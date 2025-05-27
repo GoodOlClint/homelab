@@ -1,4 +1,40 @@
-resource "proxmox_virtual_environment_file" "multicastVM" {
+locals {
+  multicast_vlans = ["vlan100", "vlan120", "vlan121", "vlan130"]
+  multicast_interfaces = {
+      for idx, vlan_key in local.multicast_vlans : vlan_key => {
+          vlan_id = var.vlans[vlan_key].vlan_id
+          bridge  = var.vlans[vlan_key].bridge
+          subnet  = var.vlans[vlan_key].subnet
+          ip      = cidrhost(var.vlans[vlan_key].subnet, 50)
+          gw      = idx == 0 ? cidrhost(var.vlans[vlan_key].subnet, 1) : null
+          eth     = "eth${idx}"
+      }
+  }
+
+  vlan_multicast_relay_map = {
+    vlan100 = ["vlan120", "vlan121"]
+    vlan120 = ["vlan100"]
+    vlan121 = ["vlan100", "vlan130"]
+    vlan130 = ["vlan121"]
+  }
+
+  # Build a map of subnet => list of ethX, using only allowed VLANs' interfaces (not self)
+  multicast_iffilter = {
+    for vlan_key, iface in local.multicast_interfaces :
+      var.vlans[vlan_key].subnet => [
+        for allowed in local.vlan_multicast_relay_map[vlan_key] : local.multicast_interfaces[allowed].eth
+        if contains(keys(local.multicast_interfaces), allowed)
+      ]
+  }
+  
+}
+
+resource "local_file" "multicast_iffilter_json" {
+  content  = jsonencode(local.multicast_iffilter)
+  filename = "${path.module}/ifFilter.json"
+}
+
+resource "proxmox_virtual_environment_file" "multicast-cloud-init" {
   content_type = "snippets"
   datastore_id = var.virtual_environment_storage
   node_name    = var.virtual_environment_node
@@ -6,7 +42,7 @@ resource "proxmox_virtual_environment_file" "multicastVM" {
   source_raw {
     data = <<-EOF
     #cloud-config
-    local-hostname: ${var.multicast_vm_name}
+    local-hostname: multicast-relay
     EOF
 
     file_name = "multicast-cloud-init.yaml"
@@ -40,23 +76,23 @@ resource "proxmox_virtual_environment_vm" "multicastVM" {
   initialization {
     datastore_id = var.virtual_environment_storage
     dynamic "ip_config" {
-      for_each = var.multicast_vm_networks
+      for_each = local.multicast_interfaces
       content {
         ipv4 {
-          address = ip_config.value.ipv4
-          gateway = ip_config.value.gateway
+          address = "${ip_config.value.ip}/${split("/", ip_config.value.subnet)[1]}"
+          gateway = ip_config.value.gw != null ? ip_config.value.gw : null
         }
       }
     }
     
     user_data_file_id = proxmox_virtual_environment_file.default-cloud-init.id
-    meta_data_file_id = proxmox_virtual_environment_file.multicastVM.id
+    meta_data_file_id = proxmox_virtual_environment_file.multicast-cloud-init.id
   }
   dynamic "network_device" {
-    for_each = var.multicast_vm_networks
+    for_each = local.multicast_interfaces
     content {
-      bridge = network_device.value.bridge
-      vlan_id = network_device.value.vlan
+      bridge  = network_device.value.bridge
+      vlan_id = network_device.value.vlan_id
     }
   }
 
@@ -67,19 +103,24 @@ resource "proxmox_virtual_environment_vm" "multicastVM" {
    timeout = "3m"
  }
  
- # Deliver target file to remote host
- provisioner "file" {
-   source   = "scripts/installMulticast-Relay.sh"
-   destination = "/tmp/bootstrap.sh"
- }
+  # Deliver target file to remote host
+  provisioner "file" {
+    source   = "scripts/installMulticast-Relay.sh"
+    destination = "/tmp/bootstrap.sh"
+  }
 
- # Run command on the remote host
- provisioner "remote-exec" {
-   inline = [
-  "chmod +x /tmp/bootstrap.sh",
-  "sh /tmp/bootstrap.sh",
-   ]
- }
+  provisioner "file" {
+    source      = local_file.multicast_iffilter_json.filename
+    destination = "/tmp/ifFilter.json"
+  }
+
+  # Run command on the remote host
+  provisioner "remote-exec" {
+    inline = [
+    "chmod +x /tmp/bootstrap.sh",
+    "sh /tmp/bootstrap.sh",
+    ]
+  }
 
 }
 

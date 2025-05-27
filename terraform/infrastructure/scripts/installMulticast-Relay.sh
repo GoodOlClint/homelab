@@ -2,11 +2,7 @@ sudo apt-get update
 sudo apt-get -y install git python3, python3-netifaces
 sudo git clone https://github.com/alsmith/multicast-relay.git /bin/multicast-relay
 sudo rm /bin/multicast-relay/ifFilter.json
-sudo sh -c "cat >> /bin/multicast-relay/ifFilter.json" << EOF
-{
-
-}
-EOF
+sudo cp /tmp/ifFilter.json /bin/multicast-relay/ifFilter.json
 sudo sh -c "cat >> /etc/logrotate.d/multicast-relay" << EOF
 /var/log/multicast-relay.log {
    compress
