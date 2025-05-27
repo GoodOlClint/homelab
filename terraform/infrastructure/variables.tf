@@ -38,3 +38,16 @@ variable "nvidia_url" {
   description = "Url containing the Nvidia Grid driver to download into VMs"
   type        = string
 }
+
+variable "multicast_vm_name" {
+  type = string
+}
+
+variable "multicast_vm_networks" {
+  type = map(object({
+    bridge = string,
+    gateway = string,
+    ipv4 = string,
+    vlan = number
+  }))
+}
