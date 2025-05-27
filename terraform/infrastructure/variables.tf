@@ -39,15 +39,11 @@ variable "nvidia_url" {
   type        = string
 }
 
-variable "multicast_vm_name" {
-  type = string
-}
-
-variable "multicast_vm_networks" {
+variable "vlans" {
   type = map(object({
-    bridge = string,
-    gateway = string,
-    ipv4 = string,
-    vlan = number
+    vlan_id     = number
+    subnet      = string #CIDR string
+    bridge      = string
+    description = string
   }))
 }
