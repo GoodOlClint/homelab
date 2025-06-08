@@ -1,0 +1,21 @@
+---
+# Tasks for Homebridge VM
+- name: Add Homebridge repository
+  ansible.builtin.deb822_repository:
+    name: homebridge
+    types: [deb]
+    uris: "https://repo.homebridge.io"
+    signed_by: "https://repo.homebridge.io/KEY.gpg"
+    suites: stable
+    components: [main]
+    state: present
+    enabled: yes
+
+- name: Update apt cache
+  apt:
+    update_cache: yes
+
+- name: Install Homebridge
+  apt:
+    name: homebridge
+    state: present
