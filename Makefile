@@ -10,21 +10,31 @@ init:
 	@cd terraform/infrastructure && terraform init
 	@cd terraform/services && terraform init
 
-infra:
-	@cd terraform/infrastructure && terraform init && terraform apply -auto-approve
+infra: terraform-infra inventory ansible-infra
 
-services:
-	@cd terraform/services && terraform init && terraform apply -auto-approve
+services: terraform-services inventory ansible-services
 
 inventory: clean-ssh
 	@cd terraform/infrastructure && terraform output -raw ansible_inventory_yaml > /tmp/vms-infra.yaml || true
 	@cd terraform/services && terraform output -raw ansible_inventory_yaml > /tmp/vms-services.yaml || true
 	@. .venv/bin/activate && python3 -c "import yaml, sys; infra=yaml.safe_load(open('/tmp/vms-infra.yaml')); services=yaml.safe_load(open('/tmp/vms-services.yaml')); merged={'all': {'hosts': {}}}; merged['all']['hosts'].update(infra.get('all', {}).get('hosts', {})); merged['all']['hosts'].update(services.get('all', {}).get('hosts', {})); yaml.safe_dump(merged, open('ansible/inventory/vms.yaml', 'w'))"
 
-ansible:
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/site.yml
+terrform-infra:
+	@cd terraform/infrastructure && terraform init && terraform apply -auto-approve
 
-apply: infra services inventory ansible
+terraform-services:
+	@cd terraform/services && terraform init && terraform apply -auto-approve
+
+ansible-infra:
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/infrastructure.yml
+
+ansible-services:
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/services.yml
+
+ansible-all:
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/all.yml
+
+apply: infra services inventory ansible-all
 
 update:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/update-all.yml
