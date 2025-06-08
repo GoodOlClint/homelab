@@ -1,0 +1,54 @@
+---
+- name: Install NVIDIA GRID driver
+  import_role:
+    name: nvidia
+
+- name: Install Docker using geerlingguy.docker
+  import_role:
+    name: geerlingguy.docker
+
+- name: Ensure nvidia-container-toolkit apt GPG key
+  ansible.builtin.apt_key:
+    url: https://nvidia.github.io/libnvidia-container/gpgkey
+    keyring: /etc/apt/trusted.gpg.d/libnvidia-container.gpg
+    state: present
+
+- name: Ensure nvidia-container-toolkit repo
+  ansible.builtin.apt_repository:
+    repo: deb [signed-by=/etc/apt/trusted.gpg.d/libnvidia-container.gpg] https://nvidia.github.io/libnvidia-container/stable/deb/$(ARCH) /
+    state: present
+    filename: nvidia-container-toolkit
+
+- name: Ensure nvidia-container-toolkit package
+  ansible.builtin.package:
+    name: nvidia-container-toolkit
+    update_cache: true
+    state: present
+
+- name: Configure NVIDIA runtime for Docker
+  ansible.builtin.shell: nvidia-ctk runtime configure --runtime=docker
+  args:
+    executable: /bin/bash
+
+- name: Restart Docker after NVIDIA toolkit install
+  ansible.builtin.systemd:
+    name: docker
+    state: restarted
+
+- name: Verify CUDA container works
+  community.docker.docker_container:
+    name: nvidia-gpu-validation
+    image: ubuntu
+    command: nvidia-smi
+    runtime: nvidia
+    state: started
+    device_requests:
+      - driver: nvidia
+        count: -1
+        capabilities:
+          - gpu
+
+- name: Remove CUDA container
+  community.docker.docker_container:
+    name: nvidia-gpu-validation
+    state: absent

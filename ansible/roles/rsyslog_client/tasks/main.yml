@@ -1,0 +1,17 @@
+---
+- name: Ensure rsyslog is installed
+  apt:
+    name: rsyslog
+    state: present
+    update_cache: yes
+
+- name: Configure rsyslog to forward logs to logcollector
+  lineinfile:
+    path: /etc/rsyslog.d/99-logcollector.conf
+    line: "*.* @{{ hostvars[groups['all'] | select('search', 'logcollector') | list | first]['ansible_host'] }}:514"
+    create: yes
+
+- name: Restart rsyslog
+  systemd:
+    name: rsyslog
+    state: restarted

@@ -1,0 +1,11 @@
+---
+- name: Update all VMs and Proxmox server
+  hosts: all
+  become: yes
+  tasks:
+    - name: Update apt cache and upgrade all packages
+      apt:
+        update_cache: yes
+        upgrade: dist
+        autoremove: yes
+        autoclean: yes

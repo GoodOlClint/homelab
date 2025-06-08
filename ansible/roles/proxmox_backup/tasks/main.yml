@@ -1,0 +1,47 @@
+---
+- name: Install Proxmox Backup Server repository key
+  apt_key:
+    url: https://enterprise.proxmox.com/debian/proxmox-release-bookworm.gpg
+    state: present
+
+- name: Add Proxmox Backup Server repository
+  apt_repository:
+    repo: "deb http://download.proxmox.com/debian/pbs bookworm pbs-no-subscription"
+    state: present
+    filename: proxmox-backup
+
+- name: Install Proxmox Backup Server
+  apt:
+    name: proxmox-backup-server
+    state: present
+    update_cache: yes
+
+- name: Ensure Proxmox Backup Server is started and enabled
+  systemd:
+    name: proxmox-backup
+    state: started
+    enabled: yes
+
+- name: Ensure /mnt/backups exists
+  file:
+    path: /mnt/backups
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Ensure NFS packages.
+  ansible.builtin.package:
+    name:
+      - nfs-common
+    state: present
+
+- name: Ensure NFS fstab entry and mount.
+  ansible.posix.mount:
+    backup: yes
+    boot: "yes"
+    path: "/mnt/backups"
+    src: "172.16.20.10:/volume1/VMBackups"
+    fstype: nfs
+    opts: "defaults"
+    state: "mounted"

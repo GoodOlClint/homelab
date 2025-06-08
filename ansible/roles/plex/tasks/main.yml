@@ -1,0 +1,38 @@
+---
+- name: Install NVIDIA GRID driver
+  import_role:
+    name: nvidia
+
+- name: Download Plex APT GPG key
+  ansible.builtin.command:
+    cmd: curl -fsSL https://downloads.plex.tv/plex-keys/PlexSign.key | gpg --dearmor | sudo tee /usr/share/keyrings/plex.gpg > /dev/null
+  args:
+    creates: /usr/share/keyrings/plex.gpg
+
+- name: Add Plex official APT repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/plex.gpg] https://downloads.plex.tv/repo/deb public main"
+    state: present
+    filename: plexmediaserver
+
+- name: Install latest Plex Media Server
+  ansible.builtin.apt:
+    name: plexmediaserver
+    state: latest
+    update_cache: yes
+
+- name: Ensure NFS packages.
+  ansible.builtin.package:
+    name:
+      - nfs-common
+    state: present
+
+- name: Ensure NFS fstab entry and mount.
+  ansible.posix.mount:
+    backup: yes
+    boot: "yes"
+    path: "/mnt/media"
+    src: "172.16.20.10:/volume1/plex"
+    fstype: nfs
+    opts: "defaults"
+    state: "mounted"

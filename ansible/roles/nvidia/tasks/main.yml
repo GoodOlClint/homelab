@@ -1,0 +1,12 @@
+---
+- name: Download NVIDIA GRID driver deb package
+  ansible.builtin.get_url:
+    url: "{{ nvidia_grid_driver_url }}"
+    dest: /tmp/nvidia-grid-driver.deb
+    mode: '0644'
+    validate_certs: false
+
+- name: Install NVIDIA GRID driver deb package
+  ansible.builtin.apt:
+    deb: /tmp/nvidia-grid-driver.deb
+    state: present
