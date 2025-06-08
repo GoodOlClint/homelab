@@ -19,7 +19,7 @@ inventory: clean-ssh
 	@cd terraform/services && terraform output -raw ansible_inventory_yaml > /tmp/vms-services.yaml || true
 	@. .venv/bin/activate && python3 -c "import yaml, sys; infra=yaml.safe_load(open('/tmp/vms-infra.yaml')); services=yaml.safe_load(open('/tmp/vms-services.yaml')); merged={'all': {'hosts': {}}}; merged['all']['hosts'].update(infra.get('all', {}).get('hosts', {})); merged['all']['hosts'].update(services.get('all', {}).get('hosts', {})); yaml.safe_dump(merged, open('ansible/inventory/vms.yaml', 'w'))"
 
-terrform-infra:
+terraform-infra:
 	@cd terraform/infrastructure && terraform init && terraform apply -auto-approve
 
 terraform-services:
