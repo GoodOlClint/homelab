@@ -1,0 +1,84 @@
+locals {
+  homebridge_vlans = ["vlan100"]
+  homebridge_interfaces = {
+      for idx, vlan_key in local.homebridge_vlans : vlan_key => {
+          vlan_id = var.vlans[vlan_key].vlan_id
+          bridge  = var.vlans[vlan_key].bridge
+          subnet  = var.vlans[vlan_key].subnet
+          ip      = cidrhost(var.vlans[vlan_key].subnet, 60)
+          gw      = idx == 0 ? cidrhost(var.vlans[vlan_key].subnet, 1) : null
+          mtu     = try(var.vlans[vlan_key].mtu, 1500)
+          dhcp    = true # Set to false for static, true for DHCP
+      }
+  }
+}
+
+resource "proxmox_virtual_environment_file" "homebridge-cloud-init" {
+  content_type = "snippets"
+  datastore_id = var.virtual_environment_storage
+  node_name    = var.virtual_environment_node
+
+  source_raw {
+    data = <<-EOF
+    #cloud-config
+    local-hostname: homebridge
+    EOF
+    file_name = "homebridge-cloud-init.yaml"
+  }
+}
+
+resource "proxmox_virtual_environment_vm" "homebridgeVM" {
+  name      = "homebridge"
+  node_name = var.virtual_environment_node
+
+  agent {
+    enabled = true
+  }
+
+  cpu {
+    cores = 2
+  }
+
+  memory {
+    dedicated = 1024
+  }
+
+  disk {
+    datastore_id = var.virtual_environment_storage
+    file_id      = local.ubuntu_cloud_image_id
+    interface    = "virtio0"
+    iothread     = true
+    discard      = "on"
+    size         = 5
+  }
+
+  initialization {
+    datastore_id = var.virtual_environment_storage
+    dynamic "ip_config" {
+      for_each = local.homebridge_interfaces
+      content {
+        dynamic "ipv4" {
+          for_each = [ip_config.value]
+          content {
+            address = ip_config.value.dhcp ? "dhcp" : "${ip_config.value.ip}/${split("/", ip_config.value.subnet)[1]}"
+            gateway = ip_config.value.dhcp || ip_config.value.gw == null ? null : ip_config.value.gw
+          }
+        }
+      }
+    }
+    user_data_file_id = proxmox_virtual_environment_file.default-cloud-init.id
+    meta_data_file_id = proxmox_virtual_environment_file.homebridge-cloud-init.id
+  }
+  dynamic "network_device" {
+    for_each = local.homebridge_interfaces
+    content {
+      bridge  = network_device.value.bridge
+      vlan_id = network_device.value.vlan_id
+      mtu     = network_device.value.mtu
+    }
+  }
+}
+
+output "homebridge_ipv4_address" {
+  value = proxmox_virtual_environment_vm.homebridgeVM.ipv4_addresses[1][0]
+}
