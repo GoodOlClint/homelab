@@ -1,0 +1,36 @@
+---
+- name: Configure homebridge VM
+  hosts: homebridge
+  become: yes
+  vars_files:
+    - ../group_vars/all.yml
+  roles:
+    - homebridge
+    - rsyslog_client
+
+- name: Configure multicast-relay VM
+  hosts: multicast_relay
+  become: yes
+  vars_files:
+    - ../group_vars/all.yml
+  roles:
+    - multicast_relay
+    - rsyslog_client
+
+- name: Configure docker VM
+  hosts: docker
+  become: yes
+  vars_files:
+    - ../group_vars/all.yml
+  roles:
+    - docker
+    - rsyslog_client
+
+- name: Configure plex VM
+  hosts: plex
+  become: yes
+  vars_files:
+    - ../group_vars/all.yml
+  roles:
+    - plex
+    - rsyslog_client
