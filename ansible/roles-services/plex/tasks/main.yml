@@ -38,7 +38,7 @@
     backup: yes
     boot: "yes"
     path: "/mnt/media"
-    src: "172.16.20.10:/volume1/plex"
+    src: "{{ plex_nfs_src }}"
     fstype: nfs
     opts: "defaults"
     state: "mounted"

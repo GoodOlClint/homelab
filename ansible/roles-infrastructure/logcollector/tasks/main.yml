@@ -1,1 +1,47 @@
-# ...existing code from roles/logcollector/ ...
+---
+- name: Install rsyslog and logrotate
+  apt:
+    name:
+      - rsyslog
+      - logrotate
+    state: present
+    update_cache: yes
+
+- name: Ensure rsyslog is started and enabled
+  systemd:
+    name: rsyslog
+    state: started
+    enabled: yes
+
+- name: Configure rsyslog to receive remote logs
+  lineinfile:
+    path: /etc/rsyslog.conf
+    regexp: '^#?\$ModLoad imudp'
+    line: '$ModLoad imudp'
+    state: present
+
+- name: Enable UDP syslog reception
+  lineinfile:
+    path: /etc/rsyslog.conf
+    regexp: '^#?\$UDPServerRun'
+    line: '$UDPServerRun 514'
+    state: present
+
+- name: Configure rsyslog to receive TCP logs
+  lineinfile:
+    path: /etc/rsyslog.conf
+    regexp: '^#?\$ModLoad imtcp'
+    line: '$ModLoad imtcp'
+    state: present
+
+- name: Enable TCP syslog reception
+  lineinfile:
+    path: /etc/rsyslog.conf
+    regexp: '^#?\$InputTCPServerRun'
+    line: '$InputTCPServerRun 514'
+    state: present
+
+- name: Restart rsyslog
+  systemd:
+    name: rsyslog
+    state: restarted
