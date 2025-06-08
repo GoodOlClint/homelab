@@ -37,10 +37,11 @@ resource "proxmox_virtual_environment_vm" "logcollectorVM" {
 
   cpu {
     cores = 4
+    sockets = 2
   }
 
   memory {
-    dedicated = 8192
+    dedicated = 16384
   }
 
   disk {
