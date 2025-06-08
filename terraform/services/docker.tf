@@ -77,6 +77,11 @@ resource "proxmox_virtual_environment_vm" "dockerVM" {
       mtu     = network_device.value.mtu
     }
   }
+  hostpci {
+    device = "hostpci0"
+    mapping = "Nvidia-GPU"
+    mdev = "nvidia-256"
+  }
 }
 
 output "docker_ipv4_address" {
