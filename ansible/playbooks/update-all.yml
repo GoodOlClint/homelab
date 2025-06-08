@@ -9,3 +9,27 @@
         upgrade: dist
         autoremove: yes
         autoclean: yes
+
+- name: Update all Docker containers (pull latest and recreate)
+  hosts: docker
+  become: yes
+  tasks:
+    - name: Pull latest images for all running containers
+      shell: |
+        images=$(docker ps --format '{{'{{.Image}}'}}' | sort -u)
+        if [ -n "$images" ]; then
+          for img in $images; do
+            docker pull "$img"
+          done
+        fi
+      register: docker_pull_result
+      changed_when: false
+
+    - name: Restart all running containers with latest image
+      shell: |
+        containers=$(docker ps --format '{{'{{.Names}}'}}')
+        if [ -n "$containers" ]; then
+          docker restart $containers
+        fi
+      register: docker_restart_result
+      changed_when: false
