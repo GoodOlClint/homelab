@@ -1,0 +1,27 @@
+---
+- name: Configure dns VM
+  hosts: dns
+  become: yes
+  vars_files:
+    - ../group_vars/all.yml
+  roles:
+    - dns
+    - rsyslog_client
+
+- name: Configure logcollector VM
+  hosts: logcollector
+  become: yes
+  vars_files:
+    - ../group_vars/all.yml
+  roles:
+    - logcollector
+    - rsyslog_client
+
+- name: Configure proxmox-backup VM
+  hosts: proxmox_backup
+  become: yes
+  vars_files:
+    - ../group_vars/all.yml
+  roles:
+    - proxmox_backup
+    - rsyslog_client

@@ -3,9 +3,15 @@
   import_role:
     name: nvidia
 
-- name: Download Plex APT GPG key
+- name: Download Plex APT GPG key to temp file
+  ansible.builtin.get_url:
+    url: https://downloads.plex.tv/plex-keys/PlexSign.key
+    dest: /tmp/plex.gpg.key
+    mode: '0644'
+
+- name: Convert Plex GPG key to dearmored format
   ansible.builtin.command:
-    cmd: curl -fsSL https://downloads.plex.tv/plex-keys/PlexSign.key | gpg --dearmor | sudo tee /usr/share/keyrings/plex.gpg > /dev/null
+    cmd: gpg --batch --dearmor -o /usr/share/keyrings/plex.gpg /tmp/plex.gpg.key
   args:
     creates: /usr/share/keyrings/plex.gpg
 

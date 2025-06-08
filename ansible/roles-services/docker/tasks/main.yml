@@ -47,8 +47,3 @@
         count: -1
         capabilities:
           - gpu
-
-- name: Remove CUDA container
-  community.docker.docker_container:
-    name: nvidia-gpu-validation
-    state: absent
