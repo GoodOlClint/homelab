@@ -45,5 +45,6 @@ variable "vlans" {
     subnet      = string #CIDR string
     bridge      = string
     description = string
+    mtu         = optional(number, 1500)
   }))
 }
