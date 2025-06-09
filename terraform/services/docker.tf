@@ -1,5 +1,5 @@
 locals {
-  docker_vlans = ["vlan100", "vlan120"]
+  docker_vlans = ["vlan100", "vlan120", "vlan20"]
   docker_interfaces = {
     for idx, vlan_key in local.docker_vlans : vlan_key => {
       vlan_id = var.vlans[vlan_key].vlan_id

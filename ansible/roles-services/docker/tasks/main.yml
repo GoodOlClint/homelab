@@ -47,3 +47,63 @@
         count: -1
         capabilities:
           - gpu
+
+- name: Remove nvidia-gpu-validation container after test
+  community.docker.docker_container:
+    name: nvidia-gpu-validation
+    state: absent
+
+- name: Ensure NFS packages are installed
+  apt:
+    name: nfs-common
+    state: present
+    update_cache: yes
+
+- name: Ensure NFS fstab entry and mount for /mnt/docker
+  ansible.posix.mount:
+    backup: yes
+    boot: "yes"
+    path: "/mnt/docker"
+    src: "{{ docker_nfs_src }}"
+    fstype: nfs
+    opts: "defaults"
+    state: "mounted"
+
+- name: Ensure NFS fstab entry and mount for /mnt/plex
+  ansible.posix.mount:
+    backup: yes
+    boot: "yes"
+    path: "/mnt/plex"
+    src: "{{ plex_nfs_src }}"
+    fstype: nfs
+    opts: "defaults"
+    state: "mounted"
+
+- name: Mount /docker/appdata
+  file:
+    src: /mnt/docker
+    dest: /docker/appdata
+    state: link
+
+- name: Mount /docker/plex
+  file:
+    src: /mnt/plex/data
+    dest: /docker/plex
+    state: link
+
+- name: Copy docker-compose.yml to the docker VM
+  copy:
+    src: files/docker-compose.yml
+    dest: /opt/docker-compose.yml
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Deploy containers with Docker Compose
+  community.docker.docker_compose_v2:
+    project_src: /opt
+    files:
+      - docker-compose.yml
+    state: present
+  environment:
+    CLOUDFLARED_TUNNEL_TOKEN: "{{ cloudflared_tunnel_token }}"
