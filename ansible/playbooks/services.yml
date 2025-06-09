@@ -7,6 +7,7 @@
   roles:
     - homebridge
     - rsyslog_client
+    - telegraf
 
 - name: Configure multicast-relay VM
   hosts: multicast_relay
@@ -16,6 +17,7 @@
   roles:
     - multicast_relay
     - rsyslog_client
+    - telegraf
 
 - name: Configure docker VM
   hosts: docker
@@ -25,6 +27,7 @@
   roles:
     - docker
     - rsyslog_client
+    - telegraf
 
 - name: Configure plex VM
   hosts: plex
@@ -34,3 +37,4 @@
   roles:
     - plex
     - rsyslog_client
+    - telegraf

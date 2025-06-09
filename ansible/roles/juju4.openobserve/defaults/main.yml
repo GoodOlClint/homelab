@@ -1,0 +1,96 @@
+---
+
+openobserve_repo: openobserve/openobserve
+openobserve_release: latest
+
+openobserve_user: _openobserve
+openobserve_home: /var/_openobserve
+openobserve_rootdir: /var/_openobserve/openobserve
+
+openobserve_web_url: "https://{{ ansible_fqdn }}"
+# if using reverse-proxy with self-signed or internal CA (backup config)
+openobserve_ca_bundle_filepath:
+# Note: localhost and ::1 don't seem accepted
+openobserve_listen_host: 127.0.0.1
+openobserve_listen_port: 5080
+openobserve_listen_port_grpc: 5081
+openobserve_compact_retention: 365
+openobserve_telemetry: true
+openobserve_usage_reporting: true
+# https://openobserve.ai/docs/api/ingestion/logs/json/#flattening-of-the-json-structure
+openobserve_ingest_json_flatten_level: 3
+
+openobserve_env_variables_template: "default-env.j2"
+openobserve_root_user_email: root@example.com
+openobserve_root_user_pass: root@example.com
+openobserve_smtp_enabled: false
+openobserve_smtp_host: smtp.example.com
+openobserve_smtp_port: 587
+openobserve_smtp_user_name:
+openobserve_smtp_password:
+openobserve_smtp_from_email: openobserve-noreply@example.com
+openobserve_smtp_encryption: starttls
+
+openobserve_sample_load: true
+
+openobserve_cgroups_restriction_enable: true
+
+# This will load /etc/environment in systemd to get
+# proxy settings
+openobserve_webproxy_enable: false
+# currently not used as can't restrict incoming traffic
+openobserve_webproxy_ip: ''
+# same but IP or hostname
+openobserve_webproxy_host: ''
+openobserve_webproxy_port: ''
+
+openobserve_logrotate_period: 'daily'
+openobserve_logrotate_rotate: 30
+openobserve_logrotate_compress: true
+openobserve_logrotate_delaycompress: true
+openobserve_logrotate_datext: true
+openobserve_logrotate_datformat: '-%Y%m%d'
+
+openobserve_backup_config_enable: false
+openobserve_backup_config_git_enable: false
+openobserve_backup_config_user: _o2_backup
+openobserve_backup_config_home: /var/_openobserve_backup
+openobserve_backup_config_root: /var/_openobserve_backup/o2
+openobserve_backup_user_email: root@example.com
+openobserve_backup_user_pass: root@example.com
+openobserve_backup_config_venv: /var/_openobserve_backup/venv
+openobserve_pip_pkgs:
+  - git+https://github.com/juju4/python-openobserve@devel-all
+  - pandas
+  - python-dotenv
+  - Gitpython
+
+is_container: false
+
+# custom build
+openobserve_build_enable: false
+openobserve_build_version: 1684427e52143137bccae17091531df573fa6c20
+openobserve_build_pkgs:
+  - git
+  - protobuf-compiler
+  - build-essential
+  # - cargo  # using rustup to get recent one
+
+# https://github.com/openobserve/dashboards
+openobserve_dashboards_url: []
+openobserve_dashboards_owner: "{{ openobserve_root_user_email }}"
+
+openobserve_build_gitconfig:
+  - { n: http.version,
+      v: HTTP/1.1
+  }
+  - { n: http.postBuffer,
+      v: 1048576000
+  }
+  # https://stackoverflow.com/questions/78966387/rust-tauri-build-error-failed-to-determine-package-fingerprint-for-build-scri
+  - { n: core.excludesFile,
+      v: /var/_openobserve/build/.gitignore
+  }
+openobserve_build_gh_url: https://github.com/cli/cli/releases/download/v2.64.0/gh_2.64.0_linux_amd64.deb
+openobserve_build_gh_hash: 'sha256:ef110bb82cdb9c2fab65ff12718f20e133cf7b3d9eac72280ea8de98ab1c464f'
+install_archives: /var/_install

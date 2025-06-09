@@ -1,0 +1,170 @@
+---
+
+- name: Ensure build dependencies are present
+  ansible.builtin.package:
+    name: "{{ openobserve_build_pkgs }}"
+    state: present
+  register: pkg_result
+  until: pkg_result is success
+
+# ubuntu-24.04: error: package `datafusion-common-runtime v43.0.0` cannot be built because it requires rustc 1.79 or newer, while the currently active rustc version is 1.75.0"
+- name: Download Rustup
+  ansible.builtin.get_url:
+    url: https://sh.rustup.rs
+    dest: "{{ openobserve_home }}/rustup.sh"
+    mode: '0600'
+    owner: "{{ openobserve_user }}"
+
+- name: Install rustup
+  ansible.builtin.command: sh rustup.sh -y
+  args:
+    chdir: "{{ openobserve_home }}"
+    creates: "{{ openobserve_home }}/.cargo/env"
+  become: yes
+  become_user: "{{ openobserve_user }}"
+
+- name: Ensure build directory exists
+  ansible.builtin.file:
+    path: "{{ openobserve_home }}/build"
+    state: directory
+    mode: '0700'
+    owner: "{{ openobserve_user }}"
+
+- name: Git
+  block:
+    # error: RPC failed; curl 92 HTTP/2 stream 0 was not closed cleanly: CANCEL (err 8)", "error: 6482 bytes of body are still expected"
+    # error: RPC failed; curl 56 GnuTLS recv error (-9): Error decoding the received TLS packet.\nerror: 19 bytes of body are still expected
+    # same error between git clone and gh repo clone
+    # only workaround is using ssh access
+    # https://github.com/orgs/community/discussions/134430
+    - name: Git config
+      community.general.git_config:
+        name: "{{ item.n }}"
+        value: "{{ item.v }}"
+        scope: file
+        file: "{{ openobserve_home }}/.gitconfig"
+      become: yes
+      become_user: "{{ openobserve_user }}"
+      loop: "{{ openobserve_build_gitconfig }}"
+
+    - name: Git clone repository
+      ansible.builtin.git:
+        repo: https://github.com/openobserve/openobserve.git
+        dest: "{{ openobserve_home }}/build"
+        version: "{{ openobserve_build_version }}"
+        update: no
+      become: yes
+      become_user: "{{ openobserve_user }}"
+  rescue:
+    - name: Get Github CLI
+      ansible.builtin.get_url:
+        url: "{{ openobserve_build_gh_url }}"
+        checksum: "{{ openobserve_build_gh_hash }}"
+        dest: "{{ install_archives }}/{{ openobserve_build_gh_url | basename }}"
+        mode: '0644'
+        owner: root
+    - name: Install Github CLI
+      ansible.builtin.apt:
+        deb: "{{ install_archives }}/{{ openobserve_build_gh_url | basename }}"
+        state: present
+    - name: Git clone with Github CLI
+      ansible.builtin.shell:
+        cmd: |
+          gh config set git_protocol ssh
+          gh repo clone openobserve/openobserve
+      args:
+        chdir: "{{ openobserve_home }}"
+        creates: "{{ openobserve_home }}/build/README.md"
+      environment:
+        GH_TOKEN: "{{ openobserve_build_gh_token }}"
+      become: yes
+      become_user: "{{ openobserve_user }}"
+
+# error: Gxhash requires aes and sse2 intrinsics.
+- name: Disable gxhash if older cpu
+  ansible.builtin.replace:
+    path: "{{ item.p }}"
+    regexp: "{{ item.re }}"
+    replace: "{{ item.rep }}"
+    mode: '0600'
+  loop:
+    - { p: "{{ openobserve_home }}/build/src/config/Cargo.toml",
+        re: "^default = \\[\"gxhash\"\\]",
+        rep: "default = []"
+    }
+    - { p: "{{ openobserve_home }}/build/.cargo/config.toml",
+        re: "\\+aes,",
+        rep: ""
+    }
+  when:
+    - "'+aes' not in cpuinfo.stdout"
+
+# Github CI
+# "An I/O error happened. Please make sure you can access the file." [...]
+# "See https://doc.rust-lang.org/cargo/reference/build-scripts.html#rerun-if-changed for more information."
+- name: Cargo clean
+  ansible.builtin.command:  # noqa no-changed-when
+    cmd: cargo clean
+  args:
+    chdir: "{{ openobserve_home }}/build"
+  environment:
+    PATH: "{{ openobserve_home }}/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    RUSTFLAGS: "-C target-cpu=native"
+  become: yes
+  become_user: "{{ openobserve_user }}"
+  register: cargo_clean
+  changed_when:
+    - "'Removed 0 files' not in cargo_clean.stderr"
+
+- name: Build openobserve
+  ansible.builtin.command:
+    cmd: cargo build --release
+  args:
+    chdir: "{{ openobserve_home }}/build"
+    creates: "{{ openobserve_home }}/build/target/release/openobserve"
+  environment:
+    PATH: "{{ openobserve_home }}/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    RUSTFLAGS: "-C target-cpu=native"
+    RUST_LOG: debug
+    RUST_BACKTRACE: '1'
+  become: yes
+  become_user: "{{ openobserve_user }}"
+  # async: "{{ openobserve_build_max | default(3600) }}"
+  # poll: 0
+  register: cargobuild
+
+- name: Check on async task for building
+  ansible.builtin.async_status:  # noqa no-handler
+    jid: "{{ cargobuild.ansible_job_id }}"
+  register: job_result
+  until: job_result.finished or cargobuild.finished
+  retries: 60
+  delay: 60
+  when:
+    - cargobuild is changed
+    - false
+
+- name: Install openobserve
+  ansible.builtin.command:
+    cmd: "cargo install --path {{ openobserve_home }}/build"
+  args:
+    chdir: "{{ openobserve_home }}/build"
+    creates: "{{ openobserve_home }}/.cargo/bin/openobserve"
+  environment:
+    PATH: "{{ openobserve_home }}/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  become: yes
+  become_user: "{{ openobserve_user }}"
+  # async: "{{ openobserve_buildinstall_max | default(3600) }}"
+  # poll: 0
+  register: cargoinstall
+
+- name: Check on async task for cargo install
+  ansible.builtin.async_status:  # noqa no-handler
+    jid: "{{ cargoinstall.ansible_job_id }}"
+  register: job_result2
+  until: job_result2.finished or cargoinstall.finished
+  retries: 60
+  delay: 60
+  when:
+    - cargoinstall is changed
+    - false

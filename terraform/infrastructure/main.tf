@@ -17,6 +17,7 @@ output "ansible_inventory_yaml" {
         dns             = { ansible_host = proxmox_virtual_environment_vm.dnsVM.ipv4_addresses[1][0] }
         logcollector    = { ansible_host = proxmox_virtual_environment_vm.logcollectorVM.ipv4_addresses[1][0] }
         proxmox_backup  = { ansible_host = proxmox_virtual_environment_vm.proxmoxBackupVM.ipv4_addresses[1][0] }
+        openobserve     = { ansible_host = proxmox_virtual_environment_vm.openobserveVM.ipv4_addresses[1][0] }
       }
     }
   })

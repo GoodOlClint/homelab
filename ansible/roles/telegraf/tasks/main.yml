@@ -1,0 +1,56 @@
+---
+
+- name: Download InfluxData GPG key to temp file
+  ansible.builtin.get_url:
+    url: https://repos.influxdata.com/influxdata-archive.key
+    dest: /tmp/influxdata.gpg.key
+    mode: '0644'
+
+- name: Convert InfluxData GPG key to dearmored format
+  ansible.builtin.command:
+    cmd: gpg --batch --dearmor -o /usr/share/keyrings/influxdata.gpg /tmp/influxdata.gpg.key
+  args:
+    creates: /usr/share/keyrings/influxdata.gpg
+
+- name: Add InfluxData official APT repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/influxdata.gpg] https://repos.influxdata.com/debian stable main"
+    state: present
+    filename: influxdata
+
+- name: Ensure Telegraf is installed
+  apt:
+    name: telegraf
+    state: present
+    update_cache: yes
+
+- name: Configure Telegraf to send metrics to OpenObserve
+  copy:
+    dest: /etc/telegraf/telegraf.d/openobserve.conf
+    content: |
+      [[outputs.prometheus_client]]
+        listen = ":9273"
+      [[outputs.http]]
+        url = "http://{{ hostvars['openobserve'].ansible_host | default('openobserve') }}:5080/api/default/prometheus/api/v1/write"
+        method = "POST"
+        data_format = "prometheusremotewrite"
+      [outputs.http.headers]
+        Content-Type = "application/x-protobuf"
+        Content-Encoding = "snappy"
+        X-Prometheus-Remote-Write-Version = "0.1.0"
+        Authorization = "Basic cm9vdEBleGFtcGxlLmNvbTozazIxVVcybTdrZUhBSzdR"
+      [[inputs.cpu]]
+        percpu = true
+        totalcpu = true
+        collect_cpu_time = false
+        report_active = false
+      [[inputs.mem]]
+      [[inputs.disk]]
+        ignore_fs = ["tmpfs", "devtmpfs", "devfs"]
+    mode: '0644'
+
+- name: Ensure Telegraf is started and enabled
+  systemd:
+    name: telegraf
+    state: started
+    enabled: yes

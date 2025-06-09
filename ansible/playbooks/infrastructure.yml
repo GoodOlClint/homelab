@@ -7,15 +7,17 @@
   roles:
     - dns
     - rsyslog_client
+    - telegraf
 
-- name: Configure logcollector VM
-  hosts: logcollector
-  become: yes
-  vars_files:
-    - ../group_vars/all.yml
-  roles:
-    - logcollector
-    - rsyslog_client
+#- name: Configure logcollector VM
+#  hosts: logcollector
+#  become: yes
+#  vars_files:
+#    - ../group_vars/all.yml
+#  roles:
+#    - logcollector
+#    - rsyslog_client
+#    - telegraf
 
 - name: Configure proxmox-backup VM
   hosts: proxmox_backup
@@ -25,3 +27,14 @@
   roles:
     - proxmox_backup
     - rsyslog_client
+    - telegraf
+
+- name: Configure openobserve VM
+  hosts: openobserve
+  become: yes
+  vars_files:
+    - ../group_vars/all.yml
+  roles:
+    - juju4.openobserve
+    - rsyslog_client
+    - telegraf

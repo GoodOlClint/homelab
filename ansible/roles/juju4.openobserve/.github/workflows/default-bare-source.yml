@@ -1,0 +1,210 @@
+---
+name: default-bare-source
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: '0 1 * * 1'
+
+permissions: {}
+
+jobs:
+  build:
+    permissions:
+      contents: read
+    runs-on: ubuntu-${{ matrix.version }}
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          - distribution: ubuntu
+            version: '24.04'
+            suite: default-source
+            experimental: false
+          - distribution: ubuntu
+            version: '24.04'
+            suite: default-source-HEAD
+            experimental: false
+    env:
+      ANSIBLE_CALLBACKS_ENABLED: profile_tasks
+      ANSIBLE_EXTRA_VARS: ""
+      ANSIBLE_ROLE: juju4.openobserve
+      ANSIBLE_SUITE: ${{ matrix.suite }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: ${{ env.ANSIBLE_ROLE }}
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          pip3 install ansible-lint flake8 yamllint jmespath
+          which ansible
+          pip3 install ansible
+          pip3 show ansible
+          ls -l $HOME/.local/bin || true
+          ansible --version
+          cd $GITHUB_WORKSPACE/$ANSIBLE_ROLE
+          [ -f molecule/$ANSIBLE_SUITE/requirements.yml ] && ansible-galaxy install -r molecule/$ANSIBLE_SUITE/requirements.yml
+          { echo '[defaults]'; echo 'callback_enabled = profile_tasks, timer'; echo 'roles_path = ../:/home/runner/.ansible/roles'; echo 'ansible_python_interpreter: /usr/bin/python3'; } >> ansible.cfg
+      - name: Environment
+        run: |
+          set -x
+          pwd
+          env
+          find -ls
+      - name: run test
+        run: |
+          cd $GITHUB_WORKSPACE/$ANSIBLE_ROLE && ansible-playbook -i localhost, --connection=local --become -vvv molecule/$ANSIBLE_SUITE/converge.yml ${ANSIBLE_EXTRA_VARS}
+        env:
+          PY_COLORS: '1'
+          ANSIBLE_FORCE_COLOR: '1'
+      - name: idempotency run
+        run: |
+          cd $GITHUB_WORKSPACE/$ANSIBLE_ROLE && ansible-playbook -i localhost, --connection=local --become -vvv molecule/$ANSIBLE_SUITE/converge.yml ${ANSIBLE_EXTRA_VARS} | tee /tmp/idempotency.log | grep -q 'changed=0.*failed=0'  && (echo 'Idempotence test: pass' && exit 0)  || (echo 'Idempotence test: fail' && cat /tmp/idempotency.log && exit 0)
+      - name: verify
+        run: |
+          cd $GITHUB_WORKSPACE/$ANSIBLE_ROLE && ansible-playbook -i localhost, --connection=local --become -vvv molecule/$ANSIBLE_SUITE/verify.yml ${ANSIBLE_EXTRA_VARS}
+        env:
+          PY_COLORS: '1'
+          ANSIBLE_FORCE_COLOR: '1'
+      - name: On failure
+        run: |
+          systemctl -l --no-pager status
+          systemctl -l --no-pager --failed
+          ls -l /usr/bin/ | egrep '(python|pip|ansible)'
+          pip freeze
+          pip3 freeze
+          ip addr
+          cat /etc/resolv.conf
+          host www.google.com
+          ping -c 1 www.google.com || true
+          ping -c 1 8.8.8.8 || true
+        if: ${{ failure() }}
+        continue-on-error: true
+      - name: After script - ansible setup
+        run: |
+          ansible -i inventory --connection=local -m setup localhost
+        if: ${{ always() }}
+        continue-on-error: true
+      - name: After script - systemd
+        run: |
+          systemctl -l --no-pager status openobserve || true
+          systemctl -l --no-pager status openobserve-backup || true
+          systemd-analyze --no-pager security || true
+          systemd-analyze --no-pager security openobserve || true
+          systemd-analyze --no-pager security openobserve-backup || true
+          systemd-analyze --no-pager verify openobserve || true
+          cat /etc/systemd/system/openobserve.service || true
+          cat /etc/systemd/system/openobserve-backup.service || true
+          systemctl -l --no-pager status otel-collector || true
+          systemctl -l --no-pager status filebeat || true
+          systemctl -l --no-pager status nginx || true
+        if: ${{ always() }}
+        continue-on-error: true
+      - name: After script - journalctl
+        run: |
+          set -x
+          journalctl -xe -l --no-pager | tail -500
+        if: ${{ always() }}
+        continue-on-error: true
+      - name: After script - files
+        run: |
+          set -x
+          if [ -x /var/_openobserve/openobserve/openobserve ]; then
+            sudo ls -la /var/_openobserve/openobserve/ || true
+            sudo /var/_openobserve/openobserve/openobserve -V || true
+          elif [ -x /var/_openobserve/.cargo/bin/openobserve ]; then
+            sudo ls -la /var/_openobserve/.cargo/bin/ || true
+            sudo /var/_openobserve/.cargo/bin/openobserve -V || true
+            sudo ls -la /var/_openobserve/build || true
+          fi
+        if: ${{ always() }}
+        continue-on-error: true
+      - name: After script - nginx ssl
+        run: |
+          set -x
+          ls -la /etc/ssl/certs/
+        if: ${{ always() }}
+        continue-on-error: true
+      - name: After script - backup service
+        run: |
+          set -x
+          sudo ls -la /var/_openobserve_backup/o2
+          sudo cat /var/_openobserve_backup/o2/.env
+          sudo find /var/_openobserve_backup/o2/ -type f -iname '*.json' -exec cat {} \;
+        if: ${{ always() }}
+        continue-on-error: true
+      - name: After script - dashboards
+        run: |
+          set -x
+          sudo bash -c 'for f in /var/_install/*.json; do python3 -mjson.tool $f; done'
+        if: ${{ always() }}
+        continue-on-error: true
+      - name: After script - curl 5080
+        run: |
+          set -x
+          export curl_args="-v --no-progress-meter -u root@example.com:root@example.com"
+          curl ${curl_args} http://127.0.0.1:5080/healthz
+          curl ${curl_args} http://127.0.0.1:5080/api/default/users
+          curl ${curl_args} http://127.0.0.1:5080/api/default/dashboards
+          curl ${curl_args} http://127.0.0.1:5080/api/default/functions
+          curl ${curl_args} http://127.0.0.1:5080/api/default/pipelines
+          curl ${curl_args} http://127.0.0.1:5080/api/default/alerts
+          curl ${curl_args} http://127.0.0.1:5080/api/default/settings
+          curl ${curl_args} http://127.0.0.1:5080
+          curl ${curl_args} http://127.0.0.1:5080/web/
+          curl ${curl_args} http://127.0.0.1:5080/api/default/_search --data '{"query":{"sql":"SELECT * FROM \"default\"","start_time":1674789786006000,"end_time":1767247261000000,"from":0,"size":10}}' || true
+          curl ${curl_args} http://127.0.0.1:5080/api/default/_search --data '{"query":{"sql":"SELECT * FROM \"journald\"","start_time":1674789786006000,"end_time":1767247261000000,"from":0,"size":10}}' || true
+        if: ${{ always() }}
+        continue-on-error: true
+      - name: After script - curl 443
+        run: |
+          set -x
+          export curl_args="-v --no-progress-meter -u root@example.com:root@example.com"
+          curl ${curl_args} https://127.0.0.1/healthz
+          curl ${curl_args} https://127.0.0.1/api/default/users
+          curl ${curl_args} https://127.0.0.1
+        if: ${{ always() }}
+        continue-on-error: true
+      - name: After script - logs
+        run: |
+          set -x
+          sudo tail -500 /var/log/openobserve/message.log
+          sudo tail -500 /var/log/openobserve/error.log
+        if: ${{ always() }}
+        continue-on-error: true
+      - name: After script - export
+        run: |
+          set -x
+          sudo -H -u _openobserve env RUST_BACKTRACE=full /var/_openobserve/openobserve/openobserve export --stream journald || true
+          sudo -H -u _openobserve env RUST_BACKTRACE=full /var/_openobserve/.cargo/bin/openobserve export --stream journald || true
+        if: ${{ always() }}
+        continue-on-error: true
+      - name: After script - cpu
+        run: |
+          set -x
+          cat /proc/cpuinfo
+        if: ${{ always() }}
+        continue-on-error: true
+      - name: After script - build info
+        run: |
+          set -x
+          sudo ls -la /var/_openobserve/build/src/proto
+        if: ${{ always() }}
+        continue-on-error: true
+      - name: After script - manual test run
+        run: |
+          set -x
+          source <(sudo cat /etc/default/openobserve)
+          [ -x /var/_openobserve/openobserve/openobserve ] && sudo -u _openobserve /var/_openobserve/openobserve/openobserve
+          [ -x /var/_openobserve/.cargo/bin/openobserve ] && sudo -u _openobserve /var/_openobserve/.cargo/bin/openobserve
+        if: ${{ always() }}
+        continue-on-error: true
