@@ -1,0 +1,60 @@
+---
+
+- name: Linux platform
+  ansible.builtin.set_fact:
+    openobserve_platform: linux
+  when: ansible_system == 'Linux'
+- name: Darwin platform
+  ansible.builtin.set_fact:
+    openobserve_platform: darwin
+  when: ansible_system == 'MacOS'
+- name: X86_64 arch
+  ansible.builtin.set_fact:
+    openobserve_arch: amd64
+  when: ansible_architecture == 'x86_64'
+- name: Aarch64 arch
+  ansible.builtin.set_fact:
+    openobserve_arch: arm64
+  when: ansible_architecture == 'aarch64'
+- name: Debug
+  ansible.builtin.debug:
+    var: "{{ item }}"
+  loop:
+    - ansible_system
+    - ansible_architecture
+
+- name: Set fact is_container
+  ansible.builtin.set_fact:
+    is_container: true
+  when: >
+    (ansible_virtualization_type is defined and
+      (ansible_virtualization_type == "docker"
+       or ansible_virtualization_type == "containerd"
+       or ansible_virtualization_type == "container"
+      )
+    )
+
+- name: Import compatibility-check
+  ansible.builtin.import_tasks: compatibility-check.yml
+
+- name: Debian | Update apt cache
+  ansible.builtin.apt:
+    update_cache: yes
+    cache_valid_time: "3600"
+  when: ansible_os_family == 'Debian'
+  register: pkg_result
+  until: pkg_result is success
+
+- name: Ensure archives folder exists
+  ansible.builtin.file:
+    dest: "{{ install_archives }}"
+    state: directory
+    mode: '0775'
+  become: yes
+  become_user: root
+  when:
+    - install_archives != '/tmp'
+    - install_archives != '/var/tmp'
+
+- name: Import server
+  ansible.builtin.import_tasks: server.yml

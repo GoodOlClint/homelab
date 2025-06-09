@@ -5,10 +5,10 @@
     state: present
     update_cache: yes
 
-- name: Configure rsyslog to forward logs to logcollector
+- name: Configure rsyslog to forward logs to openobserve
   lineinfile:
-    path: /etc/rsyslog.d/99-logcollector.conf
-    line: "*.* @{{ hostvars[groups['all'] | select('search', 'logcollector') | list | first]['ansible_host'] }}:514"
+    path: /etc/rsyslog.d/99-openobserve.conf
+    line: "*.* @{{ hostvars[groups['all'] | select('search', 'openobserve') | list | first]['ansible_host'] }}:5514"
     create: yes
 
 - name: Restart rsyslog

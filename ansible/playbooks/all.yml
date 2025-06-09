@@ -7,6 +7,7 @@
   roles:
     - dns
     - rsyslog_client
+    - telegraf
 
 - name: Configure logcollector VM
   hosts: logcollector
@@ -16,6 +17,7 @@
   roles:
     - logcollector
     - rsyslog_client
+    - telegraf
 
 - name: Configure proxmox-backup VM
   hosts: proxmox_backup
@@ -25,6 +27,7 @@
   roles:
     - proxmox_backup
     - rsyslog_client
+    - telegraf
 
 - name: Configure homebridge VM
   hosts: homebridge
@@ -34,6 +37,7 @@
   roles:
     - homebridge
     - rsyslog_client
+    - telegraf
 
 - name: Configure multicast-relay VM
   hosts: multicast_relay
@@ -43,6 +47,7 @@
   roles:
     - multicast_relay
     - rsyslog_client
+    - telegraf
 
 - name: Configure docker VM
   hosts: docker
@@ -52,6 +57,7 @@
   roles:
     - docker
     - rsyslog_client
+    - telegraf
 
 - name: Configure plex VM
   hosts: plex
@@ -61,3 +67,14 @@
   roles:
     - plex
     - rsyslog_client
+    - telegraf
+
+- name: Configure openobserve VM
+  hosts: openobserve
+  become: yes
+  vars_files:
+    - ../group_vars/all.yml
+  roles:
+    - openobserve
+    - rsyslog_client
+    - telegraf

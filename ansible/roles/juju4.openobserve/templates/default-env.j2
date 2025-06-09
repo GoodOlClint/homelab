@@ -1,0 +1,32 @@
+{{ ansible_managed | comment }}
+# Note: export is required for shell usage, but not for systemd EnvironmentFile
+ZO_ROOT_USER_EMAIL="{{ openobserve_root_user_email }}"
+ZO_ROOT_USER_PASSWORD="{{ openobserve_root_user_pass }}"
+ZO_HTTP_ADDR="{{ openobserve_listen_host }}"
+ZO_HTTP_PORT="{{ openobserve_listen_port }}"
+ZO_GRPC_PORT="{{ openobserve_listen_port_grpc }}"
+ZO_COMPACT_DATA_RETENTION_DAYS={{ openobserve_compact_retention }}
+ZO_TELEMETRY={{ openobserve_telemetry | bool | lower }}
+ZO_USAGE_REPORTING_ENABLED={{ openobserve_usage_reporting | bool | lower }}
+ZO_INGEST_FLATTEN_LEVEL={{ openobserve_ingest_json_flatten_level | int }}
+# RUST_BACKTRACE=full
+ZO_WEB_URL="{{ openobserve_web_url }}"
+
+# SMTP
+ZO_SMTP_ENABLED={{ openobserve_smtp_enabled }}
+ZO_SMTP_HOST="{{ openobserve_smtp_host }}"
+ZO_SMTP_PORT={{ openobserve_smtp_port }}
+ZO_SMTP_USER_NAME="{{ openobserve_smtp_user_name }}"
+ZO_SMTP_PASSWORD="{{ openobserve_smtp_password }}"
+ZO_SMTP_FROM_EMAIL="{{ openobserve_smtp_from_email }}"
+ZO_SMTP_ENCRYPTION="{{ openobserve_smtp_encryption }}"
+
+# Optimize memory?
+# https://github.com/openobserve/openobserve/discussions/2711
+# ZO_MAX_FILE_SIZE_IN_MEMORY=256
+# ZO_MEMORY_CACHE_ENABLED=true
+# ZO_MEMORY_CACHE_MAX_SIZE=0
+# ZO_MEMORY_CACHE_DATAFUSION_MAX_SIZE=0
+# ZO_COMPACT_MAX_FILE_SIZE=256
+# ZO_COMPACT_INTERVAL=
+# ZO_FILE_MOVE_THREAD_NUM=0
