@@ -44,14 +44,6 @@
     - plex
     - rsyslog_client
 
-- name: Configure logcollector VM
-  hosts: logcollector
-  become: yes
-  vars_files:
-    - ../group_vars/all.yml
-  roles:
-    - logcollector
-
 - name: Configure proxmox-backup VM
   hosts: proxmox_backup
   become: yes
