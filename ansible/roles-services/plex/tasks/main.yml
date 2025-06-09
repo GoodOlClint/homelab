@@ -3,6 +3,44 @@
   import_role:
     name: nvidia
 
+- name: Ensure NFS packages.
+  ansible.builtin.package:
+    name:
+      - nfs-common
+    state: present
+
+- name: Ensure NFS fstab entry and mount.
+  ansible.posix.mount:
+    backup: yes
+    boot: "yes"
+    path: "/mnt/plex"
+    src: "{{ plex_nfs_src }}"
+    fstype: nfs
+    opts: "defaults"
+    state: "mounted"
+
+- name: Mount /mnt/media
+  file:
+    src: /mnt/plex/data/media
+    dest: /mnt/media
+    state: link
+
+- name: Mount /var/lib/plexmediaserver/Library/Application Support/Plex Media Server
+  file:
+    src: /mnt/plex/app
+    dest: /var/lib/plexmediaserver/Library/Application Support/Plex Media Server
+    state: link
+
+- name: Recursively chown /mnt/media and Plex library as plex:plex
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: plex
+    group: plex
+    recurse: yes
+  loop:
+    - /mnt/media
+    - /var/lib/plexmediaserver/Library/Application Support/Plex Media Server
+
 - name: Download Plex APT GPG key to temp file
   ansible.builtin.get_url:
     url: https://downloads.plex.tv/plex-keys/PlexSign.key
@@ -27,18 +65,3 @@
     state: latest
     update_cache: yes
 
-- name: Ensure NFS packages.
-  ansible.builtin.package:
-    name:
-      - nfs-common
-    state: present
-
-- name: Ensure NFS fstab entry and mount.
-  ansible.posix.mount:
-    backup: yes
-    boot: "yes"
-    path: "/mnt/media"
-    src: "{{ plex_nfs_src }}"
-    fstype: nfs
-    opts: "defaults"
-    state: "mounted"
