@@ -31,16 +31,6 @@
     dest: /var/lib/plexmediaserver/Library/Application Support/Plex Media Server
     state: link
 
-- name: Recursively chown /mnt/media and Plex library as plex:plex
-  ansible.builtin.file:
-    path: "{{ item }}"
-    owner: plex
-    group: plex
-    recurse: yes
-  loop:
-    - /mnt/media
-    - /var/lib/plexmediaserver/Library/Application Support/Plex Media Server
-
 - name: Download Plex APT GPG key to temp file
   ansible.builtin.get_url:
     url: https://downloads.plex.tv/plex-keys/PlexSign.key
