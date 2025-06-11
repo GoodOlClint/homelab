@@ -10,6 +10,13 @@
     state: present
     update_cache: yes
 
+- name: Add /opt/fastapi-dls to git safe.directory for Ansible user
+  ansible.builtin.command:
+    cmd: git config --global --add safe.directory /opt/fastapi-dls
+  become: true
+  become_user: "{{ ansible_user | default('root') }}"
+  when: ansible_facts['os_family'] == 'Debian' or ansible_facts['os_family'] == 'RedHat'
+
 - name: Clone fastapi-dls repository
   ansible.builtin.git:
     repo: 'https://git.collinwebdesigns.de/oscar.krause/fastapi-dls.git'
