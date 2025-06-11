@@ -19,6 +19,14 @@
     - rsyslog_client
     - telegraf
 
+- name: Configure nvidia licensing
+  hosts: all
+  become: yes
+  vars_files:
+    - ../group_vars/all.yml
+  roles:
+    - nvidia_licensing
+
 - name: Configure homebridge VM
   hosts: homebridge
   become: yes

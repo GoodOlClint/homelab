@@ -1,0 +1,84 @@
+---
+# tasks file for nvidia_licensing
+- name: Ensure required system packages are installed
+  ansible.builtin.apt:
+    name:
+      - python3
+      - python3-venv
+      - python3-pip
+      - git
+    state: present
+    update_cache: yes
+
+- name: Clone fastapi-dls repository
+  ansible.builtin.git:
+    repo: 'https://git.collinwebdesigns.de/oscar.krause/fastapi-dls.git'
+    dest: /opt/fastapi-dls
+    update: yes
+
+- name: Create Python virtual environment
+  ansible.builtin.command:
+    cmd: python3 -m venv /opt/fastapi-dls/venv
+    creates: /opt/fastapi-dls/venv/bin/activate
+
+- name: Install fastapi-dls requirements
+  ansible.builtin.pip:
+    requirements: /opt/fastapi-dls/requirements.txt
+    virtualenv: /opt/fastapi-dls/venv
+
+- name: Ensure fastapi-dls cert directory exists
+  ansible.builtin.file:
+    path: /opt/fastapi-dls/app/cert
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: '0755'
+
+- name: Generate self-signed SSL certificate for fastapi-dls webserver
+  ansible.builtin.command:
+    cmd: >-
+      openssl req -x509 -nodes -days 3650 -newkey rsa:2048
+      -keyout /opt/fastapi-dls/app/cert/webserver.key
+      -out /opt/fastapi-dls/app/cert/webserver.crt
+      -subj "/CN=fastapi-dls"
+    creates: /opt/fastapi-dls/app/cert/webserver.crt
+
+- name: Ensure fastapi-dls cert directory exists
+  ansible.builtin.file:
+    path: /etc/fastapi-dls
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: '0755'
+
+- name: Create fastapi-dls environment file
+  ansible.builtin.copy:
+    dest: /etc/fastapi-dls/env
+    content: |
+      DLS_URL={{ hostvars[inventory_hostname].ansible_host }}
+      DLS_PORT=443
+      LEASE_EXPIRE_DAYS=90
+      DATABASE=sqlite:////opt/fastapi-dls/app/db.sqlite
+    owner: www-data
+    group: www-data
+    mode: '0644'
+
+- name: Set ownership of fastapi-dls directory to www-data
+  ansible.builtin.file:
+    path: /opt/fastapi-dls
+    owner: www-data
+    group: www-data
+    recurse: yes
+
+- name: Create systemd service for fastapi-dls
+  ansible.builtin.template:
+    src: fastapi-dls.service.j2
+    dest: /etc/systemd/system/fastapi-dls.service
+    mode: '0644'
+
+- name: Reload systemd and enable fastapi-dls
+  ansible.builtin.systemd:
+    name: fastapi-dls
+    enabled: yes
+    state: started
+    daemon_reload: yes

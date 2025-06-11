@@ -14,6 +14,7 @@ output "ansible_inventory_yaml" {
       hosts = {
         homebridge       = { ansible_host = proxmox_virtual_environment_vm.homebridgeVM.ipv4_addresses[1][0] }
         multicast_relay  = { ansible_host = proxmox_virtual_environment_vm.multicastVM.ipv4_addresses[1][0] }
+        nvidia_licensing = { ansible_host = proxmox_virtual_environment_vm.nvidia_licensing.ipv4_addresses[1][0] }
         plex             = { ansible_host = proxmox_virtual_environment_vm.plexVM.ipv4_addresses[1][0] }
         docker           = { ansible_host = proxmox_virtual_environment_vm.dockerVM.ipv4_addresses[1][0] }
       }

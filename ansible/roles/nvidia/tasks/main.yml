@@ -10,3 +10,30 @@
   ansible.builtin.apt:
     deb: /tmp/nvidia-grid-driver.deb
     state: present
+
+- name: Ensure ClientConfigToken directory exists
+  ansible.builtin.file:
+    path: /etc/nvidia/ClientConfigToken
+    state: directory
+    mode: '0755'
+
+- name: Download NVIDIA client configuration token from DLS
+  ansible.builtin.shell: |
+    curl --insecure -L -X GET "https://{{ hostvars['nvidia_licensing'].ansible_host }}/-/client-token" \
+      -o /etc/nvidia/ClientConfigToken/client_configuration_token_$(date '+%d-%m-%Y-%H-%M-%S').tok
+  register: dls_token_result
+  changed_when: dls_token_result.rc == 0
+
+- name: Restart nvidia-gridd service
+  ansible.builtin.systemd:
+    name: nvidia-gridd
+    state: restarted
+
+- name: Validate NVIDIA license status
+  ansible.builtin.shell: nvidia-smi -q | grep "License"
+  register: nvidia_license_status
+  changed_when: false
+
+- name: Show NVIDIA license status
+  ansible.builtin.debug:
+    var: nvidia_license_status.stdout_lines
