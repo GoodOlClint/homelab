@@ -25,15 +25,25 @@
     update_cache: true
     state: present
 
+- name: Check if nvidia-container-runtime is configured in Docker
+  ansible.builtin.shell: |
+    grep -q '"nvidia-container-runtime"' /etc/docker/daemon.json 2>/dev/null
+  register: nvidia_runtime_configured
+  changed_when: false
+  failed_when: false
+
 - name: Configure NVIDIA runtime for Docker
   ansible.builtin.shell: nvidia-ctk runtime configure --runtime=docker
   args:
     executable: /bin/bash
+  register: nvidia_ctk_result
+  when: nvidia_runtime_configured.rc != 0
 
 - name: Restart Docker after NVIDIA toolkit install
   ansible.builtin.systemd:
     name: docker
     state: restarted
+  when: nvidia_ctk_result is defined and nvidia_ctk_result is changed
 
 - name: Verify CUDA container works
   community.docker.docker_container:
@@ -115,5 +125,3 @@
     state: present
   environment:
     CLOUDFLARED_TUNNEL_TOKEN: "{{ cloudflared_tunnel_token }}"
-
-

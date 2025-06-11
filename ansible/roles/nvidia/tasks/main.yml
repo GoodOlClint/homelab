@@ -1,15 +1,28 @@
 ---
+- name: Get installed NVIDIA driver version
+  ansible.builtin.shell: |
+    nvidia-smi --version | grep 'DRIVER version' | awk -F ':' '{print $2}' | xargs
+  register: nvidia_driver_version
+  changed_when: false
+  failed_when: false
+
+- name: Extract required NVIDIA driver version from URL
+  set_fact:
+    required_nvidia_driver_version: "{{ (nvidia_grid_driver_url | regex_search('nvidia-linux-grid-[0-9]+_([0-9]+\\.[0-9]+\\.[0-9]+)_amd64\\.deb', '\\1'))[0] if (nvidia_grid_driver_url | regex_search('nvidia-linux-grid-[0-9]+_([0-9]+\\.[0-9]+\\.[0-9]+)_amd64\\.deb', '\\1')) is iterable else (nvidia_grid_driver_url | regex_search('nvidia-linux-grid-[0-9]+_([0-9]+\\.[0-9]+\\.[0-9]+)_amd64\\.deb', '\\1')) }}"
+
 - name: Download NVIDIA GRID driver deb package
   ansible.builtin.get_url:
     url: "{{ nvidia_grid_driver_url }}"
     dest: /tmp/nvidia-grid-driver.deb
     mode: '0644'
     validate_certs: false
+  when: nvidia_driver_version.stdout != required_nvidia_driver_version
 
 - name: Install NVIDIA GRID driver deb package
   ansible.builtin.apt:
     deb: /tmp/nvidia-grid-driver.deb
     state: present
+  when: nvidia_driver_version.stdout != required_nvidia_driver_version
 
 - name: Ensure ClientConfigToken directory exists
   ansible.builtin.file:
@@ -17,23 +30,54 @@
     state: directory
     mode: '0755'
 
-- name: Download NVIDIA client configuration token from DLS
+- name: Find latest NVIDIA client configuration token
+  ansible.builtin.shell: |
+    ls -1t /etc/nvidia/ClientConfigToken/client_configuration_token_*.tok 2>/dev/null | head -n1
+  register: nvidia_token_file
+  changed_when: false
+
+- name: Check if token exists and is valid (not expired)
+  ansible.builtin.shell: |
+    if [ -f "{{ nvidia_token_file.stdout }}" ]; then
+      payload=$(cut -d. -f2 < "{{ nvidia_token_file.stdout }}" | tr '_-' '/+' | base64 -d 2>/dev/null)
+      exp=$(echo "$payload" | grep -o '"exp":[0-9]*' | head -n1 | grep -o '[0-9]*')
+      now=$(date +%s)
+      if [ -n "$exp" ] && [ "$exp" -gt "$now" ]; then
+        exit 0
+      fi
+    fi
+    exit 1
+  register: nvidia_token_valid
+  changed_when: false
+  failed_when: false
+
+- name: Download NVIDIA client configuration token from DLS if missing or expired
   ansible.builtin.shell: |
     curl --insecure -L -X GET "https://{{ hostvars['nvidia_licensing'].ansible_host }}/-/client-token" \
       -o /etc/nvidia/ClientConfigToken/client_configuration_token_$(date '+%d-%m-%Y-%H-%M-%S').tok
   register: dls_token_result
   changed_when: dls_token_result.rc == 0
+  when: nvidia_token_valid.rc != 0
 
-- name: Restart nvidia-gridd service
+- name: Restart nvidia-gridd service if a new token was installed
   ansible.builtin.systemd:
     name: nvidia-gridd
     state: restarted
+  when: dls_token_result is defined and dls_token_result.changed
 
-- name: Validate NVIDIA license status
-  ansible.builtin.shell: nvidia-smi -q | grep "License"
+- name: Wait for NVIDIA license to become active
+  ansible.builtin.shell: |
+    for i in {1..30}; do
+      out=$(nvidia-smi -q | grep "License Status");
+      if echo "$out" | grep -q "Licensed" && echo "$out" | grep -q "Expiry:"; then
+        echo "$out"
+        exit 0
+      fi
+      sleep 10
+    done
+    nvidia-smi -q | grep "License Status"
   register: nvidia_license_status
   changed_when: false
-
-- name: Show NVIDIA license status
-  ansible.builtin.debug:
-    var: nvidia_license_status.stdout_lines
+  retries: 1
+  delay: 0
+  until: nvidia_license_status.stdout is search('Licensed') and nvidia_license_status.stdout is search('Expiry:')
