@@ -33,6 +33,7 @@
          missingok
          postrotate
             systemctl restart multicast-relay
+          endscript
          rotate 7
       }
 
