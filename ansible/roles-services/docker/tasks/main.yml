@@ -78,14 +78,22 @@
     fstype: nfs
     opts: "defaults"
     state: "mounted"
+    
+- name: Ensure /docker exists
+  file:
+    path: /docker
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
 
-- name: Mount /docker/appdata
+- name: Link /docker/appdata
   file:
     src: /mnt/docker
     dest: /docker/appdata
     state: link
 
-- name: Mount /docker/plex
+- name: Link /docker/plex
   file:
     src: /mnt/plex/data
     dest: /docker/plex
@@ -107,3 +115,5 @@
     state: present
   environment:
     CLOUDFLARED_TUNNEL_TOKEN: "{{ cloudflared_tunnel_token }}"
+
+
