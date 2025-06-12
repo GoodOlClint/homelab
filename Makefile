@@ -37,7 +37,7 @@ ansible-all:
 docker-deploy:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/docker.yml
 
-apply: infra services inventory ansible-all
+apply: terraform-infra terraform-services inventory ansible-all
 
 update:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/update-all.yml
