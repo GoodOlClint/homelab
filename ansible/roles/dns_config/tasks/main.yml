@@ -1,0 +1,10 @@
+---
+- name: Configure /etc/resolv.conf to use DNS VM
+  copy:
+    dest: /etc/resolv.conf
+    content: |
+      nameserver 172.16.100.53
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart networking

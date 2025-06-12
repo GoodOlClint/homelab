@@ -5,6 +5,7 @@
   vars_files:
     - ../group_vars/all.yml
   roles:
+    - dns_config
     - nvidia_licensing
     - rsyslog_client
     - telegraf
@@ -15,6 +16,7 @@
   vars_files:
     - ../group_vars/all.yml
   roles:
+    - dns_config
     - homebridge
     - rsyslog_client
     - telegraf
@@ -25,6 +27,7 @@
   vars_files:
     - ../group_vars/all.yml
   roles:
+    - dns_config
     - multicast_relay
     - rsyslog_client
     - telegraf
@@ -35,6 +38,7 @@
   vars_files:
     - ../group_vars/all.yml
   roles:
+    - dns_config
     - docker
     - rsyslog_client
     - telegraf
@@ -45,6 +49,7 @@
   vars_files:
     - ../group_vars/all.yml
   roles:
+    - dns_config
     - plex
     - rsyslog_client
     - telegraf
