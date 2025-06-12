@@ -3,10 +3,11 @@
   import_role:
     name: nvidia
 
-- name: Ensure NFS packages.
+- name: Ensure required packages.
   ansible.builtin.package:
     name:
       - nfs-common
+      - cifs-utils
     state: present
 
 - name: Ensure NFS fstab entry and mount.
@@ -25,33 +26,76 @@
     dest: /mnt/media
     state: link
 
-- name: Mount /var/lib/plexmediaserver/Library/Application Support/Plex Media Server
-  file:
-    src: /mnt/plex/app
-    dest: /var/lib/plexmediaserver/Library/Application Support/Plex Media Server
-    state: link
+- name: Check if Plex GPG key exists
+  stat:
+    path: /usr/share/keyrings/plex.gpg
+  register: plex_gpg_key
 
 - name: Download Plex APT GPG key to temp file
   ansible.builtin.get_url:
     url: https://downloads.plex.tv/plex-keys/PlexSign.key
     dest: /tmp/plex.gpg.key
     mode: '0644'
+  when: not plex_gpg_key.stat.exists
 
 - name: Convert Plex GPG key to dearmored format
   ansible.builtin.command:
     cmd: gpg --batch --dearmor -o /usr/share/keyrings/plex.gpg /tmp/plex.gpg.key
   args:
     creates: /usr/share/keyrings/plex.gpg
+  when: not plex_gpg_key.stat.exists
+
+- name: Check if Plex APT repo is present
+  ansible.builtin.shell: grep -q '^deb .*/plex' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null
+  register: plex_repo_present
+  changed_when: false
+  failed_when: false
 
 - name: Add Plex official APT repository
   ansible.builtin.apt_repository:
     repo: "deb [signed-by=/usr/share/keyrings/plex.gpg] https://downloads.plex.tv/repo/deb public main"
     state: present
     filename: plexmediaserver
+  when: plex_repo_present.rc != 0
+
+- name: Check if Plex is installed
+  ansible.builtin.stat:
+    path: /usr/lib/plexmediaserver
+  register: plex_installed
 
 - name: Install latest Plex Media Server
   ansible.builtin.apt:
     name: plexmediaserver
     state: latest
     update_cache: yes
+  when: not plex_installed.stat.exists
 
+- name: Create backup script for Plex config
+  ansible.builtin.template:
+    dest: /usr/local/bin/plex_config_backup.sh
+    mode: '0755'
+    owner: root
+    group: root
+    src: plex_config_backup.sh.j2
+
+- name: Create restore script for Plex config
+  ansible.builtin.template:
+    dest: /usr/local/bin/plex_config_restore.sh
+    mode: '0755'
+    owner: root
+    group: root
+    src: plex_config_restore.sh.j2
+
+- name: Ensure cron job for nightly Plex config backup
+  ansible.builtin.cron:
+    name: "Nightly Plex config backup"
+    user: root
+    job: "/usr/local/bin/plex_config_backup.sh"
+    minute: 0
+    hour: 2
+
+- name: Restore Plex config from latest backup if not already installed
+  ansible.builtin.shell: /usr/local/bin/plex_config_restore.sh
+  when: not plex_installed.stat.exists
+  args:
+    executable: /bin/bash
