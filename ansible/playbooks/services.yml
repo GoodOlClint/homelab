@@ -8,7 +8,7 @@
     - nvidia_licensing
     - rsyslog_client
     - telegraf
-    
+
 - name: Configure homebridge VM
   hosts: homebridge
   become: yes
@@ -48,5 +48,3 @@
     - plex
     - rsyslog_client
     - telegraf
-
-
