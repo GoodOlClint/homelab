@@ -1,0 +1,10 @@
+---
+- name: Run full Plex role
+  hosts: plex
+  become: yes
+  vars_files:
+  - ../group_vars/all.yml
+  roles:
+    - plex
+    - rsyslog_client
+    - telegraf

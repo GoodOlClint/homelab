@@ -48,3 +48,15 @@ variable "vlans" {
     mtu         = optional(number, 1500)
   }))
 }
+
+variable "primary_disk_storage" {
+  type        = string
+  description = "The storage backend for primary VM disks (e.g., iscsi-ssd-lvm)"
+  default     = "iscsi-ssd-lvm"
+}
+
+variable "secondary_disk_storage" {
+  type        = string
+  description = "The storage backend for secondary VM disks (e.g., iscsi-hdd-lvm)"
+  default     = "iscsi-hdd-lvm"
+}
