@@ -7,17 +7,30 @@
   import_role:
     name: geerlingguy.docker
 
+- name: Check if NVIDIA container toolkit GPG key exists
+  stat:
+    path: /etc/apt/trusted.gpg.d/libnvidia-container.gpg
+  register: nvidia_gpg_key
+
 - name: Ensure nvidia-container-toolkit apt GPG key
   ansible.builtin.apt_key:
     url: https://nvidia.github.io/libnvidia-container/gpgkey
     keyring: /etc/apt/trusted.gpg.d/libnvidia-container.gpg
     state: present
+  when: not nvidia_gpg_key.stat.exists
+
+- name: Check if NVIDIA container toolkit repo is present
+  ansible.builtin.shell: grep -q '^deb .*/libnvidia-container' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null
+  register: nvidia_repo_present
+  changed_when: false
+  failed_when: false
 
 - name: Ensure nvidia-container-toolkit repo
   ansible.builtin.apt_repository:
     repo: deb [signed-by=/etc/apt/trusted.gpg.d/libnvidia-container.gpg] https://nvidia.github.io/libnvidia-container/stable/deb/$(ARCH) /
     state: present
     filename: nvidia-container-toolkit
+  when: nvidia_repo_present.rc != 0
 
 - name: Ensure nvidia-container-toolkit package
   ansible.builtin.package:

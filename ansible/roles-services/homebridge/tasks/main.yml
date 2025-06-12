@@ -1,5 +1,12 @@
 ---
 # Tasks for Homebridge VM
+- name: Check if Homebridge repo is present
+  ansible.builtin.shell: |
+    grep -q 'repo.homebridge.io' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null
+  register: homebridge_repo_present
+  changed_when: false
+  failed_when: false
+
 - name: Add Homebridge repository
   ansible.builtin.deb822_repository:
     name: homebridge
@@ -10,6 +17,7 @@
     components: [main]
     state: present
     enabled: yes
+  when: homebridge_repo_present.rc != 0
 
 - name: Update apt cache
   apt:

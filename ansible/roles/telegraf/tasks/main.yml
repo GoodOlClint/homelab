@@ -1,28 +1,54 @@
 ---
 
+- name: Check if InfluxData GPG key exists
+  stat:
+    path: /usr/share/keyrings/influxdata.gpg
+  register: influxdata_gpg_key
+
 - name: Download InfluxData GPG key to temp file
   ansible.builtin.get_url:
     url: https://repos.influxdata.com/influxdata-archive.key
     dest: /tmp/influxdata.gpg.key
     mode: '0644'
+  when: not influxdata_gpg_key.stat.exists
 
 - name: Convert InfluxData GPG key to dearmored format
   ansible.builtin.command:
     cmd: gpg --batch --dearmor -o /usr/share/keyrings/influxdata.gpg /tmp/influxdata.gpg.key
   args:
     creates: /usr/share/keyrings/influxdata.gpg
+  when: not influxdata_gpg_key.stat.exists
+
+- name: Check if InfluxData APT repo is present
+  ansible.builtin.shell: grep -q '^deb .*/influxdata' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null
+  register: influxdata_repo_present
+  changed_when: false
+  failed_when: false
 
 - name: Add InfluxData official APT repository
   ansible.builtin.apt_repository:
     repo: "deb [signed-by=/usr/share/keyrings/influxdata.gpg] https://repos.influxdata.com/debian stable main"
     state: present
     filename: influxdata
+  when: influxdata_repo_present.rc != 0
+
+- name: Check if Telegraf is installed
+  ansible.builtin.shell: dpkg -l | grep -qw telegraf
+  register: telegraf_installed
+  changed_when: false
+  failed_when: false
 
 - name: Ensure Telegraf is installed
   apt:
     name: telegraf
     state: present
     update_cache: yes
+  when: telegraf_installed.rc != 0
+
+- name: Check if Telegraf OpenObserve config exists
+  stat:
+    path: /etc/telegraf/telegraf.d/openobserve.conf
+  register: telegraf_openobserve_conf
 
 - name: Configure Telegraf to send metrics to OpenObserve
   copy:
@@ -48,9 +74,11 @@
       [[inputs.disk]]
         ignore_fs = ["tmpfs", "devtmpfs", "devfs"]
     mode: '0644'
+  when: not telegraf_openobserve_conf.stat.exists
 
 - name: Ensure Telegraf is started and enabled
   systemd:
     name: telegraf
     state: started
     enabled: yes
+  when: telegraf_installed.rc == 0
