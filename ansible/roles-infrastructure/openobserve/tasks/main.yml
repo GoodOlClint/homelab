@@ -54,6 +54,12 @@
   set_fact:
     openobserve_metrics_endpoint: "http://{{ ansible_host | default(inventory_hostname) }}:5080/api/default/prometheus/api/v1/write"
 
+- name: Ensure /etc/openobserve directory exists
+  file:
+    path: /etc/openobserve
+    state: directory
+    mode: '0755'
+
 - name: Create sample configuration for metrics ingestion
   copy:
     dest: /etc/openobserve/telegraf.conf
