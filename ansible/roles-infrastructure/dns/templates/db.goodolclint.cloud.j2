@@ -1,0 +1,18 @@
+$TTL 1h
+@   IN  SOA  ns1.goodolclint.cloud. admin.goodolclint.cloud. (
+        2025061201 ; serial
+        1h         ; refresh
+        15m        ; retry
+        1w         ; expire
+        1h )       ; minimum
+
+    IN  NS  ns1.goodolclint.cloud.
+ns1 IN  A   {{ hostvars['dns'].ansible_host }}
+
+; A records for all VMs (templated by Ansible)
+{% for host in groups['all'] | sort %}
+{% set host_label = host.replace('_', '-') %}
+{% if hostvars[host].ansible_host is defined %}
+{{ host_label }}    IN  A   {{ hostvars[host].ansible_host }}
+{% endif %}
+{% endfor %}

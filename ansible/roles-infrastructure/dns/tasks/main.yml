@@ -24,3 +24,21 @@
     name: bind9
     state: started
     enabled: yes
+
+- name: Deploy goodolclint.cloud zone file
+  template:
+    src: db.goodolclint.cloud.j2
+    dest: /etc/bind/db.goodolclint.cloud
+    mode: '0644'
+  notify: Restart bind9
+
+- name: Ensure goodolclint.cloud zone is configured in named.conf.local
+  blockinfile:
+    path: /etc/bind/named.conf.local
+    marker: "// ANSIBLE MANAGED ZONE BLOCK {mark} goodolclint.cloud"
+    block: |
+      zone "goodolclint.cloud" {
+        type master;
+        file "/etc/bind/db.goodolclint.cloud";
+      };
+  notify: Restart bind9

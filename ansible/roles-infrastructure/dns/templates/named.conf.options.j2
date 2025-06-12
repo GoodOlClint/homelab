@@ -9,10 +9,10 @@ options {
 {% endfor %}
   };
   forwarders {
-    8.8.8.8;
     1.1.1.1;
+    8.8.8.8;
+    9.9.9.9;
   };
   dnssec-validation auto;
-  auth-nxdomain no;
-  listen-on-v6 { any; };
+  auth-nxdomain no;    # conform to RFC1035
 };
