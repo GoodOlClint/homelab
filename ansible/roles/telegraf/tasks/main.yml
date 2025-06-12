@@ -54,6 +54,11 @@
   copy:
     dest: /etc/telegraf/telegraf.d/openobserve.conf
     content: |
+      [[processors.regex]]
+        namepass = ["*"]
+        [[processors.regex.fields]]
+          key = ".*_format$"
+          drop = true
       [[outputs.prometheus_client]]
         listen = ":9273"
       [[outputs.http]]
