@@ -1,0 +1,109 @@
+#!/bin/bash
+PLEX_DIR="/var/lib/plexmediaserver/Library/Application Support/Plex Media Server"
+DB_DIR="$PLEX_DIR/Plug-in Support/Databases"
+DB_MAIN="com.plexapp.plugins.library.db"
+DB_BLOBS="com.plexapp.plugins.library.blobs.db"
+PLEX_SQLITE="/usr/lib/plexmediaserver/Plex SQLite"
+PLEX_TOKEN="{{ plex_token }}"
+PLEX_SMB_PASS="{{ plex_smb_pass }}"
+PLEX_SMB_MOUNT="{{ plex_smb_mount }}"
+PLEX_SMB_SHARE="{{ plex_smb_share }}"
+PLEX_SMB_USER="{{ plex_smb_user }}"
+PLEX_SMB_SERVER="{{ plex_smb_server }}"
+BACKUP_ARCHIVE="plex-backup.tar.gz"
+LOG_FILE="/var/log/plex_config_backup.log"
+
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+echo "[$(date)] Starting Plex config backup..."
+echo "[$(date)] Checking for active Plex sessions..."
+
+# Check if Plex is in use (active streams via API), retry every 5 minutes for up to 2 hours
+max_attempts=24
+attempt=1
+while true; do
+  session_count=$(curl -s -H "X-Plex-Token: $PLEX_TOKEN" http://localhost:32400/status/sessions | grep -o '<MediaContainer[^>]*size="[0-9]*"' | sed -E 's/.*size="([0-9]+)"/\1/')
+  if [[ -z "$session_count" ]]; then
+    session_count=0
+  fi
+  if (( session_count == 0 )); then
+    echo "[$(date)] No active sessions. Proceeding with backup."
+    break
+  fi
+  if [ $attempt -ge $max_attempts ]; then
+    echo "[$(date)] Plex is still in use after 2 hours, skipping backup."
+    exit 0
+  fi
+  echo "[$(date)] Plex is in use ($session_count active sessions), retrying in 5 minutes (attempt $attempt/$max_attempts)."
+  sleep 300
+  attempt=$((attempt+1))
+done
+
+echo "[$(date)] Stopping plexmediaserver..."
+systemctl stop plexmediaserver
+
+# Create a temporary directory for the backup
+TMP_BACKUP_DIR=$(mktemp -d)
+
+echo "[$(date)] Copying DB, Plug-ins, and Preferences.xml..."
+cp "$DB_DIR/$DB_MAIN" "$TMP_BACKUP_DIR/${DB_MAIN}"
+cp "$DB_DIR/$DB_BLOBS" "$TMP_BACKUP_DIR/${DB_BLOBS}"
+cp -a "$PLEX_DIR/Plug-ins" "$TMP_BACKUP_DIR/Plug-ins"
+cp "$PLEX_DIR/Preferences.xml" "$TMP_BACKUP_DIR/Preferences.xml"
+echo "[$(date)] Starting plexmediaserver..."
+systemctl start plexmediaserver
+
+# Run integrity check on copied main database
+echo "[$(date)] Running integrity check on main DB..."
+if [ -f "$TMP_BACKUP_DIR/$DB_MAIN" ]; then
+  INTEGRITY=$("$PLEX_SQLITE" "$TMP_BACKUP_DIR/$DB_MAIN" "PRAGMA integrity_check;" | tail -n 1)
+  if [ "$INTEGRITY" != "ok" ]; then
+    echo "[$(date)] Database integrity check failed: $INTEGRITY"
+    rm -rf "$TMP_BACKUP_DIR"
+    exit 1
+  fi
+fi
+
+# Run integrity check on copied blobs database (optional, if exists)
+echo "[$(date)] Running integrity check on blobs DB..."
+if [ -f "$TMP_BACKUP_DIR/$DB_BLOBS" ]; then
+  INTEGRITY_BLOBS=$("$PLEX_SQLITE" "$TMP_BACKUP_DIR/$DB_BLOBS" "PRAGMA integrity_check;" | tail -n 1)
+  if [ "$INTEGRITY_BLOBS" != "ok" ]; then
+    echo "[$(date)] Blobs database integrity check failed: $INTEGRITY_BLOBS"
+    rm -rf "$TMP_BACKUP_DIR"
+    exit 1
+  fi
+fi
+
+echo "[$(date)] Creating backup archive..."
+cd "$TMP_BACKUP_DIR"
+tar czf "$BACKUP_ARCHIVE" "$DB_MAIN" "$DB_BLOBS" Plug-ins Preferences.xml
+echo "[$(date)] Archive created."
+cd -
+
+# Mount SMB share if not already mounted
+echo "[$(date)] Mounting SMB share if needed..."
+if ! mountpoint -q "$PLEX_SMB_MOUNT"; then
+  mkdir -p "$PLEX_SMB_MOUNT"
+  # Remove leading/trailing slashes from share name for correct UNC
+  SMB_SHARE_CLEAN=$(echo "$PLEX_SMB_SHARE" | sed 's#^/*##;s#/*$##')
+  # Remove iocharset=utf8 from options to avoid CIFS error on some systems
+  mount -t cifs "//${PLEX_SMB_SERVER}/${SMB_SHARE_CLEAN}" "$PLEX_SMB_MOUNT" -o username="$PLEX_SMB_USER",password="$PLEX_SMB_PASS",file_mode=0777,dir_mode=0777,vers=3.0,noperm
+  if [ $? -ne 0 ]; then
+    echo "[$(date)] ERROR: Failed to mount //${PLEX_SMB_SERVER}/${SMB_SHARE_CLEAN} to $PLEX_SMB_MOUNT. Check that cifs-utils is installed and the mount helper is available."
+    exit 1
+  fi
+fi
+
+# Copy the archive to SMB backup (overwrite previous backup)
+echo "[$(date)] Copying archive to SMB share..."
+cp "$TMP_BACKUP_DIR/$BACKUP_ARCHIVE" "$PLEX_SMB_MOUNT/$BACKUP_ARCHIVE"
+
+# Unmount SMB share
+echo "[$(date)] Unmounting SMB share..."
+umount "$PLEX_SMB_MOUNT"
+
+# Clean up temporary files
+echo "[$(date)] Cleaning up temporary files..."
+rm -rf "$TMP_BACKUP_DIR"
+echo "[$(date)] Plex config backup complete."

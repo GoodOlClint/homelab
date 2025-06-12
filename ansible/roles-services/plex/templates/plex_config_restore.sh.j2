@@ -1,0 +1,134 @@
+#!/bin/bash
+set -e
+PLEX_DIR="/var/lib/plexmediaserver/Library/Application Support/Plex Media Server"
+DB_DIR="$PLEX_DIR/Plug-in Support/Databases"
+PLEX_SQLITE="/usr/lib/plexmediaserver/Plex SQLite"
+LOG_FILE="/var/log/plex_config_restore.log"
+
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+echo "[$(date)] Starting Plex config restore..."
+
+PLEX_SMB_PASS="{{ plex_smb_pass }}"
+PLEX_SMB_MOUNT="{{ plex_smb_mount }}"
+PLEX_SMB_SHARE="{{ plex_smb_share }}"
+PLEX_SMB_USER="{{ plex_smb_user }}"
+PLEX_SMB_SERVER="{{ plex_smb_server }}"
+
+# Mount SMB share if not already mounted
+echo "[$(date)] Mounting SMB share if needed..."
+if ! mountpoint -q "$PLEX_SMB_MOUNT"; then
+  mkdir -p "$PLEX_SMB_MOUNT"
+  SMB_SHARE_CLEAN=$(echo "$PLEX_SMB_SHARE" | sed 's#^/*##;s#/*$##')
+  mount -t cifs "//$PLEX_SMB_SERVER/$SMB_SHARE_CLEAN" "$PLEX_SMB_MOUNT" -o username="$PLEX_SMB_USER",password="$PLEX_SMB_PASS",file_mode=0777,dir_mode=0777,vers=3.0,noperm
+  if [ $? -ne 0 ]; then
+    echo "[$(date)] ERROR: Failed to mount //$PLEX_SMB_SERVER/$SMB_SHARE_CLEAN to $PLEX_SMB_MOUNT. Check that cifs-utils is installed and the mount helper is available."
+    exit 1
+  fi
+fi
+
+echo "[$(date)] Looking for latest backup archive..."
+latest_backup=$(ls -1t "$PLEX_SMB_MOUNT"/plex-backup.tar.gz 2>/dev/null | head -n1)
+if [ -z "$latest_backup" ]; then
+  echo "[$(date)] No backup archive found on SMB share."
+  exit 1
+fi
+
+echo "[$(date)] Restoring from $latest_backup"
+
+echo "[$(date)] Extracting backup archive..."
+rm -rf /tmp/plex_restore
+echo "[$(date)] Creating /tmp/plex_restore..."
+mkdir -p /tmp/plex_restore
+echo "[$(date)] Running tar extraction with ionice..."
+tar -xzf "$latest_backup" -C /tmp/plex_restore
+echo "[$(date)] Extraction complete."
+
+# Validate both DBs before copying
+VALID=true
+if [ -f /tmp/plex_restore/com.plexapp.plugins.library.db ]; then
+  echo "[$(date)] Validating main DB..."
+  INTEGRITY=$("$PLEX_SQLITE" /tmp/plex_restore/com.plexapp.plugins.library.db "PRAGMA integrity_check;" | tail -n 1)
+  if [ "$INTEGRITY" != "ok" ]; then
+    echo "[$(date)] Restored main DB failed integrity check: $INTEGRITY"
+    VALID=false
+  fi
+fi
+if [ -f /tmp/plex_restore/com.plexapp.plugins.library.blobs.db ]; then
+  echo "[$(date)] Validating blobs DB..."
+  INTEGRITY_BLOBS=$("$PLEX_SQLITE" /tmp/plex_restore/com.plexapp.plugins.library.blobs.db "PRAGMA integrity_check;" | tail -n 1)
+  if [ "$INTEGRITY_BLOBS" != "ok" ]; then
+    echo "[$(date)] Restored blobs DB failed integrity check: $INTEGRITY_BLOBS"
+    VALID=false
+  fi
+fi
+if [ "$VALID" != "true" ]; then
+  echo "[$(date)] One or more DBs failed validation. Aborting restore."
+  rm -rf /tmp/plex_restore
+  exit 1
+fi
+
+systemctl stop plexmediaserver
+
+echo "[$(date)] Restoring Plug-ins..."
+if [ -d /tmp/plex_restore/Plug-ins ]; then
+  echo "[$(date)] Removing old Plug-ins..."
+  rm -rf "$PLEX_DIR/Plug-ins"
+  echo "[$(date)] Copying Plug-ins..."
+  cp -a /tmp/plex_restore/Plug-ins "$PLEX_DIR/"
+  echo "[$(date)] Setting ownership on Plug-ins..."
+  chown -R plex:plex "$PLEX_DIR/Plug-ins"
+fi
+
+echo "[$(date)] Restoring main DB..."
+if [ -f /tmp/plex_restore/com.plexapp.plugins.library.db ]; then
+  cp -af /tmp/plex_restore/com.plexapp.plugins.library.db "$DB_DIR/com.plexapp.plugins.library.db"
+  chown plex:plex "$DB_DIR/com.plexapp.plugins.library.db"
+fi
+
+echo "[$(date)] Restoring blobs DB..."
+if [ -f /tmp/plex_restore/com.plexapp.plugins.library.blobs.db ]; then
+  cp -af /tmp/plex_restore/com.plexapp.plugins.library.blobs.db "$DB_DIR/com.plexapp.plugins.library.blobs.db"
+  chown plex:plex "$DB_DIR/com.plexapp.plugins.library.blobs.db"
+fi
+
+echo "[$(date)] Restoring Preferences.xml..."
+if [ -f /tmp/plex_restore/Preferences.xml ]; then
+  cp -af /tmp/plex_restore/Preferences.xml "$PLEX_DIR/Preferences.xml"
+  chown plex:plex "$PLEX_DIR/Preferences.xml"
+fi
+
+echo "[$(date)] Cleaning up..."
+rm -rf /tmp/plex_restore
+systemctl start plexmediaserver
+echo "[$(date)] Waiting for Plex service to start..."
+for i in {1..30}; do
+  if systemctl is-active --quiet plexmediaserver; then
+    echo "[$(date)] Plex service is active."
+    break
+  fi
+  sleep 5
+done
+
+# Wait for Plex API to become available
+PLEX_TOKEN="{{ plex_token }}"
+PLEX_API="http://localhost:32400"
+echo "[$(date)] Waiting for Plex API to become available..."
+for i in {1..30}; do
+  if curl -s -H "X-Plex-Token: $PLEX_TOKEN" "$PLEX_API/library/sections" | grep -q 'MediaContainer'; then
+    echo "[$(date)] Plex API is available."
+    break
+  fi
+  sleep 5
+done
+
+# Kick off a metadata scan for all libraries
+echo "[$(date)] Triggering metadata refresh libraries..."
+sections=$(curl -s -H "X-Plex-Token: $PLEX_TOKEN" "$PLEX_API/library/sections" | grep -o 'key="[0-9]*"' | grep -o '[0-9]*')
+for section in $sections; do
+  echo "[$(date)] Refreshing library section $section..."
+  curl -s -H "X-Plex-Token: $PLEX_TOKEN" "$PLEX_API/library/sections/$section/refresh?force=1"
+done
+echo "[$(date)] Plex config restore complete."
+# Unmount SMB share (uncomment if desired)
+umount "$PLEX_SMB_MOUNT"
