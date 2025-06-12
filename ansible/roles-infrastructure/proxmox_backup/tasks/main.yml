@@ -1,20 +1,40 @@
 ---
+- name: Check if Proxmox Backup Server GPG key exists
+  stat:
+    path: /etc/apt/trusted.gpg.d/proxmox-release-bookworm.gpg
+  register: proxmox_gpg_key
+
 - name: Install Proxmox Backup Server repository key
   apt_key:
     url: https://enterprise.proxmox.com/debian/proxmox-release-bookworm.gpg
     state: present
+  when: not proxmox_gpg_key.stat.exists
+
+- name: Check if Proxmox Backup Server repo is present
+  shell: grep -q '^deb .*/pbs' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null
+  register: proxmox_backup_repo_present
+  changed_when: false
+  failed_when: false
 
 - name: Add Proxmox Backup Server repository
   apt_repository:
     repo: "deb http://download.proxmox.com/debian/pbs bookworm pbs-no-subscription"
     state: present
     filename: proxmox-backup
+  when: proxmox_backup_repo_present.rc != 0
+
+- name: Check if Proxmox Backup Server is installed
+  ansible.builtin.shell: dpkg -l | grep -qw proxmox-backup-server
+  register: proxmox_backup_installed
+  changed_when: false
+  failed_when: false
 
 - name: Install Proxmox Backup Server
   apt:
     name: proxmox-backup-server
     state: present
     update_cache: yes
+  when: proxmox_backup_installed.rc != 0
 
 - name: Ensure Proxmox Backup Server is started and enabled
   systemd:
@@ -45,3 +65,21 @@
     fstype: nfs
     opts: "defaults"
     state: "mounted"
+
+- name: Remove Proxmox enterprise repo if present
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/pbs-enterprise.list
+    state: absent
+  register: proxmox_enterprise_repo_removed
+
+- name: Remove Proxmox enterprise repo from /etc/apt/sources.list if present
+  ansible.builtin.lineinfile:
+    path: /etc/apt/sources.list
+    regexp: '^deb .*enterprise.proxmox.com/debian/pbs'
+    state: absent
+  register: proxmox_enterprise_repo_line_removed
+
+- name: Update apt cache if repo was removed
+  apt:
+    update_cache: yes
+  when: proxmox_enterprise_repo_removed.changed or proxmox_enterprise_repo_line_removed.changed
