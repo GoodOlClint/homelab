@@ -44,7 +44,7 @@ resource "proxmox_virtual_environment_vm" "openobserveVM" {
   }
 
   disk {
-    datastore_id = var.virtual_environment_storage
+    datastore_id = var.primary_disk_storage
     file_id      = proxmox_virtual_environment_download_file.ubuntu_cloud_image.id
     interface    = "virtio0"
     iothread     = true
@@ -53,7 +53,7 @@ resource "proxmox_virtual_environment_vm" "openobserveVM" {
   }
 
   initialization {
-    datastore_id = var.virtual_environment_storage
+    datastore_id = var.primary_disk_storage
     dynamic "ip_config" {
       for_each = local.openobserve_interfaces
       content {

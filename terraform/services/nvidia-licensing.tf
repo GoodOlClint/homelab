@@ -45,7 +45,7 @@ resource "proxmox_virtual_environment_vm" "nvidia_licensing" {
   }
 
   disk {
-    datastore_id = var.virtual_environment_storage
+    datastore_id = var.primary_disk_storage
     file_id      = local.ubuntu_cloud_image_id
     size         = 4 # 4GB
     interface    = "virtio0"
@@ -54,7 +54,7 @@ resource "proxmox_virtual_environment_vm" "nvidia_licensing" {
   }
 
   initialization {
-    datastore_id = var.virtual_environment_storage
+    datastore_id = var.primary_disk_storage
     dynamic "ip_config" {
       for_each = local.nvidia_licensing_interfaces
       content {

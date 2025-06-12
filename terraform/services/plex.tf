@@ -36,7 +36,8 @@ resource "proxmox_virtual_environment_vm" "plexVM" {
   }
 
   cpu {
-    cores = 8
+    cores = 4
+    sockets = 2
   }
 
   memory {
@@ -44,7 +45,7 @@ resource "proxmox_virtual_environment_vm" "plexVM" {
   }
 
   disk {
-    datastore_id = var.virtual_environment_storage
+    datastore_id = var.primary_disk_storage
     file_id      = local.ubuntu_cloud_image_id
     interface    = "virtio0"
     iothread     = true
@@ -53,7 +54,7 @@ resource "proxmox_virtual_environment_vm" "plexVM" {
   }
 
   initialization {
-    datastore_id = var.virtual_environment_storage
+    datastore_id = var.primary_disk_storage
     dynamic "ip_config" {
       for_each = local.plex_interfaces
       content {
