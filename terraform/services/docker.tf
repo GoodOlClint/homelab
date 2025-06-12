@@ -36,11 +36,12 @@ resource "proxmox_virtual_environment_vm" "dockerVM" {
   }
 
   cpu {
-    cores = 4
+    cores = 10
+    sockets = 2
   }
 
   memory {
-    dedicated = 8192
+    dedicated = 65536
   }
 
   disk {
