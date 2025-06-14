@@ -25,20 +25,26 @@
     state: started
     enabled: yes
 
-- name: Deploy goodolclint.cloud zone file
+- name: Deploy VLAN-specific zone files
+  loop: "{{ dns_zones | dict2items }}"
+  loop_control:
+    loop_var: vlan_zone
   template:
-    src: db.goodolclint.cloud.j2
-    dest: /etc/bind/db.goodolclint.cloud
+    src: db.zone.j2
+    dest: "/var/lib/bind/db.{{ vlan_zone.value.zone }}"
     mode: '0644'
+    owner: bind
+    group: bind
+  vars:
+    zone_name: "{{ vlan_zone.value.zone }}"
+    zone_dns_ip: "{{ vlan_zone.value.dns_ip }}"
   notify: Restart bind9
 
-- name: Ensure goodolclint.cloud zone is configured in named.conf.local
-  blockinfile:
-    path: /etc/bind/named.conf.local
-    marker: "// ANSIBLE MANAGED ZONE BLOCK {mark} goodolclint.cloud"
-    block: |
-      zone "goodolclint.cloud" {
-        type master;
-        file "/etc/bind/db.goodolclint.cloud";
-      };
+- name: Ensure VLAN zones are configured in named.conf.local
+  template:
+    src: named.conf.local.j2
+    dest: /etc/bind/named.conf.local
+    mode: '0644'
+    owner: root
+    group: bind
   notify: Restart bind9
