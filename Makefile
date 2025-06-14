@@ -55,5 +55,5 @@ clean-services:
 clean-ssh:
 	@. .venv/bin/activate && python3 -c "import yaml; f=open('ansible/inventory/vms.yaml'); ips=[h['ansible_host'] for h in yaml.safe_load(f)['all']['hosts'].values()]; [__import__('os').system(f'ssh-keygen -R {ip}') for ip in ips]"
 
-clean: clean-infra clean-services clean-ssh
+clean: clean-services clean-infra clean-ssh
 
