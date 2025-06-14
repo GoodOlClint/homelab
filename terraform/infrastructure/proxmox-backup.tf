@@ -2,28 +2,60 @@ locals {
   proxmox_backup_vlans = ["vlan100", "vlan20"]
   proxmox_backup_interfaces = {
     for idx, vlan_key in local.proxmox_backup_vlans : vlan_key => {
-      vlan_id = var.vlans[vlan_key].vlan_id
-      bridge  = var.vlans[vlan_key].bridge
-      subnet  = var.vlans[vlan_key].subnet
-      ip      = cidrhost(var.vlans[vlan_key].subnet, 100)
-      gw      = idx == 0 ? cidrhost(var.vlans[vlan_key].subnet, 1) : null
-      mtu     = try(var.vlans[vlan_key].mtu, 1500)
-      dhcp    = vlan_key == "vlan100" ? true : false
+      vlan_id   = var.vlans[vlan_key].vlan_id
+      bridge    = var.vlans[vlan_key].bridge
+      subnet    = var.vlans[vlan_key].subnet
+      ip        = cidrhost(var.vlans[vlan_key].subnet, 100)
+      gw        = idx == 0 ? cidrhost(var.vlans[vlan_key].subnet, 1) : null
+      mtu       = try(var.vlans[vlan_key].mtu, 1500)
+      dhcp      = vlan_key == "vlan100" ? true : false
+      macaddress = format(
+        "52:54:00:%02x:%02x:%02x",
+        11, # unique per-VM id
+        idx,
+        var.vlans[vlan_key].vlan_id % 256
+      )
     }
   }
 }
 
-resource "proxmox_virtual_environment_file" "proxmox-backup-cloud-init" {
+resource "proxmox_virtual_environment_file" "proxmox_backup_user_data" {
   content_type = "snippets"
   datastore_id = var.virtual_environment_storage
   node_name    = var.virtual_environment_node
 
   source_raw {
-    data = <<-EOF
-    #cloud-config
-    local-hostname: proxmox-backup
-    EOF
-    file_name = "proxmox-backup-cloud-init.yaml"
+    data = templatefile("${path.module}/user-data.yaml.tmpl", {
+      hostname  = "proxmox-backup"
+      fqdn      = "proxmox-backup.goodolclint.internal"
+      username  = var.virtual_machine_username
+      ssh_key   = trimspace(data.local_file.ssh_public_key.content)
+      timezone  = var.virtual_machine_timezone
+    })
+    file_name = "proxmox-backup-user-data.yaml"
+  }
+}
+
+resource "proxmox_virtual_environment_file" "proxmox_backup_network_data" {
+  content_type = "snippets"
+  datastore_id = var.virtual_environment_storage
+  node_name    = var.virtual_environment_node
+
+  source_raw {
+    data = templatefile("${path.module}/network-data.yaml.tmpl", {
+      interfaces = [
+        for vlan_key, iface in local.proxmox_backup_interfaces : {
+          name       = "eth_${vlan_key}"
+          mtu        = iface.mtu
+          dhcp       = iface.dhcp
+          address    = iface.ip != null ? iface.ip : ""
+          prefix     = iface.subnet != null ? split("/", iface.subnet)[1] : ""
+          gateway    = iface.gw != null ? iface.gw : ""
+          macaddress = iface.macaddress != null ? iface.macaddress : ""
+        }
+      ]
+    })
+    file_name = "proxmox-backup-network-data.yaml"
   }
 }
 
@@ -35,9 +67,12 @@ resource "proxmox_virtual_environment_vm" "proxmoxBackupVM" {
     enabled = true
   }
 
+  machine = "q35"
+
   cpu {
     cores = 4
     sockets = 2
+    type = "x86-64-v3"
   }
 
   memory {
@@ -55,27 +90,16 @@ resource "proxmox_virtual_environment_vm" "proxmoxBackupVM" {
 
   initialization {
     datastore_id = var.primary_disk_storage
-    dynamic "ip_config" {
-      for_each = local.proxmox_backup_interfaces
-      content {
-        dynamic "ipv4" {
-          for_each = [ip_config.value]
-          content {
-            address = ip_config.value.dhcp ? "dhcp" : "${ip_config.value.ip}/${split("/", ip_config.value.subnet)[1]}"
-            gateway = ip_config.value.dhcp || ip_config.value.gw == null ? null : ip_config.value.gw
-          }
-        }
-      }
-    }
-    user_data_file_id = proxmox_virtual_environment_file.default-cloud-init.id
-    meta_data_file_id = proxmox_virtual_environment_file.proxmox-backup-cloud-init.id
+    user_data_file_id = proxmox_virtual_environment_file.proxmox_backup_user_data.id
+    network_data_file_id = proxmox_virtual_environment_file.proxmox_backup_network_data.id
   }
   dynamic "network_device" {
     for_each = local.proxmox_backup_interfaces
     content {
-      bridge  = network_device.value.bridge
-      vlan_id = network_device.value.vlan_id
-      mtu     = network_device.value.mtu
+      bridge      = network_device.value.bridge
+      vlan_id     = network_device.value.vlan_id
+      mtu         = network_device.value.mtu
+      mac_address = network_device.value.macaddress
     }
   }
 
