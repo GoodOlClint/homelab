@@ -40,7 +40,7 @@ docker-deploy:
 apply: terraform-infra terraform-services inventory ansible-all
 
 update:
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/update-all.yml
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/update-all.yml
 
 plan:
 	@cd terraform/infrastructure && terraform init && terraform plan
