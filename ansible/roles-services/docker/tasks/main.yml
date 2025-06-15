@@ -76,6 +76,12 @@
     name: nvidia-gpu-validation
     state: absent
 
+- name: Remove unused Ubuntu image after validation
+  community.docker.docker_image:
+    name: ubuntu
+    state: absent
+    force: yes
+
 - name: Ensure NFS packages are installed
   apt:
     name: nfs-common
