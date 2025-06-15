@@ -1,5 +1,5 @@
 locals {
-  dns_vlans = ["vlan100", "vlan110", "vlan120", "vlan121", "vlan130"]
+  dns_vlans = ["vlan100", "vlan110", "vlan120", "vlan121", "vlan130", "vlan20"]
   dns_interfaces = {
     for idx, vlan_key in local.dns_vlans : vlan_key => {
       vlan_id   = var.vlans[vlan_key].vlan_id
