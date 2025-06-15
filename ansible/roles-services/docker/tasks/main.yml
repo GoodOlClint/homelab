@@ -80,7 +80,7 @@
   community.docker.docker_image:
     name: ubuntu
     state: absent
-    force: yes
+    force_absent: true
 
 - name: Ensure NFS packages are installed
   apt:
