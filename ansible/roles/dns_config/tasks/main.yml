@@ -24,6 +24,10 @@
     content: |
       #!/bin/bash
       
+      LOGFILE="/var/log/dns_dynamic_update.log"
+      exec >> "$LOGFILE" 2>&1
+      echo "[$(date)] Starting dynamic DNS update for $HOSTNAME" 
+      
       DNS_TTL=3600
       DNS_KEY_FILE="/etc/bind/ddns.key"
       HOSTNAME="{{ inventory_hostname.replace('_', '-') }}"
@@ -36,6 +40,7 @@
       IP4=$(ip -4 addr show dev "$IFACE" | awk '/inet / {print $2}' | cut -d/ -f1)
       # Get IPv6 address for this interface (global scope only)
       IP6=$(ip -6 addr show dev "$IFACE" scope global | awk '/inet6 / {print $2}' | cut -d/ -f1 | head -n1)
+      echo "[$(date)] Checking $IFACE: IPv4=$IP4 IPv6=$IP6"
       if [[ -n "$IP4" || -n "$IP6" ]]; then
         TMPFILE=$(mktemp)
         echo "server $DNS_SERVER" > $TMPFILE
@@ -43,20 +48,25 @@
         if [[ -n "$IP4" ]]; then
           echo "update delete $HOSTNAME.$ZONE. A" >> $TMPFILE
           echo "update add $HOSTNAME.$ZONE. $DNS_TTL A $IP4" >> $TMPFILE
+          echo "[$(date)] Will update A record for $HOSTNAME.$ZONE. to $IP4"
         fi
         if [[ -n "$IP6" ]]; then
           echo "update delete $HOSTNAME.$ZONE. AAAA" >> $TMPFILE
           echo "update add $HOSTNAME.$ZONE. $DNS_TTL AAAA $IP6" >> $TMPFILE
+          echo "[$(date)] Will update AAAA record for $HOSTNAME.$ZONE. to $IP6"
         fi
         echo "send" >> $TMPFILE
         if [[ -f "$DNS_KEY_FILE" ]]; then
-          nsupdate -k "$DNS_KEY_FILE" $TMPFILE
+          nsupdate -k "$DNS_KEY_FILE" $TMPFILE && echo "[$(date)] nsupdate (key) succeeded for $ZONE" || echo "[$(date)] nsupdate (key) FAILED for $ZONE"
         else
-          nsupdate $TMPFILE
+          nsupdate $TMPFILE && echo "[$(date)] nsupdate succeeded for $ZONE" || echo "[$(date)] nsupdate FAILED for $ZONE"
         fi
         rm -f $TMPFILE
+      else
+        echo "[$(date)] No IP found for $IFACE, skipping update."
       fi
       {% endfor %}
+      echo "[$(date)] Dynamic DNS update complete for $HOSTNAME"
 
 - name: Create systemd service for dynamic DNS update
   copy:
