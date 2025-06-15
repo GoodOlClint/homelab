@@ -25,10 +25,19 @@
     state: started
     enabled: yes
 
+- name: Check if VLAN-specific zone file exists
+  loop: "{{ dns_zones | dict2items }}"
+  loop_control:
+    loop_var: vlan_zone
+  stat:
+    path: "/var/lib/bind/db.{{ vlan_zone.value.zone }}"
+  register: zonefile_stat
+
 - name: Deploy VLAN-specific zone files
   loop: "{{ dns_zones | dict2items }}"
   loop_control:
     loop_var: vlan_zone
+    index_var: idx
   template:
     src: db.zone.j2
     dest: "/var/lib/bind/db.{{ vlan_zone.value.zone }}"
@@ -38,6 +47,7 @@
   vars:
     zone_name: "{{ vlan_zone.value.zone }}"
     zone_dns_ip: "{{ vlan_zone.value.dns_ip }}"
+  when: zonefile_stat.results[idx].stat.exists == false
   notify: Restart bind9
 
 - name: Ensure VLAN zones are configured in named.conf.local
