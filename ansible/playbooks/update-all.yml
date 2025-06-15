@@ -33,3 +33,8 @@
         fi
       register: docker_restart_result
       changed_when: false
+
+    - name: Prune unused Docker images
+      shell: docker image prune -af
+      register: docker_prune_result
+      changed_when: false
