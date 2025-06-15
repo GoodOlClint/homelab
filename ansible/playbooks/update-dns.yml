@@ -1,0 +1,8 @@
+---
+- name: Update dynamic DNS records on all servers except the DNS server
+  hosts: all:!dns
+  become: yes
+  vars_files:
+  - ../group_vars/all.yml
+  roles:
+    - dns_config

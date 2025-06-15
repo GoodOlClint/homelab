@@ -42,6 +42,9 @@ apply: terraform-infra terraform-services inventory ansible-all
 update:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/update-all.yml
 
+update-dns:
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/update-dns.yml
+
 plan:
 	@cd terraform/infrastructure && terraform init && terraform plan
 	@cd terraform/services && terraform init && terraform plan
