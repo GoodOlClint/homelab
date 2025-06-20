@@ -1,0 +1,59 @@
+---
+- name: Install parted and cloud-guest-utils
+  apt:
+    name:
+      - parted
+      - cloud-guest-utils
+    state: present
+    update_cache: yes
+
+- name: Get current disk information
+  command: lsblk -ln -o NAME,SIZE,TYPE,MOUNTPOINT
+  register: disk_info
+  changed_when: false
+
+- name: Display current disk layout
+  debug:
+    msg: "{{ disk_info.stdout_lines }}"
+
+- name: Find root filesystem device
+  shell: df / | tail -1 | awk '{print $1}' | sed 's/[0-9]*$//'
+  register: root_device
+  changed_when: false
+
+- name: Find root partition number
+  shell: df / | tail -1 | awk '{print $1}' | sed 's/.*[^0-9]//'
+  register: root_partition
+  changed_when: false
+
+- name: Display detected root device and partition
+  debug:
+    msg: "Root device: {{ root_device.stdout }}, Root partition: {{ root_partition.stdout }}"
+
+- name: Resize partition to use all available space
+  command: growpart {{ root_device.stdout }} {{ root_partition.stdout }}
+  register: growpart_result
+  failed_when: 
+    - growpart_result.rc != 0
+    - "'NOCHANGE' not in growpart_result.stdout"
+  changed_when: "'CHANGED' in growpart_result.stdout"
+
+- name: Resize filesystem to use expanded partition
+  command: resize2fs {{ root_device.stdout }}{{ root_partition.stdout }}
+  when: growpart_result.changed
+  register: resize_result
+
+- name: Display resize results
+  debug:
+    msg: 
+      - "Partition resize: {{ growpart_result.stdout if growpart_result.stdout is defined else 'No change needed' }}"
+      - "Filesystem resize: {{ resize_result.stdout if resize_result.stdout is defined else 'Skipped' }}"
+
+- name: Get updated disk information
+  command: lsblk -ln -o NAME,SIZE,TYPE,MOUNTPOINT
+  register: updated_disk_info
+  changed_when: false
+
+- name: Display updated disk layout
+  debug:
+    msg: "{{ updated_disk_info.stdout_lines }}"

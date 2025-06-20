@@ -1,0 +1,6 @@
+---
+- name: Expand primary partition on all VMs
+  hosts: all
+  become: yes
+  roles:
+    - expand_disk
