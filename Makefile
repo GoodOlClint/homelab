@@ -49,6 +49,9 @@ plan:
 	@cd terraform/infrastructure && terraform init && terraform plan
 	@cd terraform/services && terraform init && terraform plan
 
+expand-disk:
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/expand-disk.yml
+
 clean-infra:
 	@cd terraform/infrastructure && terraform destroy -auto-approve
 
