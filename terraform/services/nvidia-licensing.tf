@@ -82,7 +82,7 @@ resource "proxmox_virtual_environment_vm" "nvidia_licensing" {
   disk {
     datastore_id = var.primary_disk_storage
     file_id      = local.ubuntu_cloud_image_id
-    size         = 4 # 4GB
+    size         = 10
     interface    = "virtio0"
     iothread     = true
     discard      = "on"
