@@ -85,12 +85,12 @@ resource "proxmox_virtual_environment_vm" "homebridgeVM" {
   machine = "q35"
   
   cpu {
-    cores = 2
+    cores = 6
     type = "x86-64-v3"
   }
 
   memory {
-    dedicated = 1024
+    dedicated = 8192
   }
 
   disk {
@@ -99,7 +99,7 @@ resource "proxmox_virtual_environment_vm" "homebridgeVM" {
     interface    = "virtio0"
     iothread     = true
     discard      = "on"
-    size         = 5
+    size         = 10
   }
 
   initialization {
