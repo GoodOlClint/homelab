@@ -1,5 +1,9 @@
 ---
-- name: Restart bind9
+- name: Reload systemd
   systemd:
-    name: bind9
+    daemon_reload: yes
+
+- name: Restart adguardhome
+  systemd:
+    name: adguardhome
     state: restarted
