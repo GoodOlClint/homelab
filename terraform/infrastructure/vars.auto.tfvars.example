@@ -1,0 +1,51 @@
+# Services Configuration Template
+# Copy this file to vars.auto.tfvars and fill in your actual values
+# DO NOT commit vars.auto.tfvars with real secrets to version control
+
+# Proxmox Configuration
+virtual_environment_endpoint = "https://192.168.100.1:8006"
+virtual_environment_password = "YOUR_PROXMOX_PASSWORD_HERE"  # Use environment variable: TF_VAR_virtual_environment_password
+virtual_environment_username = "root@pam"
+virtual_environment_node     = "pve"
+virtual_environment_storage  = "local"
+virtual_machine_username     = "your_username"
+virtual_machine_timezone     = "America/Chicago"
+
+# VM User Password (optional)
+# Generate with: mkpasswd --method=sha-512 --rounds=4096
+# If not set or null, password authentication will be disabled (SSH key only)
+virtual_machine_password_hash = "$6$rounds=4096$gJDlessiwfV5Gd5Y$XXOA1Bd0J1Pf5fJtqZ8khu7/WixTDvrdfHuuTqOryULcqffigBhvP6mcWOEwwfHVHNhelSCg1RmrPqUV/E.cv0"  # Use environment variable: TF_VAR_virtual_machine_password_hash
+
+# Storage Configuration
+primary_disk_storage   = "iscsi-ssd-lvm"
+secondary_disk_storage = "iscsi-hdd-lvm"
+
+# SSH Configuration
+ssh_public_key_path = "/home/your_username/.ssh/id_ed25519.pub"  # Update to your SSH key path
+
+# Unifi Configuration
+unifi_username = "your_unifi_username"
+unifi_password = "YOUR_UNIFI_PASSWORD_HERE"  # Use environment variable: TF_VAR_unifi_password
+unifi_api_url  = "https://your_unifi_controller:8443"
+unifi_site     = "default"
+
+# Domain Configuration
+domain_suffix = "your_domain.internal"
+
+# Network Mapping
+unifi_network_mapping = {
+  "vlan1" = {
+    unifi_network_name = "Core"
+    bridge            = "vmbr0"
+    description       = "Core network for services"
+  }
+  "vlan2" = {
+    unifi_network_name = "IOT"
+    bridge            = "vmbr0"
+    description       = "IOT network"
+  }
+}
+
+# Note: VM configurations are now defined in vm-configs.tf
+# This keeps infrastructure definitions in version control while
+# keeping secrets in this .tfvars file

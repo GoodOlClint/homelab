@@ -1,0 +1,43 @@
+#cloud-config
+version: 2
+ethernets:
+%{ for iface in interfaces ~}
+  ${iface.name}:
+    match:
+      macaddress: '${iface.macaddress}'
+    set-name: ${iface.name}
+    mtu: ${iface.mtu}
+    dhcp4: ${iface.dhcp}
+%{ if iface.accept_ra ~}
+    accept-ra: true
+%{ else ~}
+    accept-ra: false
+%{ endif ~}
+%{ if iface.dhcp6 ~}
+    dhcp6: true
+%{ else ~}
+    dhcp6: false
+%{ endif ~}
+%{ if !iface.dhcp && iface.address != "" || iface.address_v6 != "" }
+    addresses:
+%{ if !iface.dhcp && iface.address != "" ~}
+      - ${iface.address}/${iface.prefix}
+%{ endif ~}
+%{ if iface.address_v6 != "" ~}
+      - ${iface.address_v6}/${iface.prefix_v6}
+%{ endif ~}
+%{ endif }
+%{ if !iface.dhcp && iface.gateway != "" }
+    gateway4: ${iface.gateway}
+%{ endif }
+%{ if iface.gateway_v6 != "" }
+    gateway6: ${iface.gateway_v6}
+%{ endif }
+%{ if !iface.dhcp && length(iface.dns_servers) > 0 }
+    nameservers:
+      addresses:
+%{ for dns in iface.dns_servers ~}
+        - ${dns}
+%{ endfor ~}
+%{ endif }
+%{ endfor }

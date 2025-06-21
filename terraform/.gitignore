@@ -16,6 +16,10 @@ crash.*.log
 *.tfvars
 *.tfvars.json
 
+# Exception: Include example/template tfvars files for documentation
+!*.tfvars.example
+!terraform.tfvars.example
+
 # Ignore override files as they are usually used to override resources locally and so
 # are not checked in
 override.tf
@@ -31,10 +35,26 @@ override.tf.json
 
 # Include tfplan files to ignore the plan output of command: terraform plan -out=tfplan
 # example: *tfplan*
+*.tfplan
+*.tfplan.*
 
 # Ignore CLI configuration files
 .terraformrc
 terraform.rc
 
-#custom files
+# Ignore environment variable files that might contain secrets
+.env
+.env.local
+.env.*.local
+
+# Ignore backup files
+*.backup
+*.bak
+
+# Custom files
 ifFilter.json
+
+# Additional security: Ignore any files that might contain secrets
+*secret*
+*password*
+*credential*

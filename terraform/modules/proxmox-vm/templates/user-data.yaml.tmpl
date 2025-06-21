@@ -8,8 +8,10 @@ users:
     sudo: ALL=(ALL) NOPASSWD:ALL
     groups: users,admin
     shell: /bin/bash
+%{ if password_hash != null && password_hash != "" }
     lock_passwd: false
-    passwd: $6$rounds=4096$gJDlessiwfV5Gd5Y$XXOA1Bd0J1Pf5fJtqZ8khu7/WixTDvrdfHuuTqOryULcqffigBhvP6mcWOEwwfHVHNhelSCg1RmrPqUV/E.cv0
+    passwd: ${password_hash}
+%{ endif }
     ssh_authorized_keys:
       - ${ssh_key}
 %{ if timezone != "" }

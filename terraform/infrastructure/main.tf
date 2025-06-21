@@ -1,23 +1,82 @@
-data "local_file" "ssh_public_key" {
-  filename = "/Users/goodolclint/.ssh/id_ed25519.pub"
+# Infrastructure VMs using the shared Proxmox VM module
+module "infrastructure_vms" {
+  source = "../modules/proxmox-vm"
+
+  # Proxmox connection settings
+  virtual_environment_endpoint = var.virtual_environment_endpoint
+  virtual_environment_password = var.virtual_environment_password
+  virtual_environment_username = var.virtual_environment_username
+  virtual_environment_node     = var.virtual_environment_node
+  virtual_environment_storage  = var.virtual_environment_storage
+  primary_disk_storage         = var.primary_disk_storage
+  secondary_disk_storage       = var.secondary_disk_storage
+
+  # VM configurations
+  vm_configurations = local.vm_configurations
+
+  # Cloud-init settings
+  virtual_machine_username      = var.virtual_machine_username
+  virtual_machine_password_hash = var.virtual_machine_password_hash
+  virtual_machine_timezone      = var.virtual_machine_timezone
+  ssh_public_key_path           = var.ssh_public_key_path
+  domain_suffix                 = var.domain_suffix
+
+  # IPv6 configuration
+  ipv6_config = var.ipv6_config
+
+  # Unifi configuration
+  unifi_username        = var.unifi_username
+  unifi_password        = var.unifi_password
+  unifi_api_url         = var.unifi_api_url
+  unifi_site            = var.unifi_site
+  unifi_network_mapping = var.unifi_network_mapping
+
+  # Static VLAN overrides (if any)
+  vlans = var.vlans
+
+  # GPU configuration
+  gpu_mapping = var.gpu_mapping
+
+  # Cloud image management
+  create_cloud_image = var.create_cloud_image
 }
 
-resource "proxmox_virtual_environment_download_file" "ubuntu_cloud_image" {
-  content_type = "iso"
-  datastore_id = var.virtual_environment_storage
-  node_name    = var.virtual_environment_node
-  url = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
-}
-
-
+# Output for Ansible inventory
 output "ansible_inventory_yaml" {
   value = yamlencode({
     all = {
       hosts = {
-        dns             = { ansible_host = proxmox_virtual_environment_vm.dnsVM.ipv4_addresses[1][0] }
-        proxmox_backup  = { ansible_host = proxmox_virtual_environment_vm.proxmoxBackupVM.ipv4_addresses[1][0] }
-        openobserve     = { ansible_host = proxmox_virtual_environment_vm.openobserveVM.ipv4_addresses[1][0] }
+        for vm_name in keys(module.infrastructure_vms.vm_vlan100_ips) : vm_name => {
+          ansible_host = module.infrastructure_vms.vm_vlan100_ips[vm_name]
+        }
       }
     }
   })
+}
+
+# Output VM VLAN 100 IPs for reference
+output "vm_vlan100_ips" {
+  value = module.infrastructure_vms.vm_vlan100_ips
+}
+
+# Output detailed VM information
+output "vm_details" {
+  value = {
+    vm_ids            = module.infrastructure_vms.vm_ids
+    vm_names          = module.infrastructure_vms.vm_names
+    vm_ipv4_addresses = module.infrastructure_vms.vm_ipv4_addresses
+    vm_ipv6_addresses = module.infrastructure_vms.vm_ipv6_addresses
+    vm_nodes          = module.infrastructure_vms.vm_nodes
+    vm_mac_addresses  = module.infrastructure_vms.vm_mac_addresses
+    vm_vlan100_ips    = module.infrastructure_vms.vm_vlan100_ips
+  }
+}
+
+# Output VLAN configurations for debugging
+output "unifi_vlans" {
+  value = module.infrastructure_vms.unifi_vlans
+}
+
+output "merged_vlans" {
+  value = module.infrastructure_vms.merged_vlans
 }
