@@ -1,8 +1,0 @@
-// ANSIBLE MANAGED FILE: named.conf.local
-{% for vlan, data in dns_zones.items() %}
-zone "{{ data.zone }}" {
-    type master;
-    file "/var/lib/bind/db.{{ data.zone }}";
-    allow-update { any; };
-};
-{% endfor %}

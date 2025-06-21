@@ -1,60 +1,167 @@
 ---
-# Tasks for DNS VM (Bind9)
+# Tasks for DNS VM (AdGuard Home)
 - name: Ensure required packages are installed
   apt:
     name:
-      - bind9
-      - bind9utils
-      - bind9-dnsutils
+      - curl
+      - wget
+      - systemd
+      - dnsutils  # Provides dig command for DNS testing
     state: present
     update_cache: yes
+
+- name: Create adguardhome user
+  user:
+    name: adguardhome
+    system: yes
+    shell: /bin/false
+    home: /var/lib/adguardhome
+    create_home: yes
+
+- name: Download AdGuard Home
+  get_url:
+    url: "https://github.com/AdguardTeam/AdGuardHome/releases/latest/download/AdGuardHome_linux_amd64.tar.gz"
+    dest: /tmp/adguardhome.tar.gz
+    mode: '0644'
+
+- name: Extract AdGuard Home
+  unarchive:
+    src: /tmp/adguardhome.tar.gz
+    dest: /tmp
+    remote_src: yes
+
+- name: Install AdGuard Home binary
+  copy:
+    src: /tmp/AdGuardHome/AdGuardHome
+    dest: /usr/local/bin/adguardhome
+    mode: '0755'
+    owner: root
+    group: root
+    remote_src: yes
+
+- name: Create AdGuard Home configuration directory
+  file:
+    path: /etc/adguardhome
+    state: directory
+    owner: adguardhome
+    group: adguardhome
+    mode: '0755'
+
+- name: Create AdGuard Home work directory
+  file:
+    path: /var/lib/adguardhome
+    state: directory
+    owner: adguardhome
+    group: adguardhome
+    mode: '0755'
 
 - name: Gather all interface IPs (except loopback)
   set_fact:
     dns_listen_ips: "{{ ansible_all_ipv4_addresses | difference(['127.0.0.1']) }}"
+    dns_listen_ipv6s: "{{ ansible_all_ipv6_addresses | difference(['::1']) | select('match', '^(?!fe80:).*') | list }}"
 
-- name: Configure named.conf.options to listen on all DNS VM IPs
+- name: Deploy AdGuard Home configuration
   template:
-    src: named.conf.options.j2
-    dest: /etc/bind/named.conf.options
-  notify: Restart bind9
+    src: adguardhome.yaml.j2
+    dest: /etc/adguardhome/AdGuardHome.yaml
+    owner: adguardhome
+    group: adguardhome
+    mode: '0644'
+  notify: Restart adguardhome
 
-- name: Ensure bind9 is started and enabled
+- name: Deploy AdGuard Home systemd service
+  template:
+    src: adguardhome.service.j2
+    dest: /etc/systemd/system/adguardhome.service
+    mode: '0644'
+  notify:
+    - Reload systemd
+    - Restart adguardhome
+
+- name: Ensure AdGuard Home is started and enabled
   systemd:
-    name: bind9
+    name: adguardhome
     state: started
     enabled: yes
+    daemon_reload: yes
 
-- name: Check if VLAN-specific zone file exists
-  loop: "{{ dns_zones | dict2items }}"
-  loop_control:
-    loop_var: vlan_zone
-  stat:
-    path: "/var/lib/bind/db.{{ vlan_zone.value.zone }}"
-  register: zonefile_stat
+- name: Wait for AdGuard Home to start
+  wait_for:
+    port: 53
+    host: "{{ ansible_default_ipv4.address }}"
+    timeout: 60
 
-- name: Deploy VLAN-specific zone files
-  loop: "{{ dns_zones | dict2items }}"
-  loop_control:
-    loop_var: vlan_zone
-    index_var: idx
-  template:
-    src: db.zone.j2
-    dest: "/var/lib/bind/db.{{ vlan_zone.value.zone }}"
-    mode: '0644'
-    owner: bind
-    group: bind
-  vars:
-    zone_name: "{{ vlan_zone.value.zone }}"
-    zone_dns_ip: "{{ vlan_zone.value.dns_ip }}"
-  when: zonefile_stat.results[idx].stat.exists == false
-  notify: Restart bind9
+- name: Wait for AdGuard Home web interface
+  wait_for:
+    port: 3000
+    host: "{{ ansible_default_ipv4.address }}"
+    timeout: 60
 
-- name: Ensure VLAN zones are configured in named.conf.local
-  template:
-    src: named.conf.local.j2
-    dest: /etc/bind/named.conf.local
-    mode: '0644'
-    owner: root
-    group: bind
-  notify: Restart bind9
+- name: Check AdGuard Home service status
+  systemd:
+    name: adguardhome
+  register: adguardhome_status
+
+- name: Display AdGuard Home service status
+  debug:
+    var: adguardhome_status.status
+
+- name: Test external DNS resolution through AdGuard Home on main interface
+  command: dig @{{ ansible_default_ipv4.address }} google.com +short
+  register: external_dns_test
+  failed_when: external_dns_test.rc != 0 or external_dns_test.stdout == ""
+  changed_when: false
+  retries: 5
+  delay: 10
+
+- name: Test local zone resolution through AdGuard Home
+  command: dig @{{ ansible_default_ipv4.address }} dns.{{ dns_zones.vlan100.zone }} +short
+  register: local_dns_test
+  failed_when: local_dns_test.rc != 0 or local_dns_test.stdout == ""
+  changed_when: false
+  retries: 5
+  delay: 10
+
+- name: Test IPv6 DNS resolution through AdGuard Home (if IPv6 available)
+  command: dig @{{ dns_listen_ipv6s[0] | default('::1') }} google.com AAAA +short
+  register: ipv6_dns_test
+  failed_when: false  # Don't fail if IPv6 is not available
+  changed_when: false
+  retries: 3
+  delay: 5
+  when: dns_listen_ipv6s | length > 0
+
+- name: Test IPv4 DNS resolution through AdGuard Home IPv6 interface (if IPv6 available)
+  command: dig @{{ dns_listen_ipv6s[0] | default('::1') }} google.com A +short
+  register: ipv6_to_ipv4_dns_test
+  failed_when: false  # Don't fail if IPv6 is not available
+  changed_when: false
+  retries: 3
+  delay: 5
+  when: dns_listen_ipv6s | length > 0
+
+- name: Display IPv6 DNS test results
+  debug:
+    msg: |
+      IPv6 DNS tests:
+      - IPv6 AAAA query: {{ 'PASSED' if ipv6_dns_test.rc == 0 and ipv6_dns_test.stdout != '' else 'FAILED' }}
+      - IPv4 A query via IPv6: {{ 'PASSED' if ipv6_to_ipv4_dns_test.rc == 0 and ipv6_to_ipv4_dns_test.stdout != '' else 'FAILED' }}
+      - IPv6 interface: {{ dns_listen_ipv6s[0] | default('Not available') }}
+  when: dns_listen_ipv6s | length > 0
+
+- name: Display AdGuard Home access information
+  debug:
+    msg: |
+      AdGuard Home is now running!
+      Web Interface: http://{{ ansible_default_ipv4.address }}:3000
+      Default login: admin / Change this password!
+      DNS Server IPv4: {{ ansible_default_ipv4.address }}:53
+      DNS Server IPv6: {{ '[' + dns_listen_ipv6s[0] + ']:53' if dns_listen_ipv6s | length > 0 else 'Not available' }}
+      
+      Available DNS interfaces:
+      {% for ip in dns_listen_ips %}
+      - IPv4: {{ ip }}:53
+      {% endfor %}
+      {% for ipv6 in dns_listen_ipv6s %}
+      - IPv6: [{{ ipv6 }}]:53
+      {% endfor %}
