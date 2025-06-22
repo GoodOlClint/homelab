@@ -1,6 +1,6 @@
 ---
 - name: Configure nvidia-licensing VM
-  hosts: nvidia_licensing
+  hosts: nvidia-licensing
   become: yes
   vars_files:
     - ../group_vars/all.yml
@@ -22,7 +22,7 @@
     - telegraf
 
 - name: Configure multicast-relay VM
-  hosts: multicast_relay
+  hosts: multicast-relay
   become: yes
   vars_files:
     - ../group_vars/all.yml
