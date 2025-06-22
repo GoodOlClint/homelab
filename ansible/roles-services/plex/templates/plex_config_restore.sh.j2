@@ -1,10 +1,19 @@
 #!/bin/bash
-set -e
 PLEX_DIR="/var/lib/plexmediaserver/Library/Application Support/Plex Media Server"
 DB_DIR="$PLEX_DIR/Plug-in Support/Databases"
 PLEX_SQLITE="/usr/lib/plexmediaserver/Plex SQLite"
 LOG_FILE="/var/log/plex_config_restore.log"
 
+# Error handling function
+error_exit() {
+    echo "[$(date)] ERROR: $1" >&2
+    # Cleanup on error
+    [ -n "$TMP_RESTORE_DIR" ] && rm -rf "$TMP_RESTORE_DIR"
+    [ -n "$PLEX_SMB_MOUNT" ] && mountpoint -q "$PLEX_SMB_MOUNT" && umount "$PLEX_SMB_MOUNT" 2>/dev/null
+    exit 1
+}
+
+# Set up logging
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 echo "[$(date)] Starting Plex config restore..."
@@ -18,89 +27,166 @@ PLEX_SMB_SERVER="{{ plex_smb_server }}"
 # Mount SMB share if not already mounted
 echo "[$(date)] Mounting SMB share if needed..."
 if ! mountpoint -q "$PLEX_SMB_MOUNT"; then
-  mkdir -p "$PLEX_SMB_MOUNT"
+  mkdir -p "$PLEX_SMB_MOUNT" || error_exit "Failed to create SMB mount directory"
   SMB_SHARE_CLEAN=$(echo "$PLEX_SMB_SHARE" | sed 's#^/*##;s#/*$##')
-  mount -t cifs "//$PLEX_SMB_SERVER/$SMB_SHARE_CLEAN" "$PLEX_SMB_MOUNT" -o username="$PLEX_SMB_USER",password="$PLEX_SMB_PASS",file_mode=0777,dir_mode=0777,vers=3.0,noperm
-  if [ $? -ne 0 ]; then
-    echo "[$(date)] ERROR: Failed to mount //$PLEX_SMB_SERVER/$SMB_SHARE_CLEAN to $PLEX_SMB_MOUNT. Check that cifs-utils is installed and the mount helper is available."
-    exit 1
-  fi
+  mount -t cifs "//$PLEX_SMB_SERVER/$SMB_SHARE_CLEAN" "$PLEX_SMB_MOUNT" \
+    -o username="$PLEX_SMB_USER",password="$PLEX_SMB_PASS",file_mode=0644,dir_mode=0755,vers=3.0,noperm \
+    || error_exit "Failed to mount //$PLEX_SMB_SERVER/$SMB_SHARE_CLEAN to $PLEX_SMB_MOUNT"
 fi
 
-echo "[$(date)] Looking for latest backup archive..."
-latest_backup=$(ls -1t "$PLEX_SMB_MOUNT"/plex-backup.tar.gz 2>/dev/null | head -n1)
+echo "[$(date)] Looking for backup archives..."
+
+# Function to test archive integrity
+test_archive_integrity() {
+    local archive_path="$1"
+    echo "[$(date)] Testing archive integrity: $(basename "$archive_path")"
+    
+    # Test if archive can be listed
+    if ! tar -tzf "$archive_path" >/dev/null 2>&1; then
+        echo "[$(date)] Archive integrity test failed: tar listing failed"
+        return 1
+    fi
+    
+    # Create temp directory for extraction test
+    local test_dir=$(mktemp -d)
+    if ! tar -xzf "$archive_path" -C "$test_dir" 2>/dev/null; then
+        echo "[$(date)] Archive integrity test failed: extraction failed"
+        rm -rf "$test_dir"
+        return 1
+    fi
+    
+    # Test database integrity if databases exist
+    if [ -f "$test_dir/com.plexapp.plugins.library.db" ]; then
+        local integrity=$("$PLEX_SQLITE" "$test_dir/com.plexapp.plugins.library.db" "PRAGMA integrity_check;" 2>/dev/null | tail -n 1)
+        if [ "$integrity" != "ok" ]; then
+            echo "[$(date)] Archive integrity test failed: main DB corrupted ($integrity)"
+            rm -rf "$test_dir"
+            return 1
+        fi
+    fi
+    
+    if [ -f "$test_dir/com.plexapp.plugins.library.blobs.db" ]; then
+        local integrity_blobs=$("$PLEX_SQLITE" "$test_dir/com.plexapp.plugins.library.blobs.db" "PRAGMA integrity_check;" 2>/dev/null | tail -n 1)
+        if [ "$integrity_blobs" != "ok" ]; then
+            echo "[$(date)] Archive integrity test failed: blobs DB corrupted ($integrity_blobs)"
+            rm -rf "$test_dir"
+            return 1
+        fi
+    fi
+    
+    rm -rf "$test_dir"
+    echo "[$(date)] Archive integrity test passed: $(basename "$archive_path")"
+    return 0
+}
+
+# Try to find a working backup, starting with current, then recent timestamped backups
+latest_backup=""
+
+# First try the current backup
+if [ -f "$PLEX_SMB_MOUNT/plex-backup.tar.gz" ]; then
+    echo "[$(date)] Testing current backup: plex-backup.tar.gz"
+    if test_archive_integrity "$PLEX_SMB_MOUNT/plex-backup.tar.gz"; then
+        latest_backup="$PLEX_SMB_MOUNT/plex-backup.tar.gz"
+        echo "[$(date)] Using current backup."
+    else
+        echo "[$(date)] Current backup is corrupted, looking for alternatives..."
+    fi
+fi
+
+# If current backup failed, try timestamped backups (newest first)
 if [ -z "$latest_backup" ]; then
-  echo "[$(date)] No backup archive found on SMB share."
-  exit 1
+    echo "[$(date)] Searching for timestamped backups..."
+    for backup_file in $(ls -1t "$PLEX_SMB_MOUNT"/plex-backup-*.tar.gz 2>/dev/null); do
+        echo "[$(date)] Testing backup: $(basename "$backup_file")"
+        if test_archive_integrity "$backup_file"; then
+            latest_backup="$backup_file"
+            echo "[$(date)] Using backup: $(basename "$backup_file")"
+            break
+        else
+            echo "[$(date)] Backup corrupted, trying next one..."
+        fi
+    done
+fi
+
+if [ -z "$latest_backup" ]; then
+    error_exit "No valid backup archive found on SMB share. All backups appear to be corrupted."
 fi
 
 echo "[$(date)] Restoring from $latest_backup"
 
 echo "[$(date)] Extracting backup archive..."
-rm -rf /tmp/plex_restore
-echo "[$(date)] Creating /tmp/plex_restore..."
-mkdir -p /tmp/plex_restore
-echo "[$(date)] Running tar extraction with ionice..."
-tar -xzf "$latest_backup" -C /tmp/plex_restore
+TMP_RESTORE_DIR=$(mktemp -d) || error_exit "Failed to create temporary directory"
+echo "[$(date)] Created temporary directory: $TMP_RESTORE_DIR"
+
+# Extract with verbose error reporting
+echo "[$(date)] Running tar extraction..."
+if ! tar -xzf "$latest_backup" -C "$TMP_RESTORE_DIR" 2>&1; then
+    error_exit "Failed to extract backup archive - archive appears corrupted"
+fi
 echo "[$(date)] Extraction complete."
 
-# Validate both DBs before copying
+# Final validation of extracted files (redundant but extra safety)
+echo "[$(date)] Final validation of extracted databases..."
 VALID=true
-if [ -f /tmp/plex_restore/com.plexapp.plugins.library.db ]; then
-  echo "[$(date)] Validating main DB..."
-  INTEGRITY=$("$PLEX_SQLITE" /tmp/plex_restore/com.plexapp.plugins.library.db "PRAGMA integrity_check;" | tail -n 1)
+if [ -f "$TMP_RESTORE_DIR/com.plexapp.plugins.library.db" ]; then
+  echo "[$(date)] Validating extracted main DB..."
+  INTEGRITY=$("$PLEX_SQLITE" "$TMP_RESTORE_DIR/com.plexapp.plugins.library.db" "PRAGMA integrity_check;" | tail -n 1)
   if [ "$INTEGRITY" != "ok" ]; then
-    echo "[$(date)] Restored main DB failed integrity check: $INTEGRITY"
+    echo "[$(date)] Extracted main DB failed integrity check: $INTEGRITY"
     VALID=false
+  else
+    echo "[$(date)] Main DB validation passed."
   fi
 fi
-if [ -f /tmp/plex_restore/com.plexapp.plugins.library.blobs.db ]; then
-  echo "[$(date)] Validating blobs DB..."
-  INTEGRITY_BLOBS=$("$PLEX_SQLITE" /tmp/plex_restore/com.plexapp.plugins.library.blobs.db "PRAGMA integrity_check;" | tail -n 1)
+if [ -f "$TMP_RESTORE_DIR/com.plexapp.plugins.library.blobs.db" ]; then
+  echo "[$(date)] Validating extracted blobs DB..."
+  INTEGRITY_BLOBS=$("$PLEX_SQLITE" "$TMP_RESTORE_DIR/com.plexapp.plugins.library.blobs.db" "PRAGMA integrity_check;" | tail -n 1)
   if [ "$INTEGRITY_BLOBS" != "ok" ]; then
-    echo "[$(date)] Restored blobs DB failed integrity check: $INTEGRITY_BLOBS"
+    echo "[$(date)] Extracted blobs DB failed integrity check: $INTEGRITY_BLOBS"
     VALID=false
+  else
+    echo "[$(date)] Blobs DB validation passed."
   fi
 fi
 if [ "$VALID" != "true" ]; then
-  echo "[$(date)] One or more DBs failed validation. Aborting restore."
-  rm -rf /tmp/plex_restore
-  exit 1
+  error_exit "One or more extracted DBs failed validation. Archive may be corrupted."
 fi
 
 systemctl stop plexmediaserver
 
 echo "[$(date)] Restoring Plug-ins..."
-if [ -d /tmp/plex_restore/Plug-ins ]; then
+if [ -d "$TMP_RESTORE_DIR/Plug-ins" ]; then
   echo "[$(date)] Removing old Plug-ins..."
   rm -rf "$PLEX_DIR/Plug-ins"
   echo "[$(date)] Copying Plug-ins..."
-  cp -a /tmp/plex_restore/Plug-ins "$PLEX_DIR/"
+  cp -a "$TMP_RESTORE_DIR/Plug-ins" "$PLEX_DIR/" || error_exit "Failed to restore Plug-ins"
   echo "[$(date)] Setting ownership on Plug-ins..."
   chown -R plex:plex "$PLEX_DIR/Plug-ins"
 fi
 
 echo "[$(date)] Restoring main DB..."
-if [ -f /tmp/plex_restore/com.plexapp.plugins.library.db ]; then
-  cp -af /tmp/plex_restore/com.plexapp.plugins.library.db "$DB_DIR/com.plexapp.plugins.library.db"
+if [ -f "$TMP_RESTORE_DIR/com.plexapp.plugins.library.db" ]; then
+  cp -af "$TMP_RESTORE_DIR/com.plexapp.plugins.library.db" "$DB_DIR/com.plexapp.plugins.library.db" || error_exit "Failed to restore main DB"
   chown plex:plex "$DB_DIR/com.plexapp.plugins.library.db"
 fi
 
 echo "[$(date)] Restoring blobs DB..."
-if [ -f /tmp/plex_restore/com.plexapp.plugins.library.blobs.db ]; then
-  cp -af /tmp/plex_restore/com.plexapp.plugins.library.blobs.db "$DB_DIR/com.plexapp.plugins.library.blobs.db"
+if [ -f "$TMP_RESTORE_DIR/com.plexapp.plugins.library.blobs.db" ]; then
+  cp -af "$TMP_RESTORE_DIR/com.plexapp.plugins.library.blobs.db" "$DB_DIR/com.plexapp.plugins.library.blobs.db" || error_exit "Failed to restore blobs DB"
   chown plex:plex "$DB_DIR/com.plexapp.plugins.library.blobs.db"
 fi
 
 echo "[$(date)] Restoring Preferences.xml..."
-if [ -f /tmp/plex_restore/Preferences.xml ]; then
-  cp -af /tmp/plex_restore/Preferences.xml "$PLEX_DIR/Preferences.xml"
+if [ -f "$TMP_RESTORE_DIR/Preferences.xml" ]; then
+  cp -af "$TMP_RESTORE_DIR/Preferences.xml" "$PLEX_DIR/Preferences.xml" || error_exit "Failed to restore Preferences.xml"
   chown plex:plex "$PLEX_DIR/Preferences.xml"
 fi
 
-echo "[$(date)] Cleaning up..."
-rm -rf /tmp/plex_restore
-systemctl start plexmediaserver
+echo "[$(date)] Cleaning up temporary files..."
+rm -rf "$TMP_RESTORE_DIR"
+
+echo "[$(date)] Starting plexmediaserver..."
+systemctl start plexmediaserver || error_exit "Failed to start plexmediaserver"
 echo "[$(date)] Waiting for Plex service to start..."
 for i in {1..30}; do
   if systemctl is-active --quiet plexmediaserver; then
@@ -130,5 +216,9 @@ for section in $sections; do
   curl -s -H "X-Plex-Token: $PLEX_TOKEN" "$PLEX_API/library/sections/$section/refresh?force=1"
 done
 echo "[$(date)] Plex config restore complete."
-# Unmount SMB share (uncomment if desired)
-umount "$PLEX_SMB_MOUNT"
+
+# Unmount SMB share (with error handling)
+echo "[$(date)] Unmounting SMB share..."
+if mountpoint -q "$PLEX_SMB_MOUNT"; then
+  umount "$PLEX_SMB_MOUNT" || echo "[$(date)] Warning: Failed to unmount SMB share cleanly"
+fi

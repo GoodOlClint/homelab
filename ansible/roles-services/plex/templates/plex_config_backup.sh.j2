@@ -10,9 +10,21 @@ PLEX_SMB_MOUNT="{{ plex_smb_mount }}"
 PLEX_SMB_SHARE="{{ plex_smb_share }}"
 PLEX_SMB_USER="{{ plex_smb_user }}"
 PLEX_SMB_SERVER="{{ plex_smb_server }}"
-BACKUP_ARCHIVE="plex-backup.tar.gz"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+BACKUP_ARCHIVE="plex-backup-${TIMESTAMP}.tar.gz"
+BACKUP_ARCHIVE_CURRENT="plex-backup.tar.gz"
 LOG_FILE="/var/log/plex_config_backup.log"
 
+# Error handling function
+error_exit() {
+    echo "[$(date)] ERROR: $1" >&2
+    # Cleanup on error
+    [ -n "$TMP_BACKUP_DIR" ] && rm -rf "$TMP_BACKUP_DIR"
+    [ -n "$PLEX_SMB_MOUNT" ] && mountpoint -q "$PLEX_SMB_MOUNT" && umount "$PLEX_SMB_MOUNT" 2>/dev/null
+    exit 1
+}
+
+# Set up logging
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 echo "[$(date)] Starting Plex config backup..."
@@ -40,28 +52,29 @@ while true; do
 done
 
 echo "[$(date)] Stopping plexmediaserver..."
-systemctl stop plexmediaserver
+systemctl stop plexmediaserver || error_exit "Failed to stop plexmediaserver"
 
 # Create a temporary directory for the backup
-TMP_BACKUP_DIR=$(mktemp -d)
+TMP_BACKUP_DIR=$(mktemp -d) || error_exit "Failed to create temporary directory"
 
 echo "[$(date)] Copying DB, Plug-ins, and Preferences.xml..."
-cp "$DB_DIR/$DB_MAIN" "$TMP_BACKUP_DIR/${DB_MAIN}"
-cp "$DB_DIR/$DB_BLOBS" "$TMP_BACKUP_DIR/${DB_BLOBS}"
-cp -a "$PLEX_DIR/Plug-ins" "$TMP_BACKUP_DIR/Plug-ins"
-cp "$PLEX_DIR/Preferences.xml" "$TMP_BACKUP_DIR/Preferences.xml"
+# Copy files with error checking
+cp "$DB_DIR/$DB_MAIN" "$TMP_BACKUP_DIR/${DB_MAIN}" || error_exit "Failed to copy main database"
+cp "$DB_DIR/$DB_BLOBS" "$TMP_BACKUP_DIR/${DB_BLOBS}" || error_exit "Failed to copy blobs database"
+cp -a "$PLEX_DIR/Plug-ins" "$TMP_BACKUP_DIR/Plug-ins" || error_exit "Failed to copy Plug-ins"
+cp "$PLEX_DIR/Preferences.xml" "$TMP_BACKUP_DIR/Preferences.xml" || error_exit "Failed to copy Preferences.xml"
+
 echo "[$(date)] Starting plexmediaserver..."
-systemctl start plexmediaserver
+systemctl start plexmediaserver || error_exit "Failed to start plexmediaserver"
 
 # Run integrity check on copied main database
 echo "[$(date)] Running integrity check on main DB..."
 if [ -f "$TMP_BACKUP_DIR/$DB_MAIN" ]; then
   INTEGRITY=$("$PLEX_SQLITE" "$TMP_BACKUP_DIR/$DB_MAIN" "PRAGMA integrity_check;" | tail -n 1)
   if [ "$INTEGRITY" != "ok" ]; then
-    echo "[$(date)] Database integrity check failed: $INTEGRITY"
-    rm -rf "$TMP_BACKUP_DIR"
-    exit 1
+    error_exit "Database integrity check failed: $INTEGRITY"
   fi
+  echo "[$(date)] Main database integrity check passed."
 fi
 
 # Run integrity check on copied blobs database (optional, if exists)
@@ -69,39 +82,61 @@ echo "[$(date)] Running integrity check on blobs DB..."
 if [ -f "$TMP_BACKUP_DIR/$DB_BLOBS" ]; then
   INTEGRITY_BLOBS=$("$PLEX_SQLITE" "$TMP_BACKUP_DIR/$DB_BLOBS" "PRAGMA integrity_check;" | tail -n 1)
   if [ "$INTEGRITY_BLOBS" != "ok" ]; then
-    echo "[$(date)] Blobs database integrity check failed: $INTEGRITY_BLOBS"
-    rm -rf "$TMP_BACKUP_DIR"
-    exit 1
+    error_exit "Blobs database integrity check failed: $INTEGRITY_BLOBS"
   fi
+  echo "[$(date)] Blobs database integrity check passed."
 fi
 
 echo "[$(date)] Creating backup archive..."
-cd "$TMP_BACKUP_DIR"
-tar czf "$BACKUP_ARCHIVE" "$DB_MAIN" "$DB_BLOBS" Plug-ins Preferences.xml
-echo "[$(date)] Archive created."
-cd -
+cd "$TMP_BACKUP_DIR" || error_exit "Failed to change to backup directory"
+
+# Create archive with compression level 6 (balance of speed vs size) and verify
+tar czf "$BACKUP_ARCHIVE" "$DB_MAIN" "$DB_BLOBS" Plug-ins Preferences.xml || error_exit "Failed to create backup archive"
+echo "[$(date)] Archive created: $BACKUP_ARCHIVE"
+
+# Verify the created archive immediately
+echo "[$(date)] Verifying backup archive integrity..."
+tar -tzf "$BACKUP_ARCHIVE" >/dev/null || error_exit "Backup archive verification failed"
+echo "[$(date)] Archive verification passed."
+
+cd - >/dev/null
 
 # Mount SMB share if not already mounted
 echo "[$(date)] Mounting SMB share if needed..."
 if ! mountpoint -q "$PLEX_SMB_MOUNT"; then
-  mkdir -p "$PLEX_SMB_MOUNT"
+  mkdir -p "$PLEX_SMB_MOUNT" || error_exit "Failed to create SMB mount directory"
   # Remove leading/trailing slashes from share name for correct UNC
   SMB_SHARE_CLEAN=$(echo "$PLEX_SMB_SHARE" | sed 's#^/*##;s#/*$##')
-  # Remove iocharset=utf8 from options to avoid CIFS error on some systems
-  mount -t cifs "//${PLEX_SMB_SERVER}/${SMB_SHARE_CLEAN}" "$PLEX_SMB_MOUNT" -o username="$PLEX_SMB_USER",password="$PLEX_SMB_PASS",file_mode=0777,dir_mode=0777,vers=3.0,noperm
-  if [ $? -ne 0 ]; then
-    echo "[$(date)] ERROR: Failed to mount //${PLEX_SMB_SERVER}/${SMB_SHARE_CLEAN} to $PLEX_SMB_MOUNT. Check that cifs-utils is installed and the mount helper is available."
-    exit 1
-  fi
+  # Mount with sync option to ensure data is written immediately
+  mount -t cifs "//${PLEX_SMB_SERVER}/${SMB_SHARE_CLEAN}" "$PLEX_SMB_MOUNT" \
+    -o username="$PLEX_SMB_USER",password="$PLEX_SMB_PASS",file_mode=0644,dir_mode=0755,vers=3.0,noperm,sync \
+    || error_exit "Failed to mount //${PLEX_SMB_SERVER}/${SMB_SHARE_CLEAN} to $PLEX_SMB_MOUNT"
 fi
 
-# Copy the archive to SMB backup (overwrite previous backup)
+# Copy the archive to SMB backup with both timestamped and current versions
 echo "[$(date)] Copying archive to SMB share..."
-cp "$TMP_BACKUP_DIR/$BACKUP_ARCHIVE" "$PLEX_SMB_MOUNT/$BACKUP_ARCHIVE"
+# Copy timestamped version first
+cp "$TMP_BACKUP_DIR/$BACKUP_ARCHIVE" "$PLEX_SMB_MOUNT/$BACKUP_ARCHIVE" || error_exit "Failed to copy timestamped backup to SMB"
+# Then create/update the current version (atomic operation)
+cp "$TMP_BACKUP_DIR/$BACKUP_ARCHIVE" "$PLEX_SMB_MOUNT/${BACKUP_ARCHIVE_CURRENT}.tmp" || error_exit "Failed to copy current backup to SMB"
+mv "$PLEX_SMB_MOUNT/${BACKUP_ARCHIVE_CURRENT}.tmp" "$PLEX_SMB_MOUNT/$BACKUP_ARCHIVE_CURRENT" || error_exit "Failed to finalize current backup"
+
+# Verify the copied archives
+echo "[$(date)] Verifying copied archives..."
+tar -tzf "$PLEX_SMB_MOUNT/$BACKUP_ARCHIVE" >/dev/null || error_exit "Verification of timestamped backup on SMB failed"
+tar -tzf "$PLEX_SMB_MOUNT/$BACKUP_ARCHIVE_CURRENT" >/dev/null || error_exit "Verification of current backup on SMB failed"
+echo "[$(date)] SMB backup verification passed."
+
+# Clean up old timestamped backups (keep last 7 days)
+echo "[$(date)] Cleaning up old backups..."
+find "$PLEX_SMB_MOUNT" -name "plex-backup-*.tar.gz" -type f -mtime +7 -delete 2>/dev/null || true
+
+# Force sync to ensure data is written
+sync
 
 # Unmount SMB share
 echo "[$(date)] Unmounting SMB share..."
-umount "$PLEX_SMB_MOUNT"
+umount "$PLEX_SMB_MOUNT" || echo "[$(date)] Warning: Failed to unmount SMB share cleanly"
 
 # Clean up temporary files
 echo "[$(date)] Cleaning up temporary files..."
