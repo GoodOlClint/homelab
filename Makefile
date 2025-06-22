@@ -9,6 +9,7 @@ init:
 	@. .venv/bin/activate && pip install pyyaml
 	@cd terraform/infrastructure && terraform init
 	@cd terraform/services && terraform init
+	@cd ansible && ansible-galaxy install -r requirements.yml --force
 
 infra: terraform-infra inventory ansible-infra
 
