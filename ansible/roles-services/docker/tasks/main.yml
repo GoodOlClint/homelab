@@ -136,6 +136,12 @@
     group: root
     mode: '0644'
 
+- name: Reboot system to apply Docker and network configuration changes
+  reboot:
+    reboot_timeout: 300
+    connect_timeout: 20
+    test_command: systemctl is-active docker
+
 - name: Deploy containers with Docker Compose
   community.docker.docker_compose_v2:
     project_src: /opt
@@ -144,3 +150,17 @@
     state: present
   environment:
     CLOUDFLARED_TUNNEL_TOKEN: "{{ cloudflared_tunnel_token }}"
+  retries: 3
+  delay: 30
+  register: compose_result
+  until: compose_result is succeeded
+
+- name: Display final container status
+  command: docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+  register: container_status
+  ignore_errors: true
+
+- name: Show running containers
+  debug:
+    msg: "{{ container_status.stdout_lines }}"
+  when: container_status.stdout_lines is defined
