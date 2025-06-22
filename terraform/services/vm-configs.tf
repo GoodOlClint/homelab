@@ -22,7 +22,7 @@ locals {
     },
     {
       name         = "plex-services"
-      vlans        = ["vlan100"]
+      vlans        = ["vlan100", "vlan20"]
       cpu_cores    = 4
       memory_mb    = 8192
       disk_size_gb = 256
