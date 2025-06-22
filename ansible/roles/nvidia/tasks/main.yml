@@ -23,6 +23,14 @@
     deb: /tmp/nvidia-grid-driver.deb
     state: present
   when: nvidia_driver_version.stdout != required_nvidia_driver_version
+  register: nvidia_driver_installed
+
+- name: Reboot system after NVIDIA driver installation
+  ansible.builtin.reboot:
+    reboot_timeout: 600
+    connect_timeout: 5
+    test_command: nvidia-smi
+  when: nvidia_driver_installed is changed
 
 - name: Ensure ClientConfigToken directory exists
   ansible.builtin.file:
@@ -53,7 +61,7 @@
 
 - name: Download NVIDIA client configuration token from DLS if missing or expired
   ansible.builtin.shell: |
-    curl --insecure -L -X GET "https://{{ hostvars['nvidia_licensing'].ansible_host }}/-/client-token" \
+    curl --insecure -L -X GET "https://{{ hostvars['nvidia-licensing'].ansible_host }}/-/client-token" \
       -o /etc/nvidia/ClientConfigToken/client_configuration_token_$(date '+%d-%m-%Y-%H-%M-%S').tok
   register: dls_token_result
   changed_when: dls_token_result.rc == 0
