@@ -10,7 +10,7 @@
     - telegraf
 
 - name: Configure proxmox-backup VM
-  hosts: proxmox_backup
+  hosts: proxmox-backup
   become: yes
   vars_files:
     - ../group_vars/all.yml
