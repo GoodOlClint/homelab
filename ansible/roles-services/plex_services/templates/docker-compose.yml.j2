@@ -1,0 +1,259 @@
+services:
+  # PostgreSQL - Database for application data
+  postgres:
+    container_name: postgres14
+    image: postgres:14
+    restart: unless-stopped
+    ports:
+      - 5432:5432
+    environment:
+      - POSTGRES_PASSWORD={{ postgres_password | default('qstick') }}
+      - POSTGRES_USER={{ postgres_user | default('qstick') }}
+      - POSTGRES_DB={{ postgres_default_db | default('radarr-main') }}
+      - TZ={{ timezone | default('America/Chicago') }}
+    volumes:
+      - /docker/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U {{ postgres_user | default('qstick') }}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Portainer - Docker container management
+  portainer:
+    container_name: portainer
+    image: portainer/portainer-ce:alpine
+    restart: unless-stopped
+    ports:
+      - 9000:9000
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /docker/portainer:/data
+    environment:
+      - TZ={{ timezone | default('America/Chicago') }}
+    healthcheck:
+      test: ["CMD", "wget", "--no-check-certificate", "--no-verbose", "--tries=3", "--spider", "--header='Content-Type:application/json'", "http://localhost:9000/api/system/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Sonarr - TV series management
+  sonarr:
+    container_name: sonarr
+    image: hotio/sonarr:latest
+    restart: unless-stopped
+    logging:
+      driver: json-file
+    ports:
+      - 8989:8989
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - PUID={{ sonarr_puid | default('2002') }}
+      - PGID={{ plex_services_pgid | default('3000') }}
+      - UMASK=002
+      - TZ={{ timezone | default('America/Chicago') }}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /docker/sonarr:/config
+      - {{ plex_media_path | default('/docker/plex') }}:/data
+{% if nfs_enabled | default(true) %}
+      - nfs_media:/media
+{% endif %}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8989/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Radarr - Movie management
+  radarr:
+    container_name: radarr
+    image: hotio/radarr:latest
+    restart: unless-stopped
+    logging:
+      driver: json-file
+    ports:
+      - 7878:7878
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - PUID={{ radarr_puid | default('2001') }}
+      - PGID={{ plex_services_pgid | default('3000') }}
+      - UMASK=002
+      - TZ={{ timezone | default('America/Chicago') }}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /docker/radarr:/config
+      - {{ plex_media_path | default('/docker/plex') }}:/data
+{% if nfs_enabled | default(true) %}
+      - nfs_media:/media
+{% endif %}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7878/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Tautulli - Plex usage statistics
+  tautulli:
+    container_name: tautulli
+    image: hotio/tautulli:latest
+    restart: unless-stopped
+    logging:
+      driver: json-file
+    ports:
+      - 8181:8181
+    environment:
+      - PUID={{ tautulli_puid | default('2006') }}
+      - PGID={{ plex_services_pgid | default('3000') }}
+      - TZ={{ timezone | default('America/Chicago') }}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /docker/tautulli:/config
+{% if nfs_enabled | default(true) %}
+      - nfs_media:/media
+{% endif %}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8181/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Jellyseerr - Request management for Plex
+  jellyseerr:
+    container_name: jellyseerr
+    image: fallenbagel/jellyseerr:latest
+    restart: unless-stopped
+    ports:
+      - 5055:5055
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - PUID={{ jellyseerr_puid | default('3007') }}
+      - PGID={{ plex_services_pgid | default('3000') }}
+      - LOG_LEVEL=debug
+      - TZ={{ timezone | default('America/Chicago') }}
+      - DATABASE_TYPE=postgres
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_NAME=jellyseerr
+      - DATABASE_USERNAME={{ service_users.jellyseerr.db_user }}
+      - DATABASE_PASSWORD={{ service_users.jellyseerr.db_password }}
+    volumes:
+      - /docker/jellyseerr:/app/config
+{% if nfs_enabled | default(true) %}
+      - nfs_media:/media
+{% endif %}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5055/api/v1/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Prowlarr - Indexer management
+  prowlarr:
+    container_name: prowlarr
+    image: hotio/prowlarr:latest
+    restart: unless-stopped
+    logging:
+      driver: json-file
+    ports:
+      - 9696:9696
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - PUID={{ prowlarr_puid | default('2005') }}
+      - PGID={{ plex_services_pgid | default('3000') }}
+      - UMASK=002
+      - TZ={{ timezone | default('America/Chicago') }}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /docker/prowlarr:/config
+{% if nfs_enabled | default(true) %}
+      - nfs_media:/media
+{% endif %}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9696/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Bazarr - Subtitle management
+  bazarr:
+    container_name: bazarr
+    image: hotio/bazarr:latest
+    restart: unless-stopped
+    logging:
+      driver: json-file
+    ports:
+      - 6767:6767
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - PUID={{ bazarr_puid | default('2004') }}
+      - PGID={{ plex_services_pgid | default('3000') }}
+      - TZ={{ timezone | default('America/Chicago') }}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /docker/bazarr:/config
+      - {{ plex_media_path | default('/docker/plex') }}/media:/data/media
+{% if nfs_enabled | default(true) %}
+      - nfs_media:/media
+{% endif %}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6767/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # SABnzbd - Usenet downloader
+  sabnzbd:
+    container_name: sabnzbd
+    image: hotio/sabnzbd:latest
+    restart: unless-stopped
+    logging:
+      driver: json-file
+    ports:
+      - 8080:8080
+    environment:
+      - PUID={{ sabnzbd_puid | default('2003') }}
+      - PGID={{ plex_services_pgid | default('3000') }}
+      - UMASK=002
+      - TZ={{ timezone | default('America/Chicago') }}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /docker/sabnzbd:/config
+      - {{ plex_media_path | default('/docker/plex') }}/usenet:/data/usenet:rw
+{% if nfs_enabled | default(true) %}
+      - nfs_media:/media
+{% endif %}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api?mode=version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+{% if nfs_enabled | default(true) %}
+volumes:
+  nfs_media:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: "addr={{ plex_nfs_src.split(':')[0] }},{{ nfs_mount_options | default('nfsvers=4,rsize=1048576,wsize=1048576,hard,intr,timeo=600') }}"
+      device: "{{ plex_nfs_src }}"
+{% endif %}

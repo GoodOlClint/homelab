@@ -53,3 +53,14 @@
     - plex
     - rsyslog_client
     - telegraf
+
+- name: Configure plex-services VM
+  hosts: plex-services
+  become: yes
+  vars_files:
+    - ../group_vars/all.yml
+  roles:
+    - dns_config
+    - plex_services
+    - rsyslog_client
+    - telegraf

@@ -1,0 +1,44 @@
+[general]
+ip = 0.0.0.0
+port = 6767
+base_url = 
+path_mappings = []
+debug = False
+branch = master
+auto_update = True
+single_language = False
+minimum_score = 90
+use_postprocessing = False
+postprocessing_cmd = 
+use_sonarr = False
+use_radarr = False
+enabled_providers = []
+enabled_integrations = []
+serie_default_enabled = False
+serie_default_language = []
+serie_default_hi = False
+serie_default_forced = False
+movie_default_enabled = False
+movie_default_language = []
+movie_default_hi = False
+movie_default_forced = False
+page_size = 25
+page_size_manual_search = 10
+anti_captcha_provider = None
+
+[database]
+type = postgresql
+host = postgres
+port = 5432
+name = bazarr
+username = {{ service_users.bazarr.db_user }}
+password = {{ service_users.bazarr.db_password }}
+
+[auth]
+type = None
+
+[analytics]
+enabled = False
+
+[log]
+level = INFO

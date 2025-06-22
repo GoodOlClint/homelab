@@ -1,0 +1,20 @@
+<Config>
+  <LogLevel>info</LogLevel>
+  <UpdateMechanism>Docker</UpdateMechanism>
+  <Branch>master</Branch>
+  <BindAddress>*</BindAddress>
+  <Port>7878</Port>
+  <SslPort>9898</SslPort>
+  <EnableSsl>False</EnableSsl>
+  <LaunchBrowser>False</LaunchBrowser>
+  <AuthenticationMethod>None</AuthenticationMethod>
+  <AnalyticsEnabled>False</AnalyticsEnabled>
+  <LogSizeLimit>1</LogSizeLimit>
+  <LogRotate>50</LogRotate>
+  <PostgresUser>{{ service_users.radarr.db_user }}</PostgresUser>
+  <PostgresPassword>{{ service_users.radarr.db_password }}</PostgresPassword>
+  <PostgresPort>5432</PostgresPort>
+  <PostgresHost>postgres</PostgresHost>
+  <PostgresMainDb>radarr-main</PostgresMainDb>
+  <PostgresLogDb>radarr-log</PostgresLogDb>
+</Config>

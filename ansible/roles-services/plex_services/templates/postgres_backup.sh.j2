@@ -1,0 +1,129 @@
+#!/bin/bash
+#
+# PostgreSQL Backup Script for Plex Services
+# Backs up PostgreSQL databases to local and remote (SMB) storage
+#
+set -euo pipefail
+
+# Configuration
+BACKUP_DIR="/docker/postgres_backups"
+RETENTION_DAYS="{{ postgres_backup_retention_days | default('30') }}"
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+LOG_FILE="/var/log/postgres_backup.log"
+
+# PostgreSQL connection details
+POSTGRES_USER="{{ postgres_user | default('qstick') }}"
+POSTGRES_PASSWORD="{{ postgres_password | default('qstick') }}"
+POSTGRES_HOST="localhost"
+POSTGRES_PORT="5432"
+
+# SMB Configuration
+{% if plex_backup_smb_server is defined and postgres_backup_enabled | default(true) %}
+SMB_SERVER="{{ plex_backup_smb_server }}"
+SMB_SHARE="{{ plex_backup_smb_share }}"
+SMB_USER="{{ plex_backup_smb_user }}"
+SMB_PASS="{{ plex_backup_smb_pass }}"
+SMB_DOMAIN="{{ plex_backup_smb_domain | default('') }}"
+REMOTE_BACKUP_PATH="{{ postgres_backup_remote_path | default('plex_services/postgres_backups') }}"
+SMB_ENABLED=true
+{% else %}
+SMB_ENABLED=false
+{% endif %}
+
+# Logging function
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG_FILE"
+}
+
+# Error handling
+error_exit() {
+    log "ERROR: $1"
+    exit 1
+}
+
+# Create backup directory
+mkdir -p "$BACKUP_DIR"
+
+log "Starting PostgreSQL backup process"
+
+# Get list of databases (excluding system databases)
+DATABASES=$(PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "{{ postgres_default_db | default('radarr-main') }}" -t -c "SELECT datname FROM pg_database WHERE datistemplate = false AND datname NOT IN ('postgres', 'template0', 'template1');" | grep -v '^$' | tr -d ' ')
+
+if [ -z "$DATABASES" ]; then
+    log "No user databases found to backup"
+    exit 0
+fi
+
+# Backup each database
+for DB in $DATABASES; do
+    log "Backing up database: $DB"
+    BACKUP_FILE="$BACKUP_DIR/${DB}_${TIMESTAMP}.sql.gz"
+    
+    # Create compressed backup
+    PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" "$DB" | gzip > "$BACKUP_FILE"
+    
+    if [ $? -eq 0 ]; then
+        log "Successfully created backup: $BACKUP_FILE"
+        
+        # Upload to SMB if enabled
+        if [ "$SMB_ENABLED" = true ]; then
+            log "Uploading backup to SMB share: $SMB_SERVER/$SMB_SHARE/$REMOTE_BACKUP_PATH/"
+            
+            # Create remote directory structure
+            if [ -n "$SMB_DOMAIN" ]; then
+                smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_DOMAIN/$SMB_USER%$SMB_PASS" -c "mkdir \"$REMOTE_BACKUP_PATH\" 2>/dev/null; exit" 2>/dev/null || true
+            else
+                smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_USER%$SMB_PASS" -c "mkdir \"$REMOTE_BACKUP_PATH\" 2>/dev/null; exit" 2>/dev/null || true
+            fi
+            
+            # Upload backup file
+            if [ -n "$SMB_DOMAIN" ]; then
+                smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_DOMAIN/$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; put \"$BACKUP_FILE\" \"$(basename "$BACKUP_FILE")\""
+            else
+                smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; put \"$BACKUP_FILE\" \"$(basename "$BACKUP_FILE")\""
+            fi
+            
+            if [ $? -eq 0 ]; then
+                log "Successfully uploaded backup to SMB share"
+            else
+                log "WARNING: Failed to upload backup to SMB share"
+            fi
+        fi
+    else
+        error_exit "Failed to create backup for database: $DB"
+    fi
+done
+
+# Clean up old local backups
+log "Cleaning up local backups older than $RETENTION_DAYS days"
+find "$BACKUP_DIR" -name "*.sql.gz" -type f -mtime +$RETENTION_DAYS -delete
+
+# Clean up old remote backups if SMB is enabled
+if [ "$SMB_ENABLED" = true ]; then
+    log "Cleaning up remote backups older than $RETENTION_DAYS days"
+    
+    # Get list of remote files and delete old ones
+    CUTOFF_DATE=$(date -d "$RETENTION_DAYS days ago" +%Y%m%d)
+    
+    if [ -n "$SMB_DOMAIN" ]; then
+        REMOTE_FILES=$(smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_DOMAIN/$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; ls" 2>/dev/null | grep "\.sql\.gz$" | awk '{print $1}' || true)
+    else
+        REMOTE_FILES=$(smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; ls" 2>/dev/null | grep "\.sql\.gz$" | awk '{print $1}' || true)
+    fi
+    
+    for FILE in $REMOTE_FILES; do
+        # Extract date from filename (assuming format: dbname_YYYYMMDD_HHMMSS.sql.gz)
+        FILE_DATE=$(echo "$FILE" | grep -o '[0-9]\{8\}_[0-9]\{6\}' | cut -d'_' -f1 || true)
+        
+        if [ -n "$FILE_DATE" ] && [ "$FILE_DATE" -lt "$CUTOFF_DATE" ]; then
+            log "Deleting old remote backup: $FILE"
+            if [ -n "$SMB_DOMAIN" ]; then
+                smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_DOMAIN/$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; del \"$FILE\"" 2>/dev/null || log "WARNING: Failed to delete remote file: $FILE"
+            else
+                smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; del \"$FILE\"" 2>/dev/null || log "WARNING: Failed to delete remote file: $FILE"
+            fi
+        fi
+    done
+fi
+
+log "PostgreSQL backup process completed successfully"
