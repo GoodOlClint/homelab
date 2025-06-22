@@ -1,0 +1,276 @@
+#!/bin/bash
+#
+# PostgreSQL Restore Script for Plex Services
+# Restores PostgreSQL databases from local or remote (SMB) backup
+#
+set -euo pipefail
+
+# Configuration
+BACKUP_DIR="/docker/postgres_backups"
+LOG_FILE="/var/log/postgres_restore.log"
+
+# PostgreSQL connection details
+POSTGRES_USER="{{ postgres_user | default('qstick') }}"
+POSTGRES_PASSWORD="{{ postgres_password | default('qstick') }}"
+POSTGRES_HOST="localhost"
+POSTGRES_PORT="5432"
+
+# SMB Configuration
+{% if plex_backup_smb_server is defined %}
+SMB_SERVER="{{ plex_backup_smb_server }}"
+SMB_SHARE="{{ plex_backup_smb_share }}"
+SMB_USER="{{ plex_backup_smb_user }}"
+SMB_PASS="{{ plex_backup_smb_pass }}"
+SMB_DOMAIN="{{ plex_backup_smb_domain | default('') }}"
+REMOTE_BACKUP_PATH="{{ postgres_backup_remote_path | default('plex_services/postgres_backups') }}"
+SMB_ENABLED=true
+{% else %}
+SMB_ENABLED=false
+{% endif %}
+
+# Usage function
+usage() {
+    echo "Usage: $0 [OPTIONS]"
+    echo "Options:"
+    echo "  -d, --database DATABASE    Database name to restore"
+    echo "  -f, --file BACKUP_FILE     Specific backup file to restore"
+    echo "  -l, --latest               Restore latest backup for database"
+    echo "  -r, --remote               Download latest backup from remote SMB share"
+    echo "  --list-backups             List available backups"
+    echo "  --list-remote              List available remote backups"
+    echo "  -h, --help                 Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  $0 -d radarr-main -l                    # Restore latest local backup"
+    echo "  $0 -d radarr-main -r                    # Download and restore latest remote backup"
+    echo "  $0 -f /path/to/backup.sql.gz           # Restore specific backup file"
+    echo "  $0 --list-backups                       # List local backups"
+    echo "  $0 --list-remote                        # List remote backups"
+    exit 1
+}
+
+# Logging function
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG_FILE"
+}
+
+# Error handling
+error_exit() {
+    log "ERROR: $1"
+    exit 1
+}
+
+# List local backups
+list_backups() {
+    log "Available local backups:"
+    if [ -d "$BACKUP_DIR" ]; then
+        find "$BACKUP_DIR" -name "*.sql.gz" -type f -exec basename {} \; | sort
+    else
+        log "No local backup directory found"
+    fi
+}
+
+# List remote backups
+list_remote_backups() {
+    if [ "$SMB_ENABLED" != true ]; then
+        error_exit "SMB is not configured"
+    fi
+    
+    log "Available remote backups:"
+    if [ -n "$SMB_DOMAIN" ]; then
+        smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_DOMAIN/$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; ls *.sql.gz" 2>/dev/null | grep "\.sql\.gz$" | awk '{print $1}' || log "No remote backups found"
+    else
+        smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; ls *.sql.gz" 2>/dev/null | grep "\.sql\.gz$" | awk '{print $1}' || log "No remote backups found"
+    fi
+}
+
+# Download backup from remote
+download_remote_backup() {
+    local database="$1"
+    local backup_file="$2"
+    
+    if [ "$SMB_ENABLED" != true ]; then
+        error_exit "SMB is not configured"
+    fi
+    
+    log "Downloading backup from remote: $backup_file"
+    mkdir -p "$BACKUP_DIR"
+    
+    if [ -n "$SMB_DOMAIN" ]; then
+        smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_DOMAIN/$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; get \"$backup_file\" \"$BACKUP_DIR/$backup_file\""
+    else
+        smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; get \"$backup_file\" \"$BACKUP_DIR/$backup_file\""
+    fi
+    
+    if [ $? -eq 0 ]; then
+        log "Successfully downloaded backup: $BACKUP_DIR/$backup_file"
+        echo "$BACKUP_DIR/$backup_file"
+    else
+        error_exit "Failed to download backup from remote"
+    fi
+}
+
+# Find latest backup for database
+find_latest_backup() {
+    local database="$1"
+    local location="$2"  # "local" or "remote"
+    
+    if [ "$location" = "local" ]; then
+        if [ -d "$BACKUP_DIR" ]; then
+            find "$BACKUP_DIR" -name "${database}_*.sql.gz" -type f | sort | tail -n1
+        fi
+    elif [ "$location" = "remote" ]; then
+        if [ "$SMB_ENABLED" != true ]; then
+            error_exit "SMB is not configured"
+        fi
+        
+        local remote_files
+        if [ -n "$SMB_DOMAIN" ]; then
+            remote_files=$(smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_DOMAIN/$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; ls ${database}_*.sql.gz" 2>/dev/null | grep "${database}_.*\.sql\.gz$" | awk '{print $1}' | sort | tail -n1 || true)
+        else
+            remote_files=$(smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; ls ${database}_*.sql.gz" 2>/dev/null | grep "${database}_.*\.sql\.gz$" | awk '{print $1}' | sort | tail -n1 || true)
+        fi
+        
+        if [ -n "$remote_files" ]; then
+            echo "$remote_files"
+        fi
+    fi
+}
+
+# Restore database from backup
+restore_database() {
+    local backup_file="$1"
+    local database_name
+    
+    if [ ! -f "$backup_file" ]; then
+        error_exit "Backup file not found: $backup_file"
+    fi
+    
+    # Extract database name from filename
+    database_name=$(basename "$backup_file" | sed 's/_[0-9]\{8\}_[0-9]\{6\}\.sql\.gz$//')
+    
+    log "Restoring database '$database_name' from backup: $backup_file"
+    
+    # Check if PostgreSQL is running
+    if ! PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -c '\q' 2>/dev/null; then
+        error_exit "Cannot connect to PostgreSQL server"
+    fi
+    
+    # Drop existing database if it exists (with confirmation)
+    if PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -lqt | cut -d \| -f 1 | grep -qw "$database_name"; then
+        log "WARNING: Database '$database_name' already exists and will be dropped!"
+        read -p "Are you sure you want to continue? (y/N): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            log "Restore cancelled by user"
+            exit 0
+        fi
+        
+        # Terminate existing connections
+        PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$database_name' AND pid <> pg_backend_pid();" 2>/dev/null || true
+        
+        # Drop database
+        PGPASSWORD="$POSTGRES_PASSWORD" dropdb -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" "$database_name"
+        log "Dropped existing database: $database_name"
+    fi
+    
+    # Create new database
+    PGPASSWORD="$POSTGRES_PASSWORD" createdb -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" "$database_name"
+    log "Created new database: $database_name"
+    
+    # Restore from backup
+    log "Restoring data from backup..."
+    gunzip -c "$backup_file" | PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" "$database_name"
+    
+    if [ $? -eq 0 ]; then
+        log "Successfully restored database '$database_name' from backup"
+    else
+        error_exit "Failed to restore database '$database_name' from backup"
+    fi
+}
+
+# Parse command line arguments
+DATABASE=""
+BACKUP_FILE=""
+USE_LATEST=false
+USE_REMOTE=false
+LIST_BACKUPS=false
+LIST_REMOTE=false
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -d|--database)
+            DATABASE="$2"
+            shift 2
+            ;;
+        -f|--file)
+            BACKUP_FILE="$2"
+            shift 2
+            ;;
+        -l|--latest)
+            USE_LATEST=true
+            shift
+            ;;
+        -r|--remote)
+            USE_REMOTE=true
+            shift
+            ;;
+        --list-backups)
+            LIST_BACKUPS=true
+            shift
+            ;;
+        --list-remote)
+            LIST_REMOTE=true
+            shift
+            ;;
+        -h|--help)
+            usage
+            ;;
+        *)
+            echo "Unknown option: $1"
+            usage
+            ;;
+    esac
+done
+
+# Handle list operations
+if [ "$LIST_BACKUPS" = true ]; then
+    list_backups
+    exit 0
+fi
+
+if [ "$LIST_REMOTE" = true ]; then
+    list_remote_backups
+    exit 0
+fi
+
+# Main restore logic
+if [ -n "$BACKUP_FILE" ]; then
+    # Restore specific file
+    restore_database "$BACKUP_FILE"
+elif [ -n "$DATABASE" ] && [ "$USE_LATEST" = true ]; then
+    # Restore latest backup for database
+    if [ "$USE_REMOTE" = true ]; then
+        # Find and download latest remote backup
+        latest_remote=$(find_latest_backup "$DATABASE" "remote")
+        if [ -n "$latest_remote" ]; then
+            downloaded_file=$(download_remote_backup "$DATABASE" "$latest_remote")
+            restore_database "$downloaded_file"
+        else
+            error_exit "No remote backup found for database: $DATABASE"
+        fi
+    else
+        # Find latest local backup
+        latest_local=$(find_latest_backup "$DATABASE" "local")
+        if [ -n "$latest_local" ]; then
+            restore_database "$latest_local"
+        else
+            error_exit "No local backup found for database: $DATABASE"
+        fi
+    fi
+else
+    echo "Error: Missing required arguments"
+    usage
+fi
+
+log "Restore process completed successfully"

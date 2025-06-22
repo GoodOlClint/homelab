@@ -1,0 +1,29 @@
+---
+dependencies:
+  - geerlingguy.docker
+
+collections:
+  - community.docker
+  - community.general
+  - community.postgresql
+
+galaxy_info:
+  author: homelab
+  description: Deploy Plex media server ecosystem with Docker containers
+  company: homelab
+  license: MIT
+  min_ansible_version: 2.9
+  platforms:
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+  galaxy_tags:
+    - docker
+    - plex
+    - media
+    - automation
