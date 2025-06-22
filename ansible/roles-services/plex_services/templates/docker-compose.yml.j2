@@ -52,7 +52,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      - PUID={{ sonarr_puid | default('2002') }}
+      - PUID={{ service_users.sonarr.uid }}
       - PGID={{ plex_services_pgid | default('3000') }}
       - UMASK=002
       - TZ={{ timezone | default('America/Chicago') }}
@@ -83,7 +83,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      - PUID={{ radarr_puid | default('2001') }}
+      - PUID={{ service_users.radarr.uid }}
       - PGID={{ plex_services_pgid | default('3000') }}
       - UMASK=002
       - TZ={{ timezone | default('America/Chicago') }}
@@ -111,7 +111,7 @@ services:
     ports:
       - 8181:8181
     environment:
-      - PUID={{ tautulli_puid | default('2006') }}
+      - PUID={{ service_users.tautulli.uid }}
       - PGID={{ plex_services_pgid | default('3000') }}
       - TZ={{ timezone | default('America/Chicago') }}
     volumes:
@@ -138,7 +138,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      - PUID={{ jellyseerr_puid | default('3007') }}
+      - PUID={{ service_users.jellyseerr.uid }}
       - PGID={{ plex_services_pgid | default('3000') }}
       - LOG_LEVEL=debug
       - TZ={{ timezone | default('America/Chicago') }}
@@ -173,7 +173,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      - PUID={{ prowlarr_puid | default('2005') }}
+      - PUID={{ service_users.prowlarr.uid }}
       - PGID={{ plex_services_pgid | default('3000') }}
       - UMASK=002
       - TZ={{ timezone | default('America/Chicago') }}
@@ -203,7 +203,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      - PUID={{ bazarr_puid | default('2004') }}
+      - PUID={{ service_users.bazarr.uid }}
       - PGID={{ plex_services_pgid | default('3000') }}
       - TZ={{ timezone | default('America/Chicago') }}
     volumes:
@@ -230,7 +230,7 @@ services:
     ports:
       - 8080:8080
     environment:
-      - PUID={{ sabnzbd_puid | default('2003') }}
+      - PUID={{ service_users.sabnzbd.uid }}
       - PGID={{ plex_services_pgid | default('3000') }}
       - UMASK=002
       - TZ={{ timezone | default('America/Chicago') }}

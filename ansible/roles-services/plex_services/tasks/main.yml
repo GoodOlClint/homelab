@@ -61,6 +61,14 @@
   loop_control:
     label: "{{ item.key }} directory"
 
+- name: Create bazarr config directory with proper ownership
+  file:
+    path: "/docker/bazarr/config"
+    state: directory
+    owner: "{{ service_users.bazarr.uid }}"
+    group: "{{ plex_services_group }}"
+    mode: '0755'
+
 - name: Install PostgreSQL client packages
   apt:
     name:
@@ -182,7 +190,7 @@
     login_host: localhost
     login_user: "{{ postgres_user }}"
     login_password: "{{ postgres_password }}"
-    database: "{{ item.key }}"
+    login_db: "{{ item.key }}"
     role: "{{ service_users[item.value].db_user }}"
     privs: ALL
     type: database
@@ -205,7 +213,7 @@
     login_host: localhost
     login_user: "{{ postgres_user }}"
     login_password: "{{ postgres_password }}"
-    database: "{{ item.key }}"
+    login_db: "{{ item.key }}"
     role: "{{ service_users[item.value].db_user }}"
     objs: public
     privs: ALL
