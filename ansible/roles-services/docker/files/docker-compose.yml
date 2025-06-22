@@ -1,7 +1,7 @@
 services:
   radarr:
     container_name: radarr
-    image: ghcr.io/hotio/radarr:latest
+    image: hotio/radarr:latest
     restart: unless-stopped
     logging:
       driver: json-file
@@ -18,7 +18,7 @@ services:
       - /docker/plex:/data
   sonarr:
     container_name: sonarr
-    image: ghcr.io/hotio/sonarr:latest
+    image: hotio/sonarr:latest
     restart: unless-stopped
     logging:
       driver: json-file
@@ -35,7 +35,7 @@ services:
       - /docker/plex:/data
   bazarr:
     container_name: bazarr
-    image: ghcr.io/hotio/bazarr:latest
+    image: hotio/bazarr:latest
     restart: unless-stopped
     logging:
       driver: json-file
@@ -51,7 +51,7 @@ services:
       - /docker/plex/media:/data/media
   prowlarr:
     container_name: prowlarr
-    image: ghcr.io/hotio/prowlarr:latest
+    image: hotio/prowlarr:latest
     restart: unless-stopped
     logging:
       driver: json-file
@@ -67,7 +67,7 @@ services:
       - /docker/appdata/prowlarr:/config
   tautulli:
     container_name: tautulli
-    image: ghcr.io/hotio/tautulli:latest
+    image: hotio/tautulli:latest
     restart: unless-stopped
     logging:
       driver: json-file
@@ -88,7 +88,7 @@ services:
       ${CLOUDFLARED_TUNNEL_TOKEN}
   readarr:
     container_name: readarr
-    image: ghcr.io/hotio/readarr:latest
+    image: hotio/readarr:latest
     restart: unless-stopped
     ports:
       - "8787:8787"
@@ -103,7 +103,7 @@ services:
       - /docker/plex:/data
   lidarr:
     container_name: lidarr
-    image: ghcr.io/hotio/lidarr:latest
+    image: hotio/lidarr:latest
     restart: unless-stopped
     ports:
       - "8686:8686"
@@ -117,7 +117,7 @@ services:
       - /docker/plex:/data
   sabnzbd:
     container_name: sabnzbd
-    image: ghcr.io/hotio/sabnzbd:latest
+    image: hotio/sabnzbd:latest
     restart: unless-stopped
     logging:
       driver: json-file
@@ -144,7 +144,7 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /docker/appdata/plex-meta-manager:/config:rw
   ombi:
-    image: lscr.io/linuxserver/ombi:latest
+    image: linuxserver/ombi:latest
     container_name: ombi
     restart: unless-stopped
     logging:
@@ -191,7 +191,7 @@ services:
     command:
       - '*.zim'
   boinc:
-    image: lscr.io/linuxserver/boinc:latest
+    image: linuxserver/boinc:latest
     container_name: boinc
     runtime: nvidia
     restart: unless-stopped
@@ -220,3 +220,14 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /docker/appdata/portainer:/data
+  doge-node:
+    container_name: doge-node
+    image: goodolclint/dogecoin-node:latest
+    restart: unless-stopped
+    ports:
+      - 22555:22555
+      - 3000:3000
+    environment:
+      - TZ=America/Chicago
+    volumes:
+      - /docker/appdata/dogecoin:/data
