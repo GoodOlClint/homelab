@@ -65,7 +65,7 @@
   file:
     path: "/docker/bazarr/config"
     state: directory
-    owner: "{{ service_users.bazarr.uid }}"
+    owner: "bazarr"
     group: "{{ plex_services_group }}"
     mode: '0755'
 
@@ -299,8 +299,8 @@
 
     - name: Create Bazarr configuration file
       template:
-        src: bazarr_config.ini.j2
-        dest: /docker/bazarr/config/config.ini
+        src: bazarr_config.yaml.j2
+        dest: /docker/bazarr/config/config.yaml
         owner: bazarr
         group: "{{ plex_services_group }}"
         mode: '0644'
