@@ -1,0 +1,103 @@
+# macOS system files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Icon must end with two \r
+Icon
+
+# Thumbnails
+._*
+
+# Files that might appear on external disks
+.Spotlight-V100
+.Trashes
+
+# macOS metadata files
+*.swp
+*.swo
+
+# macOS resource forks
+*.ResourceFork
+
+# macOS Finder tags
+*.fseventsd
+
+# macOS Quick Look cache
+*.qlgenerator
+
+# macOS Trash
+*.Trash
+
+# macOS volume settings
+.VolumeIcon.icns
+
+# macOS disk image files
+*.dmg
+
+# macOS backup files
+*.bak
+*.tmp
+
+# macOS system logs
+*.log
+
+# macOS user settings
+*.plist
+
+# macOS Xcode
+*.xcworkspace
+*.xcuserstate
+*.xcuserdata
+*.xcodeproj
+*.xcsettings
+*.xccheckout
+*.moved-aside
+
+# macOS Homebrew
+Cellar/
+Caskroom/
+Homebrew/
+
+# macOS Python
+__pycache__/
+*.pyc
+
+# macOS Node
+node_modules/
+
+# macOS Ruby
+.bundle/
+vendor/bundle/
+
+# macOS Go
+bin/
+pkg/
+
+# macOS Java
+*.class
+
+# macOS VSCode
+.vscode/
+.history/
+
+# macOS JetBrains IDEs
+.idea/
+*.iml
+
+# macOS environment files
+.env
+.env.*
+
+# macOS lock files
+*.lock
+
+# macOS archives
+*.zip
+*.tar.gz
+*.tgz
+*.tar
+*.rar
+
+# macOS temporary files
+*~
