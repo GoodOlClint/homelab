@@ -32,7 +32,7 @@ locals {
       vlans        = ["vlan100"]
       cpu_cores    = 6
       memory_mb    = 8192
-      disk_size_gb = 10
+      disk_size_gb = 20
     },
     {
       name         = "multicast-relay"
@@ -40,14 +40,14 @@ locals {
       ip_offset    = 50                                           # Fixed IP for network routing
       cpu_cores    = 2
       memory_mb    = 2048
-      disk_size_gb = 10
+      disk_size_gb = 20
     },
     {
       name         = "nvidia-licensing"
       vlans        = ["vlan100"]
       cpu_cores    = 2
       memory_mb    = 2048
-      disk_size_gb = 10
+      disk_size_gb = 20
     }
   ]
 }

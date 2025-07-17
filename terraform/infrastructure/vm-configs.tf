@@ -8,9 +8,9 @@ locals {
       name         = "dns"
       vlans        = ["vlan100", "vlan20", "vlan110", "vlan120", "vlan121", "vlan130"]
       ip_offset    = 53 # Fixed IP .53 for DNS (port 53 reference)
-      cpu_cores    = 2
-      memory_mb    = 512 # Low memory for AdGuard Home DNS
-      disk_size_gb = 10
+      cpu_cores    = 4
+      memory_mb    = 2048 # Low memory for AdGuard Home DNS
+      disk_size_gb = 20
     },
     {
       name         = "openobserve"
