@@ -51,7 +51,7 @@
       RestartSec=10
       User=root
       WorkingDirectory=/bin/multicast-relay
-      ExecStart=python3 /bin/multicast-relay/multicast-relay.py --ifFilter /bin/multicast-relay/ifFilter.json --relay 255.255.255.255:7878 --interfaces eth0 eth1 eth2 eth3 --logfile /var/log/multicast-relay.log --verbose --foreground
+      ExecStart=python3 /bin/multicast-relay/multicast-relay.py --ifFilter /bin/multicast-relay/ifFilter.json --relay 255.255.255.255:7878 --interfaces eth_vlan100 eth_vlan120 eth_vlan121 eth_vlan130 --logfile /var/log/multicast-relay.log --verbose --foreground
       KillSignal=SIGINT
 
       [Install]
