@@ -1,9 +1,7 @@
 ---
-# Plex Services Role Tasks
-# This role uses global variables from group_vars/all.yml:
-# - plex_nfs_src: NFS server and path for media storage
-# - other service-specific variables as needed
 
+# Plex Services Role Tasks
+# This role uses global variables from group_vars/all.yml
 - name: Install NFS client packages
   apt:
     name:
@@ -17,6 +15,10 @@
   import_role:
     name: geerlingguy.docker
 
+- name: Import yedit role
+  import_role:
+    name: mitre.yedit
+
 - name: Create plex-services system group
   group:
     name: "{{ plex_services_group }}"
@@ -26,16 +28,16 @@
 - name: Create individual system users for each service
   user:
     name: "{{ item.key }}"
-    uid: "{{ item.value.uid }}"
+    uid: "{{ item.value.PUID }}"
     group: "{{ plex_services_group }}"
     shell: /usr/sbin/nologin
     home: /docker/{{ item.key }}
     create_home: false
     system: true
     state: present
-  loop: "{{ service_users | dict2items }}"
+  loop: "{{ plex_services | dict2items }}"
   loop_control:
-    label: "{{ item.key }} (UID: {{ item.value.uid }})"
+    label: "{{ item.key }} (UID: {{ item.value.PUID }})"
 
 - name: Create plex services directories
   file:
@@ -46,28 +48,19 @@
     mode: '0755'
   loop:
     - /docker
-    - /docker/portainer
-    - /docker/postgres
-    - /docker/postgres_backups
+    - /configarr
 
-- name: Create service-specific directories with proper ownership
+- name: Create empty config folders for each service
   file:
     path: "/docker/{{ item.key }}"
     state: directory
     owner: "{{ item.key }}"
     group: "{{ plex_services_group }}"
-    mode: '0755'
-  loop: "{{ service_users | dict2items }}"
+    mode: '0640'
+  loop: "{{ plex_services | dict2items }}"
   loop_control:
-    label: "{{ item.key }} directory"
-
-- name: Create bazarr config directory with proper ownership
-  file:
-    path: "/docker/bazarr/config"
-    state: directory
-    owner: "bazarr"
-    group: "{{ plex_services_group }}"
-    mode: '0755'
+    label: "{{ item.key }} config"
+  when: item.key is defined
 
 - name: Install PostgreSQL client packages
   apt:
@@ -132,8 +125,8 @@
     project_src: /docker
     files:
       - docker-compose-plex-services.yml
-    services:
-      - postgres
+#    services:
+#      - postgres
     wait: true
     wait_timeout: 120
 
@@ -143,11 +136,6 @@
     host: localhost
     timeout: 300
     delay: 10
-
-- name: Check if this is a first-time deployment
-  stat:
-    path: /docker/.postgres_initialized
-  register: postgres_init_file
 
 - name: Create PostgreSQL users for each service
   community.postgresql.postgresql_user:
@@ -159,78 +147,70 @@
     password: "{{ item.value.db_password }}"
     encrypted: true
     state: present
-  loop: "{{ service_users | dict2items }}"
+  loop: "{{ plex_services | dict2items }}"
   loop_control:
     label: "{{ item.key }} DB user"
   when: item.value.db_user is defined
 
-- name: Create databases for services
+- name: Initialize plex_service_db_pairs
+  set_fact:
+    plex_service_db_pairs: []
+
+- name: Add service/db pairs to plex_service_db_pairs
+  set_fact:
+    plex_service_db_pairs: "{{ plex_service_db_pairs + [{'service': item.0.key, 'db_user': item.0.value.db_user, 'db_name': item.1}] }}"
+  with_subelements:
+    - "{{ plex_services | dict2items }}"
+    - value.dbs
+  loop_control:
+    label: "{{ item.0.key }}: {{ item.1 }}"
+  when: item.0.value.db_user is defined and item.1 is defined
+  vars:
+    ansible_subelements_skip_missing: true
+
+- name: Create databases for each plex service and db
   community.postgresql.postgresql_db:
     login_host: localhost
     login_user: "{{ postgres_user }}"
     login_password: "{{ postgres_password }}"
-    name: "{{ item.key }}"
-    owner: "{{ service_users[item.value].db_user }}"
+    name: "{{ item.db_name }}"
+    owner: "{{ item.db_user }}"
     state: present
-  loop:
-    - { key: "sonarr-main", value: "sonarr" }
-    - { key: "sonarr-log", value: "sonarr" }
-    - { key: "radarr-main", value: "radarr" }
-    - { key: "radarr-log", value: "radarr" }
-    - { key: "prowlarr-main", value: "prowlarr" }
-    - { key: "prowlarr-log", value: "prowlarr" }
-    - { key: "bazarr", value: "bazarr" }
-    - { key: "jellyseerr", value: "jellyseerr" }
+  loop: "{{ plex_service_db_pairs }}"
   loop_control:
-    label: "{{ item.key }} database"
-  when: service_users[item.value].db_user is defined
+    label: "{{ item.service }}: {{ item.db_name }}"
+  when: item.db_user is defined
 
 - name: Grant database privileges to service users
   community.postgresql.postgresql_privs:
     login_host: localhost
     login_user: "{{ postgres_user }}"
     login_password: "{{ postgres_password }}"
-    login_db: "{{ item.key }}"
-    role: "{{ service_users[item.value].db_user }}"
+    login_db: "{{ item.db_name }}"
+    role: "{{ item.db_user }}"
     privs: ALL
     type: database
     state: present
-  loop:
-    - { key: "sonarr-main", value: "sonarr" }
-    - { key: "sonarr-log", value: "sonarr" }
-    - { key: "radarr-main", value: "radarr" }
-    - { key: "radarr-log", value: "radarr" }
-    - { key: "prowlarr-main", value: "prowlarr" }
-    - { key: "prowlarr-log", value: "prowlarr" }
-    - { key: "bazarr", value: "bazarr" }
-    - { key: "jellyseerr", value: "jellyseerr" }
+  loop: "{{ plex_service_db_pairs }}"
   loop_control:
-    label: "{{ item.key }} privileges"
-  when: service_users[item.value].db_user is defined
+    label: "{{ item.service }}: {{ item.db_name }} privileges"
+  when: item.db_user is defined
 
 - name: Grant schema privileges to service users
   community.postgresql.postgresql_privs:
     login_host: localhost
     login_user: "{{ postgres_user }}"
     login_password: "{{ postgres_password }}"
-    login_db: "{{ item.key }}"
-    role: "{{ service_users[item.value].db_user }}"
+    login_db: "{{ item.db_name }}"
+    role: "{{ item.db_user }}"
     objs: public
     privs: ALL
     type: schema
     state: present
-  loop:
-    - { key: "sonarr-main", value: "sonarr" }
-    - { key: "sonarr-log", value: "sonarr" }
-    - { key: "radarr-main", value: "radarr" }
-    - { key: "radarr-log", value: "radarr" }
-    - { key: "prowlarr-main", value: "prowlarr" }
-    - { key: "prowlarr-log", value: "prowlarr" }
-    - { key: "bazarr", value: "bazarr" }
-    - { key: "jellyseerr", value: "jellyseerr" }
+  loop: "{{ plex_service_db_pairs }}"
   loop_control:
-    label: "{{ item.key }} schema privileges"
-  when: service_users[item.value].db_user is defined
+    label: "{{ item.service }}: {{ item.db_name }} schema privileges"
+  when: item.db_user is defined
 
 - name: Attempt to restore databases from remote backup on first deployment
   shell: |
@@ -255,7 +235,7 @@
       exit 1
     fi
   when: 
-    - not postgres_init_file.stat.exists 
+    #- not postgres_init_file.stat.exists 
     - postgres_backup_enabled | default(true)
   register: postgres_restore_result
   failed_when: false
@@ -265,77 +245,160 @@
     msg: "{{ postgres_restore_result.stdout_lines }}"
   when: postgres_restore_result is defined and postgres_restore_result.stdout_lines is defined
 
-- name: Create application configuration files (before starting services)
+- name: Ensure lxml is installed for XML config management
+  apt:
+    name: python3-lxml
+    state: present
+    update_cache: yes
+  become: yes
+
+- name: Update config files for all containers with a database
   block:
-    - name: Create Sonarr configuration file
-      template:
-        src: sonarr_config.xml.j2
-        dest: /docker/sonarr/config.xml
-        owner: sonarr
-        group: "{{ plex_services_group }}"
-        mode: '0644'
-        backup: true
-        force: true
+    - name: Update XML config files with Postgres settings
+      community.general.xml:
+        path: "/docker/{{ item.key }}/{{ item.value.config }}"
+        xpath: /Config/PostgresUser
+        value: "{{ item.value.db_user }}"
+        state: present
+      loop: "{{ plex_services | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}: PostgresUser"
+      when:
+        - item.value.config is defined
+        - item.value.db_user is defined
+        - item.value.config | regex_search('\.xml$')
 
-    - name: Create Radarr configuration file
-      template:
-        src: radarr_config.xml.j2
-        dest: /docker/radarr/config.xml
-        owner: radarr
-        group: "{{ plex_services_group }}"
-        mode: '0644'
-        backup: true
-        force: true
+    - name: Update XML config files with PostgresPassword
+      community.general.xml:
+        path: "/docker/{{ item.key }}/{{ item.value.config }}"
+        xpath: /Config/PostgresPassword
+        value: "{{ item.value.db_password }}"
+        state: present
+      loop: "{{ plex_services | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}: PostgresPassword"
+      when:
+        - item.value.config is defined
+        - item.value.db_password is defined
+        - item.value.config | regex_search('\.xml$')
 
-    - name: Create Prowlarr configuration file
-      template:
-        src: prowlarr_config.xml.j2
-        dest: /docker/prowlarr/config.xml
-        owner: prowlarr
-        group: "{{ plex_services_group }}"
-        mode: '0644'
-        backup: true
-        force: true
+    - name: Update XML config files with PostgresHost
+      community.general.xml:
+        path: "/docker/{{ item.key }}/{{ item.value.config }}"
+        xpath: /Config/PostgresHost
+        value: "postgres"
+        state: present
+      loop: "{{ plex_services | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}: PostgresHost"
+      when:
+        - item.value.config is defined
+        - item.value.config | regex_search('\.xml$')
+        - item.value.db_user is defined
 
-    - name: Create Bazarr configuration file
-      template:
-        src: bazarr_config.yaml.j2
-        dest: /docker/bazarr/config/config.yaml
-        owner: bazarr
-        group: "{{ plex_services_group }}"
-        mode: '0644'
-        backup: true
-        force: true
+    - name: Update XML config files with PostgresPort
+      community.general.xml:
+        path: "/docker/{{ item.key }}/{{ item.value.config }}"
+        xpath: /Config/PostgresPort
+        value: "5432"
+        state: present
+      loop: "{{ plex_services | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}: PostgresPort"
+      when:
+        - item.value.config is defined
+        - item.value.config | regex_search('\.xml$')
+        - item.value.db_user is defined
 
-    - name: Create Jellyseerr configuration file
-      template:
-        src: jellyseerr_settings.json.j2
-        dest: /docker/jellyseerr/settings.json
-        owner: jellyseerr
-        group: "{{ plex_services_group }}"
-        mode: '0644'
-        backup: true
-        force: true
+- name: Read ApiKey from each *arr config.xml
+  block:
+    - name: Read config XML and register output
+      community.general.xml:
+        path: "/docker/{{ item.key }}/{{ item.value.config }}"
+        xpath: "/Config/ApiKey"
+        content: text
+      register: xml_result
+      when:
+        - item.value.config is defined
+        - item.value.config | regex_search('\.xml$')
+      loop: "{{ plex_services | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
 
-- name: Mark PostgreSQL as initialized (fallback)
-  file:
-    path: /docker/.postgres_initialized
-    state: touch
-    mode: '0644'
-  when: not postgres_init_file.stat.exists
+    - name: Set api_key fact for each service
+      set_fact:
+        arr_api_keys: >-
+          {{
+            arr_api_keys | default({}) |
+            combine({ item.item.key: item.matches[0].ApiKey | default('') })
+          }}
+      loop: "{{ xml_result.results }}"
+      when:
+        - item is mapping
+        - "'matches' in item"
+        - item.matches | length > 0
+        - item.matches[0] is mapping
+        - "'ApiKey' in item.matches[0]"
 
-- name: Fix ownership of existing service files 
-  shell: |
-    # Fix ownership for each service directory and its contents
-    chown -R {{ item.key }}:{{ plex_services_group }} /docker/{{ item.key }}/
-  loop: "{{ service_users | dict2items }}"
+- name: Set Sonarr, Radarr, Lidarr, and Readarr API keys in bazarr config.yaml
+  yedit:
+    src: "/docker/bazarr/config/config.yaml"
+    key: "{{ item.key }}.apikey"
+    value: "{{ item.value }}"
+  loop: "{{ arr_api_keys | dict2items }}"
   loop_control:
-    label: "{{ item.key }} files ownership"
+    label: "{{ item.key }}"
+  when: item.key in ['sonarr', 'radarr', 'lidarr', 'readarr'] and item.value is defined
 
-- name: Start all remaining plex services after database initialization
+- name: Correct permissions for plex services directories
+  file:
+    path: "/docker/{{ item.key }}"
+    state: directory
+    owner: "{{ item.key }}"
+    group: "{{ plex_services_group }}"
+    recurse: yes
+  loop: "{{ plex_services | dict2items }}"
+  loop_control: 
+    label: "{{ item.key }} config"
+  
+- name: Restart all plex services after config update
   community.docker.docker_compose_v2:
     project_src: /docker
     files:
       - docker-compose-plex-services.yml
+    state: restarted
     wait: true
     wait_timeout: 600
+
+- name: Ensure pip is installed (Debian/Ubuntu)
+  apt:
+    name: python3-pip
+    state: present
+  become: true
+  
+- name: Ensure prowlarr-py is installed
+  ansible.builtin.pip:
+    name: prowlarr-py
+    executable: pip
+
+- name: Configure Prowlarr (Indexer Management)
+  devopsarr.prowlarr.prowlarr_indexer:
+    prowlarr_api_key: "{{ prowlarr_api_key }}"
+    prowlarr_url: "http://localhost:9696"
+    name: "NZBPlanet"
+    enable: true
+    priority: 10
+    config_contract: "NewznabSettings"
+    implementation: "Newznab"
+    protocol: "usenet"
+    fields:
+    - name: "baseUrl"
+      value: "https://api.nzbplanet.net"
+
+- name: Generate configarr_secrets.yaml from template
+  template:
+    src: configarr_secrets.yml.j2
+    dest: /configarr/secrets.yml
+    owner: root
+    group: root
+    mode: '0600'

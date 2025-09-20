@@ -6,6 +6,7 @@ collections:
   - community.docker
   - community.general
   - community.postgresql
+  - installarr.media_server_config
 
 galaxy_info:
   author: homelab

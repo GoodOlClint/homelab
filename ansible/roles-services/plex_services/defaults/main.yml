@@ -1,6 +1,0 @@
----
-# Default variables for plex_services role
-# 
-# NOTE: All configuration has been moved to group_vars/all.yml for centralized management.
-# This file is intentionally minimal and contains no variables as all configuration
-# is now managed centrally through group_vars.
