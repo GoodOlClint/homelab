@@ -1,0 +1,329 @@
+# This file should be renamed to docker-compose.yml.j2
+services:
+#  radarr:
+#    container_name: radarr
+#    image: hotio/radarr:latest
+#    restart: unless-stopped
+#    logging:
+#      driver: json-file
+#    ports:
+#      - 7878:7878
+#    environment:
+#      - PUID={{ radarr_user }}
+#      - PGID={{ radarr_group }}
+#      - UMASK={{ radarr_umask }}
+#      - TZ={{ radarr_timezone }}
+#    volumes:
+#      - /etc/localtime:/etc/localtime:ro
+#      - radarr_config:/config
+#      - plex_media:/data
+#  sonarr:
+#    container_name: sonarr
+#    image: hotio/sonarr:latest
+#    restart: unless-stopped
+#    logging:
+#      driver: json-file
+#    ports:
+#      - 8989:8989
+#    environment:
+#      - PUID={{ sonarr_user }}
+#      - PGID={{ sonarr_group }}
+#      - UMASK={{ sonarr_umask }}
+#      - TZ={{ sonarr_timezone }}
+#    volumes:
+#      - /etc/localtime:/etc/localtime:ro
+#      - sonarr_config:/config
+#      - plex_media:/data
+#  bazarr:
+#    container_name: bazarr
+#    image: hotio/bazarr:latest
+#    restart: unless-stopped
+#    logging:
+#      driver: json-file
+#    ports:
+#      - 6767:6767
+#    environment:
+#      - PUID={{ bazarr_user }}
+#      - PGID={{ bazarr_group }}
+#      - TZ={{ bazarr_timezone }}
+#    volumes:
+#      - /etc/localtime:/etc/localtime:ro
+#      - bazarr_config:/config
+#      - plex_media:/data
+#  prowlarr:
+#    container_name: prowlarr
+#    image: hotio/prowlarr:latest
+#    restart: unless-stopped
+#    logging:
+#      driver: json-file
+#    ports:
+#      - 9696:9696
+#    environment:
+#      - PUID={{ prowlarr_user }}
+#      - PGID={{ prowlarr_group }}
+#      - UMASK={{ prowlarr_umask }}
+#      - TZ={{ prowlarr_timezone }}
+#    volumes:
+#      - /etc/localtime:/etc/localtime:ro
+#      - prowlarr_config:/config
+#      - plex_media:/data
+#  tautulli:
+#    container_name: tautulli
+#    image: hotio/tautulli:latest
+#    restart: unless-stopped
+#    logging:
+#      driver: json-file
+#    ports:
+#      - 8181:8181
+#    environment:
+#      - PUID={{ tautulli_user }}
+#      - PGID={{ tautulli_group }}
+#      - TZ={{ tautulli_timezone }}
+#    volumes:
+#      - /etc/localtime:/etc/localtime:ro
+#      - tautulli_config:/config
+#      - plex_media:/data
+#  cloudflared:
+#    image: cloudflare/cloudflared:latest
+#    restart: unless-stopped
+#    command: >-
+#      tunnel --no-autoupdate run --token
+#      ${CLOUDFLARED_TUNNEL_TOKEN}
+#  readarr:
+#    container_name: readarr
+#    image: hotio/readarr:latest
+#    restart: unless-stopped
+#    ports:
+#      - "8787:8787"
+#    environment:
+#      - PUID={{ readarr_user }}
+#      - PGID={{ readarr_group }}
+#      - UMASK={{ readarr_umask }}
+#      - TZ={{ readarr_timezone }}
+#    volumes:
+#      - /etc/localtime:/etc/localtime:ro
+#      - readarr_config:/config
+#      - plex_media:/data
+#  lidarr:
+#    container_name: lidarr
+#    image: hotio/lidarr:latest
+#    restart: unless-stopped
+#    ports:
+#      - "8686:8686"
+#    environment:
+#      - PUID={{ lidarr_user }}
+#      - PGID={{ lidarr_group }}
+#      - TZ={{ lidarr_timezone }}
+#    volumes:
+#      - /etc/localtime:/etc/localtime:ro
+#      - lidarr_config:/config
+#      - plex_media:/data
+#  sabnzbd:
+#    container_name: sabnzbd
+#    image: hotio/sabnzbd:latest
+#    restart: unless-stopped
+#    logging:
+#      driver: json-file
+#    ports:
+#      - "8080:8080"
+#    environment:
+#      - PUID={{ sabnzbd_user }}
+#      - PGID={{ sabnzbd_group }}
+#      - UMASK={{ sabnzbd_umask }}
+#      - TZ={{ sabnzbd_timezone }}
+#    volumes:
+#      - /etc/localtime:/etc/localtime:ro
+#      - sabnzbd_config:/config
+#      - plex_media:/data:rw
+#  plex-meta-manager:
+#    container_name: plex-meta-manager
+#    image: meisnate12/plex-meta-manager:latest
+#    restart: unless-stopped
+#    environment:
+#      - PUID={{ plex_meta_manager_user }}
+#      - PGID={{ plex_meta_manager_group }}
+#      - TZ={{ plex_meta_manager_timezone }}
+#    volumes:
+#      - /etc/localtime:/etc/localtime:ro
+#      - plex-meta-manager_config:/config:rw
+#  ombi:
+#    image: linuxserver/ombi:latest
+#    container_name: ombi
+#    restart: unless-stopped
+#    logging:
+#      driver: json-file
+#    depends_on:
+#      - ombi-mariadb
+#    environment:
+#      - PUID={{ ombi_user }}
+#      - PGID={{ ombi_group }}
+#      - TZ={{ ombi_timezone }}
+#    volumes:
+#      - ombi_config:/config
+#    ports:
+#      - 3579:3579
+#  ombi-mariadb:
+#    image: mariadb:latest
+#    container_name: ombi-mariadb
+#    restart: unless-stopped
+#    logging:
+#      driver: json-file
+#    environment:
+#      - "MARIADB_USER=ombi"
+#      - "MARIADB_PASSWORD=ombi"
+#      - "MARIADB_DATABASE=ombi"
+#      - "MARIADB_RANDOM_ROOT_PASSWORD=yes"
+#      - TZ={{ ombi_mariadb_timezone }}
+#    volumes:
+#      - "/docker/appdata/ombi-mariadb:/var/lib/mysql"
+#    ports:
+#      - 3306:3306
+  kiwix:
+    image: ghcr.io/kiwix/kiwix-serve:latest
+    container_name: kiwix
+    restart: unless-stopped
+    logging:
+      driver: json-file
+    ports:
+      - 8090:8080
+    environment:
+      - TZ={{ kiwix_timezone }}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - kiwix_config:/data
+    command:
+      - '*.zim'
+  boinc:
+    image: linuxserver/boinc:latest
+    container_name: boinc
+    runtime: nvidia
+    restart: unless-stopped
+    logging:
+      driver: json-file
+    ports:
+      - 7080:8080
+      - 7081:8081
+      - 31416:31416
+    security_opt:
+      - seccomp:unconfined #optional
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - PUID={{ boinc_user }}
+      - PGID={{ boinc_group }}
+      - TZ={{ boinc_timezone }}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - boinc_config:/config
+      - plex_media:/data
+  portainer:
+    container_name: portainer
+    image: portainer/portainer-ce:latest
+    restart: unless-stopped
+    ports:
+      - 9000:9000
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_config:/data
+  doge-node:
+    container_name: doge-node
+    image: goodolclint/dogecoin-node:latest
+    restart: unless-stopped
+    ports:
+      - 22555:22555
+      - 3000:3000
+    environment:
+      - TZ={{ doge_node_timezone }}
+    volumes:
+      - doge-node_config:/data
+
+volumes:
+#  radarr_config:
+#    driver: local
+#    driver_opts:
+#      type: nfs
+#      o: "addr={{ docker_nfs_server }},nfsvers=4,rsize=1048576,wsize=1048576,hard,intr,timeo=600"
+#      device: ":{{ docker_nfs_path }}/radarr"
+#  sonarr_config:
+#    driver: local
+#    driver_opts:
+#      type: nfs
+#      o: "addr={{ docker_nfs_server }},nfsvers=4,rsize=1048576,wsize=1048576,hard,intr,timeo=600"
+#      device: ":{{ docker_nfs_path }}/sonarr"
+#  bazarr_config:
+#    driver: local
+#    driver_opts:
+#      type: nfs
+#      o: "addr={{ docker_nfs_server }},nfsvers=4,rsize=1048576,wsize=1048576,hard,intr,timeo=600"
+#      device: ":{{ docker_nfs_path }}/bazarr"
+#  prowlarr_config:
+#    driver: local
+#    driver_opts:
+#      type: nfs
+#      o: "addr={{ docker_nfs_server }},nfsvers=4,rsize=1048576,wsize=1048576,hard,intr,timeo=600"
+#      device: ":{{ docker_nfs_path }}/prowlarr"
+#  tautulli_config:
+#    driver: local
+#    driver_opts:
+#      type: nfs
+#      o: "addr={{ docker_nfs_server }},nfsvers=4,rsize=1048576,wsize=1048576,hard,intr,timeo=600"
+#      device: ":{{ docker_nfs_path }}/tautulli"
+#  readarr_config:
+#    driver: local
+#    driver_opts:
+#      type: nfs
+#      o: "addr={{ docker_nfs_server }},nfsvers=4,rsize=1048576,wsize=1048576,hard,intr,timeo=600"
+#      device: ":{{ docker_nfs_path }}/readarr"
+#  lidarr_config:
+#    driver: local
+#    driver_opts:
+#      type: nfs
+#      o: "addr={{ docker_nfs_server }},nfsvers=4,rsize=1048576,wsize=1048576,hard,intr,timeo=600"
+#      device: ":{{ docker_nfs_path }}/lidarr"
+#  sabnzbd_config:
+#    driver: local
+#    driver_opts:
+#      type: nfs
+#      o: "addr={{ docker_nfs_server }},nfsvers=4,rsize=1048576,wsize=1048576,hard,intr,timeo=600"
+#      device: ":{{ docker_nfs_path }}/sabnzbd"
+#  plex-meta-manager_config:
+#    driver: local
+#    driver_opts:
+#      type: nfs
+#      o: "addr={{ docker_nfs_server }},nfsvers=4,rsize=1048576,wsize=1048576,hard,intr,timeo=600"
+#      device: ":{{ docker_nfs_path }}/plex-meta-manager"
+#  ombi_config:
+#    driver: local
+#    driver_opts:
+#      type: nfs
+#      o: "addr={{ docker_nfs_server }},nfsvers=4,rsize=1048576,wsize=1048576,hard,intr,timeo=600"
+#      device: ":{{ docker_nfs_path }}/ombi"
+  kiwix_config:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: "addr={{ docker_nfs_server }},nfsvers=4,rsize=1048576,wsize=1048576,hard,intr,timeo=600"
+      device: ":{{ docker_nfs_path }}/kiwix"
+  boinc_config:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: "addr={{ docker_nfs_server }},nfsvers=4,rsize=1048576,wsize=1048576,hard,intr,timeo=600"
+      device: ":{{ docker_nfs_path }}/boinc"
+  portainer_config:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: "addr={{ docker_nfs_server }},nfsvers=4,rsize=1048576,wsize=1048576,hard,intr,timeo=600"
+      device: ":{{ docker_nfs_path }}/portainer"
+  doge-node_config:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: "addr={{ docker_nfs_server }},nfsvers=4,rsize=1048576,wsize=1048576,hard,intr,timeo=600"
+      device: ":{{ docker_nfs_path }}/dogecoin"
+#  plex_media:
+#    driver: local
+#    driver_opts:
+#      type: nfs
+#      o: "addr={{ docker_nfs_server }},nfsvers=4,rsize=1048576,wsize=1048576,hard,intr,timeo=600"
+#      device: ":{{ plex_nfs_path }}"
