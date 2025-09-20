@@ -4,3 +4,12 @@
     name: docker
     state: restarted
     daemon_reload: yes
+
+- name: restart docker services
+  community.docker.docker_compose_v2:
+    project_src: /opt
+    files:
+      - docker-compose.yml
+    state: present
+    restarted: true
+  listen: "restart docker services"

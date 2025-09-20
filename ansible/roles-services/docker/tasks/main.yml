@@ -6,6 +6,7 @@
 - name: Install Docker using geerlingguy.docker
   import_role:
     name: geerlingguy.docker
+  register: docker_role_result
 
 - name: Check if NVIDIA container toolkit GPG key exists
   stat:
@@ -82,65 +83,80 @@
     state: absent
     force_absent: true
 
-- name: Ensure NFS packages are installed
-  apt:
-    name: nfs-common
-    state: present
-    update_cache: yes
 
-- name: Ensure NFS fstab entry and mount for /mnt/docker
-  ansible.posix.mount:
-    backup: yes
-    boot: "yes"
-    path: "/mnt/docker"
-    src: "{{ docker_nfs_src }}"
-    fstype: nfs
-    opts: "defaults"
-    state: "mounted"
-
-- name: Ensure NFS fstab entry and mount for /mnt/plex
-  ansible.posix.mount:
-    backup: yes
-    boot: "yes"
-    path: "/mnt/plex"
-    src: "{{ plex_nfs_src }}"
-    fstype: nfs
-    opts: "defaults"
-    state: "mounted"
-    
-- name: Ensure /docker exists
-  file:
-    path: /docker
-    state: directory
-    owner: root
-    group: root
-    mode: '0755'
-
-- name: Link /docker/appdata
-  file:
-    src: /mnt/docker
-    dest: /docker/appdata
-    state: link
-
-- name: Link /docker/plex
-  file:
-    src: /mnt/plex/data
-    dest: /docker/plex
-    state: link
-
-- name: Copy docker-compose.yml to the docker VM
-  copy:
-    src: files/docker-compose.yml
+- name: Deploy docker-compose.yml to the docker VM
+  template:
+    src: templates/docker-compose.yml.j2
     dest: /opt/docker-compose.yml
     owner: root
     group: root
     mode: '0644'
+  vars:
+    docker_nfs_server: "172.16.20.10"
+    docker_nfs_path: "/volume1/docker"
+    plex_nfs_path: "/volume1/plex/data"
+    radarr_user: 2001
+    radarr_group: 988
+    radarr_umask: '002'
+    radarr_timezone: 'America/Chicago'
+    sonarr_user: 2002
+    sonarr_group: 988
+    sonarr_umask: '002'
+    sonarr_timezone: 'America/Chicago'
+    bazarr_user: 2004
+    bazarr_group: 988
+    bazarr_timezone: 'America/Chicago'
+    prowlarr_user: 2005
+    prowlarr_group: 988
+    prowlarr_umask: '002'
+    prowlarr_timezone: 'America/Chicago'
+    tautulli_user: 2006
+    tautulli_group: 988
+    tautulli_timezone: 'America/Chicago'
+    readarr_user: 2007
+    readarr_group: 988
+    readarr_umask: '002'
+    readarr_timezone: 'America/Chicago'
+    lidarr_user: 2008
+    lidarr_group: 988
+    lidarr_timezone: 'America/Chicago'
+    sabnzbd_user: 2003
+    sabnzbd_group: 988
+    sabnzbd_umask: '002'
+    sabnzbd_timezone: 'America/Chicago'
+    plex_meta_manager_user: 1000
+    plex_meta_manager_group: 988
+    plex_meta_manager_timezone: 'America/Chicago'
+    ombi_user: 1000
+    ombi_group: 988
+    ombi_timezone: 'America/Chicago'
+    ombi_mariadb_timezone: 'America/Chicago'
+    kiwix_timezone: 'America/Chicago'
+    boinc_user: 1000
+    boinc_group: 988
+    boinc_timezone: 'America/Chicago'
+    doge_node_timezone: 'America/Chicago'
 
-- name: Reboot system to apply Docker and network configuration changes
+- name: Create .env file for Docker Compose with secrets
+  template:
+    src: docker-env.j2
+    dest: /opt/.env
+    mode: '0600'
+    owner: root
+    group: root
+  notify: restart docker services
+  when: cloudflared_tunnel_token is defined and cloudflared_tunnel_token != ""
+
+- name: Set reboot required flag
+  set_fact:
+    reboot_required: "{{ (nvidia_ctk_result is defined and nvidia_ctk_result is changed) or (docker_role_result is defined and docker_role_result is changed) }}"
+
+- name: Reboot system if major Docker configuration changes were made
   reboot:
     reboot_timeout: 300
     connect_timeout: 20
     test_command: systemctl is-active docker
+  when: reboot_required | default(false)
 
 - name: Deploy containers with Docker Compose
   community.docker.docker_compose_v2:
@@ -156,7 +172,8 @@
   until: compose_result is succeeded
 
 - name: Display final container status
-  command: docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+  shell: |
+    docker ps --format "table {% raw %}{{.Names}}\t{{.Status}}\t{{.Ports}}{% endraw %}"
   register: container_status
   ignore_errors: true
 
