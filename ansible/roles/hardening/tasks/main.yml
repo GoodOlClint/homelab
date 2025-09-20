@@ -1,0 +1,107 @@
+---
+# Ansible Role: Hardening
+# Harden Linux VMs for security best practices
+
+- name: Ensure UFW is installed
+  apt:
+    name: ufw
+    state: present
+  become: yes
+
+- name: Allow SSH
+  ufw:
+    rule: allow
+    port: 22
+    proto: tcp
+  become: yes
+
+- name: Allow required service ports
+  ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop: "{{ hardening_allowed_ports | default([]) }}"
+  when: hardening_allowed_ports is defined
+  become: yes
+
+- name: Set default UFW policies
+  ufw:
+    state: reset
+  become: yes
+
+- name: Set UFW default deny incoming
+  ufw:
+    direction: incoming
+    policy: deny
+  become: yes
+
+- name: Enable UFW
+  ufw:
+    state: enabled
+  become: yes
+
+- name: Disable SSH password authentication
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^PasswordAuthentication'
+    line: 'PasswordAuthentication no'
+    state: present
+  notify: Restart SSH
+  become: yes
+
+- name: Install unattended-upgrades
+  apt:
+    name: unattended-upgrades
+    state: present
+  become: yes
+
+- name: Enable automatic security updates
+  copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+  become: yes
+
+- name: Disable and stop unused services
+  service:
+    name: "{{ item }}"
+    state: stopped
+    enabled: no
+  loop: "{{ hardening_disable_services | default([]) }}"
+  when: hardening_disable_services is defined
+  become: yes
+
+- name: Install auditd for auditing
+  apt:
+    name: auditd
+    state: present
+  become: yes
+
+- name: Ensure auditd is running
+  service:
+    name: auditd
+    state: started
+    enabled: yes
+  become: yes
+
+- name: Harden sysctl settings
+  sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: yes
+  loop: "{{ hardening_sysctl_settings | default([]) }}"
+  when: hardening_sysctl_settings is defined
+  become: yes
+
+- name: Set permissions on sensitive files
+  file:
+    path: "{{ item.path }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: '/etc/shadow', mode: '0600' }
+    - { path: '/etc/ssh/sshd_config', mode: '0600' }
+  become: yes 
