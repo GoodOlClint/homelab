@@ -23,7 +23,37 @@
   apt:
     update_cache: yes
 
+- name: Install/Update Node.js LTS
+  apt:
+    name:
+      - nodejs
+      - npm
+    state: latest
+
 - name: Install Homebridge
   apt:
     name: homebridge
     state: present
+
+- name: Update Homebridge to latest version
+  apt:
+    name: homebridge
+    state: latest
+  tags: update
+
+- name: Update all Homebridge plugins
+  community.general.npm:
+    name: "*"
+    global: yes
+    state: latest
+  become: yes
+  tags: update
+  register: plugin_update
+  changed_when: "'up to date' not in plugin_update.stdout"
+
+- name: Restart Homebridge service after updates
+  ansible.builtin.systemd:
+    name: homebridge
+    state: restarted
+  when: plugin_update.changed
+  tags: update
