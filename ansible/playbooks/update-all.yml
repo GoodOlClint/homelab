@@ -23,13 +23,11 @@
           - npm
         state: latest
 
-    - name: Update all Homebridge plugins
-      community.general.npm:
-        name: "*"
-        global: yes
-        state: latest
+    - name: Update all globally installed npm packages (including Homebridge plugins)
+      ansible.builtin.shell: |
+        npm update -g
       register: plugin_update
-      changed_when: "'up to date' not in plugin_update.stdout"
+      changed_when: plugin_update.stdout != ""
 
     - name: Restart Homebridge service after updates
       ansible.builtin.systemd:
