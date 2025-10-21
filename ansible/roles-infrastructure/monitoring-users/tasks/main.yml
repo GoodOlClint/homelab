@@ -1,0 +1,21 @@
+---
+# Main tasks for monitoring-users role
+# This role provisions monitoring users for Proxmox, UniFi, and Synology
+
+- name: Include Proxmox user tasks
+  ansible.builtin.include_tasks: proxmox.yml
+  tags:
+    - monitoring-users
+    - proxmox-user
+
+- name: Include UniFi user tasks
+  ansible.builtin.include_tasks: unifi.yml
+  tags:
+    - monitoring-users
+    - unifi-user
+
+- name: Include Synology SNMP tasks
+  ansible.builtin.include_tasks: synology.yml
+  tags:
+    - monitoring-users
+    - synology-snmp

@@ -1,0 +1,102 @@
+---
+# Synology NAS SNMP configuration tasks
+
+- name: Login to Synology DSM API
+  ansible.builtin.uri:
+    url: "https://{{ synology_host }}:5001/webapi/auth.cgi"
+    method: GET
+    body_format: form-urlencoded
+    validate_certs: false
+    url_username: "{{ synology_admin_user | default('admin') }}"
+    url_password: "{{ synology_admin_password }}"
+    force_basic_auth: true
+  register: synology_login
+  no_log: true
+  ignore_errors: true
+
+- name: Warning about Synology SNMP configuration
+  ansible.builtin.debug:
+    msg: |
+      WARNING: Synology DSM API for SNMP configuration requires manual setup or SSH access.
+      
+      Please enable SNMP manually via DSM Web Interface:
+      1. Login to DSM at https://{{ synology_host }}:5001
+      2. Go to Control Panel → Terminal & SNMP
+      3. Click on the SNMP tab
+      4. Check "Enable SNMP service"
+      5. Select SNMPv1, SNMPv2c service
+      6. Set Community name to: {{ synology_snmp_community }}
+      7. Click Apply
+      
+      Alternatively, if SSH is enabled, we can configure via command line.
+
+- name: Check if Synology SSH is accessible
+  ansible.builtin.wait_for:
+    host: "{{ synology_host }}"
+    port: 22
+    timeout: 5
+  register: synology_ssh_check
+  ignore_errors: true
+
+- name: Configure Synology SNMP via SSH (if accessible)
+  when: synology_ssh_check is succeeded
+  block:
+    - name: Enable SNMP service on Synology
+      ansible.builtin.command:
+        cmd: "synoservicecfg --enable SNMP"
+      delegate_to: "{{ synology_host }}"
+      become: true
+      register: snmp_enabled
+      changed_when: "'enabled' in snmp_enabled.stdout.lower()"
+
+    - name: Configure SNMP community string
+      ansible.builtin.lineinfile:
+        path: /etc/snmp/snmpd.conf
+        regexp: '^rocommunity\s+'
+        line: "rocommunity {{ synology_snmp_community }} default"
+        create: false
+      delegate_to: "{{ synology_host }}"
+      become: true
+      notify: Restart Synology SNMP service
+
+    - name: Start SNMP service on Synology
+      ansible.builtin.command:
+        cmd: "synoservicecfg --start SNMP"
+      delegate_to: "{{ synology_host }}"
+      become: true
+      changed_when: true
+
+    - name: Verify SNMP service status
+      ansible.builtin.command:
+        cmd: "synoservicecfg --status SNMP"
+      delegate_to: "{{ synology_host }}"
+      become: true
+      register: snmp_status
+      changed_when: false
+
+    - name: Display SNMP status
+      ansible.builtin.debug:
+        msg: "Synology SNMP service status: {{ snmp_status.stdout }}"
+
+- name: Test SNMP connectivity from monitoring host
+  ansible.builtin.command:
+    cmd: "snmpwalk -v2c -c {{ synology_snmp_community }} {{ synology_host }} 1.3.6.1.2.1.1.1"
+  register: snmp_test
+  changed_when: false
+  ignore_errors: true
+  delegate_to: localhost
+
+- name: Display SNMP test result
+  ansible.builtin.debug:
+    msg: |
+      {% if snmp_test.rc == 0 %}
+      ✓ SNMP connectivity test PASSED
+      {{ snmp_test.stdout }}
+      {% else %}
+      ✗ SNMP connectivity test FAILED
+      Error: {{ snmp_test.stderr }}
+      Please ensure:
+      1. SNMP is enabled on Synology
+      2. Community string matches: {{ synology_snmp_community }}
+      3. Firewall allows SNMP traffic from monitoring host
+      {% endif %}

@@ -1,0 +1,19 @@
+---
+# Default variables for monitoring-users role
+
+# Proxmox monitoring user configuration
+proxmox_monitoring_user: "monitoring@pve"
+proxmox_monitoring_role: "PVEAuditor"
+proxmox_monitoring_comment: "Monitoring user for Prometheus PVE Exporter"
+
+# UniFi monitoring user configuration
+unifi_monitoring_user: "monitoring"
+unifi_monitoring_role: "readonly"  # Options: admin, readonly
+unifi_monitoring_name: "Monitoring User"
+
+# Synology SNMP configuration
+synology_snmp_enabled: true
+synology_snmp_port: 161
+synology_snmp_trap_port: 162
+synology_snmp_v1_v2c_enabled: true
+synology_snmp_v3_enabled: false

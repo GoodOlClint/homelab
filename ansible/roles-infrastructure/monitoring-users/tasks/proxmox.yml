@@ -1,0 +1,58 @@
+---
+# Proxmox monitoring user provisioning tasks
+
+- name: Check if Proxmox monitoring user exists
+  ansible.builtin.command:
+    cmd: "pveum user list --output-format json"
+  register: proxmox_users_raw
+  changed_when: false
+  delegate_to: "{{ proxmox_host }}"
+
+- name: Parse Proxmox users JSON
+  ansible.builtin.set_fact:
+    proxmox_users: "{{ proxmox_users_raw.stdout | from_json }}"
+
+- name: Check if monitoring user exists in user list
+  ansible.builtin.set_fact:
+    monitoring_user_exists: "{{ proxmox_users | selectattr('userid', 'equalto', proxmox_monitoring_user) | list | length > 0 }}"
+
+- name: Create Proxmox monitoring user
+  ansible.builtin.command:
+    cmd: "pveum user add {{ proxmox_monitoring_user }} --comment '{{ proxmox_monitoring_comment }}'"
+  when: not monitoring_user_exists
+  delegate_to: "{{ proxmox_host }}"
+  register: user_created
+
+- name: Set Proxmox monitoring user password
+  ansible.builtin.command:
+    cmd: "pveum passwd {{ proxmox_monitoring_user }}"
+    stdin: "{{ proxmox_password }}\n{{ proxmox_password }}\n"
+  when: user_created.changed or monitoring_user_exists
+  delegate_to: "{{ proxmox_host }}"
+  no_log: true
+  changed_when: true
+
+- name: Check current ACL for monitoring user
+  ansible.builtin.command:
+    cmd: "pveum acl list"
+  register: current_acl
+  changed_when: false
+  delegate_to: "{{ proxmox_host }}"
+
+- name: Grant PVEAuditor role to monitoring user
+  ansible.builtin.command:
+    cmd: "pveum aclmod / -user {{ proxmox_monitoring_user }} -role {{ proxmox_monitoring_role }}"
+  delegate_to: "{{ proxmox_host }}"
+  when: proxmox_monitoring_user not in current_acl.stdout or proxmox_monitoring_role not in current_acl.stdout
+  changed_when: true
+
+- name: Verify monitoring user permissions
+  ansible.builtin.command:
+    cmd: "pveum user permissions {{ proxmox_monitoring_user }}"
+  register: user_permissions
+  changed_when: false
+  delegate_to: "{{ proxmox_host }}"
+
+- name: Display Proxmox user permissions
+  ansible.builtin.debug:
+    msg: "Proxmox monitoring user permissions: {{ user_permissions.stdout_lines }}"
