@@ -18,8 +18,8 @@ POSTGRES_PORT="5432"
 
 # PBS Configuration
 {% if pbs_backup_enabled | default(true) %}
-PBS_REPOSITORY="{{ plex_pbs_repository | default('backup@pbs!backup-token@pbs-server:synology:databases') }}"
-PBS_PASSWORD="{{ plex_pbs_password | default('changeme') }}"
+PBS_REPOSITORY="{{ postgres_pbs_repository | default('backup@pbs!backup-token@proxmox-backup.core.goodolclint.internal:synology:databases') }}"
+PBS_PASSWORD="{{ postgres_pbs_password | default(pbs_backup_token) }}"
 PBS_NAMESPACE="{{ postgres_pbs_namespace | default('databases') }}"
 PBS_ENABLED=true
 {% else %}

@@ -1,0 +1,7 @@
+# Proxmox Backup Server Client Environment
+# Source this file before running proxmox-backup-client commands
+# Example: . /etc/proxmox-backup/pbs-client.env && proxmox-backup-client snapshot list
+
+export PBS_REPOSITORY="{{ pbs_username }}!{{ pbs_token_name }}@{{ pbs_server_host }}:{{ pbs_datastore }}"
+export PBS_PASSWORD="{{ pbs_backup_token }}"
+export PBS_FINGERPRINT="{{ pbs_fingerprint }}"

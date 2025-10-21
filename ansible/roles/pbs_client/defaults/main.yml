@@ -1,0 +1,9 @@
+---
+# Proxmox Backup Client Configuration
+pbs_client_install: true
+pbs_server_host: "proxmox-backup.core.goodolclint.internal"
+pbs_server_port: 8007
+pbs_datastore: "synology"
+pbs_username: "backup@pbs"
+pbs_token_name: "backup-token"
+# pbs_backup_token and pbs_fingerprint should be defined in group_vars

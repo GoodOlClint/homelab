@@ -1,0 +1,66 @@
+---
+# Install and configure Proxmox Backup Client
+
+- name: Check if PBS GPG key exists
+  stat:
+    path: /etc/apt/trusted.gpg.d/proxmox-release-bookworm.gpg
+  register: pbs_gpg_key
+
+- name: Install Proxmox Backup Server repository key
+  shell: |
+    wget https://enterprise.proxmox.com/debian/proxmox-release-bookworm.gpg \
+      -O /etc/apt/trusted.gpg.d/proxmox-release-bookworm.gpg
+  when: not pbs_gpg_key.stat.exists
+
+- name: Check if Proxmox repo is present
+  shell: grep -q "pbs-client" /etc/apt/sources.list.d/pbs-client.list
+  register: pbs_repo_check
+  failed_when: false
+  changed_when: false
+
+- name: Add Proxmox Backup Client repository
+  copy:
+    content: |
+      # Proxmox Backup Client repository
+      deb http://download.proxmox.com/debian/pbs-client bookworm main
+    dest: /etc/apt/sources.list.d/pbs-client.list
+    mode: '0644'
+  when: pbs_repo_check.rc != 0
+  register: pbs_repo_added
+
+- name: Update apt cache if repo was added
+  apt:
+    update_cache: yes
+  when: pbs_repo_added is changed
+
+- name: Install proxmox-backup-client
+  apt:
+    name: proxmox-backup-client
+    state: present
+  when: pbs_client_install | default(true)
+
+- name: Ensure /etc/proxmox-backup directory exists
+  file:
+    path: /etc/proxmox-backup
+    state: directory
+    mode: '0755'
+
+- name: Create PBS environment file for authentication
+  template:
+    src: pbs_env.j2
+    dest: /etc/proxmox-backup/pbs-client.env
+    mode: '0600'
+    owner: root
+    group: root
+
+- name: Verify PBS connection
+  shell: |
+    . /etc/proxmox-backup/pbs-client.env && proxmox-backup-client snapshot list | head -n 1 || true
+  register: pbs_connection_test
+  failed_when: false
+  changed_when: false
+
+- name: Display PBS connection status
+  debug:
+    msg: "PBS Connection: {{ 'SUCCESS' if pbs_connection_test.rc == 0 else 'FAILED - ' + pbs_connection_test.stderr }}"
+  when: pbs_connection_test is defined and pbs_connection_test.rc is defined
