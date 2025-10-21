@@ -1,6 +1,6 @@
 ---
 - name: Set IPv4 DNS server for each interface using resolvectl
-  with_dict: "{{ dns_zones }}"
+  loop: "{{ dns_zones | dict2items }}"
   loop_control:
     loop_var: vlan
   command: >
@@ -10,7 +10,7 @@
   when: "'eth_' + vlan.key in ansible_facts.interfaces"
 
 - name: Set IPv6 DNS server for each interface using resolvectl
-  with_dict: "{{ dns_zones }}"
+  loop: "{{ dns_zones | dict2items }}"
   loop_control:
     loop_var: vlan
   command: >
@@ -22,6 +22,11 @@
     - vlan.value.ipv6_enabled | default(false)
     - vlan.value.dns_ipv6 is defined
 
+- name: Wait for apt lock to be released
+  shell: while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 1; done
+  changed_when: false
+  timeout: 300
+
 - name: Ensure dnsutils and inotify-tools are installed
   apt:
     name:
@@ -29,6 +34,39 @@
       - inotify-tools
     state: present
     update_cache: yes
+  retries: 3
+  delay: 10
+  register: apt_result
+  until: apt_result is success
+
+- name: Initialize iface_zone_map
+  set_fact:
+    iface_zone_map: {}
+
+- name: Map interfaces to DNS zones
+  set_fact:
+    iface_zone_map: "{{ iface_zone_map | combine({ iface: zone.value.zone }) }}"
+  vars:
+    zone: "{{ dns_zones | dict2items | selectattr('value.dns_ip', 'defined') | selectattr('value.dns_ip', 'equalto', ansible_facts['interfaces'][iface]['ipv4']['address']) | list | first }}"
+  loop: "{{ ansible_facts.interfaces | list }}"
+  loop_control:
+    loop_var: iface
+  when:
+    - ansible_facts['interfaces'][iface]['ipv4'] is defined
+    - zone is defined
+
+- name: Debug iface_zone_map type
+  debug:
+    msg: "iface_zone_map type is {{ iface_zone_map | type_debug }} and value is {{ iface_zone_map }}"
+
+- name: Set DNS search suffix for each interface based on IP
+  loop: "{{ iface_zone_map | dict2items }}"
+  loop_control:
+    loop_var: iface_zone
+  command: >
+    resolvectl domain {{ iface_zone.key }} {{ iface_zone.value }}
+  become: yes
+  changed_when: false
 
 - name: Create dynamic DNS update script
   copy:
@@ -39,85 +77,46 @@
       
       LOGFILE="/var/log/dns_dynamic_update.log"
       exec >> "$LOGFILE" 2>&1
-      echo "[$(date)] Starting dynamic DNS update for $HOSTNAME" 
-      
-      DNS_TTL=3600
-      DNS_KEY_FILE="/etc/bind/ddns.key"
-      HOSTNAME="{{ inventory_hostname.replace('_', '-') }}"
-      
-      {% for vlan, data in dns_zones.items() %}
-      DNS_SERVER="{{ data.dns_ip }}"
-      {% if data.ipv6_enabled | default(false) and data.dns_ipv6 is defined %}
-      DNS_SERVER_IPV6="{{ data.dns_ipv6 }}"
-      {% endif %}
-      IFACE="eth_{{ vlan }}"
-      ZONE="{{ data.zone }}"
-      IPV6_ENABLED="{{ data.ipv6_enabled | default(false) | string }}"
-      
-      # Get IPv4 address for this interface
-      IP4=$(ip -4 addr show dev "$IFACE" | awk '/inet / {print $2}' | cut -d/ -f1)
-      
-      # Get IPv6 address for this interface (global scope only) if IPv6 is enabled
-      if [[ "$IPV6_ENABLED" == "True" ]]; then
+      echo "[$(date)] Starting dynamic DNS update for $(hostname)"
+
+      HOSTNAME="$(hostname)"
+
+      for IFACE in $(ls /sys/class/net); do
+        # Skip loopback and virtual interfaces
+        [[ "$IFACE" =~ ^lo$|^bonding_masters$|^docker|^veth|^br|^virbr|^vmnet|^tap|^tun ]] && continue
+
+        IP4=$(ip -4 addr show dev "$IFACE" | awk '/inet / {print $2}' | cut -d/ -f1)
         IP6=$(ip -6 addr show dev "$IFACE" scope global | awk '/inet6 / {print $2}' | cut -d/ -f1 | head -n1)
-      else
-        IP6=""
-      fi
-      
-      echo "[$(date)] Checking $IFACE (IPv6: $IPV6_ENABLED): IPv4=$IP4 IPv6=$IP6"
-      
-      if [[ -n "$IP4" || -n "$IP6" ]]; then
-        TMPFILE=$(mktemp)
-        echo "server $DNS_SERVER" > $TMPFILE
-        echo "zone $ZONE" >> $TMPFILE
-        
-        # Update IPv4 A record
-        if [[ -n "$IP4" ]]; then
-          echo "update delete $HOSTNAME.$ZONE. A" >> $TMPFILE
-          echo "update add $HOSTNAME.$ZONE. $DNS_TTL A $IP4" >> $TMPFILE
-          echo "[$(date)] Will update A record for $HOSTNAME.$ZONE. to $IP4"
-        fi
-        
-        # Update IPv6 AAAA record only if IPv6 is enabled for this VLAN
-        if [[ "$IPV6_ENABLED" == "True" && -n "$IP6" ]]; then
-          echo "update delete $HOSTNAME.$ZONE. AAAA" >> $TMPFILE
-          echo "update add $HOSTNAME.$ZONE. $DNS_TTL AAAA $IP6" >> $TMPFILE
-          echo "[$(date)] Will update AAAA record for $HOSTNAME.$ZONE. to $IP6"
-        fi
-        
-        echo "send" >> $TMPFILE
-        
-        # Try with DNS key first, fallback to no key
-        if [[ -f "$DNS_KEY_FILE" ]]; then
-          nsupdate -k "$DNS_KEY_FILE" $TMPFILE && echo "[$(date)] nsupdate (key) succeeded for $ZONE" || echo "[$(date)] nsupdate (key) FAILED for $ZONE"
+        if command -v resolvectl &>/dev/null; then
+          SERVER_IP=$(resolvectl dns "$IFACE" | awk '{print $4}' | head -n1)
+          ZONE=$(resolvectl domain "$IFACE" | awk '{print $4}' | head -n1)
         else
-          nsupdate $TMPFILE && echo "[$(date)] nsupdate succeeded for $ZONE" || echo "[$(date)] nsupdate FAILED for $ZONE"
-        fi
-        
-        {% if data.ipv6_enabled | default(false) and data.dns_ipv6 is defined %}
-        # If IPv6 is enabled and we have an IPv6 DNS server, also try updating via IPv6 DNS server
-        if [[ "$IPV6_ENABLED" == "True" && -n "$IP6" && -n "$DNS_SERVER_IPV6" ]]; then
-          TMPFILE_IPV6=$(mktemp)
-          echo "server $DNS_SERVER_IPV6" > $TMPFILE_IPV6
-          echo "zone $ZONE" >> $TMPFILE_IPV6
-          echo "update delete $HOSTNAME.$ZONE. AAAA" >> $TMPFILE_IPV6
-          echo "update add $HOSTNAME.$ZONE. $DNS_TTL AAAA $IP6" >> $TMPFILE_IPV6
-          echo "send" >> $TMPFILE_IPV6
-          
-          if [[ -f "$DNS_KEY_FILE" ]]; then
-            nsupdate -k "$DNS_KEY_FILE" $TMPFILE_IPV6 && echo "[$(date)] IPv6 nsupdate (key) succeeded for $ZONE" || echo "[$(date)] IPv6 nsupdate (key) FAILED for $ZONE"
-          else
-            nsupdate $TMPFILE_IPV6 && echo "[$(date)] IPv6 nsupdate succeeded for $ZONE" || echo "[$(date)] IPv6 nsupdate FAILED for $ZONE"
+          SERVER_IP=$(awk '/^nameserver/ {print $2; exit}' /etc/resolv.conf)
+          ZONE=$(awk '/^search/ {print $2; exit}' /etc/resolv.conf)
+          if [[ -z "$ZONE" ]]; then
+            ZONE=$(awk '/^domain/ {print $2; exit}' /etc/resolv.conf)
           fi
-          rm -f $TMPFILE_IPV6
         fi
-        {% endif %}
-        
-        rm -f $TMPFILE
-      else
-        echo "[$(date)] No IP found for $IFACE, skipping update."
-      fi
-      {% endfor %}
+        if [[ -n "$SERVER_IP" && -n "$ZONE" && ( -n "$IP4" || -n "$IP6" ) ]]; then
+          TMPFILE=$(mktemp)
+          echo "server $SERVER_IP" > $TMPFILE
+          echo "zone $ZONE" >> $TMPFILE
+          if [[ -n "$IP4" ]]; then
+            echo "update delete $HOSTNAME.$ZONE. A" >> $TMPFILE
+            echo "update add $HOSTNAME.$ZONE. 3600 A $IP4" >> $TMPFILE
+            echo "[$(date)] Will update A record for $HOSTNAME.$ZONE. to $IP4"
+          fi
+          if [[ -n "$IP6" ]]; then
+            echo "update delete $HOSTNAME.$ZONE. AAAA" >> $TMPFILE
+            echo "update add $HOSTNAME.$ZONE. 3600 AAAA $IP6" >> $TMPFILE
+            echo "[$(date)] Will update AAAA record for $HOSTNAME.$ZONE. to $IP6"
+          fi
+          echo "send" >> $TMPFILE
+          nsupdate $TMPFILE && echo "[$(date)] nsupdate succeeded for $ZONE" || echo "[$(date)] nsupdate FAILED for $ZONE"
+          rm -f $TMPFILE
+        fi
+      done
+
       echo "[$(date)] Dynamic DNS update complete for $HOSTNAME"
 
 - name: Create systemd service for dynamic DNS update
@@ -138,13 +137,11 @@
     mode: '0644'
     content: |
       [Unit]
-      Description=Watch for IP address changes
 
       [Path]
       PathChanged=/run/systemd/netif/state
 
       [Install]
-      WantedBy=multi-user.target
 
 - name: Enable and start dynamic DNS update path
   systemd:

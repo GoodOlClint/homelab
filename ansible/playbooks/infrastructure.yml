@@ -1,32 +1,55 @@
 ---
+# Provision monitoring users first (run on localhost, delegates to target hosts)
+- name: Provision monitoring users for infrastructure
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  vars_files:
+    - ../group_vars/all.yml
+  roles:
+    - role: ../roles-infrastructure/monitoring-users
+      tags:
+        - monitoring-users
+        - users
+
 - name: Configure dns VM
   hosts: dns
   become: yes
   vars_files:
     - ../group_vars/all.yml
   roles:
-    - dns
+    - bind9
     - rsyslog_client
     - telegraf
 
-- name: Configure proxmox-backup VM
-  hosts: proxmox-backup
+- name: Configure AdGuard VM
+  hosts: adguard
   become: yes
   vars_files:
     - ../group_vars/all.yml
   roles:
-    - dns_config
-    - proxmox_backup
+    - adguard
     - rsyslog_client
     - telegraf
 
-- name: Configure openobserve VM
+- name: Configure OpenObserve Monitoring VM
   hosts: openobserve
   become: yes
   vars_files:
     - ../group_vars/all.yml
   roles:
     - dns_config
-    - juju4.openobserve
+    - monitoring
     - rsyslog_client
     - telegraf
+
+#- name: Configure proxmox-backup VM
+#  hosts: proxmox-backup
+#  become: yes
+#  vars_files:
+#    - ../group_vars/all.yml
+#  roles:
+#    - dns_config
+#    - proxmox_backup
+#    - rsyslog_client
+#    - telegraf

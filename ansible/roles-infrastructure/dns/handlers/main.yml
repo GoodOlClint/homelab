@@ -1,9 +1,0 @@
----
-- name: Reload systemd
-  systemd:
-    daemon_reload: yes
-
-- name: Restart adguardhome
-  systemd:
-    name: adguardhome
-    state: restarted
