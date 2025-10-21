@@ -1,15 +1,24 @@
 ---
 # Proxmox Backup Server Configuration
 
-# NFS mount configuration
+# Storage backend: 'nfs' or 'iscsi'
+pbs_storage_backend: iscsi
+
+# NFS mount configuration (legacy, use if pbs_storage_backend: nfs)
 pbs_nfs_mount_path: /mnt/backups
 pbs_nfs_source: "{{ proxmox_backup_nfs_src }}"
+
+# iSCSI configuration
+pbs_iscsi_target: "iqn.2000-01.com.synology:DS1821Plus.Target-1.96b7014ff97"
+pbs_iscsi_portal: "{{ synology_host }}:3260"
+pbs_iscsi_mount_path: /mnt/pbs-iscsi
+pbs_iscsi_filesystem: ext4  # ext4 or xfs
 
 # Datastore configuration
 pbs_datastores:
   - name: synology
-    path: /mnt/backups/pbs-datastore
-    comment: "Backup datastore on Synology NAS"
+    path: "{{ pbs_iscsi_mount_path if pbs_storage_backend == 'iscsi' else pbs_nfs_mount_path }}/pbs-datastore"
+    comment: "Backup datastore on Synology iSCSI LUN"
     gc_schedule: "daily"
     prune_schedule: "daily"
     # Retention policy (GFS - Grandfather-Father-Son)

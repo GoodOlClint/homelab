@@ -42,6 +42,96 @@
     state: started
     enabled: yes
 
+# Storage Configuration - iSCSI
+- name: Install iSCSI initiator packages
+  ansible.builtin.package:
+    name:
+      - open-iscsi
+      - multipath-tools
+    state: present
+  when: pbs_storage_backend == 'iscsi'
+
+- name: Ensure iSCSI initiator is started and enabled
+  systemd:
+    name: "{{ item }}"
+    state: started
+    enabled: yes
+  loop:
+    - open-iscsi
+    - iscsid
+  when: pbs_storage_backend == 'iscsi'
+
+- name: Discover iSCSI targets
+  shell: |
+    iscsiadm --mode discovery --type sendtargets --portal {{ pbs_iscsi_portal }}
+  register: iscsi_discovery
+  changed_when: false
+  when: pbs_storage_backend == 'iscsi'
+
+- name: Login to iSCSI target
+  shell: |
+    iscsiadm --mode node --targetname {{ pbs_iscsi_target }} --portal {{ pbs_iscsi_portal }} --login
+  register: iscsi_login
+  failed_when: false
+  changed_when: "'successful' in iscsi_login.stdout"
+  when: pbs_storage_backend == 'iscsi'
+
+- name: Enable automatic iSCSI login on boot
+  shell: |
+    iscsiadm --mode node --targetname {{ pbs_iscsi_target }} --portal {{ pbs_iscsi_portal }} --op update --name node.startup --value automatic
+  when: pbs_storage_backend == 'iscsi'
+
+- name: Wait for iSCSI device to appear
+  wait_for:
+    path: /dev/disk/by-path/ip-{{ pbs_iscsi_portal.split(':')[0] }}:{{ pbs_iscsi_portal.split(':')[1] }}-iscsi-{{ pbs_iscsi_target }}-lun-1
+    state: present
+    timeout: 30
+  when: pbs_storage_backend == 'iscsi'
+  register: iscsi_device
+
+- name: Get iSCSI device name
+  shell: |
+    readlink -f /dev/disk/by-path/ip-{{ pbs_iscsi_portal.split(':')[0] }}:{{ pbs_iscsi_portal.split(':')[1] }}-iscsi-{{ pbs_iscsi_target }}-lun-1
+  register: iscsi_device_path
+  changed_when: false
+  when: pbs_storage_backend == 'iscsi'
+
+- name: Check if iSCSI device is formatted
+  shell: |
+    blkid {{ iscsi_device_path.stdout }}
+  register: iscsi_formatted
+  failed_when: false
+  changed_when: false
+  when: pbs_storage_backend == 'iscsi'
+
+- name: Format iSCSI LUN with {{ pbs_iscsi_filesystem }}
+  filesystem:
+    fstype: "{{ pbs_iscsi_filesystem }}"
+    dev: "{{ iscsi_device_path.stdout }}"
+    opts: -L pbs-datastore
+  when: 
+    - pbs_storage_backend == 'iscsi'
+    - iscsi_formatted.rc != 0
+
+- name: Ensure iSCSI mount point exists
+  file:
+    path: "{{ pbs_iscsi_mount_path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  when: pbs_storage_backend == 'iscsi'
+
+- name: Mount iSCSI LUN
+  mount:
+    path: "{{ pbs_iscsi_mount_path }}"
+    src: "{{ iscsi_device_path.stdout }}"
+    fstype: "{{ pbs_iscsi_filesystem }}"
+    opts: _netdev,defaults
+    state: mounted
+  when: pbs_storage_backend == 'iscsi'
+
+# Storage Configuration - NFS (legacy)
 - name: Ensure /mnt/backups exists
   file:
     path: /mnt/backups
@@ -49,14 +139,16 @@
     owner: root
     group: root
     mode: '0755'
+  when: pbs_storage_backend == 'nfs'
 
-- name: Ensure NFS packages.
+- name: Ensure NFS packages
   ansible.builtin.package:
     name:
       - nfs-common
     state: present
+  when: pbs_storage_backend == 'nfs'
 
-- name: Ensure NFS fstab entry and mount.
+- name: Ensure NFS fstab entry and mount
   ansible.posix.mount:
     backup: yes
     boot: "yes"
@@ -65,6 +157,7 @@
     fstype: nfs
     opts: "defaults"
     state: "mounted"
+  when: pbs_storage_backend == 'nfs'
 
 - name: Remove Proxmox enterprise repo if present
   ansible.builtin.file:
@@ -102,9 +195,9 @@
 
 - name: Create datastores
   shell: |
-    proxmox-backup-manager datastore create {{ item.name }} {{ item.path }}{% if item.comment is defined %} --comment "{{ item.comment }}"{% endif %}{% if item.gc_schedule is defined %} --gc-schedule "{{ item.gc_schedule }}"{% endif %}{% if item.prune_schedule is defined %} --prune-schedule "{{ item.prune_schedule }}"{% endif %}{% if item.keep_last is defined %} --keep-last {{ item.keep_last }}{% endif %}{% if item.keep_hourly is defined %} --keep-hourly {{ item.keep_hourly }}{% endif %}{% if item.keep_daily is defined %} --keep-daily {{ item.keep_daily }}{% endif %}{% if item.keep_weekly is defined %} --keep-weekly {{ item.keep_weekly }}{% endif %}{% if item.keep_monthly is defined %} --keep-monthly {{ item.keep_monthly }}{% endif %}{% if item.keep_yearly is defined %} --keep-yearly {{ item.keep_yearly }}{% endif %}
+    proxmox-backup-manager datastore create {{ item.name }} {{ item.path }}{% if item.comment is defined %} --comment "{{ item.comment }}"{% endif %}{% if item.gc_schedule is defined %} --gc-schedule "{{ item.gc_schedule }}"{% endif %}{% if item.prune_schedule is defined %} --prune-schedule "{{ item.prune_schedule }}"{% endif %}{% if item.keep_last is defined %} --keep-last {{ item.keep_last }}{% endif %}{% if item.keep_hourly is defined and item.keep_hourly > 0 %} --keep-hourly {{ item.keep_hourly }}{% endif %}{% if item.keep_daily is defined %} --keep-daily {{ item.keep_daily }}{% endif %}{% if item.keep_weekly is defined %} --keep-weekly {{ item.keep_weekly }}{% endif %}{% if item.keep_monthly is defined %} --keep-monthly {{ item.keep_monthly }}{% endif %}{% if item.keep_yearly is defined %} --keep-yearly {{ item.keep_yearly }}{% endif %}
   loop: "{{ pbs_datastores }}"
-  when: pbs_datastore_list.stdout is defined and (pbs_datastore_list.stdout | from_json | selectattr('name', 'equalto', item.name) | list | length == 0)
+  when: pbs_datastore_list.stdout is defined and pbs_datastore_list.stdout != "" and (pbs_datastore_list.stdout | from_json | selectattr('name', 'equalto', item.name) | list | length == 0)
   register: datastore_created
 
 # User Management
@@ -117,14 +210,10 @@
 - name: Create PBS users
   shell: |
     proxmox-backup-manager user create {{ item.username }}@{{ item.realm }} \
-      {% if item.comment is defined %}--comment "{{ item.comment }}"{% endif %}
+      {% if item.comment is defined %}--comment "{{ item.comment }}"{% endif %} \
+      {% if pbs_backup_user_password is defined %}--password "{{ pbs_backup_user_password }}"{% endif %}
   loop: "{{ pbs_users }}"
   when: pbs_user_list.stdout is defined and (pbs_user_list.stdout | from_json | selectattr('userid', 'equalto', item.username + '@' + item.realm) | list | length == 0)
-
-- name: Set backup user password
-  shell: |
-    echo "{{ pbs_backup_user_password | default('changeme') }}" | proxmox-backup-manager user update backup@pbs --password
-  when: pbs_backup_user_password is defined
   no_log: true
 
 # Namespace Configuration
@@ -157,7 +246,7 @@
 
 - name: Generate API token for backup user
   shell: |
-    proxmox-backup-manager user generate-token backup@pbs backup-token --output-format json
+    proxmox-backup-manager user generate-token backup@pbs backup-token
   register: pbs_token_output
   when: pbs_token_list.stdout is defined and (pbs_token_list.stdout | from_json | length == 0)
 
@@ -168,11 +257,11 @@
       PBS API Token Generated (SAVE THIS!):
       User: backup@pbs
       Token: backup-token
-      Value: {{ (pbs_token_output.stdout | from_json).value }}
+      Value: {{ pbs_token_output.stdout }}
       ============================================
       Add to ansible vault:
-      pbs_backup_token: "{{ (pbs_token_output.stdout | from_json).value }}"
-  when: pbs_token_output.changed and pbs_token_output.stdout is defined
+      pbs_backup_token: "{{ pbs_token_output.stdout }}"
+  when: pbs_token_output is changed and pbs_token_output.stdout is defined
 
 # Verification jobs
 - name: Configure verification jobs
