@@ -20,6 +20,7 @@ POSTGRES_PORT="5432"
 {% if pbs_backup_enabled | default(true) %}
 PBS_REPOSITORY="{{ postgres_pbs_repository | default('backup@pbs!backup-token@proxmox-backup.core.goodolclint.internal:synology:databases') }}"
 PBS_PASSWORD="{{ postgres_pbs_password | default(pbs_backup_token) }}"
+PBS_FINGERPRINT="{{ pbs_fingerprint }}"
 PBS_NAMESPACE="{{ postgres_pbs_namespace | default('databases') }}"
 PBS_ENABLED=true
 {% else %}
@@ -60,18 +61,40 @@ if [ "$PBS_ENABLED" = true ]; then
         error_exit "proxmox-backup-client not found. Install with: apt install proxmox-backup-client"
     fi
     
-    # Test PBS connection
+    # Test PBS connection and create namespace if needed
     log "Testing PBS connection..."
-    if ! PBS_REPOSITORY="$PBS_REPOSITORY" PBS_PASSWORD="$PBS_PASSWORD" proxmox-backup-client snapshot list &>/dev/null; then
-        log "WARNING: Cannot connect to PBS, falling back to local backup only"
+    set +e  # Temporarily disable exit on error for PBS test
+    PBS_REPOSITORY="$PBS_REPOSITORY" PBS_PASSWORD="$PBS_PASSWORD" PBS_FINGERPRINT="$PBS_FINGERPRINT" \
+        proxmox-backup-client snapshot list --ns "$PBS_NAMESPACE" &>/dev/null
+    PBS_TEST_EXIT=$?
+    set -e  # Re-enable exit on error
+    
+    if [ $PBS_TEST_EXIT -ne 0 ] && [ $PBS_TEST_EXIT -ne 255 ]; then
+        log "WARNING: Cannot connect to PBS (exit code: $PBS_TEST_EXIT), falling back to local backup only"
         PBS_ENABLED=false
+    else
+        # Create namespace if it doesn't exist (ENOENT means namespace doesn't exist yet)
+        if [ $PBS_TEST_EXIT -eq 255 ]; then
+            log "Namespace '$PBS_NAMESPACE' doesn't exist, creating it..."
+            set +e
+            PBS_REPOSITORY="$PBS_REPOSITORY" PBS_PASSWORD="$PBS_PASSWORD" PBS_FINGERPRINT="$PBS_FINGERPRINT" \
+                proxmox-backup-client namespace create "$PBS_NAMESPACE"
+            CREATE_EXIT=$?
+            set -e
+            if [ $CREATE_EXIT -eq 0 ]; then
+                log "Successfully created namespace '$PBS_NAMESPACE'"
+            else
+                log "WARNING: Failed to create namespace (exit code: $CREATE_EXIT), falling back to local backup only"
+                PBS_ENABLED=false
+            fi
+        fi
     fi
 fi
 
 # First, backup global objects (roles, tablespaces, etc.)
 log "Backing up global objects (roles, tablespaces, etc.)"
 GLOBALS_FILE="$BACKUP_DIR/postgres_globals_${TIMESTAMP}.sql"
-PGPASSWORD="$POSTGRES_PASSWORD" pg_dumpall -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" --globals-only > "$GLOBALS_FILE"
+docker exec postgres pg_dumpall -U "$POSTGRES_USER" --globals-only > "$GLOBALS_FILE"
 
 if [ $? -eq 0 ]; then
     gzip "$GLOBALS_FILE"
@@ -81,7 +104,7 @@ else
 fi
 
 # Get list of databases (excluding system databases)
-DATABASES=$(PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "{{ postgres_default_db | default('radarr-main') }}" -t -c "SELECT datname FROM pg_database WHERE datistemplate = false AND datname NOT IN ('postgres', 'template0', 'template1');" | grep -v '^$' | tr -d ' ')
+DATABASES=$(docker exec postgres psql -U "$POSTGRES_USER" -d "{{ postgres_default_db | default('radarr-main') }}" -t -c "SELECT datname FROM pg_database WHERE datistemplate = false AND datname NOT IN ('postgres', 'template0', 'template1');" | grep -v '^$' | tr -d ' ')
 
 if [ -z "$DATABASES" ]; then
     log "No user databases found to backup"
@@ -94,7 +117,8 @@ for DB in $DATABASES; do
     BACKUP_FILE="$BACKUP_DIR/${DB}_${TIMESTAMP}.dump"
     
     # Create compressed backup in custom format (better for pg_restore)
-    PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -Fc -f "$BACKUP_FILE" "$DB"
+    # Dump inside container, redirect to host filesystem
+    docker exec postgres pg_dump -U "$POSTGRES_USER" -Fc "$DB" > "$BACKUP_FILE"
     
     if [ $? -ne 0 ]; then
         log "WARNING: Failed to backup database: $DB"
@@ -108,26 +132,19 @@ done
 if [ "$PBS_ENABLED" = true ]; then
     log "Uploading backups to Proxmox Backup Server..."
     
-    # Create pxar archives for PBS
+    # Create backup ID using hostname and type
     BACKUP_ID="postgres-${TIMESTAMP}"
-    
-    # Build proxmox-backup-client command with all .pxar archives
-    PXAR_FILES=""
-    PXAR_FILES="${PXAR_FILES} postgres-globals.pxar:${BACKUP_DIR}/postgres_globals_${TIMESTAMP}.sql.gz"
-    
-    for DB in $DATABASES; do
-        if [ -f "$BACKUP_DIR/${DB}_${TIMESTAMP}.dump" ]; then
-            PXAR_FILES="${PXAR_FILES} postgres-${DB}.pxar:$BACKUP_DIR/${DB}_${TIMESTAMP}.dump"
-        fi
-    done
     
     log "Backing up to PBS repository: $PBS_REPOSITORY"
     
-    # Execute PBS backup
+    # Execute PBS backup - backup the entire directory
+    # The .pxar format archives directories, so we backup the whole backup dir
     PBS_REPOSITORY="$PBS_REPOSITORY" \
     PBS_PASSWORD="$PBS_PASSWORD" \
+    PBS_FINGERPRINT="$PBS_FINGERPRINT" \
     proxmox-backup-client backup \
-        $PXAR_FILES \
+        "postgres-backups.pxar:$BACKUP_DIR" \
+        --ns "$PBS_NAMESPACE" \
         --backup-id "$BACKUP_ID" \
         --backup-time "$(date +%s)"
     
@@ -136,8 +153,8 @@ if [ "$PBS_ENABLED" = true ]; then
         
         # List recent backups
         log "Recent PBS backups:"
-        PBS_REPOSITORY="$PBS_REPOSITORY" PBS_PASSWORD="$PBS_PASSWORD" \
-            proxmox-backup-client snapshot list | tail -n 5
+        PBS_REPOSITORY="$PBS_REPOSITORY" PBS_PASSWORD="$PBS_PASSWORD" PBS_FINGERPRINT="$PBS_FINGERPRINT" \
+            proxmox-backup-client snapshot list --ns "$PBS_NAMESPACE" | tail -n 5
     else
         log "WARNING: Failed to upload backups to PBS"
     fi

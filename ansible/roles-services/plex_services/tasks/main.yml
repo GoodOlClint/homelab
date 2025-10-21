@@ -68,13 +68,23 @@
     state: present
     update_cache: yes
 
-- name: Copy PostgreSQL backup script
+- name: Copy PostgreSQL PBS backup script
+  template:
+    src: postgres_pbs_backup.sh.j2
+    dest: /usr/local/bin/postgres_pbs_backup.sh
+    owner: root
+    group: root
+    mode: '0755'
+  when: pbs_backup_enabled | default(true)
+
+- name: Copy PostgreSQL legacy backup script (SMB)
   template:
     src: postgres_backup.sh.j2
     dest: /usr/local/bin/postgres_backup.sh
     owner: root
     group: root
     mode: '0755'
+  when: not (pbs_backup_enabled | default(true))
 
 - name: Copy PostgreSQL restore script
   template:
@@ -84,7 +94,17 @@
     group: root
     mode: '0755'
 
-- name: Create PostgreSQL backup cron job
+- name: Create PostgreSQL PBS backup cron job
+  cron:
+    name: "PostgreSQL PBS backup"
+    cron_file: postgres_pbs_backup
+    minute: "0"
+    hour: "2"
+    job: "/usr/local/bin/postgres_pbs_backup.sh >> /var/log/postgres_pbs_backup.log 2>&1"
+    user: root
+  when: pbs_backup_enabled | default(true)
+
+- name: Create PostgreSQL legacy backup cron job (SMB)
   cron:
     name: "PostgreSQL backup"
     cron_file: postgres_backup
@@ -92,7 +112,7 @@
     hour: "2"
     job: "/usr/local/bin/postgres_backup.sh >> /var/log/postgres_backup.log 2>&1"
     user: root
-  when: postgres_backup_enabled | default(true)
+  when: not (pbs_backup_enabled | default(true))
 
 - name: Create plex services docker compose file
   template:

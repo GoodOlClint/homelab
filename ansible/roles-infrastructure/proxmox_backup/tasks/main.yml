@@ -216,52 +216,52 @@
   when: pbs_user_list.stdout is defined and (pbs_user_list.stdout | from_json | selectattr('userid', 'equalto', item.username + '@' + item.realm) | list | length == 0)
   no_log: true
 
-# Namespace Configuration
-- name: Create PBS namespaces
+  # Namespace Configuration
+- name: Create PBS namespaces using proxmox-backup-client (delegated)
   shell: |
-    proxmox-backup-manager namespace create {{ item.datastore }}:{{ item.namespace }} \
-      {% if item.comment is defined %}--comment "{{ item.comment }}"{% endif %}
+    # Create namespace if it doesn't exist yet (proxmox-backup-client returns non-zero for some conditions)
+    set +e
+    proxmox-backup-client namespace create "{{ item.namespace }}" --repo "$PBS_REPOSITORY" --fingerprint "$PBS_FINGERPRINT" --password "$PBS_PASSWORD"
+    RC=$?
+    set -e
+    if [ $RC -eq 0 ]; then
+      echo "created"
+      exit 0
+    else
+      # If namespace already exists or other non-fatal, treat as ok
+      echo "namespace create exit code: $RC"
+      exit 0
+    fi
   loop: "{{ pbs_namespaces }}"
+  delegate_to: plex-services
+  args:
+    executable: /bin/bash
   register: namespace_created
   failed_when: false
-  changed_when: "'created' in namespace_created.stdout or namespace_created.rc == 0"
+  changed_when: namespace_created is defined
+  environment:
+    PBS_REPOSITORY: "{{ pbs_username }}!{{ pbs_token_name }}@{{ pbs_server_host }}:{{ item.datastore }}"
+    PBS_PASSWORD: "{{ pbs_token_value }}"
+    PBS_FINGERPRINT: "{{ pbs_fingerprint }}"
 
 # ACL Configuration
-- name: Grant backup user DatastoreBackup permissions
+- name: Grant backup user DatastoreAdmin permissions (needed for namespace creation)
   shell: |
-    proxmox-backup-manager acl update /datastore/{{ item.name }} DatastoreBackup \
+    proxmox-backup-manager acl update /datastore/{{ item.name }} DatastoreAdmin \
       --auth-id backup@pbs
   loop: "{{ pbs_datastores }}"
-  register: acl_backup_updated
+  register: acl_admin_updated
   failed_when: false
-  changed_when: acl_backup_updated.rc == 0
+  changed_when: acl_admin_updated.rc == 0
 
-- name: Grant backup user DatastoreAudit permissions
+- name: Grant API token DatastoreAdmin permissions (needed for namespace creation)
   shell: |
-    proxmox-backup-manager acl update /datastore/{{ item.name }} DatastoreAudit \
-      --auth-id backup@pbs
-  loop: "{{ pbs_datastores }}"
-  register: acl_audit_updated
-  failed_when: false
-  changed_when: acl_audit_updated.rc == 0
-
-- name: Grant API token DatastoreBackup permissions
-  shell: |
-    proxmox-backup-manager acl update /datastore/{{ item.name }} DatastoreBackup \
+    proxmox-backup-manager acl update /datastore/{{ item.name }} DatastoreAdmin \
       --auth-id 'backup@pbs!backup-token'
   loop: "{{ pbs_datastores }}"
-  register: acl_token_backup_updated
+  register: acl_token_admin_updated
   failed_when: false
-  changed_when: acl_token_backup_updated.rc == 0
-
-- name: Grant API token DatastoreAudit permissions
-  shell: |
-    proxmox-backup-manager acl update /datastore/{{ item.name }} DatastoreAudit \
-      --auth-id 'backup@pbs!backup-token'
-  loop: "{{ pbs_datastores }}"
-  register: acl_token_audit_updated
-  failed_when: false
-  changed_when: acl_token_audit_updated.rc == 0
+  changed_when: acl_token_admin_updated.rc == 0
 
 # API Token Generation
 - name: Check if API token exists for backup user
