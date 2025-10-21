@@ -37,6 +37,8 @@ usage() {
     echo "  -l, --latest               Restore latest backup for database"
     echo "  -r, --remote               Download latest backup from remote SMB share"
     echo "  -g, --globals              Restore global objects (roles, tablespaces)"
+    echo "  -a, --all                  Restore all databases (with globals)"
+    echo "  --hydrate                  Restore globals + schema only (no data)"
     echo "  --list-backups             List available backups"
     echo "  --list-remote              List available remote backups"
     echo "  -h, --help                 Show this help message"
@@ -46,10 +48,14 @@ usage() {
     echo "  $0 -d radarr-main -r                    # Download and restore latest remote backup"
     echo "  $0 -f /path/to/backup.dump             # Restore specific backup file"
     echo "  $0 -g -l                                # Restore latest globals backup"
+    echo "  $0 -a -l                                # Restore ALL databases (full restore)"
+    echo "  $0 -a -r                                # Restore ALL from remote"
+    echo "  $0 --hydrate -l                         # Restore globals + schema only"
     echo "  $0 --list-backups                       # List local backups"
     echo "  $0 --list-remote                        # List remote backups"
     echo ""
-    echo "Note: Always restore globals first when doing a full restore!"
+    echo "Note: --all automatically restores globals first, then all databases"
+    echo "      --hydrate creates empty databases with correct structure"
     echo "      pg_restore is used for .dump files (recommended)"
     echo "      psql is used for legacy .sql.gz files"
     exit 1
@@ -172,6 +178,7 @@ find_latest_backup() {
 # Restore database from backup
 restore_database() {
     local backup_file="$1"
+    local schema_only="${2:-false}"
     local database_name
     
     if [ ! -f "$backup_file" ]; then
@@ -191,7 +198,11 @@ restore_database() {
         error_exit "Unknown backup format: $backup_file (expected .dump or .sql.gz)"
     fi
     
-    log "Restoring database '$database_name' from backup: $backup_file (format: $BACKUP_FORMAT)"
+    if [ "$schema_only" = true ]; then
+        log "Restoring database schema '$database_name' from backup: $backup_file (format: $BACKUP_FORMAT, SCHEMA ONLY)"
+    else
+        log "Restoring database '$database_name' from backup: $backup_file (format: $BACKUP_FORMAT)"
+    fi
     
     # Check if PostgreSQL is running
     if ! PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -c '\q' 2>/dev/null; then
@@ -221,17 +232,33 @@ restore_database() {
     log "Created new database: $database_name"
     
     # Restore from backup based on format
-    log "Restoring data from backup..."
-    if [ "$BACKUP_FORMAT" = "custom" ]; then
-        # Use pg_restore for custom format (.dump files)
-        PGPASSWORD="$POSTGRES_PASSWORD" pg_restore -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$database_name" --no-owner --no-acl "$backup_file"
+    if [ "$schema_only" = true ]; then
+        log "Restoring schema only (no data)..."
+        if [ "$BACKUP_FORMAT" = "custom" ]; then
+            # Use pg_restore with --schema-only for custom format
+            PGPASSWORD="$POSTGRES_PASSWORD" pg_restore -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$database_name" --no-owner --no-acl --schema-only "$backup_file"
+        else
+            log "WARNING: Schema-only restore not fully supported for .sql.gz files"
+            log "Will restore full backup (use .dump format for schema-only support)"
+            gunzip -c "$backup_file" | PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" "$database_name"
+        fi
     else
-        # Use psql for legacy SQL format (.sql.gz files)
-        gunzip -c "$backup_file" | PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" "$database_name"
+        log "Restoring data from backup..."
+        if [ "$BACKUP_FORMAT" = "custom" ]; then
+            # Use pg_restore for custom format (.dump files)
+            PGPASSWORD="$POSTGRES_PASSWORD" pg_restore -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$database_name" --no-owner --no-acl "$backup_file"
+        else
+            # Use psql for legacy SQL format (.sql.gz files)
+            gunzip -c "$backup_file" | PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" "$database_name"
+        fi
     fi
     
     if [ $? -eq 0 ]; then
-        log "Successfully restored database '$database_name' from backup"
+        if [ "$schema_only" = true ]; then
+            log "Successfully restored database schema '$database_name' from backup"
+        else
+            log "Successfully restored database '$database_name' from backup"
+        fi
     else
         error_exit "Failed to restore database '$database_name' from backup"
     fi
@@ -263,12 +290,38 @@ restore_globals() {
     fi
 }
 
+# Get list of all database backups
+get_all_databases() {
+    local location="$1"  # "local" or "remote"
+    
+    if [ "$location" = "local" ]; then
+        if [ -d "$BACKUP_DIR" ]; then
+            # Find all unique database names from backup files
+            find "$BACKUP_DIR" -type f \( -name "*.dump" -o -name "*.sql.gz" \) ! -name "postgres_globals_*" -exec basename {} \; | sed 's/_[0-9]\{8\}_[0-9]\{6\}\.\(dump\|sql\.gz\)$//' | sort -u
+        fi
+    elif [ "$location" = "remote" ]; then
+        if [ "$SMB_ENABLED" != true ]; then
+            error_exit "SMB is not configured"
+        fi
+        
+        local remote_files
+        if [ -n "$SMB_DOMAIN" ]; then
+            remote_files=$(smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_DOMAIN/$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; ls" 2>/dev/null | grep -E "\.(dump|sql\.gz)$" | grep -v "postgres_globals_" | awk '{print $1}' | sed 's/_[0-9]\{8\}_[0-9]\{6\}\.\(dump\|sql\.gz\)$//' | sort -u || true)
+        else
+            remote_files=$(smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; ls" 2>/dev/null | grep -E "\.(dump|sql\.gz)$" | grep -v "postgres_globals_" | awk '{print $1}' | sed 's/_[0-9]\{8\}_[0-9]\{6\}\.\(dump\|sql\.gz\)$//' | sort -u || true)
+        fi
+        echo "$remote_files"
+    fi
+}
+
 # Parse command line arguments
 DATABASE=""
 BACKUP_FILE=""
 USE_LATEST=false
 USE_REMOTE=false
 RESTORE_GLOBALS=false
+RESTORE_ALL=false
+HYDRATE=false
 LIST_BACKUPS=false
 LIST_REMOTE=false
 
@@ -292,6 +345,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         -g|--globals)
             RESTORE_GLOBALS=true
+            shift
+            ;;
+        -a|--all)
+            RESTORE_ALL=true
+            shift
+            ;;
+        --hydrate)
+            HYDRATE=true
             shift
             ;;
         --list-backups)
@@ -324,8 +385,144 @@ if [ "$LIST_REMOTE" = true ]; then
 fi
 
 # Main restore logic
-if [ "$RESTORE_GLOBALS" = true ]; then
-    # Restore global objects
+if [ "$HYDRATE" = true ]; then
+    # Hydrate mode: Restore globals + schema only (no data)
+    if [ "$USE_LATEST" != true ]; then
+        error_exit "Hydrate mode requires --latest flag"
+    fi
+    
+    log "========================================="
+    log "HYDRATE MODE: Restoring globals + schema"
+    log "========================================="
+    
+    # Step 1: Restore globals
+    log "Step 1/2: Restoring global objects..."
+    if [ "$USE_REMOTE" = true ]; then
+        latest_remote=$(find_latest_backup "postgres_globals" "remote")
+        if [ -n "$latest_remote" ]; then
+            downloaded_file=$(download_remote_backup "postgres_globals" "$latest_remote")
+            restore_globals "$downloaded_file"
+        else
+            error_exit "No remote globals backup found"
+        fi
+    else
+        latest_local=$(find "$BACKUP_DIR" -name "postgres_globals_*.sql.gz" -type f | sort | tail -n1)
+        if [ -n "$latest_local" ]; then
+            restore_globals "$latest_local"
+        else
+            error_exit "No local globals backup found"
+        fi
+    fi
+    
+    # Step 2: Restore all database schemas (no data)
+    log "Step 2/2: Restoring database schemas (no data)..."
+    location="local"
+    [ "$USE_REMOTE" = true ] && location="remote"
+    
+    databases=$(get_all_databases "$location")
+    if [ -z "$databases" ]; then
+        error_exit "No database backups found"
+    fi
+    
+    db_count=$(echo "$databases" | wc -l | tr -d ' ')
+    current=0
+    
+    for db in $databases; do
+        current=$((current + 1))
+        log "Restoring schema [$current/$db_count]: $db"
+        
+        if [ "$USE_REMOTE" = true ]; then
+            latest_remote=$(find_latest_backup "$db" "remote")
+            if [ -n "$latest_remote" ]; then
+                downloaded_file=$(download_remote_backup "$db" "$latest_remote")
+                restore_database "$downloaded_file" true  # true = schema only
+            else
+                log "WARNING: No remote backup found for database: $db"
+            fi
+        else
+            latest_local=$(find_latest_backup "$db" "local")
+            if [ -n "$latest_local" ]; then
+                restore_database "$latest_local" true  # true = schema only
+            else
+                log "WARNING: No local backup found for database: $db"
+            fi
+        fi
+    done
+    
+    log "========================================="
+    log "Hydrate complete: Globals + all schemas restored (no data)"
+    log "========================================="
+    
+elif [ "$RESTORE_ALL" = true ]; then
+    # Restore all databases (with data)
+    if [ "$USE_LATEST" != true ]; then
+        error_exit "Restore all mode requires --latest flag"
+    fi
+    
+    log "========================================="
+    log "FULL RESTORE: All databases"
+    log "========================================="
+    
+    # Step 1: Restore globals
+    log "Step 1/2: Restoring global objects..."
+    if [ "$USE_REMOTE" = true ]; then
+        latest_remote=$(find_latest_backup "postgres_globals" "remote")
+        if [ -n "$latest_remote" ]; then
+            downloaded_file=$(download_remote_backup "postgres_globals" "$latest_remote")
+            restore_globals "$downloaded_file"
+        else
+            error_exit "No remote globals backup found"
+        fi
+    else
+        latest_local=$(find "$BACKUP_DIR" -name "postgres_globals_*.sql.gz" -type f | sort | tail -n1)
+        if [ -n "$latest_local" ]; then
+            restore_globals "$latest_local"
+        else
+            error_exit "No local globals backup found"
+        fi
+    fi
+    
+    # Step 2: Restore all databases
+    log "Step 2/2: Restoring all databases..."
+    location="local"
+    [ "$USE_REMOTE" = true ] && location="remote"
+    
+    databases=$(get_all_databases "$location")
+    if [ -z "$databases" ]; then
+        error_exit "No database backups found"
+    fi
+    
+    db_count=$(echo "$databases" | wc -l | tr -d ' ')
+    current=0
+    
+    for db in $databases; do
+        current=$((current + 1))
+        log "Restoring database [$current/$db_count]: $db"
+        
+        if [ "$USE_REMOTE" = true ]; then
+            latest_remote=$(find_latest_backup "$db" "remote")
+            if [ -n "$latest_remote" ]; then
+                downloaded_file=$(download_remote_backup "$db" "$latest_remote")
+                restore_database "$downloaded_file"
+            else
+                log "WARNING: No remote backup found for database: $db"
+            fi
+        else
+            latest_local=$(find_latest_backup "$db" "local")
+            if [ -n "$latest_local" ]; then
+                restore_database "$latest_local"
+            else
+                log "WARNING: No local backup found for database: $db"
+            fi
+        fi
+    done
+    
+    log "========================================="
+    log "Full restore complete: $db_count databases restored"
+    log "========================================="
+    
+elif [ "$RESTORE_GLOBALS" = true ]; then
+    # Restore global objects only
     if [ "$USE_LATEST" = true ]; then
         if [ "$USE_REMOTE" = true ]; then
             # Find and download latest remote globals backup
