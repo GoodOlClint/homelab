@@ -18,11 +18,17 @@ POSTGRES_PORT="5432"
 
 # PBS Configuration
 {% if pbs_backup_enabled | default(true) %}
-PBS_REPOSITORY="{{ postgres_pbs_repository | default('backup@pbs!backup-token@proxmox-backup.core.goodolclint.internal:synology:databases') }}"
-PBS_PASSWORD="{{ postgres_pbs_password | default(pbs_backup_token) }}"
-PBS_FINGERPRINT="{{ pbs_fingerprint }}"
+PBS_ENV_FILE="/etc/proxmox-backup/pbs-client.env"
 PBS_NAMESPACE="{{ postgres_pbs_namespace | default('databases') }}"
 PBS_ENABLED=true
+
+# Source PBS environment file for credentials
+if [ -f "$PBS_ENV_FILE" ]; then
+    source "$PBS_ENV_FILE"
+else
+    log "ERROR: PBS environment file not found at $PBS_ENV_FILE"
+    PBS_ENABLED=false
+fi
 {% else %}
 PBS_ENABLED=false
 {% endif %}
@@ -64,8 +70,7 @@ if [ "$PBS_ENABLED" = true ]; then
     # Test PBS connection and create namespace if needed
     log "Testing PBS connection..."
     set +e  # Temporarily disable exit on error for PBS test
-    PBS_REPOSITORY="$PBS_REPOSITORY" PBS_PASSWORD="$PBS_PASSWORD" PBS_FINGERPRINT="$PBS_FINGERPRINT" \
-        proxmox-backup-client snapshot list --ns "$PBS_NAMESPACE" &>/dev/null
+    proxmox-backup-client snapshot list --ns "$PBS_NAMESPACE" &>/dev/null
     PBS_TEST_EXIT=$?
     set -e  # Re-enable exit on error
     
@@ -77,8 +82,7 @@ if [ "$PBS_ENABLED" = true ]; then
         if [ $PBS_TEST_EXIT -eq 255 ]; then
             log "Namespace '$PBS_NAMESPACE' doesn't exist, creating it..."
             set +e
-            PBS_REPOSITORY="$PBS_REPOSITORY" PBS_PASSWORD="$PBS_PASSWORD" PBS_FINGERPRINT="$PBS_FINGERPRINT" \
-                proxmox-backup-client namespace create "$PBS_NAMESPACE"
+            proxmox-backup-client namespace create "$PBS_NAMESPACE"
             CREATE_EXIT=$?
             set -e
             if [ $CREATE_EXIT -eq 0 ]; then
@@ -139,9 +143,6 @@ if [ "$PBS_ENABLED" = true ]; then
     
     # Execute PBS backup - backup the entire directory
     # The .pxar format archives directories, so we backup the whole backup dir
-    PBS_REPOSITORY="$PBS_REPOSITORY" \
-    PBS_PASSWORD="$PBS_PASSWORD" \
-    PBS_FINGERPRINT="$PBS_FINGERPRINT" \
     proxmox-backup-client backup \
         "postgres-backups.pxar:$BACKUP_DIR" \
         --ns "$PBS_NAMESPACE" \
@@ -153,8 +154,7 @@ if [ "$PBS_ENABLED" = true ]; then
         
         # List recent backups
         log "Recent PBS backups:"
-        PBS_REPOSITORY="$PBS_REPOSITORY" PBS_PASSWORD="$PBS_PASSWORD" PBS_FINGERPRINT="$PBS_FINGERPRINT" \
-            proxmox-backup-client snapshot list --ns "$PBS_NAMESPACE" | tail -n 5
+        proxmox-backup-client snapshot list --ns "$PBS_NAMESPACE" | tail -n 5
     else
         log "WARNING: Failed to upload backups to PBS"
     fi
