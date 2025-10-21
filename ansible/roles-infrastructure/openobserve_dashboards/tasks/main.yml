@@ -1,0 +1,87 @@
+---
+- name: Check OpenObserve API connectivity
+  uri:
+    url: "http://{{ openobserve_listen_host }}:{{ openobserve_listen_port }}/api/default/_search"
+    method: GET
+    user: "{{ openobserve_root_user_email }}"
+    password: "{{ openobserve_root_user_pass }}"
+    force_basic_auth: yes
+    status_code: [200, 401, 404]
+  register: openobserve_api_check
+  ignore_errors: yes
+
+- name: Display OpenObserve API status
+  debug:
+    msg: "OpenObserve API is {{ 'accessible' if openobserve_api_check.status == 200 else 'not accessible' }}"
+
+- name: Create dashboards directory on OpenObserve host
+  file:
+    path: /opt/openobserve/dashboards
+    state: directory
+    mode: '0755'
+  become: yes
+
+- name: Copy PBS backup dashboard to OpenObserve host
+  copy:
+    src: pbs_backup_dashboard.json
+    dest: /opt/openobserve/dashboards/pbs_backup_dashboard.json
+    mode: '0644'
+  become: yes
+
+- name: Copy PBS storage dashboard to OpenObserve host
+  copy:
+    src: pbs_storage_dashboard.json
+    dest: /opt/openobserve/dashboards/pbs_storage_dashboard.json
+    mode: '0644'
+  become: yes
+
+- name: Display dashboard import instructions
+  debug:
+    msg: |
+      ============================================
+      OpenObserve Dashboards Ready for Import
+      ============================================
+      
+      Dashboard files have been copied to:
+      /opt/openobserve/dashboards/
+      
+      Dashboards available:
+      1. pbs_backup_dashboard.json - Backup Status & Activity
+      2. pbs_storage_dashboard.json - Storage & Performance
+      
+      To import dashboards:
+      1. Access OpenObserve: http://{{ openobserve_listen_host }}:{{ openobserve_listen_port }}
+      2. Login with: {{ openobserve_root_user_email }}
+      3. Navigate to: Dashboards > Import
+      4. Upload the JSON files from /opt/openobserve/dashboards/
+      
+      Or use the OpenObserve API to import programmatically:
+      
+      curl -u "{{ openobserve_root_user_email }}:{{ openobserve_root_user_pass }}" \
+        -X POST \
+        -H "Content-Type: application/json" \
+        -d @/opt/openobserve/dashboards/pbs_backup_dashboard.json \
+        "http://{{ openobserve_listen_host }}:{{ openobserve_listen_port }}/api/default/dashboards"
+      
+      ============================================
+      
+      Dashboard Features:
+      
+      PBS Backup Status Dashboard:
+      - Backup success rate (pie chart)
+      - Recent backup jobs (table)
+      - Backup activity timeline
+      - Backup errors and warnings
+      - Per-host backup statistics
+      - Real-time status indicators
+      
+      PBS Storage & Performance Dashboard:
+      - Datastore usage gauge
+      - Garbage collection activity
+      - Backup verification jobs
+      - Prune operations
+      - iSCSI storage health
+      - Backup throughput metrics
+      - System-level errors
+      
+      ============================================

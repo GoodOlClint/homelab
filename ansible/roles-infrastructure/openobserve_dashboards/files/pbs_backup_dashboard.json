@@ -1,0 +1,249 @@
+{
+  "title": "Proxmox Backup Server - Backup Status",
+  "description": "Dashboard for monitoring PBS backup jobs, success rates, and storage usage",
+  "version": 1,
+  "dashboardId": "pbs-backup-status",
+  "panels": [
+    {
+      "id": "backup-success-rate",
+      "type": "pie",
+      "title": "Backup Success Rate (Last 24h)",
+      "description": "Success vs failure rate of backup jobs",
+      "config": {
+        "query": "SELECT count(*) as count, CASE WHEN message LIKE '%finished%successfully%' OR message LIKE '%backup successful%' THEN 'Success' WHEN message LIKE '%error%' OR message LIKE '%failed%' THEN 'Failed' ELSE 'Other' END as status FROM default WHERE syslog_identifier IN ('proxmox-backup-client', 'proxmox-backup') AND _timestamp >= now() - interval '24 hours' GROUP BY status",
+        "legend": {
+          "show": true,
+          "position": "right"
+        }
+      },
+      "layout": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      }
+    },
+    {
+      "id": "recent-backups",
+      "type": "table",
+      "title": "Recent Backup Jobs (Last 24h)",
+      "description": "List of recent backup operations",
+      "config": {
+        "query": "SELECT _timestamp, hostname, message FROM default WHERE (syslog_identifier = 'proxmox-backup-client' OR message LIKE '%backup%' OR message LIKE '%snapshot%') AND _timestamp >= now() - interval '24 hours' ORDER BY _timestamp DESC LIMIT 50",
+        "columns": [
+          {
+            "field": "_timestamp",
+            "label": "Time",
+            "width": 180
+          },
+          {
+            "field": "hostname",
+            "label": "Host",
+            "width": 150
+          },
+          {
+            "field": "message",
+            "label": "Message",
+            "width": 600
+          }
+        ]
+      },
+      "layout": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      }
+    },
+    {
+      "id": "backup-timeline",
+      "type": "line",
+      "title": "Backup Activity Timeline",
+      "description": "Backup jobs over time",
+      "config": {
+        "query": "SELECT date_trunc('hour', _timestamp) as time, count(*) as backups FROM default WHERE (syslog_identifier = 'proxmox-backup-client' OR message LIKE '%backup%started%' OR message LIKE '%Creating backup snapshot%') AND _timestamp >= now() - interval '7 days' GROUP BY time ORDER BY time",
+        "xAxis": "time",
+        "yAxis": "backups",
+        "aggregation": "sum"
+      },
+      "layout": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 4
+      }
+    },
+    {
+      "id": "backup-errors",
+      "type": "table",
+      "title": "Backup Errors (Last 7 days)",
+      "description": "Failed backups and error messages",
+      "config": {
+        "query": "SELECT _timestamp, hostname, message FROM default WHERE (message LIKE '%error%' OR message LIKE '%failed%' OR message LIKE '%warning%') AND (syslog_identifier = 'proxmox-backup-client' OR message LIKE '%backup%') AND _timestamp >= now() - interval '7 days' ORDER BY _timestamp DESC LIMIT 100",
+        "columns": [
+          {
+            "field": "_timestamp",
+            "label": "Time",
+            "width": 180
+          },
+          {
+            "field": "hostname",
+            "label": "Host",
+            "width": 150
+          },
+          {
+            "field": "message",
+            "label": "Error Message",
+            "width": 600
+          }
+        ]
+      },
+      "layout": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 4
+      }
+    },
+    {
+      "id": "backup-duration",
+      "type": "bar",
+      "title": "Backup Duration by Host",
+      "description": "Average backup duration per host",
+      "config": {
+        "query": "SELECT hostname, avg(duration) as avg_duration FROM (SELECT hostname, _timestamp, lead(_timestamp) over (partition by hostname order by _timestamp) - _timestamp as duration FROM default WHERE message LIKE '%backup%' AND _timestamp >= now() - interval '7 days') WHERE duration IS NOT NULL GROUP BY hostname ORDER BY avg_duration DESC",
+        "xAxis": "hostname",
+        "yAxis": "avg_duration"
+      },
+      "layout": {
+        "x": 0,
+        "y": 12,
+        "w": 6,
+        "h": 4
+      }
+    },
+    {
+      "id": "backup-size",
+      "type": "table",
+      "title": "Backup Sizes",
+      "description": "Backup sizes and compression ratios",
+      "config": {
+        "query": "SELECT _timestamp, hostname, message FROM default WHERE message LIKE '%size%' OR message LIKE '%compressed%' OR message LIKE '%GiB%' OR message LIKE '%MiB%' AND _timestamp >= now() - interval '7 days' ORDER BY _timestamp DESC LIMIT 50",
+        "columns": [
+          {
+            "field": "_timestamp",
+            "label": "Time",
+            "width": 180
+          },
+          {
+            "field": "hostname",
+            "label": "Host",
+            "width": 150
+          },
+          {
+            "field": "message",
+            "label": "Details",
+            "width": 600
+          }
+        ]
+      },
+      "layout": {
+        "x": 6,
+        "y": 12,
+        "w": 6,
+        "h": 4
+      }
+    },
+    {
+      "id": "pbs-server-status",
+      "type": "stat",
+      "title": "PBS Server Status",
+      "description": "Proxmox Backup Server health",
+      "config": {
+        "query": "SELECT count(*) as events FROM default WHERE hostname = 'proxmox-backup' AND _timestamp >= now() - interval '5 minutes'",
+        "thresholds": [
+          {
+            "value": 0,
+            "color": "red",
+            "label": "Offline"
+          },
+          {
+            "value": 1,
+            "color": "green",
+            "label": "Online"
+          }
+        ]
+      },
+      "layout": {
+        "x": 0,
+        "y": 16,
+        "w": 3,
+        "h": 3
+      }
+    },
+    {
+      "id": "backup-hosts",
+      "type": "stat",
+      "title": "Active Backup Hosts",
+      "description": "Number of hosts performing backups",
+      "config": {
+        "query": "SELECT count(distinct hostname) as hosts FROM default WHERE syslog_identifier = 'proxmox-backup-client' AND _timestamp >= now() - interval '24 hours'",
+        "unit": "hosts"
+      },
+      "layout": {
+        "x": 3,
+        "y": 16,
+        "w": 3,
+        "h": 3
+      }
+    },
+    {
+      "id": "total-backups-today",
+      "type": "stat",
+      "title": "Backups Today",
+      "description": "Total backup jobs completed today",
+      "config": {
+        "query": "SELECT count(*) as backups FROM default WHERE (message LIKE '%finished%successfully%' OR message LIKE '%backup successful%') AND _timestamp >= date_trunc('day', now())",
+        "unit": "backups"
+      },
+      "layout": {
+        "x": 6,
+        "y": 16,
+        "w": 3,
+        "h": 3
+      }
+    },
+    {
+      "id": "failed-backups-today",
+      "type": "stat",
+      "title": "Failed Backups Today",
+      "description": "Backup failures today",
+      "config": {
+        "query": "SELECT count(*) as failures FROM default WHERE (message LIKE '%error%' OR message LIKE '%failed%') AND syslog_identifier = 'proxmox-backup-client' AND _timestamp >= date_trunc('day', now())",
+        "thresholds": [
+          {
+            "value": 0,
+            "color": "green"
+          },
+          {
+            "value": 1,
+            "color": "red"
+          }
+        ],
+        "unit": "failures"
+      },
+      "layout": {
+        "x": 9,
+        "y": 16,
+        "w": 3,
+        "h": 3
+      }
+    }
+  ],
+  "variables": [],
+  "refresh": "5m",
+  "timeRange": {
+    "from": "now-24h",
+    "to": "now"
+  }
+}

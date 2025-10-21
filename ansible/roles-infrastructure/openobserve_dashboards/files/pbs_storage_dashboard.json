@@ -1,0 +1,266 @@
+{
+  "title": "Proxmox Backup Server - Storage & Performance",
+  "description": "Dashboard for monitoring PBS storage usage, datastore health, and performance metrics",
+  "version": 1,
+  "dashboardId": "pbs-storage-performance",
+  "panels": [
+    {
+      "id": "datastore-usage",
+      "type": "gauge",
+      "title": "Datastore Usage",
+      "description": "Current storage utilization",
+      "config": {
+        "query": "SELECT hostname, message FROM default WHERE hostname = 'proxmox-backup' AND (message LIKE '%datastore%' OR message LIKE '%storage%' OR message LIKE '%usage%') ORDER BY _timestamp DESC LIMIT 1",
+        "max": 100,
+        "unit": "%",
+        "thresholds": [
+          {
+            "value": 0,
+            "color": "green"
+          },
+          {
+            "value": 70,
+            "color": "yellow"
+          },
+          {
+            "value": 85,
+            "color": "red"
+          }
+        ]
+      },
+      "layout": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "id": "gc-activity",
+      "type": "table",
+      "title": "Garbage Collection Activity",
+      "description": "Recent GC operations",
+      "config": {
+        "query": "SELECT _timestamp, message FROM default WHERE hostname = 'proxmox-backup' AND (message LIKE '%garbage%collection%' OR message LIKE '%gc%') AND _timestamp >= now() - interval '7 days' ORDER BY _timestamp DESC LIMIT 20",
+        "columns": [
+          {
+            "field": "_timestamp",
+            "label": "Time",
+            "width": 180
+          },
+          {
+            "field": "message",
+            "label": "GC Event",
+            "width": 700
+          }
+        ]
+      },
+      "layout": {
+        "x": 4,
+        "y": 0,
+        "w": 8,
+        "h": 4
+      }
+    },
+    {
+      "id": "verify-jobs",
+      "type": "table",
+      "title": "Verification Jobs",
+      "description": "Recent backup verification tasks",
+      "config": {
+        "query": "SELECT _timestamp, message FROM default WHERE hostname = 'proxmox-backup' AND (message LIKE '%verif%' OR message LIKE '%check%') AND _timestamp >= now() - interval '7 days' ORDER BY _timestamp DESC LIMIT 20",
+        "columns": [
+          {
+            "field": "_timestamp",
+            "label": "Time",
+            "width": 180
+          },
+          {
+            "field": "message",
+            "label": "Verification Event",
+            "width": 700
+          }
+        ]
+      },
+      "layout": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 4
+      }
+    },
+    {
+      "id": "prune-jobs",
+      "type": "table",
+      "title": "Prune Operations",
+      "description": "Recent prune job executions",
+      "config": {
+        "query": "SELECT _timestamp, message FROM default WHERE hostname = 'proxmox-backup' AND message LIKE '%prune%' AND _timestamp >= now() - interval '7 days' ORDER BY _timestamp DESC LIMIT 20",
+        "columns": [
+          {
+            "field": "_timestamp",
+            "label": "Time",
+            "width": 180
+          },
+          {
+            "field": "message",
+            "label": "Prune Event",
+            "width": 700
+          }
+        ]
+      },
+      "layout": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 4
+      }
+    },
+    {
+      "id": "iscsi-status",
+      "type": "table",
+      "title": "iSCSI Storage Status",
+      "description": "iSCSI connection and storage health",
+      "config": {
+        "query": "SELECT _timestamp, message FROM default WHERE hostname = 'proxmox-backup' AND (message LIKE '%iscsi%' OR message LIKE '%scsi%') AND _timestamp >= now() - interval '24 hours' ORDER BY _timestamp DESC LIMIT 30",
+        "columns": [
+          {
+            "field": "_timestamp",
+            "label": "Time",
+            "width": 180
+          },
+          {
+            "field": "message",
+            "label": "iSCSI Event",
+            "width": 700
+          }
+        ]
+      },
+      "layout": {
+        "x": 0,
+        "y": 12,
+        "w": 12,
+        "h": 4
+      }
+    },
+    {
+      "id": "backup-throughput",
+      "type": "line",
+      "title": "Backup Throughput Timeline",
+      "description": "Data transfer rates over time",
+      "config": {
+        "query": "SELECT date_trunc('hour', _timestamp) as time, count(*) as operations FROM default WHERE (message LIKE '%MiB%' OR message LIKE '%GiB%' OR message LIKE '%transfer%') AND _timestamp >= now() - interval '7 days' GROUP BY time ORDER BY time",
+        "xAxis": "time",
+        "yAxis": "operations"
+      },
+      "layout": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 4
+      }
+    },
+    {
+      "id": "pbs-system-errors",
+      "type": "table",
+      "title": "PBS System Errors",
+      "description": "System-level errors and warnings on PBS server",
+      "config": {
+        "query": "SELECT _timestamp, severity, message FROM default WHERE hostname = 'proxmox-backup' AND (severity IN ('error', 'crit', 'alert', 'emerg') OR message LIKE '%error%' OR message LIKE '%fail%') AND _timestamp >= now() - interval '7 days' ORDER BY _timestamp DESC LIMIT 50",
+        "columns": [
+          {
+            "field": "_timestamp",
+            "label": "Time",
+            "width": 180
+          },
+          {
+            "field": "severity",
+            "label": "Severity",
+            "width": 100
+          },
+          {
+            "field": "message",
+            "label": "Error Message",
+            "width": 600
+          }
+        ]
+      },
+      "layout": {
+        "x": 0,
+        "y": 20,
+        "w": 12,
+        "h": 4
+      }
+    },
+    {
+      "id": "snapshot-count",
+      "type": "stat",
+      "title": "Total Snapshots (7d)",
+      "description": "Number of backup snapshots created",
+      "config": {
+        "query": "SELECT count(*) as snapshots FROM default WHERE message LIKE '%snapshot%created%' AND _timestamp >= now() - interval '7 days'",
+        "unit": "snapshots"
+      },
+      "layout": {
+        "x": 0,
+        "y": 24,
+        "w": 3,
+        "h": 3
+      }
+    },
+    {
+      "id": "gc-runs",
+      "type": "stat",
+      "title": "GC Runs (7d)",
+      "description": "Garbage collection executions",
+      "config": {
+        "query": "SELECT count(*) as gc_runs FROM default WHERE hostname = 'proxmox-backup' AND message LIKE '%garbage%collection%' AND _timestamp >= now() - interval '7 days'",
+        "unit": "runs"
+      },
+      "layout": {
+        "x": 3,
+        "y": 24,
+        "w": 3,
+        "h": 3
+      }
+    },
+    {
+      "id": "verify-runs",
+      "type": "stat",
+      "title": "Verify Runs (7d)",
+      "description": "Verification job executions",
+      "config": {
+        "query": "SELECT count(*) as verify_runs FROM default WHERE hostname = 'proxmox-backup' AND message LIKE '%verif%' AND _timestamp >= now() - interval '7 days'",
+        "unit": "runs"
+      },
+      "layout": {
+        "x": 6,
+        "y": 24,
+        "w": 3,
+        "h": 3
+      }
+    },
+    {
+      "id": "prune-runs",
+      "type": "stat",
+      "title": "Prune Runs (7d)",
+      "description": "Prune job executions",
+      "config": {
+        "query": "SELECT count(*) as prune_runs FROM default WHERE hostname = 'proxmox-backup' AND message LIKE '%prune%' AND _timestamp >= now() - interval '7 days'",
+        "unit": "runs"
+      },
+      "layout": {
+        "x": 9,
+        "y": 24,
+        "w": 3,
+        "h": 3
+      }
+    }
+  ],
+  "variables": [],
+  "refresh": "5m",
+  "timeRange": {
+    "from": "now-7d",
+    "to": "now"
+  }
+}
