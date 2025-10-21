@@ -12,7 +12,6 @@ pbs_datastores:
     comment: "Backup datastore on Synology NAS"
     gc_schedule: "daily"
     prune_schedule: "daily"
-    verify_schedule: "weekly"
     # Retention policy (GFS - Grandfather-Father-Son)
     keep_last: 7        # Keep last 7 backups
     keep_hourly: 0      # Don't keep hourly
@@ -20,6 +19,9 @@ pbs_datastores:
     keep_weekly: 8      # Keep weekly for 2 months
     keep_monthly: 12    # Keep monthly for 1 year
     keep_yearly: 3      # Keep yearly for 3 years
+
+# Verification schedule (separate from datastore)
+pbs_verify_schedule: "weekly"
 
 # PBS users and permissions
 pbs_users:

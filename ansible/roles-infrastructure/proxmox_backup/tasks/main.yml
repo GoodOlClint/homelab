@@ -102,27 +102,10 @@
 
 - name: Create datastores
   shell: |
-    proxmox-backup-manager datastore create {{ item.name }} \
-      --path {{ item.path }} \
-      {% if item.comment is defined %}--comment "{{ item.comment }}" \{% endif %}
-      {% if item.gc_schedule is defined %}--gc-schedule "{{ item.gc_schedule }}" \{% endif %}
-      {% if item.prune_schedule is defined %}--prune-schedule "{{ item.prune_schedule }}" \{% endif %}
-      {% if item.verify_schedule is defined %}--verify-schedule "{{ item.verify_schedule }}"{% endif %}
+    proxmox-backup-manager datastore create {{ item.name }} {{ item.path }}{% if item.comment is defined %} --comment "{{ item.comment }}"{% endif %}{% if item.gc_schedule is defined %} --gc-schedule "{{ item.gc_schedule }}"{% endif %}{% if item.prune_schedule is defined %} --prune-schedule "{{ item.prune_schedule }}"{% endif %}{% if item.keep_last is defined %} --keep-last {{ item.keep_last }}{% endif %}{% if item.keep_hourly is defined %} --keep-hourly {{ item.keep_hourly }}{% endif %}{% if item.keep_daily is defined %} --keep-daily {{ item.keep_daily }}{% endif %}{% if item.keep_weekly is defined %} --keep-weekly {{ item.keep_weekly }}{% endif %}{% if item.keep_monthly is defined %} --keep-monthly {{ item.keep_monthly }}{% endif %}{% if item.keep_yearly is defined %} --keep-yearly {{ item.keep_yearly }}{% endif %}
   loop: "{{ pbs_datastores }}"
   when: pbs_datastore_list.stdout is defined and (pbs_datastore_list.stdout | from_json | selectattr('name', 'equalto', item.name) | list | length == 0)
   register: datastore_created
-
-- name: Configure datastore retention policies
-  shell: |
-    proxmox-backup-manager datastore update {{ item.name }} \
-      --keep-last {{ item.keep_last | default(7) }} \
-      --keep-hourly {{ item.keep_hourly | default(0) }} \
-      --keep-daily {{ item.keep_daily | default(14) }} \
-      --keep-weekly {{ item.keep_weekly | default(8) }} \
-      --keep-monthly {{ item.keep_monthly | default(12) }} \
-      --keep-yearly {{ item.keep_yearly | default(3) }}
-  loop: "{{ pbs_datastores }}"
-  when: datastore_created.changed or (pbs_datastore_list.stdout is defined and (pbs_datastore_list.stdout | from_json | selectattr('name', 'equalto', item.name) | list | length > 0))
 
 # User Management
 - name: Check if backup user exists
@@ -196,7 +179,7 @@
   shell: |
     proxmox-backup-manager verify-job create verify-{{ item.name }} \
       --store {{ item.name }} \
-      --schedule "{{ item.verify_schedule | default('weekly') }}"
+      --schedule "{{ pbs_verify_schedule | default('weekly') }}"
   loop: "{{ pbs_datastores }}"
   register: verify_job_created
   failed_when: false
