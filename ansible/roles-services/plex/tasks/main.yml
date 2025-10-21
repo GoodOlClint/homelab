@@ -70,32 +70,80 @@
     update_cache: yes
   when: not plex_installed.stat.exists
 
-- name: Create backup script for Plex config
+- name: Create PBS backup script for Plex config
+  ansible.builtin.template:
+    dest: /usr/local/bin/plex_config_pbs_backup.sh
+    mode: '0755'
+    owner: root
+    group: root
+    src: plex_config_pbs_backup.sh.j2
+  when: pbs_backup_enabled | default(true)
+
+- name: Create PBS restore script for Plex config
+  ansible.builtin.template:
+    dest: /usr/local/bin/plex_config_pbs_restore.sh
+    mode: '0755'
+    owner: root
+    group: root
+    src: plex_config_pbs_restore.sh.j2
+  when: pbs_backup_enabled | default(true)
+
+- name: Create SMB backup script for Plex config (fallback)
   ansible.builtin.template:
     dest: /usr/local/bin/plex_config_backup.sh
     mode: '0755'
     owner: root
     group: root
     src: plex_config_backup.sh.j2
+  when: not (pbs_backup_enabled | default(true))
 
-- name: Create restore script for Plex config
+- name: Create SMB restore script for Plex config (fallback)
   ansible.builtin.template:
     dest: /usr/local/bin/plex_config_restore.sh
     mode: '0755'
     owner: root
     group: root
     src: plex_config_restore.sh.j2
+  when: not (pbs_backup_enabled | default(true))
 
-- name: Ensure cron job for nightly Plex config backup
+- name: Ensure cron job for nightly Plex config PBS backup
+  ansible.builtin.cron:
+    name: "Nightly Plex config PBS backup"
+    user: root
+    job: "/usr/local/bin/plex_config_pbs_backup.sh"
+    minute: 0
+    hour: 2
+    state: present
+  when: pbs_backup_enabled | default(true)
+
+- name: Remove old SMB backup cron job when PBS is enabled
+  ansible.builtin.cron:
+    name: "Nightly Plex config backup"
+    state: absent
+  when: pbs_backup_enabled | default(true)
+
+- name: Ensure cron job for nightly Plex config SMB backup (fallback)
   ansible.builtin.cron:
     name: "Nightly Plex config backup"
     user: root
     job: "/usr/local/bin/plex_config_backup.sh"
     minute: 0
     hour: 2
+    state: present
+  when: not (pbs_backup_enabled | default(true))
 
-- name: Restore Plex config from latest backup if not already installed
+- name: Restore Plex config from PBS if not already installed
+  ansible.builtin.shell: /usr/local/bin/plex_config_pbs_restore.sh
+  when: 
+    - not plex_installed.stat.exists
+    - pbs_backup_enabled | default(true)
+  args:
+    executable: /bin/bash
+
+- name: Restore Plex config from SMB if not already installed (fallback)
   ansible.builtin.shell: /usr/local/bin/plex_config_restore.sh
-  when: not plex_installed.stat.exists
+  when: 
+    - not plex_installed.stat.exists
+    - not (pbs_backup_enabled | default(true))
   args:
     executable: /bin/bash

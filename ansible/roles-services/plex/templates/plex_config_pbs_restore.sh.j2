@@ -1,0 +1,207 @@
+#!/bin/bash
+#
+# Plex Config Restore Script from Proxmox Backup Server
+# Restores Plex databases, plugins, and config from PBS
+#
+set -euo pipefail
+
+# Configuration
+PLEX_DIR="/var/lib/plexmediaserver/Library/Application Support/Plex Media Server"
+DB_DIR="$PLEX_DIR/Plug-in Support/Databases"
+PLEX_SQLITE="/usr/lib/plexmediaserver/Plex SQLite"
+LOG_FILE="/var/log/plex_config_pbs_restore.log"
+RESTORE_DIR="/tmp/plex_pbs_restore"
+PLEX_TOKEN="{{ plex_token }}"
+
+# PBS Configuration
+PBS_ENV_FILE="/etc/proxmox-backup/pbs-client.env"
+PBS_NAMESPACE="{{ plex_pbs_namespace | default('plex') }}"
+
+# Backup hostname for PBS (defaults to actual hostname)
+BACKUP_HOSTNAME="{{ inventory_hostname | default(ansible_hostname) }}"
+
+# Logging function
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG_FILE"
+}
+
+# Error handling
+error_exit() {
+    log "ERROR: $1"
+    # Cleanup temp directory on error
+    rm -rf "$RESTORE_DIR"
+    exit 1
+}
+
+# Cleanup function
+cleanup() {
+    log "Cleaning up temporary files..."
+    rm -rf "$RESTORE_DIR"
+}
+trap cleanup EXIT
+
+log "Starting Plex config PBS restore process"
+
+# Check if proxmox-backup-client is available
+if ! command -v proxmox-backup-client &> /dev/null; then
+    error_exit "proxmox-backup-client not found. Install with: apt install proxmox-backup-client"
+fi
+
+# Source PBS environment file for credentials
+if [ -f "$PBS_ENV_FILE" ]; then
+    source "$PBS_ENV_FILE"
+else
+    error_exit "PBS environment file not found at $PBS_ENV_FILE"
+fi
+
+log "Looking for available backups in PBS..."
+
+# List all snapshots in the namespace
+set +e
+SNAPSHOTS=$(proxmox-backup-client snapshot list --ns "$PBS_NAMESPACE" --output-format json 2>/dev/null)
+LIST_EXIT=$?
+set -e
+
+if [ $LIST_EXIT -ne 0 ]; then
+    error_exit "Failed to list snapshots from PBS (exit code: $LIST_EXIT)"
+fi
+
+# Parse JSON to find the most recent snapshot
+# Format: [namespace:]<type>/<ID>/<timestamp>
+LATEST_SNAPSHOT=$(echo "$SNAPSHOTS" | jq -r '.[] | select(.["backup-type"] == "host") | .["backup-id"] + "/" + (.["backup-time"] | tostring)' | sort -r | head -n 1)
+
+if [ -z "$LATEST_SNAPSHOT" ]; then
+    error_exit "No backups found in PBS namespace '$PBS_NAMESPACE'"
+fi
+
+# Extract backup-id and timestamp
+BACKUP_ID=$(echo "$LATEST_SNAPSHOT" | cut -d'/' -f1)
+BACKUP_TIME=$(echo "$LATEST_SNAPSHOT" | cut -d'/' -f2)
+
+log "Found latest backup: host/$BACKUP_ID/$BACKUP_TIME"
+
+# Create restore directory
+mkdir -p "$RESTORE_DIR"
+
+log "Restoring backup from PBS..."
+
+# Restore the plex-config.pxar archive from PBS
+proxmox-backup-client restore \
+    --ns "$PBS_NAMESPACE" \
+    "host/$BACKUP_ID/$BACKUP_TIME" \
+    "plex-config.pxar" "$RESTORE_DIR"
+
+if [ $? -ne 0 ]; then
+    error_exit "Failed to restore backup from PBS"
+fi
+
+log "Backup restored to $RESTORE_DIR"
+
+# Validate extracted files
+log "Validating extracted databases..."
+VALID=true
+
+if [ -f "$RESTORE_DIR/com.plexapp.plugins.library.db" ]; then
+    log "Validating main DB..."
+    INTEGRITY=$("$PLEX_SQLITE" "$RESTORE_DIR/com.plexapp.plugins.library.db" "PRAGMA integrity_check;" | tail -n 1)
+    if [ "$INTEGRITY" != "ok" ]; then
+        log "Main DB failed integrity check: $INTEGRITY"
+        VALID=false
+    else
+        log "Main DB validation passed."
+    fi
+else
+    log "WARNING: Main database not found in restore"
+    VALID=false
+fi
+
+if [ -f "$RESTORE_DIR/com.plexapp.plugins.library.blobs.db" ]; then
+    log "Validating blobs DB..."
+    INTEGRITY_BLOBS=$("$PLEX_SQLITE" "$RESTORE_DIR/com.plexapp.plugins.library.blobs.db" "PRAGMA integrity_check;" | tail -n 1)
+    if [ "$INTEGRITY_BLOBS" != "ok" ]; then
+        log "Blobs DB failed integrity check: $INTEGRITY_BLOBS"
+        VALID=false
+    else
+        log "Blobs DB validation passed."
+    fi
+else
+    log "WARNING: Blobs database not found in restore"
+fi
+
+if [ "$VALID" != "true" ]; then
+    error_exit "One or more extracted DBs failed validation. Backup may be corrupted."
+fi
+
+# Stop Plex before restoring files
+log "Stopping plexmediaserver..."
+systemctl stop plexmediaserver || error_exit "Failed to stop plexmediaserver"
+
+# Restore Plug-ins
+log "Restoring Plug-ins..."
+if [ -d "$RESTORE_DIR/Plug-ins" ]; then
+    log "Removing old Plug-ins..."
+    rm -rf "$PLEX_DIR/Plug-ins"
+    log "Copying Plug-ins..."
+    cp -a "$RESTORE_DIR/Plug-ins" "$PLEX_DIR/" || error_exit "Failed to restore Plug-ins"
+    log "Setting ownership on Plug-ins..."
+    chown -R plex:plex "$PLEX_DIR/Plug-ins"
+else
+    log "WARNING: Plug-ins directory not found in backup"
+fi
+
+# Restore main database
+log "Restoring main DB..."
+if [ -f "$RESTORE_DIR/com.plexapp.plugins.library.db" ]; then
+    cp -af "$RESTORE_DIR/com.plexapp.plugins.library.db" "$DB_DIR/com.plexapp.plugins.library.db" || error_exit "Failed to restore main DB"
+    chown plex:plex "$DB_DIR/com.plexapp.plugins.library.db"
+fi
+
+# Restore blobs database
+log "Restoring blobs DB..."
+if [ -f "$RESTORE_DIR/com.plexapp.plugins.library.blobs.db" ]; then
+    cp -af "$RESTORE_DIR/com.plexapp.plugins.library.blobs.db" "$DB_DIR/com.plexapp.plugins.library.blobs.db" || error_exit "Failed to restore blobs DB"
+    chown plex:plex "$DB_DIR/com.plexapp.plugins.library.blobs.db"
+fi
+
+# Restore Preferences.xml
+log "Restoring Preferences.xml..."
+if [ -f "$RESTORE_DIR/Preferences.xml" ]; then
+    cp -af "$RESTORE_DIR/Preferences.xml" "$PLEX_DIR/Preferences.xml" || error_exit "Failed to restore Preferences.xml"
+    chown plex:plex "$PLEX_DIR/Preferences.xml"
+else
+    log "WARNING: Preferences.xml not found in backup"
+fi
+
+# Start Plex
+log "Starting plexmediaserver..."
+systemctl start plexmediaserver || error_exit "Failed to start plexmediaserver"
+
+log "Waiting for Plex service to start..."
+for i in {1..30}; do
+    if systemctl is-active --quiet plexmediaserver; then
+        log "Plex service is active."
+        break
+    fi
+    sleep 5
+done
+
+# Wait for Plex API to become available
+PLEX_API="http://localhost:32400"
+log "Waiting for Plex API to become available..."
+for i in {1..30}; do
+    if curl -s -H "X-Plex-Token: $PLEX_TOKEN" "$PLEX_API/library/sections" | grep -q 'MediaContainer'; then
+        log "Plex API is available."
+        break
+    fi
+    sleep 5
+done
+
+# Trigger metadata refresh for all libraries
+log "Triggering metadata refresh for all libraries..."
+sections=$(curl -s -H "X-Plex-Token: $PLEX_TOKEN" "$PLEX_API/library/sections" | grep -o 'key="[0-9]*"' | grep -o '[0-9]*' || true)
+for section in $sections; do
+    log "Refreshing library section $section..."
+    curl -s -H "X-Plex-Token: $PLEX_TOKEN" "$PLEX_API/library/sections/$section/refresh?force=1" || true
+done
+
+log "Plex config PBS restore complete."
