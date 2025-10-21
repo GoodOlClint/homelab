@@ -36,6 +36,7 @@ usage() {
     echo "  -f, --file BACKUP_FILE     Specific backup file to restore"
     echo "  -l, --latest               Restore latest backup for database"
     echo "  -r, --remote               Download latest backup from remote SMB share"
+    echo "  -g, --globals              Restore global objects (roles, tablespaces)"
     echo "  --list-backups             List available backups"
     echo "  --list-remote              List available remote backups"
     echo "  -h, --help                 Show this help message"
@@ -43,9 +44,14 @@ usage() {
     echo "Examples:"
     echo "  $0 -d radarr-main -l                    # Restore latest local backup"
     echo "  $0 -d radarr-main -r                    # Download and restore latest remote backup"
-    echo "  $0 -f /path/to/backup.sql.gz           # Restore specific backup file"
+    echo "  $0 -f /path/to/backup.dump             # Restore specific backup file"
+    echo "  $0 -g -l                                # Restore latest globals backup"
     echo "  $0 --list-backups                       # List local backups"
     echo "  $0 --list-remote                        # List remote backups"
+    echo ""
+    echo "Note: Always restore globals first when doing a full restore!"
+    echo "      pg_restore is used for .dump files (recommended)"
+    echo "      psql is used for legacy .sql.gz files"
     exit 1
 }
 
@@ -64,7 +70,14 @@ error_exit() {
 list_backups() {
     log "Available local backups:"
     if [ -d "$BACKUP_DIR" ]; then
-        find "$BACKUP_DIR" -name "*.sql.gz" -type f -exec basename {} \; | sort
+        echo "=== Database Backups ==="
+        find "$BACKUP_DIR" -name "*.dump" -type f -exec basename {} \; | sort
+        echo ""
+        echo "=== Global Objects Backups ==="
+        find "$BACKUP_DIR" -name "postgres_globals_*.sql.gz" -type f -exec basename {} \; | sort
+        echo ""
+        echo "=== Legacy SQL Backups ==="
+        find "$BACKUP_DIR" -name "*.sql.gz" ! -name "postgres_globals_*" -type f -exec basename {} \; | sort
     else
         log "No local backup directory found"
     fi
@@ -78,9 +91,11 @@ list_remote_backups() {
     
     log "Available remote backups:"
     if [ -n "$SMB_DOMAIN" ]; then
-        smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_DOMAIN/$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; ls *.sql.gz" 2>/dev/null | grep "\.sql\.gz$" | awk '{print $1}' || log "No remote backups found"
+        smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_DOMAIN/$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; ls *.dump" 2>/dev/null | grep "\.dump$" | awk '{print $1}' || log "No remote .dump backups found"
+        smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_DOMAIN/$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; ls *.sql.gz" 2>/dev/null | grep "\.sql\.gz$" | awk '{print $1}' || log "No remote .sql.gz backups found"
     else
-        smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; ls *.sql.gz" 2>/dev/null | grep "\.sql\.gz$" | awk '{print $1}' || log "No remote backups found"
+        smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; ls *.dump" 2>/dev/null | grep "\.dump$" | awk '{print $1}' || log "No remote .dump backups found"
+        smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; ls *.sql.gz" 2>/dev/null | grep "\.sql\.gz$" | awk '{print $1}' || log "No remote .sql.gz backups found"
     fi
 }
 
@@ -117,6 +132,13 @@ find_latest_backup() {
     
     if [ "$location" = "local" ]; then
         if [ -d "$BACKUP_DIR" ]; then
+            # First try to find .dump files (preferred)
+            local dump_file=$(find "$BACKUP_DIR" -name "${database}_*.dump" -type f | sort | tail -n1)
+            if [ -n "$dump_file" ]; then
+                echo "$dump_file"
+                return
+            fi
+            # Fall back to .sql.gz files (legacy)
             find "$BACKUP_DIR" -name "${database}_*.sql.gz" -type f | sort | tail -n1
         fi
     elif [ "$location" = "remote" ]; then
@@ -126,9 +148,19 @@ find_latest_backup() {
         
         local remote_files
         if [ -n "$SMB_DOMAIN" ]; then
-            remote_files=$(smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_DOMAIN/$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; ls ${database}_*.sql.gz" 2>/dev/null | grep "${database}_.*\.sql\.gz$" | awk '{print $1}' | sort | tail -n1 || true)
+            # Try .dump files first
+            remote_files=$(smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_DOMAIN/$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; ls ${database}_*.dump" 2>/dev/null | grep "${database}_.*\.dump$" | awk '{print $1}' | sort | tail -n1 || true)
+            # Fall back to .sql.gz
+            if [ -z "$remote_files" ]; then
+                remote_files=$(smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_DOMAIN/$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; ls ${database}_*.sql.gz" 2>/dev/null | grep "${database}_.*\.sql\.gz$" | awk '{print $1}' | sort | tail -n1 || true)
+            fi
         else
-            remote_files=$(smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; ls ${database}_*.sql.gz" 2>/dev/null | grep "${database}_.*\.sql\.gz$" | awk '{print $1}' | sort | tail -n1 || true)
+            # Try .dump files first
+            remote_files=$(smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; ls ${database}_*.dump" 2>/dev/null | grep "${database}_.*\.dump$" | awk '{print $1}' | sort | tail -n1 || true)
+            # Fall back to .sql.gz
+            if [ -z "$remote_files" ]; then
+                remote_files=$(smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; ls ${database}_*.sql.gz" 2>/dev/null | grep "${database}_.*\.sql\.gz$" | awk '{print $1}' | sort | tail -n1 || true)
+            fi
         fi
         
         if [ -n "$remote_files" ]; then
@@ -146,10 +178,20 @@ restore_database() {
         error_exit "Backup file not found: $backup_file"
     fi
     
-    # Extract database name from filename
-    database_name=$(basename "$backup_file" | sed 's/_[0-9]\{8\}_[0-9]\{6\}\.sql\.gz$//')
+    # Detect backup format and extract database name
+    if [[ "$backup_file" =~ \.dump$ ]]; then
+        # Custom format (.dump)
+        database_name=$(basename "$backup_file" | sed 's/_[0-9]\{8\}_[0-9]\{6\}\.dump$//')
+        BACKUP_FORMAT="custom"
+    elif [[ "$backup_file" =~ \.sql\.gz$ ]]; then
+        # Legacy compressed SQL (.sql.gz)
+        database_name=$(basename "$backup_file" | sed 's/_[0-9]\{8\}_[0-9]\{6\}\.sql\.gz$//')
+        BACKUP_FORMAT="sql"
+    else
+        error_exit "Unknown backup format: $backup_file (expected .dump or .sql.gz)"
+    fi
     
-    log "Restoring database '$database_name' from backup: $backup_file"
+    log "Restoring database '$database_name' from backup: $backup_file (format: $BACKUP_FORMAT)"
     
     # Check if PostgreSQL is running
     if ! PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -c '\q' 2>/dev/null; then
@@ -178,9 +220,15 @@ restore_database() {
     PGPASSWORD="$POSTGRES_PASSWORD" createdb -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" "$database_name"
     log "Created new database: $database_name"
     
-    # Restore from backup
+    # Restore from backup based on format
     log "Restoring data from backup..."
-    gunzip -c "$backup_file" | PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" "$database_name"
+    if [ "$BACKUP_FORMAT" = "custom" ]; then
+        # Use pg_restore for custom format (.dump files)
+        PGPASSWORD="$POSTGRES_PASSWORD" pg_restore -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$database_name" --no-owner --no-acl "$backup_file"
+    else
+        # Use psql for legacy SQL format (.sql.gz files)
+        gunzip -c "$backup_file" | PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" "$database_name"
+    fi
     
     if [ $? -eq 0 ]; then
         log "Successfully restored database '$database_name' from backup"
@@ -189,11 +237,38 @@ restore_database() {
     fi
 }
 
+# Restore global objects
+restore_globals() {
+    local globals_file="$1"
+    
+    if [ ! -f "$globals_file" ]; then
+        error_exit "Globals backup file not found: $globals_file"
+    fi
+    
+    log "Restoring global objects (roles, tablespaces) from: $globals_file"
+    
+    # Check if PostgreSQL is running
+    if ! PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -c '\q' 2>/dev/null; then
+        error_exit "Cannot connect to PostgreSQL server"
+    fi
+    
+    # Restore globals
+    log "Restoring global objects..."
+    gunzip -c "$globals_file" | PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" postgres
+    
+    if [ $? -eq 0 ]; then
+        log "Successfully restored global objects"
+    else
+        error_exit "Failed to restore global objects"
+    fi
+}
+
 # Parse command line arguments
 DATABASE=""
 BACKUP_FILE=""
 USE_LATEST=false
 USE_REMOTE=false
+RESTORE_GLOBALS=false
 LIST_BACKUPS=false
 LIST_REMOTE=false
 
@@ -213,6 +288,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         -r|--remote)
             USE_REMOTE=true
+            shift
+            ;;
+        -g|--globals)
+            RESTORE_GLOBALS=true
             shift
             ;;
         --list-backups)
@@ -245,7 +324,33 @@ if [ "$LIST_REMOTE" = true ]; then
 fi
 
 # Main restore logic
-if [ -n "$BACKUP_FILE" ]; then
+if [ "$RESTORE_GLOBALS" = true ]; then
+    # Restore global objects
+    if [ "$USE_LATEST" = true ]; then
+        if [ "$USE_REMOTE" = true ]; then
+            # Find and download latest remote globals backup
+            latest_remote=$(find_latest_backup "postgres_globals" "remote")
+            if [ -n "$latest_remote" ]; then
+                downloaded_file=$(download_remote_backup "postgres_globals" "$latest_remote")
+                restore_globals "$downloaded_file"
+            else
+                error_exit "No remote globals backup found"
+            fi
+        else
+            # Find latest local globals backup
+            latest_local=$(find "$BACKUP_DIR" -name "postgres_globals_*.sql.gz" -type f | sort | tail -n1)
+            if [ -n "$latest_local" ]; then
+                restore_globals "$latest_local"
+            else
+                error_exit "No local globals backup found"
+            fi
+        fi
+    elif [ -n "$BACKUP_FILE" ]; then
+        restore_globals "$BACKUP_FILE"
+    else
+        error_exit "Must specify either --latest or --file with --globals"
+    fi
+elif [ -n "$BACKUP_FILE" ]; then
     # Restore specific file
     restore_database "$BACKUP_FILE"
 elif [ -n "$DATABASE" ] && [ "$USE_LATEST" = true ]; then
