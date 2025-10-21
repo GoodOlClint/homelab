@@ -83,3 +83,177 @@
   apt:
     update_cache: yes
   when: proxmox_enterprise_repo_removed.changed or proxmox_enterprise_repo_line_removed.changed
+
+# Datastore Configuration
+- name: Ensure datastore directories exist
+  file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: backup
+    group: backup
+    mode: '0750'
+  loop: "{{ pbs_datastores }}"
+
+- name: Check if datastores are already configured
+  shell: proxmox-backup-manager datastore list --output-format json
+  register: pbs_datastore_list
+  changed_when: false
+  failed_when: false
+
+- name: Create datastores
+  shell: |
+    proxmox-backup-manager datastore create {{ item.name }} \
+      --path {{ item.path }} \
+      {% if item.comment is defined %}--comment "{{ item.comment }}" \{% endif %}
+      {% if item.gc_schedule is defined %}--gc-schedule "{{ item.gc_schedule }}" \{% endif %}
+      {% if item.prune_schedule is defined %}--prune-schedule "{{ item.prune_schedule }}" \{% endif %}
+      {% if item.verify_schedule is defined %}--verify-schedule "{{ item.verify_schedule }}"{% endif %}
+  loop: "{{ pbs_datastores }}"
+  when: pbs_datastore_list.stdout is defined and (pbs_datastore_list.stdout | from_json | selectattr('name', 'equalto', item.name) | list | length == 0)
+  register: datastore_created
+
+- name: Configure datastore retention policies
+  shell: |
+    proxmox-backup-manager datastore update {{ item.name }} \
+      --keep-last {{ item.keep_last | default(7) }} \
+      --keep-hourly {{ item.keep_hourly | default(0) }} \
+      --keep-daily {{ item.keep_daily | default(14) }} \
+      --keep-weekly {{ item.keep_weekly | default(8) }} \
+      --keep-monthly {{ item.keep_monthly | default(12) }} \
+      --keep-yearly {{ item.keep_yearly | default(3) }}
+  loop: "{{ pbs_datastores }}"
+  when: datastore_created.changed or (pbs_datastore_list.stdout is defined and (pbs_datastore_list.stdout | from_json | selectattr('name', 'equalto', item.name) | list | length > 0))
+
+# User Management
+- name: Check if backup user exists
+  shell: proxmox-backup-manager user list --output-format json
+  register: pbs_user_list
+  changed_when: false
+  failed_when: false
+
+- name: Create PBS users
+  shell: |
+    proxmox-backup-manager user create {{ item.username }}@{{ item.realm }} \
+      {% if item.comment is defined %}--comment "{{ item.comment }}"{% endif %}
+  loop: "{{ pbs_users }}"
+  when: pbs_user_list.stdout is defined and (pbs_user_list.stdout | from_json | selectattr('userid', 'equalto', item.username + '@' + item.realm) | list | length == 0)
+
+- name: Set backup user password
+  shell: |
+    echo "{{ pbs_backup_user_password | default('changeme') }}" | proxmox-backup-manager user update backup@pbs --password
+  when: pbs_backup_user_password is defined
+  no_log: true
+
+# Namespace Configuration
+- name: Create PBS namespaces
+  shell: |
+    proxmox-backup-manager namespace create {{ item.datastore }}:{{ item.namespace }} \
+      {% if item.comment is defined %}--comment "{{ item.comment }}"{% endif %}
+  loop: "{{ pbs_namespaces }}"
+  register: namespace_created
+  failed_when: false
+  changed_when: "'created' in namespace_created.stdout or namespace_created.rc == 0"
+
+# ACL Configuration
+- name: Grant backup user DatastoreBackup permissions
+  shell: |
+    proxmox-backup-manager acl update /datastore/{{ item.name }} \
+      --auth-id backup@pbs \
+      --role DatastoreBackup
+  loop: "{{ pbs_datastores }}"
+  register: acl_updated
+  failed_when: false
+  changed_when: acl_updated.rc == 0
+
+# API Token Generation
+- name: Check if API token exists for backup user
+  shell: proxmox-backup-manager user list-tokens backup@pbs --output-format json
+  register: pbs_token_list
+  changed_when: false
+  failed_when: false
+
+- name: Generate API token for backup user
+  shell: |
+    proxmox-backup-manager user generate-token backup@pbs backup-token --output-format json
+  register: pbs_token_output
+  when: pbs_token_list.stdout is defined and (pbs_token_list.stdout | from_json | length == 0)
+
+- name: Display API token (save this securely!)
+  debug:
+    msg: |
+      ============================================
+      PBS API Token Generated (SAVE THIS!):
+      User: backup@pbs
+      Token: backup-token
+      Value: {{ (pbs_token_output.stdout | from_json).value }}
+      ============================================
+      Add to ansible vault:
+      pbs_backup_token: "{{ (pbs_token_output.stdout | from_json).value }}"
+  when: pbs_token_output.changed and pbs_token_output.stdout is defined
+
+# Verification jobs
+- name: Configure verification jobs
+  shell: |
+    proxmox-backup-manager verify-job create verify-{{ item.name }} \
+      --store {{ item.name }} \
+      --schedule "{{ item.verify_schedule | default('weekly') }}"
+  loop: "{{ pbs_datastores }}"
+  register: verify_job_created
+  failed_when: false
+  changed_when: "'created' in verify_job_created.stdout or verify_job_created.rc == 0"
+
+# GC jobs
+- name: Configure garbage collection jobs
+  shell: |
+    proxmox-backup-manager gc-job create gc-{{ item.name }} \
+      --store {{ item.name }} \
+      --schedule "{{ item.gc_schedule | default('daily') }}"
+  loop: "{{ pbs_datastores }}"
+  register: gc_job_created
+  failed_when: false
+  changed_when: "'created' in gc_job_created.stdout or gc_job_created.rc == 0"
+
+# Prune jobs
+- name: Configure prune jobs
+  shell: |
+    proxmox-backup-manager prune-job create prune-{{ item.name }} \
+      --store {{ item.name }} \
+      --schedule "{{ item.prune_schedule | default('daily') }}" \
+      --keep-last {{ item.keep_last | default(7) }} \
+      --keep-daily {{ item.keep_daily | default(14) }} \
+      --keep-weekly {{ item.keep_weekly | default(8) }} \
+      --keep-monthly {{ item.keep_monthly | default(12) }} \
+      --keep-yearly {{ item.keep_yearly | default(3) }}
+  loop: "{{ pbs_datastores }}"
+  register: prune_job_created
+  failed_when: false
+  changed_when: "'created' in prune_job_created.stdout or prune_job_created.rc == 0"
+
+- name: Display PBS configuration summary
+  debug:
+    msg: |
+      ============================================
+      Proxmox Backup Server Configuration Complete
+      ============================================
+      Web Interface: https://{{ ansible_host }}:8007
+      
+      Datastores configured:
+      {% for ds in pbs_datastores %}
+      - {{ ds.name }}: {{ ds.path }}
+      {% endfor %}
+      
+      Namespaces configured:
+      {% for ns in pbs_namespaces %}
+      - {{ ns.datastore }}:{{ ns.namespace }}
+      {% endfor %}
+      
+      Users configured:
+      {% for user in pbs_users %}
+      - {{ user.username }}@{{ user.realm }}
+      {% endfor %}
+      
+      Next steps:
+      1. Access web UI at https://{{ ansible_host }}:8007
+      2. Login with root@pam
+      3. Configure backup clients using API token
+      ============================================

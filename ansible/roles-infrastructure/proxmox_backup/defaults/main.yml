@@ -1,0 +1,45 @@
+---
+# Proxmox Backup Server Configuration
+
+# NFS mount configuration
+pbs_nfs_mount_path: /mnt/backups
+pbs_nfs_source: "{{ proxmox_backup_nfs_src }}"
+
+# Datastore configuration
+pbs_datastores:
+  - name: synology
+    path: /mnt/backups/pbs-datastore
+    comment: "Backup datastore on Synology NAS"
+    gc_schedule: "daily"
+    prune_schedule: "daily"
+    verify_schedule: "weekly"
+    # Retention policy (GFS - Grandfather-Father-Son)
+    keep_last: 7        # Keep last 7 backups
+    keep_hourly: 0      # Don't keep hourly
+    keep_daily: 14      # Keep daily for 2 weeks
+    keep_weekly: 8      # Keep weekly for 2 months
+    keep_monthly: 12    # Keep monthly for 1 year
+    keep_yearly: 3      # Keep yearly for 3 years
+
+# PBS users and permissions
+pbs_users:
+  - username: backup
+    realm: pbs
+    comment: "Backup user for Proxmox Backup Client"
+    # Password will be set from vault
+    # API token will be auto-generated
+
+# PBS root password (default admin user)
+pbs_root_password: "{{ pbs_admin_password | default('changeme') }}"
+
+# PBS namespaces for organization
+pbs_namespaces:
+  - datastore: synology
+    namespace: plex
+    comment: "Plex Media Server backups"
+  - datastore: synology
+    namespace: services
+    comment: "Service configuration backups"
+  - datastore: synology
+    namespace: databases
+    comment: "Database backups"

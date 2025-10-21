@@ -1,0 +1,20 @@
+# Proxmox Backup Server Datastore Configuration
+# Managed by Ansible - do not edit manually
+
+{% for datastore in pbs_datastores %}
+datastore: {{ datastore.name }}
+	path {{ datastore.path }}
+{% if datastore.comment is defined %}
+	comment {{ datastore.comment }}
+{% endif %}
+{% if datastore.gc_schedule is defined %}
+	gc-schedule {{ datastore.gc_schedule }}
+{% endif %}
+{% if datastore.prune_schedule is defined %}
+	prune-schedule {{ datastore.prune_schedule }}
+{% endif %}
+{% if datastore.verify_schedule is defined %}
+	verify-schedule {{ datastore.verify_schedule }}
+{% endif %}
+
+{% endfor %}

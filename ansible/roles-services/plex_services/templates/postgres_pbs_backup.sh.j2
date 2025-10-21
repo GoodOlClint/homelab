@@ -1,0 +1,149 @@
+#!/bin/bash
+#
+# PostgreSQL Backup Script for Plex Services using Proxmox Backup Server
+# Backs up PostgreSQL databases directly to PBS with deduplication
+#
+set -euo pipefail
+
+# Configuration
+BACKUP_DIR="/tmp/postgres_pbs_backup"
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+LOG_FILE="/var/log/postgres_pbs_backup.log"
+
+# PostgreSQL connection details
+POSTGRES_USER="{{ postgres_user | default('qstick') }}"
+POSTGRES_PASSWORD="{{ postgres_password | default('qstick') }}"
+POSTGRES_HOST="localhost"
+POSTGRES_PORT="5432"
+
+# PBS Configuration
+{% if pbs_backup_enabled | default(true) %}
+PBS_REPOSITORY="{{ plex_pbs_repository | default('backup@pbs!backup-token@pbs-server:synology:databases') }}"
+PBS_PASSWORD="{{ plex_pbs_password | default('changeme') }}"
+PBS_NAMESPACE="{{ postgres_pbs_namespace | default('databases') }}"
+PBS_ENABLED=true
+{% else %}
+PBS_ENABLED=false
+{% endif %}
+
+# Backup hostname for PBS (defaults to actual hostname)
+BACKUP_HOSTNAME="{{ inventory_hostname | default(ansible_hostname) }}"
+
+# Logging function
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG_FILE"
+}
+
+# Error handling
+error_exit() {
+    log "ERROR: $1"
+    # Cleanup temp directory on error
+    rm -rf "$BACKUP_DIR"
+    exit 1
+}
+
+# Cleanup function
+cleanup() {
+    log "Cleaning up temporary files..."
+    rm -rf "$BACKUP_DIR"
+}
+trap cleanup EXIT
+
+# Create temp backup directory
+mkdir -p "$BACKUP_DIR"
+
+log "Starting PostgreSQL PBS backup process"
+
+# Check if PBS is available
+if [ "$PBS_ENABLED" = true ]; then
+    if ! command -v proxmox-backup-client &> /dev/null; then
+        error_exit "proxmox-backup-client not found. Install with: apt install proxmox-backup-client"
+    fi
+    
+    # Test PBS connection
+    log "Testing PBS connection..."
+    if ! PBS_REPOSITORY="$PBS_REPOSITORY" PBS_PASSWORD="$PBS_PASSWORD" proxmox-backup-client snapshot list &>/dev/null; then
+        log "WARNING: Cannot connect to PBS, falling back to local backup only"
+        PBS_ENABLED=false
+    fi
+fi
+
+# First, backup global objects (roles, tablespaces, etc.)
+log "Backing up global objects (roles, tablespaces, etc.)"
+GLOBALS_FILE="$BACKUP_DIR/postgres_globals_${TIMESTAMP}.sql"
+PGPASSWORD="$POSTGRES_PASSWORD" pg_dumpall -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" --globals-only > "$GLOBALS_FILE"
+
+if [ $? -eq 0 ]; then
+    gzip "$GLOBALS_FILE"
+    log "Successfully created globals backup: ${GLOBALS_FILE}.gz"
+else
+    error_exit "Failed to backup global objects"
+fi
+
+# Get list of databases (excluding system databases)
+DATABASES=$(PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "{{ postgres_default_db | default('radarr-main') }}" -t -c "SELECT datname FROM pg_database WHERE datistemplate = false AND datname NOT IN ('postgres', 'template0', 'template1');" | grep -v '^$' | tr -d ' ')
+
+if [ -z "$DATABASES" ]; then
+    log "No user databases found to backup"
+    exit 0
+fi
+
+# Backup each database using custom format
+for DB in $DATABASES; do
+    log "Backing up database: $DB"
+    BACKUP_FILE="$BACKUP_DIR/${DB}_${TIMESTAMP}.dump"
+    
+    # Create compressed backup in custom format (better for pg_restore)
+    PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -Fc -f "$BACKUP_FILE" "$DB"
+    
+    if [ $? -ne 0 ]; then
+        log "WARNING: Failed to backup database: $DB"
+        continue
+    fi
+    
+    log "Successfully created backup: $BACKUP_FILE"
+done
+
+# Upload to PBS if enabled
+if [ "$PBS_ENABLED" = true ]; then
+    log "Uploading backups to Proxmox Backup Server..."
+    
+    # Create pxar archives for PBS
+    BACKUP_ID="postgres-${TIMESTAMP}"
+    
+    # Build proxmox-backup-client command with all .pxar archives
+    PXAR_FILES=""
+    PXAR_FILES="${PXAR_FILES} postgres-globals.pxar:${BACKUP_DIR}/postgres_globals_${TIMESTAMP}.sql.gz"
+    
+    for DB in $DATABASES; do
+        if [ -f "$BACKUP_DIR/${DB}_${TIMESTAMP}.dump" ]; then
+            PXAR_FILES="${PXAR_FILES} postgres-${DB}.pxar:$BACKUP_DIR/${DB}_${TIMESTAMP}.dump"
+        fi
+    done
+    
+    log "Backing up to PBS repository: $PBS_REPOSITORY"
+    
+    # Execute PBS backup
+    PBS_REPOSITORY="$PBS_REPOSITORY" \
+    PBS_PASSWORD="$PBS_PASSWORD" \
+    proxmox-backup-client backup \
+        $PXAR_FILES \
+        --backup-id "$BACKUP_ID" \
+        --backup-time "$(date +%s)"
+    
+    if [ $? -eq 0 ]; then
+        log "Successfully uploaded backups to PBS"
+        
+        # List recent backups
+        log "Recent PBS backups:"
+        PBS_REPOSITORY="$PBS_REPOSITORY" PBS_PASSWORD="$PBS_PASSWORD" \
+            proxmox-backup-client snapshot list | tail -n 5
+    else
+        log "WARNING: Failed to upload backups to PBS"
+    fi
+else
+    log "PBS backup disabled or unavailable, backups remain in $BACKUP_DIR"
+    log "WARNING: Local backups will be deleted on script exit unless PBS is enabled"
+fi
+
+log "PostgreSQL PBS backup process completed successfully"
