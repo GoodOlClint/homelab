@@ -1,0 +1,24 @@
+# Recyclarr configuration template for *arr stack
+# Copy this file to /docker/recyclarr/config/recyclarr.yml and edit as needed
+
+sonarr:
+  - instance_name: Sonarr
+    url: http://sonarr:8989
+    api_key: "{{ sonarr_api_key | default('changeme') }}"
+    quality_profiles:
+      - name: HD-1080p
+        # Add your preferred quality settings here
+    root_folders:
+      - /data/tv
+
+radarr:
+  - instance_name: Radarr
+    url: http://radarr:7878
+    api_key: "{{ radarr_api_key | default('changeme') }}"
+    quality_profiles:
+      - name: HD-1080p
+        # Add your preferred quality settings here
+    root_folders:
+      - /data/movies
+
+# See https://recyclarr.dev/wiki/yaml-reference/ for more options

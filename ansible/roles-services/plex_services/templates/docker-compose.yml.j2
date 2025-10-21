@@ -157,7 +157,7 @@ services:
     logging:
       driver: json-file
     ports:
-      - 9696:9696
+      - "9696:9696"
     depends_on:
       postgres:
         condition: service_healthy
@@ -301,6 +301,30 @@ services:
       - TUNNEL_TOKEN={{ cloudflared_tunnel_token }}
     healthcheck:
       test: ["CMD", "cloudflared", "--version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Recyclarr - Sync *arr indexers and quality profiles
+  recyclarr:
+    container_name: recyclarr
+    image: ghcr.io/recyclarr/recyclarr:latest
+    restart: unless-stopped
+    logging:
+      driver: json-file
+    environment:
+      - PUID={{ plex_services['recyclarr'].PUID | default(1000) }}
+      - PGID={{ plex_services['recyclarr'].PGID | default(1000) }}
+      - TZ={{ timezone }}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /docker/recyclarr:/config:rw
+    depends_on:
+      - sonarr
+      - radarr
+    healthcheck:
+      test: ["CMD", "recyclarr", "--version"]
       interval: 30s
       timeout: 10s
       retries: 3

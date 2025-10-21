@@ -15,10 +15,6 @@
   import_role:
     name: geerlingguy.docker
 
-- name: Import yedit role
-  import_role:
-    name: mitre.yedit
-
 - name: Create plex-services system group
   group:
     name: "{{ plex_services_group }}"
@@ -266,7 +262,7 @@
       when:
         - item.value.config is defined
         - item.value.db_user is defined
-        - item.value.config | regex_search('\.xml$')
+        - item.value.config | regex_search('\.xml$') is not none
 
     - name: Update XML config files with PostgresPassword
       community.general.xml:
@@ -280,7 +276,7 @@
       when:
         - item.value.config is defined
         - item.value.db_password is defined
-        - item.value.config | regex_search('\.xml$')
+        - item.value.config | regex_search('\.xml$') is not none
 
     - name: Update XML config files with PostgresHost
       community.general.xml:
@@ -293,7 +289,7 @@
         label: "{{ item.key }}: PostgresHost"
       when:
         - item.value.config is defined
-        - item.value.config | regex_search('\.xml$')
+        - item.value.config | regex_search('\.xml$') is not none
         - item.value.db_user is defined
 
     - name: Update XML config files with PostgresPort
@@ -307,7 +303,7 @@
         label: "{{ item.key }}: PostgresPort"
       when:
         - item.value.config is defined
-        - item.value.config | regex_search('\.xml$')
+        - item.value.config | regex_search('\.xml$') is not none
         - item.value.db_user is defined
 
 - name: Read ApiKey from each *arr config.xml
@@ -320,7 +316,7 @@
       register: xml_result
       when:
         - item.value.config is defined
-        - item.value.config | regex_search('\.xml$')
+        - item.value.config | regex_search('\.xml$') is not none
       loop: "{{ plex_services | dict2items }}"
       loop_control:
         label: "{{ item.key }}"
@@ -339,16 +335,6 @@
         - item.matches | length > 0
         - item.matches[0] is mapping
         - "'ApiKey' in item.matches[0]"
-
-- name: Set Sonarr, Radarr, Lidarr, and Readarr API keys in bazarr config.yaml
-  yedit:
-    src: "/docker/bazarr/config/config.yaml"
-    key: "{{ item.key }}.apikey"
-    value: "{{ item.value }}"
-  loop: "{{ arr_api_keys | dict2items }}"
-  loop_control:
-    label: "{{ item.key }}"
-  when: item.key in ['sonarr', 'radarr', 'lidarr', 'readarr'] and item.value is defined
 
 - name: Correct permissions for plex services directories
   file:
@@ -380,6 +366,9 @@
   ansible.builtin.pip:
     name: prowlarr-py
     executable: pip
+    break_system_packages: true
+    extra_args: --ignore-installed
+  become: true
 
 - name: Configure Prowlarr (Indexer Management)
   devopsarr.prowlarr.prowlarr_indexer:
