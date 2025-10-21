@@ -1,0 +1,147 @@
+# Enhanced Telegraf configuration template for comprehensive monitoring
+
+[[processors.regex]]
+  namepass = ["*"]
+  [[processors.regex.fields]]
+    key = ".*_format$"
+    drop = true
+
+# Prometheus client output for scraping
+[[outputs.prometheus_client]]
+  listen = ":9273"
+  metric_version = 2
+  string_as_label = true
+  export_timestamp = true
+
+# Note: Remote write disabled - Prometheus scrapes from :9273 instead
+# This avoids issues with string-valued metrics being dropped
+#{% if hostvars['openobserve'] is defined and hostvars['openobserve'].ansible_host is defined %}
+#[[outputs.http]]
+#  url = "http://{{ hostvars['openobserve'].ansible_host }}:{{ openobserve_listen_port }}/api/default/prometheus/api/v1/write"
+#  method = "POST"
+#  data_format = "prometheusremotewrite"
+#  [outputs.http.headers]
+#    Content-Type = "application/x-protobuf"
+#    Content-Encoding = "snappy"
+#    X-Prometheus-Remote-Write-Version = "0.1.0"
+#    Authorization = "Basic {{ (openobserve_root_user_email + ':' + openobserve_root_user_pass) | b64encode }}"
+#{% endif %}
+
+# System Metrics
+[[inputs.cpu]]
+  percpu = true
+  totalcpu = true
+  collect_cpu_time = false
+  report_active = false
+
+[[inputs.mem]]
+
+[[inputs.disk]]
+  ignore_fs = ["tmpfs", "devtmpfs", "devfs", "overlay", "squashfs"]
+
+[[inputs.diskio]]
+
+[[inputs.net]]
+  interfaces = ["eth*", "en*"]
+
+[[inputs.netstat]]
+
+[[inputs.system]]
+
+[[inputs.processes]]
+
+[[inputs.kernel]]
+
+# DNS Monitoring (for DNS hosts)
+{% if inventory_hostname == 'dns' %}
+[[inputs.dns_query]]
+  servers = ["127.0.0.1"]
+  domains = [
+{% for vlan, zone in dns_zones.items() %}
+    "{{ zone.zone }}",
+{% endfor %}
+    "google.com",
+    "cloudflare.com"
+  ]
+  record_type = "A"
+  timeout = 2
+{% endif %}
+
+# Docker Monitoring (for hosts with Docker)
+{% if inventory_hostname in ['openobserve', 'docker', 'plex', 'plex-services'] %}
+[[inputs.docker]]
+  endpoint = "unix:///var/run/docker.sock"
+  gather_services = false
+  container_name_include = []
+  container_name_exclude = []
+  timeout = "5s"
+  perdevice_include = ["cpu", "blkio", "network"]
+  total_include = ["cpu", "blkio", "network"]
+{% endif %}
+
+# NFS Monitoring (for hosts with NFS mounts)
+{% if inventory_hostname in ['plex', 'docker'] %}
+[[inputs.nfsclient]]
+  fullstat = false
+{% endif %}
+
+# Ping monitoring to key infrastructure
+[[inputs.ping]]
+  urls = [
+{% if hostvars['dns'] is defined and hostvars['dns'].ansible_host is defined %}
+    "{{ hostvars['dns'].ansible_host }}",
+{% endif %}
+{% if hostvars['adguard'] is defined and hostvars['adguard'].ansible_host is defined %}
+    "{{ hostvars['adguard'].ansible_host }}",
+{% endif %}
+    "8.8.8.8",
+    "1.1.1.1"
+  ]
+  count = 4
+  ping_interval = 1.0
+  timeout = 2.0
+
+# HTTP response check for web services
+[[inputs.http_response]]
+  urls = [
+{% if inventory_hostname == 'adguard' %}
+    "http://127.0.0.1:3000",
+{% endif %}
+{% if inventory_hostname == 'openobserve' %}
+    "http://127.0.0.1:{{ openobserve_listen_port }}/healthz",
+    "http://127.0.0.1:3000/api/health",
+    "http://127.0.0.1:9090/-/healthy",
+{% endif %}
+{% if inventory_hostname == 'plex' %}
+    "http://127.0.0.1:32400/web/index.html",
+{% endif %}
+{% if inventory_hostname == 'docker' or inventory_hostname == 'plex-services' %}
+    "http://127.0.0.1:8989",    # Sonarr
+    "http://127.0.0.1:7878",    # Radarr
+    "http://127.0.0.1:8686",    # Lidarr
+    "http://127.0.0.1:8787",    # Readarr
+    "http://127.0.0.1:6767",    # Bazarr
+    "http://127.0.0.1:9696",    # Prowlarr
+    "http://127.0.0.1:8080",    # SABnzbd
+    "http://127.0.0.1:8181",    # Tautulli
+{% endif %}
+{% if inventory_hostname == 'plex-services' %}
+    "http://127.0.0.1:5055",    # Jellyseerr
+{% endif %}
+{% if inventory_hostname == 'docker' %}
+    "http://127.0.0.1:3579",    # Ombi
+    "http://127.0.0.1:9000",    # Portainer
+{% endif %}
+  ]
+  response_timeout = "5s"
+  method = "GET"
+  follow_redirects = true
+
+
+# Log file monitoring using tail with grok parser
+[[inputs.tail]]
+  files = ["/var/log/syslog"]
+  from_beginning = false
+  data_format = "grok"
+  grok_patterns = ["%{SYSLOGTIMESTAMP:timestamp} %{SYSLOGHOST:host} %{DATA:program}(?:\\[%{POSINT:pid}\\])?: %{GREEDYDATA:message}"]
+  name_override = "syslog"

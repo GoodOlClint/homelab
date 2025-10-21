@@ -51,35 +51,17 @@
   register: telegraf_openobserve_conf
 
 - name: Configure Telegraf to send metrics to OpenObserve
-  copy:
+  template:
+    src: telegraf-openobserve.conf.j2
     dest: /etc/telegraf/telegraf.d/openobserve.conf
-    content: |
-      [[processors.regex]]
-        namepass = ["*"]
-        [[processors.regex.fields]]
-          key = ".*_format$"
-          drop = true
-      [[outputs.prometheus_client]]
-        listen = ":9273"
-      [[outputs.http]]
-        url = "http://{{ hostvars['openobserve'].ansible_host | default('openobserve') }}:5080/api/default/prometheus/api/v1/write"
-        method = "POST"
-        data_format = "prometheusremotewrite"
-      [outputs.http.headers]
-        Content-Type = "application/x-protobuf"
-        Content-Encoding = "snappy"
-        X-Prometheus-Remote-Write-Version = "0.1.0"
-        Authorization = "Basic cm9vdEBleGFtcGxlLmNvbTozazIxVVcybTdrZUhBSzdR"
-      [[inputs.cpu]]
-        percpu = true
-        totalcpu = true
-        collect_cpu_time = false
-        report_active = false
-      [[inputs.mem]]
-      [[inputs.disk]]
-        ignore_fs = ["tmpfs", "devtmpfs", "devfs"]
     mode: '0644'
-  when: not telegraf_openobserve_conf.stat.exists
+  notify: Restart Telegraf
+
+- name: Validate Telegraf configuration syntax
+  command: telegraf --config /etc/telegraf/telegraf.conf --config-directory /etc/telegraf/telegraf.d config
+  register: telegraf_test
+  changed_when: false
+  failed_when: telegraf_test.rc != 0
 
 - name: Ensure Telegraf is started and enabled
   systemd:
