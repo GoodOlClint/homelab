@@ -1,10 +1,10 @@
 ---
 # Deploy Proxmox Backup Client to VMs that need backups
 - name: Configure backup clients
-  hosts: plex,plex-services
+  hosts: plex,plex-services,docker
   become: yes
-  vars:
-    pbs_backup_token: "{{ hostvars[inventory_hostname].pbs_backup_token }}"
+  vars_files:
+    - ../group_vars/all.yml
   roles:
     - pbs_client
 

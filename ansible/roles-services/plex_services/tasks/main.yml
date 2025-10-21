@@ -411,3 +411,22 @@
     owner: root
     group: root
     mode: '0600'
+
+- name: Create PBS backup script for Docker containers
+  ansible.builtin.template:
+    dest: /usr/local/bin/docker_pbs_backup.sh
+    mode: '0755'
+    owner: root
+    group: root
+    src: docker_pbs_backup.sh.j2
+  when: pbs_backup_enabled | default(true)
+
+- name: Ensure cron job for nightly Docker PBS backup
+  ansible.builtin.cron:
+    name: "Nightly Docker PBS backup"
+    user: root
+    job: "/usr/local/bin/docker_pbs_backup.sh"
+    minute: 30
+    hour: 2
+    state: present
+  when: pbs_backup_enabled | default(true)

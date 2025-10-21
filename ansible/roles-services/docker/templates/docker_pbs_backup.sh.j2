@@ -1,0 +1,241 @@
+#!/bin/bash
+#
+# Docker Containers Backup Script using Proxmox Backup Server
+# Auto-discovers and backs up all Docker containers, volumes, and configurations
+#
+set -euo pipefail
+
+# Configuration
+BACKUP_DIR="/tmp/docker_pbs_backup"
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+LOG_FILE="/var/log/docker_pbs_backup.log"
+
+# Logging function
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG_FILE"
+}
+
+# PBS Configuration
+{% if pbs_backup_enabled | default(true) %}
+PBS_ENV_FILE="/etc/proxmox-backup/pbs-client.env"
+PBS_NAMESPACE="{{ docker_pbs_namespace | default('services') }}"
+PBS_ENABLED=true
+
+# Source PBS environment file for credentials
+if [ -f "$PBS_ENV_FILE" ]; then
+    source "$PBS_ENV_FILE"
+else
+    log "ERROR: PBS environment file not found at $PBS_ENV_FILE"
+    PBS_ENABLED=false
+fi
+{% else %}
+PBS_ENABLED=false
+{% endif %}
+
+# Backup hostname for PBS (defaults to actual hostname)
+BACKUP_HOSTNAME="{{ inventory_hostname | default(ansible_hostname) }}"
+
+# Error handling
+error_exit() {
+    log "ERROR: $1"
+    # Cleanup temp directory on error
+    rm -rf "$BACKUP_DIR"
+    exit 1
+}
+
+# Cleanup function
+cleanup() {
+    log "Cleaning up temporary files..."
+    rm -rf "$BACKUP_DIR"
+}
+trap cleanup EXIT
+
+# Create backup directory
+mkdir -p "$BACKUP_DIR"
+
+log "Starting Docker PBS backup process"
+
+# Check if PBS is available
+if [ "$PBS_ENABLED" = true ]; then
+    if ! command -v proxmox-backup-client &> /dev/null; then
+        error_exit "proxmox-backup-client not found. Install with: apt install proxmox-backup-client"
+    fi
+    
+    # Test PBS connection and create namespace if needed
+    log "Testing PBS connection..."
+    set +e  # Temporarily disable exit on error for PBS test
+    proxmox-backup-client snapshot list --ns "$PBS_NAMESPACE" &>/dev/null
+    PBS_TEST_EXIT=$?
+    set -e  # Re-enable exit on error
+    
+    if [ $PBS_TEST_EXIT -ne 0 ] && [ $PBS_TEST_EXIT -ne 255 ]; then
+        log "WARNING: Cannot connect to PBS (exit code: $PBS_TEST_EXIT), falling back to local backup only"
+        PBS_ENABLED=false
+    else
+        # Create namespace if it doesn't exist (ENOENT means namespace doesn't exist yet)
+        if [ $PBS_TEST_EXIT -eq 255 ]; then
+            log "Namespace '$PBS_NAMESPACE' doesn't exist, creating it..."
+            set +e
+            proxmox-backup-client namespace create "$PBS_NAMESPACE"
+            CREATE_EXIT=$?
+            set -e
+            if [ $CREATE_EXIT -eq 0 ]; then
+                log "Successfully created namespace '$PBS_NAMESPACE'"
+            else
+                log "WARNING: Failed to create namespace (exit code: $CREATE_EXIT), falling back to local backup only"
+                PBS_ENABLED=false
+            fi
+        fi
+    fi
+fi
+
+# Auto-discover all running and stopped containers
+log "Discovering Docker containers..."
+CONTAINERS=$(docker ps -a --format '{% raw %}{{.Names}}{% endraw %}' 2>/dev/null || true)
+
+if [ -z "$CONTAINERS" ]; then
+    log "No Docker containers found to backup"
+    exit 0
+fi
+
+CONTAINER_COUNT=$(echo "$CONTAINERS" | wc -l)
+log "Found $CONTAINER_COUNT container(s) to backup"
+
+# Backup Docker compose files and configurations
+log "Backing up Docker Compose files and configurations..."
+mkdir -p "$BACKUP_DIR/compose"
+
+# Common locations for docker-compose files
+for compose_dir in /opt/docker /opt/containers /home/*/docker-compose /root/docker-compose; do
+    if [ -d "$compose_dir" ]; then
+        log "Backing up compose directory: $compose_dir"
+        rsync -a "$compose_dir/" "$BACKUP_DIR/compose/$(basename $compose_dir)/" 2>/dev/null || true
+    fi
+done
+
+# Backup individual container configurations
+mkdir -p "$BACKUP_DIR/containers"
+
+for container in $CONTAINERS; do
+    log "Processing container: $container"
+    
+    # Create container-specific backup directory
+    CONTAINER_DIR="$BACKUP_DIR/containers/$container"
+    mkdir -p "$CONTAINER_DIR"
+    
+    # Export container configuration as JSON
+    log "  Exporting configuration for $container"
+    docker inspect "$container" > "$CONTAINER_DIR/inspect.json" 2>/dev/null || log "  WARNING: Failed to inspect $container"
+    
+    # Export container logs (last 1000 lines)
+    log "  Exporting logs for $container"
+    docker logs --tail 1000 "$container" > "$CONTAINER_DIR/logs.txt" 2>&1 || log "  WARNING: Failed to get logs for $container"
+    
+    # Get container's volumes
+    VOLUMES=$(docker inspect -f '{% raw %}{{ range .Mounts }}{{ .Source }}:{{ .Destination }}:{{ .Type }}{{ println }}{{ end }}{% endraw %}' "$container" 2>/dev/null || true)
+    
+    if [ -n "$VOLUMES" ]; then
+        mkdir -p "$CONTAINER_DIR/volumes"
+        log "  Recording volume information for $container"
+        
+        while IFS=: read -r source dest type; do
+            if [ -n "$source" ] && [ -n "$dest" ]; then
+                # Only backup config directories, skip large data/media volumes
+                # Skip paths containing: /data, /media, /downloads, /tv, /movies, /music
+                if [[ "$dest" =~ /(data|media|downloads|tv|movies|music)$ ]] || [[ "$source" =~ /(data|media|downloads|tv|movies|music)/ ]]; then
+                    log "    Skipping large data volume: $source -> $dest (type: $type)"
+                    # Just record the volume info without backing up data
+                    VOLUME_NAME=$(basename "$dest" | sed 's/[^a-zA-Z0-9._-]/_/g')
+                    echo "Source: $source" > "$CONTAINER_DIR/volumes/${VOLUME_NAME}.info"
+                    echo "Destination: $dest" >> "$CONTAINER_DIR/volumes/${VOLUME_NAME}.info"
+                    echo "Type: $type" >> "$CONTAINER_DIR/volumes/${VOLUME_NAME}.info"
+                    echo "Skipped: true (data volume)" >> "$CONTAINER_DIR/volumes/${VOLUME_NAME}.info"
+                elif [ "$type" = "bind" ] || [ "$type" = "volume" ]; then
+                    if [ -e "$source" ]; then
+                        # Check size before backing up
+                        SIZE=$(du -sm "$source" 2>/dev/null | cut -f1 || echo "0")
+                        if [ "$SIZE" -gt 1000 ]; then
+                            log "    Skipping large volume (${SIZE}MB): $source -> $dest"
+                            VOLUME_NAME=$(basename "$dest" | sed 's/[^a-zA-Z0-9._-]/_/g')
+                            echo "Source: $source" > "$CONTAINER_DIR/volumes/${VOLUME_NAME}.info"
+                            echo "Destination: $dest" >> "$CONTAINER_DIR/volumes/${VOLUME_NAME}.info"
+                            echo "Type: $type" >> "$CONTAINER_DIR/volumes/${VOLUME_NAME}.info"
+                            echo "Size: ${SIZE}MB" >> "$CONTAINER_DIR/volumes/${VOLUME_NAME}.info"
+                            echo "Skipped: true (too large)" >> "$CONTAINER_DIR/volumes/${VOLUME_NAME}.info"
+                        else
+                            VOLUME_NAME=$(basename "$dest" | sed 's/[^a-zA-Z0-9._-]/_/g')
+                            log "    Backing up volume (${SIZE}MB): $source -> $dest (type: $type)"
+                            
+                            # Create a marker file with volume info
+                            echo "Source: $source" > "$CONTAINER_DIR/volumes/${VOLUME_NAME}.info"
+                            echo "Destination: $dest" >> "$CONTAINER_DIR/volumes/${VOLUME_NAME}.info"
+                            echo "Type: $type" >> "$CONTAINER_DIR/volumes/${VOLUME_NAME}.info"
+                            echo "Size: ${SIZE}MB" >> "$CONTAINER_DIR/volumes/${VOLUME_NAME}.info"
+                            
+                            # Backup the volume data
+                            rsync -a "$source/" "$CONTAINER_DIR/volumes/$VOLUME_NAME/" 2>/dev/null || log "    WARNING: Failed to backup volume $source"
+                        fi
+                    else
+                        log "    WARNING: Volume source does not exist: $source"
+                    fi
+                fi
+            fi
+        done <<< "$VOLUMES"
+    else
+        log "  No volumes found for $container"
+    fi
+done
+
+# Backup Docker networks
+log "Backing up Docker networks..."
+docker network ls --format '{% raw %}{{.Name}}{% endraw %}' > "$BACKUP_DIR/networks.txt" 2>/dev/null || true
+docker network ls --format 'json' > "$BACKUP_DIR/networks.json" 2>/dev/null || true
+
+# Backup Docker volumes list
+log "Backing up Docker volumes list..."
+docker volume ls --format '{% raw %}{{.Name}}{% endraw %}' > "$BACKUP_DIR/volumes.txt" 2>/dev/null || true
+
+# Create a backup manifest
+log "Creating backup manifest..."
+cat > "$BACKUP_DIR/manifest.txt" <<EOF
+Backup Date: $(date)
+Hostname: $(hostname)
+Container Count: $CONTAINER_COUNT
+Docker Version: $(docker version --format '{% raw %}{{.Server.Version}}{% endraw %}' 2>/dev/null || echo "unknown")
+
+Containers:
+$(echo "$CONTAINERS" | sed 's/^/  - /')
+
+EOF
+
+# Upload to PBS if enabled
+if [ "$PBS_ENABLED" = true ]; then
+    log "Uploading backups to Proxmox Backup Server..."
+    
+    # Create backup ID using hostname and timestamp
+    BACKUP_ID="docker-${TIMESTAMP}"
+    
+    log "Backing up to PBS repository: $PBS_REPOSITORY"
+    
+    # Execute PBS backup - backup the entire directory
+    proxmox-backup-client backup \
+        "docker-backup.pxar:$BACKUP_DIR" \
+        --ns "$PBS_NAMESPACE" \
+        --backup-id "$BACKUP_ID" \
+        --backup-time "$(date +%s)"
+    
+    if [ $? -eq 0 ]; then
+        log "Successfully uploaded backups to PBS"
+        
+        # List recent backups
+        log "Recent PBS backups:"
+        proxmox-backup-client snapshot list --ns "$PBS_NAMESPACE" | tail -n 5
+    else
+        log "WARNING: Failed to upload backups to PBS"
+    fi
+else
+    log "PBS backup disabled or unavailable, backups remain in $BACKUP_DIR"
+    log "WARNING: Local backups will be deleted on script exit unless PBS is enabled"
+fi
+
+log "Docker PBS backup process completed successfully"
