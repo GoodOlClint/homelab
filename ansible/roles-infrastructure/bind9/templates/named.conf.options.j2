@@ -1,0 +1,12 @@
+options {
+    directory "/var/cache/bind";
+    forwarders {
+        {{ adguard_ip | default('172.16.100.15') }};
+    };
+    listen-on { any; };
+    allow-query { any; };
+    recursion yes;
+    dnssec-validation no;
+    auth-nxdomain no;
+    listen-on-v6 { any; };
+};

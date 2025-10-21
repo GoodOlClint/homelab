@@ -1,0 +1,10 @@
+$TTL    604800
+@       IN      SOA     ns.core.goodolclint.internal. admin.core.goodolclint.internal. (
+                              2         ; Serial
+                         604800         ; Refresh
+                          86400         ; Retry
+                        2419200         ; Expire
+                         604800 )       ; Negative Cache TTL
+;
+@       IN      NS      ns.core.goodolclint.internal.
+ns      IN      A       {{ bind9_ns_ip | default('172.16.100.53') }}
