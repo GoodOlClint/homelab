@@ -105,7 +105,17 @@ log "Found $CONTAINER_COUNT container(s) to backup"
 log "Backing up Docker Compose files and configurations..."
 mkdir -p "$BACKUP_DIR/compose"
 
-# Common locations for docker-compose files
+# Backup specific docker-compose files
+for compose_file in /opt/docker-compose.yml /opt/docker-compose.yaml /opt/.env \
+                    /docker/docker-compose*.yml /docker/docker-compose*.yaml \
+                    /root/docker-compose.yml /root/docker-compose.yaml; do
+    if [ -f "$compose_file" ]; then
+        log "Backing up compose file: $compose_file"
+        cp -a "$compose_file" "$BACKUP_DIR/compose/" 2>/dev/null || true
+    fi
+done
+
+# Common locations for docker-compose directories
 for compose_dir in /opt/docker /opt/containers /home/*/docker-compose /root/docker-compose; do
     if [ -d "$compose_dir" ]; then
         log "Backing up compose directory: $compose_dir"
