@@ -7,9 +7,17 @@ locals {
     {
       name         = "dns"
       vlans        = ["vlan100", "vlan20", "vlan110", "vlan120", "vlan121", "vlan130"]
-      ip_offset    = 53 # Fixed IP .53 for DNS (port 53 reference)
+      ip_offset    = 53 # Fixed IP .53 for Bind9 DNS
       cpu_cores    = 4
-      memory_mb    = 2048 # Low memory for AdGuard Home DNS
+      memory_mb    = 2048
+      disk_size_gb = 20
+    },
+    {
+      name         = "adguard"
+      vlans        = ["vlan2", "vlan100"]
+      ip_offset    = 15 # .15 IP for AdGuard on dmz
+      cpu_cores    = 4
+      memory_mb    = 2048
       disk_size_gb = 20
     },
     {

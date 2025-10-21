@@ -119,11 +119,9 @@ resource "proxmox_virtual_environment_file" "network_data" {
           gateway    = iface.gw != null ? iface.gw : ""
           gateway_v6 = iface.gw_v6 != null ? iface.gw_v6 : ""
           macaddress = iface.macaddress != null ? iface.macaddress : ""
-          # Add DNS servers from Unifi data for static IPs
-          dns_servers = !iface.dhcp ? concat(
-            try(data.unifi_network.networks[vlan_key].dhcp_dns, ["172.16.100.53", "172.16.100.1"]),
-            try(data.unifi_network.networks[vlan_key].dhcp_v6_dns != null ? data.unifi_network.networks[vlan_key].dhcp_v6_dns : [], [])
-          ) : []
+          # Don't configure DNS in cloud-init - let Ansible handle it
+          # This prevents VM recreation when DNS configuration changes
+          dns_servers = []
         }
       ]
     })
@@ -172,6 +170,16 @@ resource "proxmox_virtual_environment_vm" "vms" {
     datastore_id         = coalesce(each.value.disk_storage, var.primary_disk_storage)
     user_data_file_id    = proxmox_virtual_environment_file.user_data[each.key].id
     network_data_file_id = proxmox_virtual_environment_file.network_data[each.key].id
+  }
+
+  # Prevent VM recreation when cloud-init files change
+  # Cloud-init only runs on first boot, so changes after that don't matter
+  # Use Ansible for runtime configuration changes instead
+  lifecycle {
+    ignore_changes = [
+      initialization[0].user_data_file_id,
+      initialization[0].network_data_file_id,
+    ]
   }
 
   dynamic "network_device" {
