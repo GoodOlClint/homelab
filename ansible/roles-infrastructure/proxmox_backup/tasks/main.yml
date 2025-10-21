@@ -229,13 +229,39 @@
 # ACL Configuration
 - name: Grant backup user DatastoreBackup permissions
   shell: |
-    proxmox-backup-manager acl update /datastore/{{ item.name }} \
-      --auth-id backup@pbs \
-      --role DatastoreBackup
+    proxmox-backup-manager acl update /datastore/{{ item.name }} DatastoreBackup \
+      --auth-id backup@pbs
   loop: "{{ pbs_datastores }}"
-  register: acl_updated
+  register: acl_backup_updated
   failed_when: false
-  changed_when: acl_updated.rc == 0
+  changed_when: acl_backup_updated.rc == 0
+
+- name: Grant backup user DatastoreAudit permissions
+  shell: |
+    proxmox-backup-manager acl update /datastore/{{ item.name }} DatastoreAudit \
+      --auth-id backup@pbs
+  loop: "{{ pbs_datastores }}"
+  register: acl_audit_updated
+  failed_when: false
+  changed_when: acl_audit_updated.rc == 0
+
+- name: Grant API token DatastoreBackup permissions
+  shell: |
+    proxmox-backup-manager acl update /datastore/{{ item.name }} DatastoreBackup \
+      --auth-id 'backup@pbs!backup-token'
+  loop: "{{ pbs_datastores }}"
+  register: acl_token_backup_updated
+  failed_when: false
+  changed_when: acl_token_backup_updated.rc == 0
+
+- name: Grant API token DatastoreAudit permissions
+  shell: |
+    proxmox-backup-manager acl update /datastore/{{ item.name }} DatastoreAudit \
+      --auth-id 'backup@pbs!backup-token'
+  loop: "{{ pbs_datastores }}"
+  register: acl_token_audit_updated
+  failed_when: false
+  changed_when: acl_token_audit_updated.rc == 0
 
 # API Token Generation
 - name: Check if API token exists for backup user
