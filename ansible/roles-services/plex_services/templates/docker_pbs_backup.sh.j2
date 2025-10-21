@@ -222,8 +222,8 @@ EOF
 if [ "$PBS_ENABLED" = true ]; then
     log "Uploading backups to Proxmox Backup Server..."
     
-    # Create backup ID using hostname and timestamp
-    BACKUP_ID="docker-${TIMESTAMP}"
+    # Create backup ID using actual hostname (no timestamp - PBS adds that)
+    BACKUP_ID="${BACKUP_HOSTNAME}-docker"
     
     log "Backing up to PBS repository: $PBS_REPOSITORY"
     

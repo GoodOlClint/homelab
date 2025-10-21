@@ -162,8 +162,8 @@ fi
 if [ "$PBS_ENABLED" = true ]; then
     log "Uploading backups to Proxmox Backup Server..."
     
-    # Create backup ID using hostname and timestamp
-    BACKUP_ID="plex-config-${TIMESTAMP}"
+    # Create backup ID (PBS adds timestamp automatically)
+    BACKUP_ID="plex-config"
     
     log "Backing up to PBS repository: $PBS_REPOSITORY"
     
