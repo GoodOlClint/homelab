@@ -1,3 +1,40 @@
+# Terraform sensitive files
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+terraform.tfstate
+terraform.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+**/terraform.tfstate.d/
+
+# Ansible sensitive files
+*.retry
+group_vars/vault.yml
+group_vars/vault/
+host_vars/vault/
+*.vault
+
+# SSH keys and certificates
+*.pem
+*.key
+!*.pub
+*.crt
+*.csr
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+
+# Secrets and credentials
+.env
+.env.*
+!.env.example
+secrets.yml
+secrets.yaml
+credentials.yml
+credentials.yaml
+
 # macOS system files
 .DS_Store
 .AppleDouble
