@@ -1,0 +1,44 @@
+# SNMP Exporter Configuration for Synology NAS
+synology:
+  walk:
+    - sysUpTime
+    - ifNumber
+    - ifDescr
+    - ifType
+    - ifSpeed
+    - ifPhysAddress
+    - ifAdminStatus
+    - ifOperStatus
+    - ifInOctets
+    - ifOutOctets
+    - ifInErrors
+    - ifOutErrors
+    - hrStorageDescr
+    - hrStorageAllocationUnits
+    - hrStorageSize
+    - hrStorageUsed
+    - hrProcessorLoad
+    - laLoad
+    - ssCpuRawUser
+    - ssCpuRawSystem
+    - ssCpuRawIdle
+    - memTotalReal
+    - memAvailReal
+    - memTotalFree
+    # Synology-specific OIDs
+    - 1.3.6.1.4.1.6574.1  # Synology System
+    - 1.3.6.1.4.1.6574.2  # Synology Disk
+    - 1.3.6.1.4.1.6574.3  # Synology RAID
+    - 1.3.6.1.4.1.6574.4  # Synology UPS
+    - 1.3.6.1.4.1.6574.5  # Synology System Fan Status
+    - 1.3.6.1.4.1.6574.6  # Synology CPU Fan Status
+  lookups:
+    - source_indexes: [ifIndex]
+      lookup: ifDescr
+    - source_indexes: [hrStorageIndex]
+      lookup: hrStorageDescr
+  overrides:
+    ifPhysAddress:
+      type: PhysAddress48
+    ifOperStatus:
+      type: gauge

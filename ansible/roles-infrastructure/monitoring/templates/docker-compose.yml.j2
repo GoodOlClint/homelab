@@ -1,0 +1,208 @@
+version: '3.8'
+
+services:
+  # OpenObserve - Metrics and Logs Storage
+  openobserve:
+    image: public.ecr.aws/zinclabs/openobserve:latest
+    container_name: openobserve
+    restart: unless-stopped
+    ports:
+      - "{{ openobserve_listen_port }}:5080"
+    env_file:
+      - openobserve/.env
+    volumes:
+      - /var/lib/openobserve:/data
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - monitoring
+
+  # Grafana - Visualization and Dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD={{ grafana_admin_password }}
+      - GF_INSTALL_PLUGINS=
+      - GF_SERVER_ROOT_URL=http://{{ ansible_host }}:3000
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+    volumes:
+      - /var/lib/grafana:/var/lib/grafana
+      - /opt/monitoring/grafana/provisioning:/etc/grafana/provisioning
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - monitoring
+    depends_on:
+      - openobserve
+
+  # Prometheus - Metrics Collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    volumes:
+      - /opt/monitoring/prometheus:/etc/prometheus
+      - prometheus-data:/prometheus
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - monitoring
+
+  # Blackbox Exporter - Endpoint Monitoring (DNS, HTTP, ICMP)
+  blackbox:
+    image: prom/blackbox-exporter:latest
+    container_name: blackbox-exporter
+    restart: unless-stopped
+    ports:
+      - "9115:9115"
+    command:
+      - '--config.file=/config/blackbox.yml'
+    volumes:
+      - /opt/monitoring/blackbox:/config
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9115/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - monitoring
+
+  # Speedtest Exporter - Network Speed Monitoring
+  speedtest:
+    image: miguelndecarvalho/speedtest-exporter:latest
+    container_name: speedtest-exporter
+    restart: unless-stopped
+    ports:
+      - "9798:9798"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9798/metrics"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - monitoring
+
+  # Node Exporter - System Metrics for OpenObserve Host
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    restart: unless-stopped
+    ports:
+      - "9100:9100"
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9100/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - monitoring
+
+  # Proxmox VE Exporter - Proxmox Host Metrics
+  proxmox-exporter:
+    image: promprd/prometheus-pve-exporter:latest
+    container_name: proxmox-exporter
+    restart: unless-stopped
+    ports:
+      - "9221:9221"
+    volumes:
+      - /opt/monitoring/proxmox:/etc/pve-exporter
+    environment:
+      - PVE_USER={{ proxmox_user | default('monitoring@pve') }}
+      - PVE_PASSWORD={{ proxmox_password }}
+      - PVE_VERIFY_SSL={{ proxmox_verify_ssl | default('false') }}
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9221/metrics"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - monitoring
+
+  # Synology SNMP Exporter - NAS Metrics
+  snmp-exporter:
+    image: prom/snmp-exporter:latest
+    container_name: snmp-exporter
+    restart: unless-stopped
+    ports:
+      - "9116:9116"
+    volumes:
+      - /opt/monitoring/snmp:/etc/snmp_exporter
+    command:
+      - '--config.file=/etc/snmp_exporter/snmp.yml'
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9116/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - monitoring
+
+  # UniFi Poller - UniFi Controller Metrics
+  unifi-poller:
+    image: golift/unifi-poller:latest
+    container_name: unifi-poller
+    restart: unless-stopped
+    ports:
+      - "9130:9130"
+    environment:
+      - UP_UNIFI_DEFAULT_ROLE=unifi-poller
+      - UP_UNIFI_DEFAULT_URL={{ unifi_controller_url }}
+      - UP_UNIFI_DEFAULT_USER={{ unifi_user }}
+      - UP_UNIFI_DEFAULT_PASS={{ unifi_password }}
+      - UP_UNIFI_DEFAULT_VERIFY_SSL={{ unifi_verify_ssl | default('false') }}
+      - UP_PROMETHEUS_HTTP_LISTEN=0.0.0.0:9130
+      - UP_PROMETHEUS_NAMESPACE=unifi
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9130/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - monitoring
+
+networks:
+  monitoring:
+    driver: bridge
+
+volumes:
+  prometheus-data:

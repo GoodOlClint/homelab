@@ -1,0 +1,4 @@
+---
+# Default variables for monitoring role
+# Note: Override in group_vars/all.yml for production values
+grafana_admin_password: "admin"

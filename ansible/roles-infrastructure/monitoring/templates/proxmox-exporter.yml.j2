@@ -1,0 +1,14 @@
+# Proxmox VE Exporter Configuration
+default:
+  user: {{ proxmox_user }}
+  password: {{ proxmox_password }}
+  verify_ssl: {{ proxmox_verify_ssl }}
+  timeout: 5
+  module: [pve]
+  
+pve:
+  - name: proxmox
+    url: https://{{ proxmox_host }}:8006
+    user: {{ proxmox_user }}
+    password: {{ proxmox_password }}
+    verify_ssl: {{ proxmox_verify_ssl }}

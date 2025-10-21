@@ -1,0 +1,155 @@
+---
+- name: Install required packages
+  apt:
+    name:
+      - docker.io
+      - python3-pip
+      - python3-docker
+    state: present
+    update_cache: yes
+
+- name: Ensure Docker is started and enabled
+  systemd:
+    name: docker
+    state: started
+    enabled: yes
+
+- name: Create Docker CLI plugins directory
+  file:
+    path: /usr/libexec/docker/cli-plugins
+    state: directory
+    mode: '0755'
+    owner: root
+    group: root
+
+- name: Download Docker Compose plugin
+  get_url:
+    url: https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-linux-x86_64
+    dest: /usr/libexec/docker/cli-plugins/docker-compose
+    mode: '0755'
+    owner: root
+    group: root
+
+- name: Create monitoring directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - /opt/monitoring
+    - /opt/monitoring/openobserve
+    - /opt/monitoring/grafana
+    - /opt/monitoring/grafana/provisioning
+    - /opt/monitoring/grafana/provisioning/datasources
+    - /opt/monitoring/grafana/provisioning/dashboards
+    - /opt/monitoring/prometheus
+    - /opt/monitoring/blackbox
+    - /opt/monitoring/proxmox
+    - /opt/monitoring/snmp
+    - /var/lib/openobserve
+
+- name: Create Grafana data directory with correct ownership
+  file:
+    path: /var/lib/grafana
+    state: directory
+    mode: '0755'
+    owner: 472
+    group: 472
+
+- name: Create Docker Compose file for monitoring stack
+  template:
+    src: docker-compose.yml.j2
+    dest: /opt/monitoring/docker-compose.yml
+    mode: '0644'
+
+- name: Create OpenObserve configuration
+  template:
+    src: openobserve.env.j2
+    dest: /opt/monitoring/openobserve/.env
+    mode: '0600'
+
+- name: Create Grafana datasource configuration
+  template:
+    src: grafana-datasource.yml.j2
+    dest: /opt/monitoring/grafana/provisioning/datasources/openobserve.yml
+    mode: '0644'
+
+- name: Create Grafana dashboard provisioning
+  template:
+    src: grafana-dashboards.yml.j2
+    dest: /opt/monitoring/grafana/provisioning/dashboards/default.yml
+    mode: '0644'
+
+- name: Create System Overview dashboard
+  copy:
+    src: dashboard-system-overview.json
+    dest: /opt/monitoring/grafana/provisioning/dashboards/system-overview.json
+    mode: '0644'
+
+- name: Create Docker Monitoring dashboard
+  copy:
+    src: dashboard-docker.json
+    dest: /opt/monitoring/grafana/provisioning/dashboards/docker.json
+    mode: '0644'
+
+- name: Create DNS Monitoring dashboard
+  copy:
+    src: dashboard-dns.json
+    dest: /opt/monitoring/grafana/provisioning/dashboards/dns.json
+    mode: '0644'
+
+- name: Create Prometheus configuration
+  template:
+    src: prometheus.yml.j2
+    dest: /opt/monitoring/prometheus/prometheus.yml
+    mode: '0644'
+
+- name: Create Blackbox Exporter configuration
+  template:
+    src: blackbox.yml.j2
+    dest: /opt/monitoring/blackbox/blackbox.yml
+    mode: '0644'
+
+- name: Create SNMP Exporter configuration for Synology
+  template:
+    src: snmp.yml.j2
+    dest: /opt/monitoring/snmp/snmp.yml
+    mode: '0644'
+
+- name: Create Proxmox Exporter configuration
+  template:
+    src: proxmox-exporter.yml.j2
+    dest: /opt/monitoring/proxmox/pve.yml
+    mode: '0600'
+
+- name: Start monitoring stack
+  community.docker.docker_compose_v2:
+    project_src: /opt/monitoring
+    state: present
+    pull: always
+
+- name: Wait for OpenObserve to be ready
+  uri:
+    url: "http://localhost:{{ openobserve_listen_port }}/healthz"
+    status_code: 200
+  register: result
+  until: result.status == 200
+  retries: 30
+  delay: 10
+
+- name: Wait for Grafana to be ready
+  uri:
+    url: "http://localhost:3000/api/health"
+    status_code: 200
+  register: result
+  until: result.status == 200
+  retries: 30
+  delay: 10
+
+- name: Display access information
+  debug:
+    msg:
+      - "OpenObserve is available at: http://{{ ansible_host }}:{{ openobserve_listen_port }}"
+      - "Grafana is available at: http://{{ ansible_host }}:3000"
+      - "Prometheus is available at: http://{{ ansible_host }}:9090"
+      - "Grafana default credentials: admin / {{ grafana_admin_password }}"
