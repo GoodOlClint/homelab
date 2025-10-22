@@ -10,7 +10,10 @@ services:
       - "{{ openobserve_listen_port }}:5080"
     env_file:
       - openobserve/.env
+    environment:
+      - TZ={{ timezone }}
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - /var/lib/openobserve:/data
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:5080/healthz"]
@@ -29,12 +32,14 @@ services:
     ports:
       - "3000:3000"
     environment:
+      - TZ={{ timezone }}
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD={{ grafana_admin_password }}
       - GF_INSTALL_PLUGINS=
       - GF_SERVER_ROOT_URL=http://{{ ansible_host }}:3000
       - GF_AUTH_ANONYMOUS_ENABLED=false
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - /var/lib/grafana:/var/lib/grafana
       - /opt/monitoring/grafana/provisioning:/etc/grafana/provisioning
     healthcheck:
@@ -61,7 +66,10 @@ services:
       - '--web.console.libraries=/etc/prometheus/console_libraries'
       - '--web.console.templates=/etc/prometheus/consoles'
       - '--web.enable-lifecycle'
+    environment:
+      - TZ={{ timezone }}
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - /opt/monitoring/prometheus:/etc/prometheus
       - prometheus-data:/prometheus
     healthcheck:
@@ -82,7 +90,10 @@ services:
       - "9115:9115"
     command:
       - '--config.file=/config/blackbox.yml'
+    environment:
+      - TZ={{ timezone }}
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - /opt/monitoring/blackbox:/config
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:9115/health"]
@@ -100,6 +111,10 @@ services:
     restart: unless-stopped
     ports:
       - "9798:9798"
+    environment:
+      - TZ={{ timezone }}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:9798/metrics"]
       interval: 60s
@@ -121,7 +136,10 @@ services:
       - '--path.sysfs=/host/sys'
       - '--path.rootfs=/rootfs'
       - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    environment:
+      - TZ={{ timezone }}
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
       - /:/rootfs:ro
@@ -136,16 +154,19 @@ services:
 
   # Proxmox VE Exporter - Proxmox Host Metrics
   proxmox-exporter:
-    image: promprd/prometheus-pve-exporter:latest
+    image: prompve/prometheus-pve-exporter
     container_name: proxmox-exporter
     restart: unless-stopped
     ports:
       - "9221:9221"
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - /opt/monitoring/proxmox:/etc/pve-exporter
     environment:
+      - TZ={{ timezone }}
       - PVE_USER={{ proxmox_user | default('monitoring@pve') }}
-      - PVE_PASSWORD={{ proxmox_password }}
+      - PVE_TOKEN_NAME={{ proxmox_token_name }}
+      - PVE_TOKEN_VALUE={{ proxmox_token_value }}
       - PVE_VERIFY_SSL={{ proxmox_verify_ssl | default('false') }}
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:9221/metrics"]
@@ -156,6 +177,26 @@ services:
     networks:
       - monitoring
 
+  # AxoSyslog - Syslog receiver and forwarder
+  axosyslog:
+    image: ghcr.io/axoflow/axosyslog:latest
+    container_name: axosyslog
+    restart: unless-stopped
+    ports:
+      - "5514:5514/udp"  # Syslog UDP
+      - "5514:5514/tcp"  # Syslog TCP
+      - "6514:6514/tcp"  # Syslog TLS
+    environment:
+      - TZ={{ timezone }}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /opt/monitoring/axosyslog:/etc/syslog-ng:ro
+    command: ["-edv"]
+    networks:
+      - monitoring
+    depends_on:
+      - openobserve
+
   # Synology SNMP Exporter - NAS Metrics
   snmp-exporter:
     image: prom/snmp-exporter:latest
@@ -164,9 +205,12 @@ services:
     ports:
       - "9116:9116"
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - /opt/monitoring/snmp:/etc/snmp_exporter
     command:
       - '--config.file=/etc/snmp_exporter/snmp.yml'
+    environment:
+      - TZ={{ timezone }}
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:9116/metrics"]
       interval: 30s
@@ -184,6 +228,7 @@ services:
     ports:
       - "9130:9130"
     environment:
+      - TZ={{ timezone }}
       - UP_UNIFI_DEFAULT_ROLE=unifi-poller
       - UP_UNIFI_DEFAULT_URL={{ unifi_controller_url }}
       - UP_UNIFI_DEFAULT_USER={{ unifi_user }}
@@ -191,8 +236,38 @@ services:
       - UP_UNIFI_DEFAULT_VERIFY_SSL={{ unifi_verify_ssl | default('false') }}
       - UP_PROMETHEUS_HTTP_LISTEN=0.0.0.0:9130
       - UP_PROMETHEUS_NAMESPACE=unifi
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:9130/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - monitoring
+
+  # PBS Exporter - Proxmox Backup Server Metrics
+  pbs-exporter:
+    image: ghcr.io/natrontech/pbs-exporter:latest
+    container_name: pbs-exporter
+    user: '65534'
+    restart: unless-stopped
+    ports:
+      - "10019:10019"
+    environment:
+      - TZ={{ timezone }}
+      - PBS_ENDPOINT=https://{{ pbs_host }}:8007
+      - PBS_USERNAME={{ pbs_username | default('root@pam') }}
+      - PBS_API_TOKEN_NAME={{ pbs_api_token_name }}
+      - PBS_API_TOKEN={{ pbs_api_token }}
+      - PBS_INSECURE={{ pbs_insecure | default('false') }}
+      - PBS_TIMEOUT=5s
+      - PBS_LOGLEVEL=info
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:10019/metrics"]
       interval: 30s
       timeout: 10s
       retries: 3

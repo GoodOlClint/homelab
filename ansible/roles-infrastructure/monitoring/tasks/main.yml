@@ -46,6 +46,7 @@
     - /opt/monitoring/blackbox
     - /opt/monitoring/proxmox
     - /opt/monitoring/snmp
+    - /opt/monitoring/axosyslog
     - /var/lib/openobserve
 
 - name: Create Grafana data directory with correct ownership
@@ -67,6 +68,12 @@
     src: openobserve.env.j2
     dest: /opt/monitoring/openobserve/.env
     mode: '0600'
+
+- name: Create AxoSyslog configuration
+  template:
+    src: axosyslog.conf.j2
+    dest: /opt/monitoring/axosyslog/syslog-ng.conf
+    mode: '0644'
 
 - name: Create Grafana datasource configuration
   template:
@@ -98,6 +105,12 @@
     dest: /opt/monitoring/grafana/provisioning/dashboards/dns.json
     mode: '0644'
 
+- name: Create PBS Overview dashboard
+  copy:
+    src: dashboard-pbs-overview.json
+    dest: /opt/monitoring/grafana/provisioning/dashboards/pbs-overview.json
+    mode: '0644'
+
 - name: Create Prometheus configuration
   template:
     src: prometheus.yml.j2
@@ -115,12 +128,6 @@
     src: snmp.yml.j2
     dest: /opt/monitoring/snmp/snmp.yml
     mode: '0644'
-
-- name: Create Proxmox Exporter configuration
-  template:
-    src: proxmox-exporter.yml.j2
-    dest: /opt/monitoring/proxmox/pve.yml
-    mode: '0600'
 
 - name: Start monitoring stack
   community.docker.docker_compose_v2:

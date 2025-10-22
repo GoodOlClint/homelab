@@ -39,6 +39,10 @@ pbs_users:
     comment: "Backup user for Proxmox Backup Client"
     # Password will be set from vault
     # API token will be auto-generated
+  - username: monitoring
+    realm: pbs
+    comment: "Monitoring user for PBS Exporter (read-only)"
+    # API token will be auto-generated (no password needed for token auth)
 
 # PBS root password (default admin user)
 pbs_root_password: "{{ pbs_admin_password | default('changeme') }}"

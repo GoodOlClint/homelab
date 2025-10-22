@@ -40,7 +40,6 @@
   roles:
     - dns_config
     - monitoring
-    - openobserve_dashboards
     - rsyslog_client
     - telegraf
 

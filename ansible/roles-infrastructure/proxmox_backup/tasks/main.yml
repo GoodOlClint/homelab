@@ -288,6 +288,67 @@
       pbs_backup_token: "{{ pbs_token_output.stdout }}"
   when: pbs_token_output is changed and pbs_token_output.stdout is defined
 
+# API Token Generation - Monitoring User
+- name: Check if API token exists for monitoring user
+  shell: proxmox-backup-manager user list-tokens monitoring@pbs --output-format json
+  register: pbs_monitoring_token_list
+  changed_when: false
+  failed_when: false
+
+- name: Generate API token for monitoring user
+  shell: |
+    proxmox-backup-manager user generate-token monitoring@pbs monitoring-token
+  register: pbs_monitoring_token_output
+  when: pbs_monitoring_token_list.stdout is defined and (pbs_monitoring_token_list.stdout | from_json | length == 0)
+
+- name: Display monitoring API token (save this securely!)
+  debug:
+    msg: |
+      ============================================
+      PBS Monitoring API Token Generated (SAVE THIS!):
+      User: monitoring@pbs
+      Token: monitoring-token
+      Value: {{ pbs_monitoring_token_output.stdout }}
+      ============================================
+      Add to ansible vault:
+      pbs_monitoring_token: "{{ pbs_monitoring_token_output.stdout }}"
+  when: pbs_monitoring_token_output is changed and pbs_monitoring_token_output.stdout is defined
+
+# Grant monitoring user Audit (read-only) permissions
+- name: Grant monitoring user Audit permissions on datastores
+  shell: |
+    proxmox-backup-manager acl update /datastore/{{ item.name }} Audit \
+      --auth-id monitoring@pbs
+  loop: "{{ pbs_datastores }}"
+  register: acl_monitoring_updated
+  failed_when: false
+  changed_when: acl_monitoring_updated.rc == 0
+
+- name: Grant monitoring token Audit permissions on datastores
+  shell: |
+    proxmox-backup-manager acl update /datastore/{{ item.name }} Audit \
+      --auth-id 'monitoring@pbs!monitoring-token'
+  loop: "{{ pbs_datastores }}"
+  register: acl_monitoring_token_updated
+  failed_when: false
+  changed_when: acl_monitoring_token_updated.rc == 0
+
+- name: Grant monitoring user Audit permissions on system
+  shell: |
+    proxmox-backup-manager acl update / Audit \
+      --auth-id monitoring@pbs
+  register: acl_monitoring_system_updated
+  failed_when: false
+  changed_when: acl_monitoring_system_updated.rc == 0
+
+- name: Grant monitoring token Audit permissions on system
+  shell: |
+    proxmox-backup-manager acl update / Audit \
+      --auth-id 'monitoring@pbs!monitoring-token'
+  register: acl_monitoring_token_system_updated
+  failed_when: false
+  changed_when: acl_monitoring_token_system_updated.rc == 0
+
 # Verification jobs
 - name: Configure verification jobs
   shell: |

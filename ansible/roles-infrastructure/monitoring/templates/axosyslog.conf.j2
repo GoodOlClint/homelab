@@ -1,0 +1,66 @@
+@version: 4.8
+@include "scl.conf"
+
+# Options
+options {
+    chain_hostnames(off);
+    flush_lines(0);
+    use_dns(no);
+    use_fqdn(no);
+    owner("root");
+    group("adm");
+    perm(0640);
+    stats_freq(0);
+    bad_hostname("^gconfd$");
+    time_reopen(10);
+    log_fifo_size(10000);
+    create_dirs(yes);
+};
+
+# Sources - Listen for syslog messages
+source s_network_udp {
+    network(
+        transport("udp")
+        port(5514)
+        flags(no-parse)
+    );
+};
+
+source s_network_tcp {
+    network(
+        transport("tcp")
+        port(5514)
+        flags(no-parse)
+    );
+};
+
+# Destination - OpenObserve using native driver
+destination d_openobserve {
+    openobserve-log(
+        url("http://openobserve")
+        port(5080)
+        organization("default")
+        stream("syslog")
+        user("{{ openobserve_root_user_email }}")
+        password("{{ openobserve_root_user_pass }}")
+    );
+};
+
+# Log path - Connect source to destination
+log {
+    source(s_network_udp);
+    source(s_network_tcp);
+    
+    # Parse syslog format
+    parser {
+        syslog-parser(flags(syslog-protocol));
+    };
+    
+    # Add additional fields
+    rewrite {
+        set("syslog", value("stream_name"));
+    };
+    
+    # Send to OpenObserve
+    destination(d_openobserve);
+};
