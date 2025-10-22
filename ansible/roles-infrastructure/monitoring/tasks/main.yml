@@ -111,6 +111,36 @@
     dest: /opt/monitoring/grafana/provisioning/dashboards/pbs-overview.json
     mode: '0644'
 
+- name: Create UniFi Sites dashboard
+  copy:
+    src: dashboard-unifi-sites.json
+    dest: /opt/monitoring/grafana/provisioning/dashboards/unifi-sites.json
+    mode: '0644'
+
+- name: Create UniFi Clients dashboard
+  copy:
+    src: dashboard-unifi-clients.json
+    dest: /opt/monitoring/grafana/provisioning/dashboards/unifi-clients.json
+    mode: '0644'
+
+- name: Create UniFi UAP dashboard
+  copy:
+    src: dashboard-unifi-uap.json
+    dest: /opt/monitoring/grafana/provisioning/dashboards/unifi-uap.json
+    mode: '0644'
+
+- name: Create UniFi USW dashboard
+  copy:
+    src: dashboard-unifi-usw.json
+    dest: /opt/monitoring/grafana/provisioning/dashboards/unifi-usw.json
+    mode: '0644'
+
+- name: Create UniFi DPI dashboard
+  copy:
+    src: dashboard-unifi-dpi.json
+    dest: /opt/monitoring/grafana/provisioning/dashboards/unifi-dpi.json
+    mode: '0644'
+
 - name: Create Prometheus configuration
   template:
     src: prometheus.yml.j2
