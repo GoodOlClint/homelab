@@ -122,6 +122,11 @@
     src: dashboard-unifi-clients.json
     dest: /opt/monitoring/grafana/provisioning/dashboards/unifi-clients.json
     mode: '0644'
+- name: Create Synology NAS dashboard
+  copy:
+    src: dashboard-synology.json
+    dest: /opt/monitoring/grafana/provisioning/dashboards/synology.json
+    mode: '0644'
 
 - name: Create Prometheus configuration
   template:
