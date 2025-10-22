@@ -17,7 +17,7 @@ locals {
       vlans        = ["vlan100", "vlan20"]
       cpu_cores    = 8
       memory_mb    = 16384
-      disk_size_gb = 40
+      disk_size_gb = 100
       needs_gpu    = true # GPU for hardware transcoding
     },
     {
