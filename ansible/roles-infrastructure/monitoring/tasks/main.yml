@@ -7,12 +7,18 @@
       - python3-docker
     state: present
     update_cache: yes
+  tags:
+    - monitoring
+    - docker
 
 - name: Ensure Docker is started and enabled
   systemd:
     name: docker
     state: started
     enabled: yes
+  tags:
+    - monitoring
+    - docker
 
 - name: Create Docker CLI plugins directory
   file:
@@ -21,6 +27,9 @@
     mode: '0755'
     owner: root
     group: root
+  tags:
+    - monitoring
+    - docker
 
 - name: Download Docker Compose plugin
   get_url:
@@ -29,6 +38,9 @@
     mode: '0755'
     owner: root
     group: root
+  tags:
+    - monitoring
+    - docker
 
 - name: Create monitoring directories
   file:
@@ -48,6 +60,8 @@
     - /opt/monitoring/snmp
     - /opt/monitoring/axosyslog
     - /var/lib/openobserve
+  tags:
+    - monitoring
 
 - name: Create Grafana data directory with correct ownership
   file:
@@ -56,101 +70,168 @@
     mode: '0755'
     owner: 472
     group: 472
+  tags:
+    - monitoring
+    - grafana
 
 - name: Create Docker Compose file for monitoring stack
   template:
     src: docker-compose.yml.j2
     dest: /opt/monitoring/docker-compose.yml
     mode: '0644'
+  tags:
+    - monitoring
+    - config
+    - docker
 
 - name: Create OpenObserve configuration
   template:
     src: openobserve.env.j2
     dest: /opt/monitoring/openobserve/.env
     mode: '0600'
+  tags:
+    - monitoring
+    - config
 
 - name: Create AxoSyslog configuration
   template:
     src: axosyslog.conf.j2
     dest: /opt/monitoring/axosyslog/syslog-ng.conf
     mode: '0644'
+  tags:
+    - monitoring
+    - config
 
 - name: Create Grafana datasource configuration
   template:
     src: grafana-datasource.yml.j2
     dest: /opt/monitoring/grafana/provisioning/datasources/openobserve.yml
     mode: '0644'
+  tags:
+    - monitoring
+    - grafana
+    - config
 
 - name: Create Grafana dashboard provisioning
   template:
     src: grafana-dashboards.yml.j2
     dest: /opt/monitoring/grafana/provisioning/dashboards/default.yml
     mode: '0644'
+  tags:
+    - monitoring
+    - grafana
+    - config
 
 - name: Create System Overview dashboard
   copy:
     src: dashboard-system-overview.json
     dest: /opt/monitoring/grafana/provisioning/dashboards/system-overview.json
     mode: '0644'
+  tags:
+    - monitoring
+    - grafana
+    - dashboards
 
 - name: Create Docker Monitoring dashboard
   copy:
     src: dashboard-docker.json
     dest: /opt/monitoring/grafana/provisioning/dashboards/docker.json
     mode: '0644'
+  tags:
+    - monitoring
+    - grafana
+    - dashboards
 
 - name: Create DNS Monitoring dashboard
   copy:
     src: dashboard-dns.json
     dest: /opt/monitoring/grafana/provisioning/dashboards/dns.json
     mode: '0644'
+  tags:
+    - monitoring
+    - grafana
+    - dashboards
 
 - name: Create PBS Overview dashboard
   copy:
     src: dashboard-pbs-overview.json
     dest: /opt/monitoring/grafana/provisioning/dashboards/pbs-overview.json
     mode: '0644'
+  tags:
+    - monitoring
+    - grafana
+    - dashboards
 
 - name: Create UniFi Sites dashboard
   copy:
     src: dashboard-unifi-sites.json
     dest: /opt/monitoring/grafana/provisioning/dashboards/unifi-sites.json
     mode: '0644'
+  tags:
+    - monitoring
+    - grafana
+    - dashboards
+    - unifi
 
 - name: Create UniFi Clients dashboard
   copy:
     src: dashboard-unifi-clients.json
     dest: /opt/monitoring/grafana/provisioning/dashboards/unifi-clients.json
     mode: '0644'
+  tags:
+    - monitoring
+    - grafana
+    - dashboards
+    - unifi
+
 - name: Create Synology NAS dashboard
   copy:
     src: dashboard-synology.json
     dest: /opt/monitoring/grafana/provisioning/dashboards/synology.json
     mode: '0644'
+  tags:
+    - monitoring
+    - grafana
+    - dashboards
+    - synology
 
 - name: Create Prometheus configuration
   template:
     src: prometheus.yml.j2
     dest: /opt/monitoring/prometheus/prometheus.yml
     mode: '0644'
+  tags:
+    - monitoring
+    - prometheus
+    - config
 
 - name: Create Blackbox Exporter configuration
   template:
     src: blackbox.yml.j2
     dest: /opt/monitoring/blackbox/blackbox.yml
     mode: '0644'
+  tags:
+    - monitoring
+    - config
 
 - name: Create SNMP Exporter configuration for Synology
   template:
     src: snmp.yml.j2
     dest: /opt/monitoring/snmp/snmp.yml
     mode: '0644'
+  tags:
+    - monitoring
+    - snmp
+    - config
 
 - name: Start monitoring stack
   community.docker.docker_compose_v2:
     project_src: /opt/monitoring
     state: present
     pull: always
+  tags:
+    - monitoring
+    - docker
 
 - name: Wait for OpenObserve to be ready
   uri:
@@ -160,6 +241,8 @@
   until: result.status == 200
   retries: 30
   delay: 10
+  tags:
+    - monitoring
 
 - name: Wait for Grafana to be ready
   uri:
@@ -169,6 +252,9 @@
   until: result.status == 200
   retries: 30
   delay: 10
+  tags:
+    - monitoring
+    - grafana
 
 - name: Display access information
   debug:
@@ -177,3 +263,5 @@
       - "Grafana is available at: http://{{ ansible_host }}:3000"
       - "Prometheus is available at: http://{{ ansible_host }}:9090"
       - "Grafana default credentials: admin / {{ grafana_admin_password }}"
+  tags:
+    - monitoring
