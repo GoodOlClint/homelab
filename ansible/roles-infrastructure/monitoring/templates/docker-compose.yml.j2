@@ -235,7 +235,7 @@ services:
       - UP_UNIFI_DEFAULT_PASS={{ unifi_password }}
       - UP_UNIFI_DEFAULT_VERIFY_SSL={{ unifi_verify_ssl | default('false') }}
       - UP_PROMETHEUS_HTTP_LISTEN=0.0.0.0:9130
-      - UP_PROMETHEUS_NAMESPACE=unifi
+      - UP_PROMETHEUS_NAMESPACE=unpoller
     volumes:
       - /etc/localtime:/etc/localtime:ro
     healthcheck:
