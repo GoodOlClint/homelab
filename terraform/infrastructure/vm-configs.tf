@@ -24,14 +24,14 @@ locals {
       name         = "openobserve"
       vlans        = ["vlan100"]
       cpu_cores    = 4
-      memory_mb    = 8192 # Higher memory for log processing
+      memory_mb    = 16384 # Higher memory for log processing
       disk_size_gb = 50   # Storage for logs and metrics
     },
     {
       name         = "proxmox-backup"
       vlans        = ["vlan100", "vlan20"]
       cpu_cores    = 4
-      memory_mb    = 4096
+      memory_mb    = 8192
       disk_size_gb = 20
     }
   ]

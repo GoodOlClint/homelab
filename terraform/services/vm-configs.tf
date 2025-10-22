@@ -16,7 +16,7 @@ locals {
       name         = "plex"
       vlans        = ["vlan100", "vlan20"]
       cpu_cores    = 8
-      memory_mb    = 16384
+      memory_mb    = 32768
       disk_size_gb = 100
       needs_gpu    = true # GPU for hardware transcoding
     },
