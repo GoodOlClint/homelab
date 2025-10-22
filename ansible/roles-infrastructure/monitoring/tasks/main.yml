@@ -195,6 +195,17 @@
     - dashboards
     - synology
 
+- name: Create Proxmox dashboard
+  copy:
+    src: dashboard-proxmox.json
+    dest: /opt/monitoring/grafana/provisioning/dashboards/proxmox.json
+    mode: '0644'
+  tags:
+    - monitoring
+    - grafana
+    - dashboards
+    - proxmox
+
 - name: Create Prometheus configuration
   template:
     src: prometheus.yml.j2
