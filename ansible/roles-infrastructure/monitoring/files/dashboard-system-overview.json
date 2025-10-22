@@ -102,7 +102,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "100 - (avg by (host) (irate(cpu_usage_idle{cpu=\"cpu-total\"}[5m])))",
+          "expr": "100 - (avg by (host) (cpu_usage_idle{cpu=\"cpu-total\"}))",
           "refId": "A",
           "legendFormat": "{{host}}"
         }
@@ -437,7 +437,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "100 - (avg(irate(cpu_usage_idle{cpu=\"cpu-total\"}[5m])))",
+          "expr": "100 - (avg(cpu_usage_idle{cpu=\"cpu-total\"}))",
           "refId": "A"
         }
       ],
