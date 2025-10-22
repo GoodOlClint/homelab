@@ -166,6 +166,12 @@ scrape_configs:
           instance: 'multicast-relay'
           role: 'services'
 {% endif %}
+{% if hostvars['proxmox-backup'] is defined and hostvars['proxmox-backup'].ansible_host is defined %}
+      - targets: ['{{ hostvars['proxmox-backup'].ansible_host }}:9273']
+        labels:
+          instance: 'proxmox-backup'
+          role: 'infrastructure'
+{% endif %}
 
   # Proxmox VE Exporter - Hypervisor Metrics
   - job_name: 'proxmox'
