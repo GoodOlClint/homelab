@@ -8,7 +8,7 @@
     force_basic_auth: yes
     status_code: [200, 401, 404]
   register: openobserve_api_check
-  ignore_errors: yes
+  ignore_errors: true
   tags:
     - openobserve_dashboards
     - monitoring
@@ -29,7 +29,7 @@
     path: /opt/openobserve/dashboards
     state: directory
     mode: '0755'
-  become: yes
+  become: true
   tags:
     - openobserve_dashboards
     - monitoring
@@ -40,7 +40,7 @@
     src: pbs_backup_dashboard.json
     dest: /opt/openobserve/dashboards/pbs_backup_dashboard.json
     mode: '0644'
-  become: yes
+  become: true
   tags:
     - openobserve_dashboards
     - monitoring
@@ -51,7 +51,7 @@
     src: pbs_storage_dashboard.json
     dest: /opt/openobserve/dashboards/pbs_storage_dashboard.json
     mode: '0644'
-  become: yes
+  become: true
   tags:
     - openobserve_dashboards
     - monitoring

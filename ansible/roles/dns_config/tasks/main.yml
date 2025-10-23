@@ -5,7 +5,7 @@
     loop_var: vlan
   command: >
     resolvectl dns eth_{{ vlan.key }} {{ vlan.value.dns_ip }}
-  become: yes
+  become: true
   changed_when: false
   when: "'eth_' + vlan.key in ansible_facts.interfaces"
   tags:
@@ -19,7 +19,7 @@
     loop_var: vlan
   command: >
     resolvectl dns eth_{{ vlan.key }} {{ vlan.value.dns_ip }} {{ vlan.value.dns_ipv6 | default('') }}
-  become: yes
+  become: true
   changed_when: false
   when: 
     - "'eth_' + vlan.key in ansible_facts.interfaces"
@@ -89,7 +89,7 @@
     loop_var: iface_zone
   command: >
     resolvectl domain {{ iface_zone.key }} {{ iface_zone.value }}
-  become: yes
+  become: true
   changed_when: false
   tags:
     - dns_config
@@ -199,7 +199,7 @@
 
 - name: Run dynamic DNS update script immediately
   command: /usr/local/bin/dns_dynamic_update.sh
-  become: yes
+  become: true
   tags:
     - dns_config
     - dns

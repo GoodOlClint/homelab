@@ -3,7 +3,7 @@
 - name: Provision monitoring users for infrastructure
   hosts: localhost
   connection: local
-  gather_facts: no
+  gather_facts: false
   vars_files:
     - ../group_vars/all.yml
   roles:
@@ -14,7 +14,7 @@
 
 - name: Configure dns VM
   hosts: dns
-  become: yes
+  become: true
   vars_files:
     - ../group_vars/all.yml
   roles:
@@ -24,7 +24,7 @@
 
 - name: Configure AdGuard VM
   hosts: adguard
-  become: yes
+  become: true
   vars_files:
     - ../group_vars/all.yml
   roles:
@@ -34,7 +34,7 @@
 
 - name: Configure OpenObserve Monitoring VM
   hosts: openobserve
-  become: yes
+  become: true
   vars_files:
     - ../group_vars/all.yml
   roles:
@@ -45,7 +45,7 @@
 
 - name: Configure proxmox-backup VM
   hosts: proxmox-backup
-  become: yes
+  become: true
   vars_files:
     - ../group_vars/all.yml
   roles:

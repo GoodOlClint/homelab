@@ -2,7 +2,7 @@
 
 - name: Update all VMs and Proxmox server
   hosts: all
-  become: yes
+  become: true
   tasks:
     - name: Update apt cache and upgrade all packages
       apt:
@@ -14,7 +14,7 @@
 
 - name: Update Homebridge plugins and Node.js
   hosts: homebridge
-  become: yes
+  become: true
   tasks:
     - name: Update Node.js and npm to latest
       apt:
@@ -37,7 +37,7 @@
 
 - name: Update all Docker containers (pull latest and recreate)
   hosts: docker,plex-services
-  become: yes
+  become: true
   tasks:
     - name: Pull latest images for docker services
       community.docker.docker_compose_v2:
@@ -77,8 +77,8 @@
 
 - name: Final Reboot
   hosts: all
-  become: yes
-  gather_facts: no
+  become: true
+  gather_facts: false
   tasks:
 
   - name: Check if reboot is required
