@@ -203,8 +203,8 @@
     project_src: /docker
     files:
       - docker-compose-plex-services.yml
-#    services:
-#      - postgres
+    services:
+      - postgres
     wait: true
     wait_timeout: 120
   tags:
@@ -293,15 +293,8 @@
     role: "{{ item.db_user }}"
     privs: ALL
     type: database
-    state: present
+    obj: "{{ item.db_name }}"
   loop: "{{ plex_service_db_pairs }}"
-  loop_control:
-    label: "{{ item.service }}: {{ item.db_name }} privileges"
-  when: item.db_user is defined
-  tags:
-    - plex_services
-    - postgres
-    - database
 
 - name: Grant schema privileges to service users
   community.postgresql.postgresql_privs:
