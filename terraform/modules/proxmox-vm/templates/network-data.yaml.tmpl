@@ -8,6 +8,15 @@ ethernets:
     set-name: ${iface.name}
     mtu: ${iface.mtu}
     dhcp4: ${iface.dhcp}
+%{ if iface.dhcp ~}
+    dhcp4-overrides:
+%{ if iface.is_primary ~}
+      route-metric: 100
+%{ else ~}
+      route-metric: 200
+      use-routes: false
+%{ endif ~}
+%{ endif ~}
 %{ if iface.accept_ra ~}
     accept-ra: true
 %{ else ~}

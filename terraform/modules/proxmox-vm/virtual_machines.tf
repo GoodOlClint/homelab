@@ -106,19 +106,20 @@ resource "proxmox_virtual_environment_file" "network_data" {
   source_raw {
     data = templatefile("${path.module}/templates/network-data.yaml.tmpl", {
       interfaces = [
-        for vlan_key, iface in local.build_vm_interfaces[each.value.name] : {
-          name       = "eth_${vlan_key}"
-          mtu        = iface.mtu
-          dhcp       = iface.dhcp
-          accept_ra  = iface.accept_ra
-          dhcp6      = iface.dhcp6
-          address    = iface.ip != null ? iface.ip : ""
-          address_v6 = iface.ipv6 != null ? iface.ipv6 : ""
-          prefix     = iface.subnet != null ? split("/", iface.subnet)[1] : ""
-          prefix_v6  = iface.subnet_v6 != null ? split("/", iface.subnet_v6)[1] : ""
-          gateway    = iface.gw != null ? iface.gw : ""
-          gateway_v6 = iface.gw_v6 != null ? iface.gw_v6 : ""
-          macaddress = iface.macaddress != null ? iface.macaddress : ""
+        for idx, vlan_entry in [for vlan_key, iface in local.build_vm_interfaces[each.value.name] : { key = vlan_key, iface = iface }] : {
+          name       = "eth_${vlan_entry.key}"
+          mtu        = vlan_entry.iface.mtu
+          dhcp       = vlan_entry.iface.dhcp
+          accept_ra  = vlan_entry.iface.accept_ra
+          dhcp6      = vlan_entry.iface.dhcp6
+          address    = vlan_entry.iface.ip != null ? vlan_entry.iface.ip : ""
+          address_v6 = vlan_entry.iface.ipv6 != null ? vlan_entry.iface.ipv6 : ""
+          prefix     = vlan_entry.iface.subnet != null ? split("/", vlan_entry.iface.subnet)[1] : ""
+          prefix_v6  = vlan_entry.iface.subnet_v6 != null ? split("/", vlan_entry.iface.subnet_v6)[1] : ""
+          gateway    = vlan_entry.iface.gw != null ? vlan_entry.iface.gw : ""
+          gateway_v6 = vlan_entry.iface.gw_v6 != null ? vlan_entry.iface.gw_v6 : ""
+          macaddress = vlan_entry.iface.macaddress != null ? vlan_entry.iface.macaddress : ""
+          is_primary = idx == 0 # First interface is primary for default routing
           # Don't configure DNS in cloud-init - let Ansible handle it
           # This prevents VM recreation when DNS configuration changes
           dns_servers = []
