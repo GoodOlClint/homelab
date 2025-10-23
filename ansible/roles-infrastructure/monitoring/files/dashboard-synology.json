@@ -536,7 +536,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "(memTotalSwap{job=~'$job',instance=~'$instance'} - memAvailSwap{job=~'$job',instance=~'$instance'}) / memTotalSwap{job=~'$job',instance=~'$instance'} * 100",
+          "expr": "(memTotalSwap{job=\"synology\"} - memAvailSwap{job=\"synology\"}) / memTotalSwap{job=\"synology\"} * 100",
           "intervalFactor": 1,
           "range": true,
           "refId": "A",
@@ -627,7 +627,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "100-(100/raidTotalSize{job=~'$job',instance=~'$instance',raidName=\"Volume 1\"}*raidFreeSize{job=~'$job',instance=~'$instance',raidName=\"Volume 1\"})",
+          "expr": "100-(100/raidTotalSize{job=\"synology\",raidIndex=\"0\"}*raidFreeSize{job=\"synology\",raidIndex=\"0\"})",
           "format": "time_series",
           "hide": false,
           "intervalFactor": 1,
@@ -721,17 +721,17 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "100-(100/raidTotalSize{job=~'$job',instance=~'$instance',raidName=\"Volume 2\"}*raidFreeSize{job=~'$job',instance=~'$instance',raidName=\"Volume 2\"})",
+          "expr": "100-(100/raidTotalSize{job=\"synology\",raidIndex=\"1\"}*raidFreeSize{job=\"synology\",raidIndex=\"1\"})",
           "format": "time_series",
           "hide": false,
           "intervalFactor": 1,
-          "legendFormat": "Volume 2",
+          "legendFormat": "Storage Pool 1",
           "range": true,
           "refId": "Used 2",
           "step": 240
         }
       ],
-      "title": "Volume 2 Usage %",
+      "title": "Storage Pool 1 Usage %",
       "type": "gauge"
     },
     {
@@ -1221,7 +1221,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Value"
+              "options": "Status"
             },
             "properties": [
               {
@@ -1411,61 +1411,60 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "raidStatus{job=~'$job',instance=~'$instance', raidName=~\"Volume.*\"}",
+          "expr": "raidStatus{job=\"synology\"}",
           "format": "table",
           "hide": false,
           "instant": true,
           "interval": "",
           "legendFormat": "__auto",
           "refId": "Status"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "raidName{job=\"synology\"}",
+          "format": "table",
+          "hide": false,
+          "instant": true,
+          "interval": "",
+          "legendFormat": "__auto",
+          "refId": "Name"
         }
       ],
       "title": "RAID Status",
       "transformations": [
+        {
+          "id": "seriesToColumns",
+          "options": {
+            "byField": "raidIndex"
+          }
+        },
         {
           "id": "filterFieldsByName",
           "options": {
             "include": {
               "names": [
                 "raidName",
-                "Value"
+                "Value #Status"
               ]
             }
           }
         },
         {
-          "id": "seriesToColumns",
-          "options": {
-            "byField": "raidName",
-            "mode": "outer"
-          }
-        },
-        {
           "id": "organize",
           "options": {
-            "excludeByName": {
-              "Value": false,
-              "diskID": false,
-              "raidIndex": false,
-              "raidName": false,
-              "raidName 2": true
-            },
+            "excludeByName": {},
             "indexByName": {
-              "Value #A": 4,
-              "Value #C": 3,
-              "diskID": 0,
-              "diskModel": 2,
-              "diskType": 1
+              "raidName": 0,
+              "Value #Status": 1
             },
             "renameByName": {
-              "Value": "Status",
-              "Value #A": "Temperature",
-              "Value #C": "Status",
               "Value #Status": "Status",
-              "diskID": "Disk",
-              "diskModel": "Model",
-              "diskType": "Type",
-              "raidName": "Name"
+              "raidName": "Volume"
             }
           }
         }
@@ -1662,7 +1661,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "ifPhysAddress{job=~'$job',instance=~'$instance',ifName=~'$Interface'}",
+          "expr": "ifName{job=\"synology\",ifName=~\"eth.*|ovs_.*|bond.*\"}",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -1676,7 +1675,21 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "ifSpeed{job=~'$job',instance=~'$instance',ifName=~'$Interface'}",
+          "expr": "ifPhysAddress{job=\"synology\"}",
+          "format": "table",
+          "instant": true,
+          "interval": "",
+          "legendFormat": "",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "ifSpeed{job=\"synology\",ifName=~\"eth.*|ovs_.*|bond.*\"}",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -1691,7 +1704,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "ifOperStatus{job=~'$job',instance=~'$instance',ifName=~'$Interface'}",
+          "expr": "ifOperStatus{job=\"synology\",ifName=~\"eth.*|ovs_.*|bond.*\"}",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -1713,10 +1726,8 @@
           "options": {
             "include": {
               "names": [
-                "ifIndex",
                 "ifName",
                 "ifPhysAddress",
-                "Value #B",
                 "Value #D",
                 "Value #E"
               ]
@@ -1726,23 +1737,16 @@
         {
           "id": "organize",
           "options": {
-            "excludeByName": {
-              "ifIndex": true
-            },
+            "excludeByName": {},
             "indexByName": {
-              "ifIndex": 0,
+              "ifName": 0,
+              "ifPhysAddress": 1,
               "Value #D": 2,
-              "Value #E": 4,
-              "ifName": 1,
-              "ifPhysAddress": 3
+              "Value #E": 3
             },
             "renameByName": {
-              "Value #B": "Admin Status",
-              "Value #C": "Connector",
               "Value #D": "Speed",
               "Value #E": "Status",
-              "Value #F": "Description",
-              "Value #G": "",
               "ifName": "Interface",
               "ifPhysAddress": "MAC Address"
             }
@@ -2270,7 +2274,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "diskTemperature{job=~'$job',instance=~'$instance'}",
+          "expr": "diskTemperature{job=\"synology\"}",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -2284,7 +2288,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "diskType{job=~'$job',instance=~'$instance'}",
+          "expr": "diskType{job=\"synology\"}",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -2298,7 +2302,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "diskStatus{job=~'$job',instance=~'$instance'}",
+          "expr": "diskStatus{job=\"synology\"}",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -2312,16 +2316,36 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "diskModel{job=~'$job',instance=~'$instance'}",
+          "expr": "diskModel{job=\"synology\"}",
           "format": "table",
           "instant": true,
           "interval": "",
           "legendFormat": "",
           "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "diskID{job=\"synology\"}",
+          "format": "table",
+          "instant": true,
+          "interval": "",
+          "legendFormat": "",
+          "refId": "E"
         }
       ],
       "title": "Hard Drives",
       "transformations": [
+        {
+          "id": "seriesToColumns",
+          "options": {
+            "byField": "diskIndex"
+          }
+        },
         {
           "id": "filterFieldsByName",
           "options": {
@@ -2330,17 +2354,11 @@
                 "diskIndex",
                 "diskID",
                 "diskType",
-                "Value #C",
                 "diskModel",
-                "Value #A"
+                "Value #A",
+                "Value #C"
               ]
             }
-          }
-        },
-        {
-          "id": "seriesToColumns",
-          "options": {
-            "byField": "diskIndex"
           }
         },
         {
@@ -3423,7 +3441,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "100-(100/raidTotalSize{job=~'$job',instance=~'$instance',raidName=\"Volume 1\"}*raidFreeSize{job=~'$job',instance=~'$instance',raidName=\"Volume 1\"})",
+          "expr": "100-(100/raidTotalSize{job=~'$job',instance=~'$instance',raidIndex=\"0\"}*raidFreeSize{job=~'$job',instance=~'$instance',raidIndex=\"0\"})",
           "format": "time_series",
           "hide": false,
           "intervalFactor": 1,
@@ -3438,11 +3456,11 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "100-(100/raidTotalSize{job=~'$job',instance=~'$instance',raidName=\"Volume 2\"}*raidFreeSize{job=~'$job',instance=~'$instance',raidName=\"Volume 2\"})",
+          "expr": "100-(100/raidTotalSize{job=~'$job',instance=~'$instance',raidIndex=\"1\"}*raidFreeSize{job=~'$job',instance=~'$instance',raidIndex=\"1\"})",
           "format": "time_series",
           "hide": false,
           "intervalFactor": 1,
-          "legendFormat": "Volume 2",
+          "legendFormat": "Storage Pool 1",
           "range": true,
           "refId": "Used 2",
           "step": 240
@@ -3453,9 +3471,9 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "100-(100/raidTotalSize{job=~'$job',instance=~'$instance',raidName=\"Volume 3\"}*raidFreeSize{job=~'$job',instance=~'$instance',raidName=\"Volume 3\"})",
+          "expr": "100-(100/raidTotalSize{job=~'$job',instance=~'$instance',raidIndex=\"2\"}*raidFreeSize{job=~'$job',instance=~'$instance',raidIndex=\"2\"})",
           "format": "time_series",
-          "hide": false,
+          "hide": true,
           "intervalFactor": 1,
           "legendFormat": "Volume 3",
           "range": true,
@@ -3468,9 +3486,9 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "100-(100/raidTotalSize{job=~'$job',instance=~'$instance',raidName=\"Volume 4\"}*raidFreeSize{job=~'$job',instance=~'$instance',raidName=\"Volume 4\"})",
+          "expr": "100-(100/raidTotalSize{job=~'$job',instance=~'$instance',raidIndex=\"3\"}*raidFreeSize{job=~'$job',instance=~'$instance',raidIndex=\"3\"})",
           "format": "time_series",
-          "hide": false,
+          "hide": true,
           "intervalFactor": 1,
           "legendFormat": "Volume 4",
           "range": true,
@@ -3483,9 +3501,9 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "100-(100/raidTotalSize{job=~'$job',instance=~'$instance',raidName=\"Volume 5\"}*raidFreeSize{job=~'$job',instance=~'$instance',raidName=\"Volume 5\"})",
+          "expr": "100-(100/raidTotalSize{job=~'$job',instance=~'$instance',raidIndex=\"4\"}*raidFreeSize{job=~'$job',instance=~'$instance',raidIndex=\"4\"})",
           "format": "time_series",
-          "hide": false,
+          "hide": true,
           "intervalFactor": 1,
           "legendFormat": "Volume 5",
           "range": true,
@@ -3498,7 +3516,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "100-(100/raidTotalSize{job=~'$job',instance=~'$instance',raidName=\"Volume 6\"}*raidFreeSize{job=~'$job',instance=~'$instance',raidName=\"Volume 6\"})",
+          "expr": "100-(100/raidTotalSize{job=~'$job',instance=~'$instance',raidIndex=\"5\"}*raidFreeSize{job=~'$job',instance=~'$instance',raidIndex=\"5\"})",
           "format": "time_series",
           "hide": false,
           "intervalFactor": 1,
@@ -3619,7 +3637,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "raidTotalSize{job=~'$job',instance=~'$instance',raidName=\"Volume 1\"} - raidFreeSize{job=~'$job',instance=~'$instance',raidName=\"Volume 1\"}",
+          "expr": "raidTotalSize{job=~'$job',instance=~'$instance',raidIndex=\"0\"} - raidFreeSize{job=~'$job',instance=~'$instance',raidIndex=\"0\"}",
           "format": "time_series",
           "hide": false,
           "intervalFactor": 1,
@@ -3634,11 +3652,11 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "raidTotalSize{job=~'$job',instance=~'$instance',raidName=\"Volume 2\"} - raidFreeSize{job=~'$job',instance=~'$instance',raidName=\"Volume 2\"}",
+          "expr": "raidTotalSize{job=~'$job',instance=~'$instance',raidIndex=\"1\"} - raidFreeSize{job=~'$job',instance=~'$instance',raidIndex=\"1\"}",
           "format": "time_series",
           "hide": false,
           "intervalFactor": 1,
-          "legendFormat": "Volume 2",
+          "legendFormat": "Storage Pool 1",
           "range": true,
           "refId": "Used 2",
           "step": 240
@@ -3649,9 +3667,9 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "raidTotalSize{job=~'$job',instance=~'$instance',raidName=\"Volume 3\"} - raidFreeSize{job=~'$job',instance=~'$instance',raidName=\"Volume 3\"}",
+          "expr": "raidTotalSize{job=~'$job',instance=~'$instance',raidIndex=\"2\"} - raidFreeSize{job=~'$job',instance=~'$instance',raidIndex=\"2\"}",
           "format": "time_series",
-          "hide": false,
+          "hide": true,
           "intervalFactor": 1,
           "legendFormat": "Volume 3",
           "range": true,
@@ -3664,9 +3682,9 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "raidTotalSize{job=~'$job',instance=~'$instance',raidName=\"Volume 4\"} - raidFreeSize{job=~'$job',instance=~'$instance',raidName=\"Volume 4\"}",
+          "expr": "raidTotalSize{job=~'$job',instance=~'$instance',raidIndex=\"3\"} - raidFreeSize{job=~'$job',instance=~'$instance',raidIndex=\"3\"}",
           "format": "time_series",
-          "hide": false,
+          "hide": true,
           "intervalFactor": 1,
           "legendFormat": "Volume 4",
           "range": true,
@@ -3679,9 +3697,9 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "raidTotalSize{job=~'$job',instance=~'$instance',raidName=\"Volume 5\"} - raidFreeSize{job=~'$job',instance=~'$instance',raidName=\"Volume 5\"}",
+          "expr": "raidTotalSize{job=~'$job',instance=~'$instance',raidIndex=\"4\"} - raidFreeSize{job=~'$job',instance=~'$instance',raidIndex=\"4\"}",
           "format": "time_series",
-          "hide": false,
+          "hide": true,
           "intervalFactor": 1,
           "legendFormat": "Volume 5",
           "range": true,
@@ -3694,7 +3712,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "raidTotalSize{job=~'$job',instance=~'$instance',raidName=\"Volume 6\"} - raidFreeSize{job=~'$job',instance=~'$instance',raidName=\"Volume 6\"}",
+          "expr": "raidTotalSize{job=~'$job',instance=~'$instance',raidIndex=\"5\"} - raidFreeSize{job=~'$job',instance=~'$instance',raidIndex=\"5\"}",
           "format": "time_series",
           "hide": false,
           "intervalFactor": 1,
@@ -3712,7 +3730,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "",
+      "description": "This metric (diskIONReadX) is not available via SNMP. Install Telegraf on the NAS for disk I/O metrics.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -3796,13 +3814,13 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "irate(diskIONReadX{job=~'$job',instance=~'$instance'}[$__rate_interval])",
+          "expr": "",
           "legendFormat": "{{diskI0Device}}",
           "range": true,
           "refId": "read sata1"
         }
       ],
-      "title": "Disk read MB/s - $instance",
+      "title": "Disk read MB/s - $instance (No SNMP data available)",
       "transformations": [
         {
           "id": "filterFieldsByName",
@@ -3904,13 +3922,13 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "irate(diskIONWrittenX{job=~'$job',instance=~'$instance'}[$__rate_interval])",
+          "expr": "",
           "legendFormat": "{{diskI0Device}}",
           "range": true,
           "refId": "read sata1"
         }
       ],
-      "title": "Disk write MB/s - $instance",
+      "title": "Disk write MB/s - $instance (No SNMP data available)",
       "transformations": [
         {
           "id": "filterFieldsByName",
@@ -3928,7 +3946,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "",
+      "description": "This metric (diskIONWrittenX) is not available via SNMP. Install Telegraf on the NAS for disk I/O metrics.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -4012,13 +4030,13 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "irate(diskIOReads{job=~'$job',instance=~'$instance'}[$__rate_interval])",
+          "expr": "",
           "legendFormat": "{{diskI0Device}}",
           "range": true,
           "refId": "read sata1"
         }
       ],
-      "title": "Disk read io/s - $instance",
+      "title": "Disk read io/s - $instance (No SNMP data available)",
       "transformations": [
         {
           "id": "filterFieldsByName",
@@ -4036,7 +4054,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "",
+      "description": "This metric (diskIOReads) is not available via SNMP. Install Telegraf on the NAS for disk I/O metrics.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -4116,13 +4134,13 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "irate(diskIOWrites{job=~'$job',instance=~'$instance'}[$__rate_interval])",
+          "expr": "",
           "legendFormat": "{{diskI0Device}}",
           "range": true,
           "refId": "read sata1"
         }
       ],
-      "title": "Disk write io/s - $instance",
+      "title": "Disk write io/s - $instance (No SNMP data available)",
       "transformations": [
         {
           "id": "filterFieldsByName",
@@ -4133,6 +4151,7 @@
           }
         }
       ],
+      "description": "This metric (diskIOWrites) is not available via SNMP. Install Telegraf on the NAS for disk I/O metrics.",
       "type": "timeseries"
     },
     {
