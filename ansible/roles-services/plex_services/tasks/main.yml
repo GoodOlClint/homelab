@@ -10,16 +10,27 @@
     state: present
     update_cache: yes
   when: nfs_enabled | default(true)
+  tags:
+    - plex_services
+    - packages
+    - nfs
 
 - name: Install Docker using geerlingguy.docker
   import_role:
     name: geerlingguy.docker
+  tags:
+    - plex_services
+    - docker
+    - packages
 
 - name: Create plex-services system group
   group:
     name: "{{ plex_services_group }}"
     gid: "{{ plex_services_pgid }}"
     state: present
+  tags:
+    - plex_services
+    - users
 
 - name: Create individual system users for each service
   user:
@@ -34,6 +45,9 @@
   loop: "{{ plex_services | dict2items }}"
   loop_control:
     label: "{{ item.key }} (UID: {{ item.value.PUID }})"
+  tags:
+    - plex_services
+    - users
 
 - name: Create plex services directories
   file:
@@ -45,6 +59,9 @@
   loop:
     - /docker
     - /configarr
+  tags:
+    - plex_services
+    - config
 
 - name: Create empty config folders for each service
   file:
@@ -57,6 +74,9 @@
   loop_control:
     label: "{{ item.key }} config"
   when: item.key is defined
+  tags:
+    - plex_services
+    - config
 
 - name: Install PostgreSQL client packages
   apt:
@@ -67,6 +87,10 @@
       - smbclient
     state: present
     update_cache: yes
+  tags:
+    - plex_services
+    - packages
+    - postgres
 
 - name: Copy PostgreSQL PBS backup script
   template:
@@ -76,6 +100,11 @@
     group: root
     mode: '0755'
   when: pbs_backup_enabled | default(true)
+  tags:
+    - plex_services
+    - backup
+    - pbs
+    - postgres
 
 - name: Copy PostgreSQL legacy backup script (SMB)
   template:
@@ -85,6 +114,11 @@
     group: root
     mode: '0755'
   when: not (pbs_backup_enabled | default(true))
+  tags:
+    - plex_services
+    - backup
+    - smb
+    - postgres
 
 - name: Copy PostgreSQL restore script
   template:
@@ -93,6 +127,10 @@
     owner: root
     group: root
     mode: '0755'
+  tags:
+    - plex_services
+    - restore
+    - postgres
 
 - name: Create PostgreSQL PBS backup cron job
   cron:
@@ -103,6 +141,12 @@
     job: "/usr/local/bin/postgres_pbs_backup.sh >> /var/log/postgres_pbs_backup.log 2>&1"
     user: root
   when: pbs_backup_enabled | default(true)
+  tags:
+    - plex_services
+    - backup
+    - pbs
+    - postgres
+    - cron
 
 - name: Create PostgreSQL legacy backup cron job (SMB)
   cron:
@@ -113,6 +157,12 @@
     job: "/usr/local/bin/postgres_backup.sh >> /var/log/postgres_backup.log 2>&1"
     user: root
   when: not (pbs_backup_enabled | default(true))
+  tags:
+    - plex_services
+    - backup
+    - smb
+    - postgres
+    - cron
 
 - name: Create plex services docker compose file
   template:
@@ -123,18 +173,30 @@
     mode: '0644'
   notify:
     - restart plex services docker compose
+  tags:
+    - plex_services
+    - config
+    - compose
 
 - name: Ensure docker service is started and enabled
   systemd:
     name: docker
     state: started
     enabled: yes
+  tags:
+    - plex_services
+    - docker
+    - service
 
 - name: Check if PostgreSQL container already exists
   community.docker.docker_container_info:
     name: postgres14
   register: postgres_container_info
   ignore_errors: true
+  tags:
+    - plex_services
+    - postgres
+    - validate
 
 - name: Start PostgreSQL container only (first)
   community.docker.docker_compose_v2:
@@ -145,6 +207,11 @@
 #      - postgres
     wait: true
     wait_timeout: 120
+  tags:
+    - plex_services
+    - postgres
+    - compose
+    - deploy
 
 - name: Wait for PostgreSQL to be ready
   wait_for:
@@ -152,6 +219,10 @@
     host: localhost
     timeout: 300
     delay: 10
+  tags:
+    - plex_services
+    - postgres
+    - validate
 
 - name: Create PostgreSQL users for each service
   community.postgresql.postgresql_user:
@@ -167,10 +238,18 @@
   loop_control:
     label: "{{ item.key }} DB user"
   when: item.value.db_user is defined
+  tags:
+    - plex_services
+    - postgres
+    - database
 
 - name: Initialize plex_service_db_pairs
   set_fact:
     plex_service_db_pairs: []
+  tags:
+    - plex_services
+    - postgres
+    - database
 
 - name: Add service/db pairs to plex_service_db_pairs
   set_fact:
@@ -183,6 +262,10 @@
   when: item.0.value.db_user is defined and item.1 is defined
   vars:
     ansible_subelements_skip_missing: true
+  tags:
+    - plex_services
+    - postgres
+    - database
 
 - name: Create databases for each plex service and db
   community.postgresql.postgresql_db:
@@ -196,6 +279,10 @@
   loop_control:
     label: "{{ item.service }}: {{ item.db_name }}"
   when: item.db_user is defined
+  tags:
+    - plex_services
+    - postgres
+    - database
 
 - name: Grant database privileges to service users
   community.postgresql.postgresql_privs:
@@ -211,6 +298,10 @@
   loop_control:
     label: "{{ item.service }}: {{ item.db_name }} privileges"
   when: item.db_user is defined
+  tags:
+    - plex_services
+    - postgres
+    - database
 
 - name: Grant schema privileges to service users
   community.postgresql.postgresql_privs:
@@ -227,6 +318,10 @@
   loop_control:
     label: "{{ item.service }}: {{ item.db_name }} schema privileges"
   when: item.db_user is defined
+  tags:
+    - plex_services
+    - postgres
+    - database
 
 - name: Attempt to restore databases from remote backup on first deployment
   shell: |
@@ -255,18 +350,29 @@
     - postgres_backup_enabled | default(true)
   register: postgres_restore_result
   failed_when: false
+  tags:
+    - plex_services
+    - postgres
+    - restore
 
 - name: Display PostgreSQL restore results
   debug:
     msg: "{{ postgres_restore_result.stdout_lines }}"
   when: postgres_restore_result is defined and postgres_restore_result.stdout_lines is defined
+  tags:
+    - plex_services
+    - postgres
+    - restore
 
 - name: Ensure lxml is installed for XML config management
   apt:
     name: python3-lxml
     state: present
     update_cache: yes
-  become: yes
+  become: true
+  tags:
+    - plex_services
+    - packages
 
 - name: Update config files for all containers with a database
   block:
@@ -325,6 +431,10 @@
         - item.value.config is defined
         - item.value.config | regex_search('\.xml$') is not none
         - item.value.db_user is defined
+  tags:
+    - plex_services
+    - config
+    - postgres
 
 - name: Read ApiKey from each *arr config.xml
   block:
@@ -355,6 +465,9 @@
         - item.matches | length > 0
         - item.matches[0] is mapping
         - "'ApiKey' in item.matches[0]"
+  tags:
+    - plex_services
+    - config
 
 - name: Correct permissions for plex services directories
   file:
@@ -366,6 +479,9 @@
   loop: "{{ plex_services | dict2items }}"
   loop_control: 
     label: "{{ item.key }} config"
+  tags:
+    - plex_services
+    - config
   
 - name: Restart all plex services after config update
   community.docker.docker_compose_v2:
@@ -375,12 +491,19 @@
     state: restarted
     wait: true
     wait_timeout: 600
+  tags:
+    - plex_services
+    - compose
+    - service
 
 - name: Ensure pip is installed (Debian/Ubuntu)
   apt:
     name: python3-pip
     state: present
   become: true
+  tags:
+    - plex_services
+    - packages
   
 - name: Ensure prowlarr-py is installed
   ansible.builtin.pip:
@@ -389,6 +512,10 @@
     break_system_packages: true
     extra_args: --ignore-installed
   become: true
+  tags:
+    - plex_services
+    - packages
+    - prowlarr
 
 - name: Configure Prowlarr (Indexer Management)
   devopsarr.prowlarr.prowlarr_indexer:
@@ -403,6 +530,10 @@
     fields:
     - name: "baseUrl"
       value: "https://api.nzbplanet.net"
+  tags:
+    - plex_services
+    - prowlarr
+    - config
 
 - name: Generate configarr_secrets.yaml from template
   template:
@@ -411,6 +542,10 @@
     owner: root
     group: root
     mode: '0600'
+  tags:
+    - plex_services
+    - config
+    - secrets
 
 - name: Create PBS backup script for Docker containers
   ansible.builtin.template:
@@ -420,6 +555,10 @@
     group: root
     src: docker_pbs_backup.sh.j2
   when: pbs_backup_enabled | default(true)
+  tags:
+    - plex_services
+    - backup
+    - pbs
 
 - name: Ensure cron job for nightly Docker PBS backup
   ansible.builtin.cron:
@@ -430,3 +569,8 @@
     hour: 2
     state: present
   when: pbs_backup_enabled | default(true)
+  tags:
+    - plex_services
+    - backup
+    - pbs
+    - cron

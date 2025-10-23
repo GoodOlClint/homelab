@@ -6,6 +6,9 @@
   register: homebridge_repo_present
   changed_when: false
   failed_when: false
+  tags:
+    - homebridge
+    - packages
 
 - name: Add Homebridge repository
   ansible.builtin.deb822_repository:
@@ -18,10 +21,16 @@
     state: present
     enabled: yes
   when: homebridge_repo_present.rc != 0
+  tags:
+    - homebridge
+    - packages
 
 - name: Update apt cache
   apt:
     update_cache: yes
+  tags:
+    - homebridge
+    - packages
 
 - name: Install/Update Node.js LTS
   apt:
@@ -29,25 +38,38 @@
       - nodejs
       - npm
     state: latest
+  tags:
+    - homebridge
+    - packages
+    - nodejs
 
 - name: Install Homebridge
   apt:
     name: homebridge
     state: present
+  tags:
+    - homebridge
+    - packages
 
 - name: Update Homebridge to latest version
   apt:
     name: homebridge
     state: latest
-  tags: update
+  tags:
+    - homebridge
+    - update
+    - packages
 
 - name: Update all Homebridge plugins
   community.general.npm:
     name: "*"
     global: yes
     state: latest
-  become: yes
-  tags: update
+  become: true
+  tags:
+    - homebridge
+    - update
+    - plugins
   register: plugin_update
   changed_when: "'up to date' not in plugin_update.stdout"
 
@@ -56,4 +78,7 @@
     name: homebridge
     state: restarted
   when: plugin_update.changed
-  tags: update
+  tags:
+    - homebridge
+    - update
+    - service

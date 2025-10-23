@@ -9,6 +9,11 @@
       - git
     state: present
     update_cache: yes
+  tags:
+    - nvidia_licensing
+    - nvidia
+    - license
+    - packages
 
 - name: Add /opt/fastapi-dls to git safe.directory for Ansible user
   ansible.builtin.command:
@@ -16,22 +21,42 @@
   become: true
   become_user: "{{ ansible_user | default('root') }}"
   when: ansible_facts['os_family'] == 'Debian' or ansible_facts['os_family'] == 'RedHat'
+  tags:
+    - nvidia_licensing
+    - nvidia
+    - license
+    - config
 
 - name: Clone fastapi-dls repository
   ansible.builtin.git:
     repo: 'https://git.collinwebdesigns.de/oscar.krause/fastapi-dls.git'
     dest: /opt/fastapi-dls
     update: yes
+  tags:
+    - nvidia_licensing
+    - nvidia
+    - license
+    - install
 
 - name: Create Python virtual environment
   ansible.builtin.command:
     cmd: python3 -m venv /opt/fastapi-dls/venv
     creates: /opt/fastapi-dls/venv/bin/activate
+  tags:
+    - nvidia_licensing
+    - nvidia
+    - license
+    - install
 
 - name: Install fastapi-dls requirements
   ansible.builtin.pip:
     requirements: /opt/fastapi-dls/requirements.txt
     virtualenv: /opt/fastapi-dls/venv
+  tags:
+    - nvidia_licensing
+    - nvidia
+    - license
+    - packages
 
 - name: Ensure fastapi-dls cert directory exists
   ansible.builtin.file:
@@ -40,6 +65,12 @@
     owner: www-data
     group: www-data
     mode: '0755'
+  tags:
+    - nvidia_licensing
+    - nvidia
+    - license
+    - config
+    - ssl
 
 - name: Generate self-signed SSL certificate for fastapi-dls webserver
   ansible.builtin.command:
@@ -49,6 +80,12 @@
       -out /opt/fastapi-dls/app/cert/webserver.crt
       -subj "/CN=fastapi-dls"
     creates: /opt/fastapi-dls/app/cert/webserver.crt
+  tags:
+    - nvidia_licensing
+    - nvidia
+    - license
+    - config
+    - ssl
 
 - name: Ensure fastapi-dls cert directory exists
   ansible.builtin.file:
@@ -57,6 +94,11 @@
     owner: www-data
     group: www-data
     mode: '0755'
+  tags:
+    - nvidia_licensing
+    - nvidia
+    - license
+    - config
 
 - name: Create fastapi-dls environment file
   ansible.builtin.copy:
@@ -69,6 +111,11 @@
     owner: www-data
     group: www-data
     mode: '0644'
+  tags:
+    - nvidia_licensing
+    - nvidia
+    - license
+    - config
 
 - name: Set ownership of fastapi-dls directory to www-data
   ansible.builtin.file:
@@ -76,12 +123,23 @@
     owner: www-data
     group: www-data
     recurse: yes
+  tags:
+    - nvidia_licensing
+    - nvidia
+    - license
+    - config
 
 - name: Create systemd service for fastapi-dls
   ansible.builtin.template:
     src: fastapi-dls.service.j2
     dest: /etc/systemd/system/fastapi-dls.service
     mode: '0644'
+  tags:
+    - nvidia_licensing
+    - nvidia
+    - license
+    - config
+    - service
 
 - name: Reload systemd and enable fastapi-dls
   ansible.builtin.systemd:
@@ -89,3 +147,8 @@
     enabled: yes
     state: started
     daemon_reload: yes
+  tags:
+    - nvidia_licensing
+    - nvidia
+    - license
+    - service

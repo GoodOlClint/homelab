@@ -2,16 +2,27 @@
 - name: Install NVIDIA GRID driver
   import_role:
     name: nvidia
+  tags:
+    - docker
+    - nvidia
+    - driver
 
 - name: Install Docker using geerlingguy.docker
   import_role:
     name: geerlingguy.docker
   register: docker_role_result
+  tags:
+    - docker
+    - packages
 
 - name: Check if NVIDIA container toolkit GPG key exists
   stat:
     path: /etc/apt/trusted.gpg.d/libnvidia-container.gpg
   register: nvidia_gpg_key
+  tags:
+    - docker
+    - nvidia
+    - packages
 
 - name: Ensure nvidia-container-toolkit apt GPG key
   ansible.builtin.apt_key:
@@ -19,12 +30,20 @@
     keyring: /etc/apt/trusted.gpg.d/libnvidia-container.gpg
     state: present
   when: not nvidia_gpg_key.stat.exists
+  tags:
+    - docker
+    - nvidia
+    - packages
 
 - name: Check if NVIDIA container toolkit repo is present
   ansible.builtin.shell: grep -q '^deb .*/libnvidia-container' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null
   register: nvidia_repo_present
   changed_when: false
   failed_when: false
+  tags:
+    - docker
+    - nvidia
+    - packages
 
 - name: Ensure nvidia-container-toolkit repo
   ansible.builtin.apt_repository:
@@ -32,12 +51,20 @@
     state: present
     filename: nvidia-container-toolkit
   when: nvidia_repo_present.rc != 0
+  tags:
+    - docker
+    - nvidia
+    - packages
 
 - name: Ensure nvidia-container-toolkit package
   ansible.builtin.package:
     name: nvidia-container-toolkit
     update_cache: true
     state: present
+  tags:
+    - docker
+    - nvidia
+    - packages
 
 - name: Check if nvidia-container-runtime is configured in Docker
   ansible.builtin.shell: |
@@ -45,6 +72,10 @@
   register: nvidia_runtime_configured
   changed_when: false
   failed_when: false
+  tags:
+    - docker
+    - nvidia
+    - config
 
 - name: Configure NVIDIA runtime for Docker
   ansible.builtin.shell: nvidia-ctk runtime configure --runtime=docker
@@ -52,12 +83,20 @@
     executable: /bin/bash
   register: nvidia_ctk_result
   when: nvidia_runtime_configured.rc != 0
+  tags:
+    - docker
+    - nvidia
+    - config
 
 - name: Restart Docker after NVIDIA toolkit install
   ansible.builtin.systemd:
     name: docker
     state: restarted
   when: nvidia_ctk_result is defined and nvidia_ctk_result is changed
+  tags:
+    - docker
+    - nvidia
+    - service
 
 - name: Verify CUDA container works
   community.docker.docker_container:
@@ -71,17 +110,29 @@
         count: -1
         capabilities:
           - gpu
+  tags:
+    - docker
+    - nvidia
+    - validate
 
 - name: Remove nvidia-gpu-validation container after test
   community.docker.docker_container:
     name: nvidia-gpu-validation
     state: absent
+  tags:
+    - docker
+    - nvidia
+    - validate
 
 - name: Remove unused Ubuntu image after validation
   community.docker.docker_image:
     name: ubuntu
     state: absent
     force_absent: true
+  tags:
+    - docker
+    - nvidia
+    - validate
 
 
 - name: Deploy docker-compose.yml to the docker VM
@@ -136,6 +187,10 @@
     boinc_group: 988
     boinc_timezone: 'America/Chicago'
     doge_node_timezone: 'America/Chicago'
+  tags:
+    - docker
+    - config
+    - compose
 
 - name: Create .env file for Docker Compose with secrets
   template:
@@ -146,10 +201,16 @@
     group: root
   notify: restart docker services
   when: cloudflared_tunnel_token is defined and cloudflared_tunnel_token != ""
+  tags:
+    - docker
+    - config
+    - secrets
 
 - name: Set reboot required flag
   set_fact:
     reboot_required: "{{ (nvidia_ctk_result is defined and nvidia_ctk_result is changed) or (docker_role_result is defined and docker_role_result is changed) }}"
+  tags:
+    - docker
 
 - name: Reboot system if major Docker configuration changes were made
   reboot:
@@ -157,6 +218,9 @@
     connect_timeout: 20
     test_command: systemctl is-active docker
   when: reboot_required | default(false)
+  tags:
+    - docker
+    - reboot
 
 - name: Deploy containers with Docker Compose
   community.docker.docker_compose_v2:
@@ -170,17 +234,27 @@
   delay: 30
   register: compose_result
   until: compose_result is succeeded
+  tags:
+    - docker
+    - compose
+    - deploy
 
 - name: Display final container status
   shell: |
     docker ps --format "table {% raw %}{{.Names}}\t{{.Status}}\t{{.Ports}}{% endraw %}"
   register: container_status
   ignore_errors: true
+  tags:
+    - docker
+    - validate
 
 - name: Show running containers
   debug:
     msg: "{{ container_status.stdout_lines }}"
   when: container_status.stdout_lines is defined
+  tags:
+    - docker
+    - validate
 
 - name: Create PBS backup script for Docker containers
   ansible.builtin.template:
@@ -190,6 +264,10 @@
     group: root
     src: docker_pbs_backup.sh.j2
   when: pbs_backup_enabled | default(true)
+  tags:
+    - docker
+    - backup
+    - pbs
 
 - name: Ensure cron job for nightly Docker PBS backup
   ansible.builtin.cron:
@@ -200,3 +278,9 @@
     hour: 2
     state: present
   when: pbs_backup_enabled | default(true)
+  tags:
+    - docker
+    - backup
+    - pbs
+    - cron
+

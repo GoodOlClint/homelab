@@ -8,6 +8,10 @@
   become: yes
   changed_when: false
   when: "'eth_' + vlan.key in ansible_facts.interfaces"
+  tags:
+    - dns_config
+    - dns
+    - config
 
 - name: Set IPv6 DNS server for each interface using resolvectl
   loop: "{{ dns_zones | dict2items }}"
@@ -21,11 +25,18 @@
     - "'eth_' + vlan.key in ansible_facts.interfaces"
     - vlan.value.ipv6_enabled | default(false)
     - vlan.value.dns_ipv6 is defined
+  tags:
+    - dns_config
+    - dns
+    - config
 
 - name: Wait for apt lock to be released
   shell: while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 1; done
   changed_when: false
   timeout: 300
+  tags:
+    - dns_config
+    - packages
 
 - name: Ensure dnsutils and inotify-tools are installed
   apt:
@@ -38,10 +49,17 @@
   delay: 10
   register: apt_result
   until: apt_result is success
+  tags:
+    - dns_config
+    - dns
+    - packages
 
 - name: Initialize iface_zone_map
   set_fact:
     iface_zone_map: {}
+  tags:
+    - dns_config
+    - dns
 
 - name: Map interfaces to DNS zones
   set_fact:
@@ -54,10 +72,16 @@
   when:
     - ansible_facts['interfaces'][iface]['ipv4'] is defined
     - zone is defined
+  tags:
+    - dns_config
+    - dns
 
 - name: Debug iface_zone_map type
   debug:
     msg: "iface_zone_map type is {{ iface_zone_map | type_debug }} and value is {{ iface_zone_map }}"
+  tags:
+    - dns_config
+    - dns
 
 - name: Set DNS search suffix for each interface based on IP
   loop: "{{ iface_zone_map | dict2items }}"
@@ -67,6 +91,10 @@
     resolvectl domain {{ iface_zone.key }} {{ iface_zone.value }}
   become: yes
   changed_when: false
+  tags:
+    - dns_config
+    - dns
+    - config
 
 - name: Create dynamic DNS update script
   copy:
@@ -118,6 +146,11 @@
       done
 
       echo "[$(date)] Dynamic DNS update complete for $HOSTNAME"
+  tags:
+    - dns_config
+    - dns
+    - ddns
+    - config
 
 - name: Create systemd service for dynamic DNS update
   copy:
@@ -130,6 +163,11 @@
       [Service]
       Type=simple
       ExecStart=/usr/local/bin/dns_dynamic_update.sh
+  tags:
+    - dns_config
+    - dns
+    - ddns
+    - service
 
 - name: Create systemd path unit to watch for IP changes
   copy:
@@ -142,13 +180,27 @@
       PathChanged=/run/systemd/netif/state
 
       [Install]
+  tags:
+    - dns_config
+    - dns
+    - ddns
+    - service
 
 - name: Enable and start dynamic DNS update path
   systemd:
     name: dns-dynamic-update.path
     enabled: yes
     state: started
+  tags:
+    - dns_config
+    - dns
+    - ddns
+    - service
 
 - name: Run dynamic DNS update script immediately
   command: /usr/local/bin/dns_dynamic_update.sh
   become: yes
+  tags:
+    - dns_config
+    - dns
+    - ddns

@@ -3,18 +3,33 @@
   stat:
     path: /etc/apt/trusted.gpg.d/proxmox-release-bookworm.gpg
   register: proxmox_gpg_key
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - packages
 
 - name: Install Proxmox Backup Server repository key
   apt_key:
     url: https://enterprise.proxmox.com/debian/proxmox-release-bookworm.gpg
     state: present
   when: not proxmox_gpg_key.stat.exists
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - packages
 
 - name: Check if Proxmox Backup Server repo is present
   shell: grep -q '^deb .*/pbs' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null
   register: proxmox_backup_repo_present
   changed_when: false
   failed_when: false
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - packages
 
 - name: Add Proxmox Backup Server repository
   apt_repository:
@@ -22,12 +37,22 @@
     state: present
     filename: proxmox-backup
   when: proxmox_backup_repo_present.rc != 0
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - packages
 
 - name: Check if Proxmox Backup Server is installed
   ansible.builtin.shell: dpkg -l | grep -qw proxmox-backup-server
   register: proxmox_backup_installed
   changed_when: false
   failed_when: false
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - packages
 
 - name: Install Proxmox Backup Server
   apt:
@@ -35,12 +60,22 @@
     state: present
     update_cache: yes
   when: proxmox_backup_installed.rc != 0
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - packages
 
 - name: Ensure Proxmox Backup Server is started and enabled
   systemd:
     name: proxmox-backup
     state: started
     enabled: yes
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - service
 
 # Storage Configuration - iSCSI
 - name: Install iSCSI initiator packages
@@ -50,6 +85,13 @@
       - multipath-tools
     state: present
   when: pbs_storage_backend == 'iscsi'
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - storage
+    - iscsi
+    - packages
 
 - name: Ensure iSCSI initiator is started and enabled
   systemd:
@@ -60,6 +102,13 @@
     - open-iscsi
     - iscsid
   when: pbs_storage_backend == 'iscsi'
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - storage
+    - iscsi
+    - service
 
 - name: Discover iSCSI targets
   shell: |
@@ -67,6 +116,12 @@
   register: iscsi_discovery
   changed_when: false
   when: pbs_storage_backend == 'iscsi'
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - storage
+    - iscsi
 
 - name: Login to iSCSI target
   shell: |
@@ -75,11 +130,23 @@
   failed_when: false
   changed_when: "'successful' in iscsi_login.stdout"
   when: pbs_storage_backend == 'iscsi'
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - storage
+    - iscsi
 
 - name: Enable automatic iSCSI login on boot
   shell: |
     iscsiadm --mode node --targetname {{ pbs_iscsi_target }} --portal {{ pbs_iscsi_portal }} --op update --name node.startup --value automatic
   when: pbs_storage_backend == 'iscsi'
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - storage
+    - iscsi
 
 - name: Wait for iSCSI device to appear
   wait_for:
@@ -88,6 +155,12 @@
     timeout: 30
   when: pbs_storage_backend == 'iscsi'
   register: iscsi_device
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - storage
+    - iscsi
 
 - name: Get iSCSI device name
   shell: |
@@ -95,6 +168,12 @@
   register: iscsi_device_path
   changed_when: false
   when: pbs_storage_backend == 'iscsi'
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - storage
+    - iscsi
 
 - name: Check if iSCSI device is formatted
   shell: |
@@ -103,6 +182,12 @@
   failed_when: false
   changed_when: false
   when: pbs_storage_backend == 'iscsi'
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - storage
+    - iscsi
 
 - name: Format iSCSI LUN with {{ pbs_iscsi_filesystem }}
   filesystem:
@@ -112,6 +197,12 @@
   when: 
     - pbs_storage_backend == 'iscsi'
     - iscsi_formatted.rc != 0
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - storage
+    - iscsi
 
 - name: Ensure iSCSI mount point exists
   file:
@@ -121,6 +212,12 @@
     group: root
     mode: '0755'
   when: pbs_storage_backend == 'iscsi'
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - storage
+    - iscsi
 
 - name: Mount iSCSI LUN
   mount:
@@ -130,6 +227,12 @@
     opts: _netdev,defaults
     state: mounted
   when: pbs_storage_backend == 'iscsi'
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - storage
+    - iscsi
 
 # Storage Configuration - NFS (legacy)
 - name: Ensure /mnt/backups exists
@@ -140,6 +243,12 @@
     group: root
     mode: '0755'
   when: pbs_storage_backend == 'nfs'
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - storage
+    - nfs
 
 - name: Ensure NFS packages
   ansible.builtin.package:
@@ -147,6 +256,13 @@
       - nfs-common
     state: present
   when: pbs_storage_backend == 'nfs'
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - storage
+    - nfs
+    - packages
 
 - name: Ensure NFS fstab entry and mount
   ansible.posix.mount:
@@ -158,12 +274,23 @@
     opts: "defaults"
     state: "mounted"
   when: pbs_storage_backend == 'nfs'
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - storage
+    - nfs
 
 - name: Remove Proxmox enterprise repo if present
   ansible.builtin.file:
     path: /etc/apt/sources.list.d/pbs-enterprise.list
     state: absent
   register: proxmox_enterprise_repo_removed
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - config
 
 - name: Remove Proxmox enterprise repo from /etc/apt/sources.list if present
   ansible.builtin.lineinfile:
@@ -171,11 +298,21 @@
     regexp: '^deb .*enterprise.proxmox.com/debian/pbs'
     state: absent
   register: proxmox_enterprise_repo_line_removed
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - config
 
 - name: Update apt cache if repo was removed
   apt:
     update_cache: yes
   when: proxmox_enterprise_repo_removed.changed or proxmox_enterprise_repo_line_removed.changed
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - packages
 
 # Datastore Configuration
 - name: Ensure datastore directories exist
@@ -186,12 +323,23 @@
     group: backup
     mode: '0750'
   loop: "{{ pbs_datastores }}"
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - datastore
+    - config
 
 - name: Check if datastores are already configured
   shell: proxmox-backup-manager datastore list --output-format json
   register: pbs_datastore_list
   changed_when: false
   failed_when: false
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - datastore
 
 - name: Create datastores
   shell: |
@@ -199,6 +347,12 @@
   loop: "{{ pbs_datastores }}"
   when: pbs_datastore_list.stdout is defined and pbs_datastore_list.stdout != "" and (pbs_datastore_list.stdout | from_json | selectattr('name', 'equalto', item.name) | list | length == 0)
   register: datastore_created
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - datastore
+    - config
 
 # User Management
 - name: Check if backup user exists
@@ -206,6 +360,11 @@
   register: pbs_user_list
   changed_when: false
   failed_when: false
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - users
 
 - name: Create PBS users
   shell: |
@@ -215,6 +374,11 @@
   loop: "{{ pbs_users }}"
   when: pbs_user_list.stdout is defined and (pbs_user_list.stdout | from_json | selectattr('userid', 'equalto', item.username + '@' + item.realm) | list | length == 0)
   no_log: true
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - users
 
 # Namespace Configuration
 # Note: Namespaces are now created automatically by backup scripts on first run

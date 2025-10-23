@@ -4,14 +4,26 @@
     name: rsyslog
     state: present
     update_cache: yes
+  tags:
+    - rsyslog_client
+    - logging
+    - packages
 
 - name: Configure rsyslog to forward logs to openobserve
   lineinfile:
     path: /etc/rsyslog.d/99-openobserve.conf
     line: "*.* @{{ hostvars[groups['all'] | select('search', 'openobserve') | list | first]['ansible_host'] }}:5514"
     create: yes
+  tags:
+    - rsyslog_client
+    - logging
+    - config
 
 - name: Restart rsyslog
   systemd:
     name: rsyslog
     state: restarted
+  tags:
+    - rsyslog_client
+    - logging
+    - service

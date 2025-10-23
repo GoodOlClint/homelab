@@ -7,12 +7,20 @@
       - tar
     state: present
     update_cache: yes
+  tags:
+    - openobserve
+    - monitoring
+    - packages
 
 - name: Download OpenObserve release
   get_url:
     url: https://github.com/openobserve/openobserve/releases/download/v0.14.7/openobserve-v0.14.7-linux-amd64.tar.gz
     dest: /tmp/openobserve.tar.gz
     mode: '0644'
+  tags:
+    - openobserve
+    - monitoring
+    - install
 
 - name: Extract OpenObserve
   unarchive:
@@ -20,6 +28,10 @@
     dest: /opt/
     remote_src: yes
     creates: /opt/openobserve
+  tags:
+    - openobserve
+    - monitoring
+    - install
 
 - name: Create OpenObserve systemd service
   copy:
@@ -39,26 +51,47 @@
       [Install]
       WantedBy=multi-user.target
     mode: '0644'
+  tags:
+    - openobserve
+    - monitoring
+    - config
+    - service
 
 - name: Reload systemd
   systemd:
     daemon_reload: yes
+  tags:
+    - openobserve
+    - monitoring
+    - service
 
 - name: Ensure OpenObserve is started and enabled
   systemd:
     name: openobserve
     state: started
     enabled: yes
+  tags:
+    - openobserve
+    - monitoring
+    - service
 
 - name: Set fact for OpenObserve endpoint
   set_fact:
     openobserve_metrics_endpoint: "http://{{ ansible_host | default(inventory_hostname) }}:5080/api/default/prometheus/api/v1/write"
+  tags:
+    - openobserve
+    - monitoring
+    - config
 
 - name: Ensure /etc/openobserve directory exists
   file:
     path: /etc/openobserve
     state: directory
     mode: '0755'
+  tags:
+    - openobserve
+    - monitoring
+    - config
 
 - name: Create sample configuration for metrics ingestion
   copy:
@@ -67,9 +100,18 @@
       [[outputs.prometheus_remote_write]]
         url = "{{ openobserve_metrics_endpoint }}"
     mode: '0644'
+  tags:
+    - openobserve
+    - monitoring
+    - config
 
 - name: Restart Telegraf to apply new configuration
   systemd:
     name: telegraf
     state: restarted
     enabled: yes
+  tags:
+    - openobserve
+    - monitoring
+    - service
+    - telegraf

@@ -2,6 +2,10 @@
 - name: Install NVIDIA GRID driver
   import_role:
     name: nvidia
+  tags:
+    - plex
+    - nvidia
+    - driver
 
 - name: Ensure required packages.
   ansible.builtin.package:
@@ -9,6 +13,9 @@
       - nfs-common
       - cifs-utils
     state: present
+  tags:
+    - plex
+    - packages
 
 - name: Ensure NFS fstab entry and mount.
   ansible.posix.mount:
@@ -19,17 +26,27 @@
     fstype: nfs
     opts: "defaults"
     state: "mounted"
+  tags:
+    - plex
+    - storage
+    - nfs
 
 - name: Mount /mnt/media
   file:
     src: /mnt/plex/data/media
     dest: /mnt/media
     state: link
+  tags:
+    - plex
+    - storage
 
 - name: Check if Plex GPG key exists
   stat:
     path: /usr/share/keyrings/plex.gpg
   register: plex_gpg_key
+  tags:
+    - plex
+    - packages
 
 - name: Download Plex APT GPG key to temp file
   ansible.builtin.get_url:
@@ -37,6 +54,9 @@
     dest: /tmp/plex.gpg.key
     mode: '0644'
   when: not plex_gpg_key.stat.exists
+  tags:
+    - plex
+    - packages
 
 - name: Convert Plex GPG key to dearmored format
   ansible.builtin.command:
@@ -44,12 +64,18 @@
   args:
     creates: /usr/share/keyrings/plex.gpg
   when: not plex_gpg_key.stat.exists
+  tags:
+    - plex
+    - packages
 
 - name: Check if Plex APT repo is present
   ansible.builtin.shell: grep -q '^deb .*/plex' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null
   register: plex_repo_present
   changed_when: false
   failed_when: false
+  tags:
+    - plex
+    - packages
 
 - name: Add Plex official APT repository
   ansible.builtin.apt_repository:
@@ -57,11 +83,17 @@
     state: present
     filename: plexmediaserver
   when: plex_repo_present.rc != 0
+  tags:
+    - plex
+    - packages
 
 - name: Check if Plex is installed
   ansible.builtin.stat:
     path: /usr/lib/plexmediaserver
   register: plex_installed
+  tags:
+    - plex
+    - packages
 
 - name: Install latest Plex Media Server
   ansible.builtin.apt:
@@ -69,6 +101,9 @@
     state: latest
     update_cache: yes
   when: not plex_installed.stat.exists
+  tags:
+    - plex
+    - packages
 
 - name: Create PBS backup script for Plex config
   ansible.builtin.template:
@@ -78,6 +113,10 @@
     group: root
     src: plex_config_pbs_backup.sh.j2
   when: pbs_backup_enabled | default(true)
+  tags:
+    - plex
+    - backup
+    - pbs
 
 - name: Create PBS restore script for Plex config
   ansible.builtin.template:
@@ -87,6 +126,10 @@
     group: root
     src: plex_config_pbs_restore.sh.j2
   when: pbs_backup_enabled | default(true)
+  tags:
+    - plex
+    - backup
+    - pbs
 
 - name: Create SMB backup script for Plex config (fallback)
   ansible.builtin.template:
@@ -96,6 +139,10 @@
     group: root
     src: plex_config_backup.sh.j2
   when: not (pbs_backup_enabled | default(true))
+  tags:
+    - plex
+    - backup
+    - smb
 
 - name: Create SMB restore script for Plex config (fallback)
   ansible.builtin.template:
@@ -105,6 +152,10 @@
     group: root
     src: plex_config_restore.sh.j2
   when: not (pbs_backup_enabled | default(true))
+  tags:
+    - plex
+    - backup
+    - smb
 
 - name: Ensure cron job for nightly Plex config PBS backup
   ansible.builtin.cron:
@@ -115,12 +166,21 @@
     hour: 2
     state: present
   when: pbs_backup_enabled | default(true)
+  tags:
+    - plex
+    - backup
+    - pbs
+    - cron
 
 - name: Remove old SMB backup cron job when PBS is enabled
   ansible.builtin.cron:
     name: "Nightly Plex config backup"
     state: absent
   when: pbs_backup_enabled | default(true)
+  tags:
+    - plex
+    - backup
+    - cron
 
 - name: Ensure cron job for nightly Plex config SMB backup (fallback)
   ansible.builtin.cron:
@@ -131,6 +191,11 @@
     hour: 2
     state: present
   when: not (pbs_backup_enabled | default(true))
+  tags:
+    - plex
+    - backup
+    - smb
+    - cron
 
 - name: Restore Plex config from PBS if not already installed
   ansible.builtin.shell: /usr/local/bin/plex_config_pbs_restore.sh
@@ -139,6 +204,11 @@
     - pbs_backup_enabled | default(true)
   args:
     executable: /bin/bash
+  tags:
+    - plex
+    - backup
+    - pbs
+    - restore
 
 - name: Restore Plex config from SMB if not already installed (fallback)
   ansible.builtin.shell: /usr/local/bin/plex_config_restore.sh
@@ -147,3 +217,8 @@
     - not (pbs_backup_enabled | default(true))
   args:
     executable: /bin/bash
+  tags:
+    - plex
+    - backup
+    - smb
+    - restore

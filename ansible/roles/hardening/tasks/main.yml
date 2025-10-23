@@ -7,6 +7,10 @@
     name: ufw
     state: present
   become: yes
+  tags:
+    - hardening
+    - firewall
+    - packages
 
 - name: Allow SSH
   ufw:
@@ -14,6 +18,9 @@
     port: 22
     proto: tcp
   become: yes
+  tags:
+    - hardening
+    - firewall
 
 - name: Allow required service ports
   ufw:
@@ -23,22 +30,34 @@
   loop: "{{ hardening_allowed_ports | default([]) }}"
   when: hardening_allowed_ports is defined
   become: yes
+  tags:
+    - hardening
+    - firewall
 
 - name: Set default UFW policies
   ufw:
     state: reset
   become: yes
+  tags:
+    - hardening
+    - firewall
 
 - name: Set UFW default deny incoming
   ufw:
     direction: incoming
     policy: deny
   become: yes
+  tags:
+    - hardening
+    - firewall
 
 - name: Enable UFW
   ufw:
     state: enabled
   become: yes
+  tags:
+    - hardening
+    - firewall
 
 - name: Disable SSH password authentication
   lineinfile:
@@ -48,12 +67,20 @@
     state: present
   notify: Restart SSH
   become: yes
+  tags:
+    - hardening
+    - ssh
+    - security
 
 - name: Install unattended-upgrades
   apt:
     name: unattended-upgrades
     state: present
   become: yes
+  tags:
+    - hardening
+    - packages
+    - updates
 
 - name: Enable automatic security updates
   copy:
@@ -62,6 +89,10 @@
       APT::Periodic::Update-Package-Lists "1";
       APT::Periodic::Unattended-Upgrade "1";
   become: yes
+  tags:
+    - hardening
+    - config
+    - updates
 
 - name: Disable and stop unused services
   service:
@@ -71,12 +102,19 @@
   loop: "{{ hardening_disable_services | default([]) }}"
   when: hardening_disable_services is defined
   become: yes
+  tags:
+    - hardening
+    - services
 
 - name: Install auditd for auditing
   apt:
     name: auditd
     state: present
   become: yes
+  tags:
+    - hardening
+    - packages
+    - audit
 
 - name: Ensure auditd is running
   service:
@@ -84,6 +122,10 @@
     state: started
     enabled: yes
   become: yes
+  tags:
+    - hardening
+    - audit
+    - services
 
 - name: Harden sysctl settings
   sysctl:
@@ -94,6 +136,10 @@
   loop: "{{ hardening_sysctl_settings | default([]) }}"
   when: hardening_sysctl_settings is defined
   become: yes
+  tags:
+    - hardening
+    - sysctl
+    - security
 
 - name: Set permissions on sensitive files
   file:
@@ -104,4 +150,9 @@
   loop:
     - { path: '/etc/shadow', mode: '0600' }
     - { path: '/etc/ssh/sshd_config', mode: '0600' }
-  become: yes 
+  become: yes
+  tags:
+    - hardening
+    - permissions
+    - security
+ 

@@ -8,6 +8,10 @@
       - dnsutils
     state: present
     update_cache: yes
+  tags:
+    - bind9
+    - dns
+    - packages
 
 - name: Configure named.conf.options for forwarding to AdGuard
   template:
@@ -15,6 +19,10 @@
     dest: /etc/bind/named.conf.options
     mode: '0644'
   notify: Restart bind9
+  tags:
+    - bind9
+    - dns
+    - config
 
 - name: Configure named.conf.local for zones
   template:
@@ -22,12 +30,21 @@
     dest: /etc/bind/named.conf.local
     mode: '0644'
   notify: Restart bind9
+  tags:
+    - bind9
+    - dns
+    - config
+    - zones
 
 - name: Check if zone files exist
   stat:
     path: "/etc/bind/db.{{ item.zone }}"
   loop: "{{ dns_zones.values() }}"
   register: zone_files_stat
+  tags:
+    - bind9
+    - dns
+    - zones
 
 - name: Configure zone files for all zones (only if they don't exist)
   template:
@@ -37,6 +54,11 @@
   loop: "{{ zone_files_stat.results }}"
   when: not item.stat.exists
   notify: Restart bind9
+  tags:
+    - bind9
+    - dns
+    - zones
+    - config
 
 - name: Set ownership of zone files to bind user for dynamic updates
   file:
@@ -45,6 +67,10 @@
     group: bind
     mode: '0644'
   loop: "{{ dns_zones.values() }}"
+  tags:
+    - bind9
+    - dns
+    - zones
 
 - name: Ensure /etc/bind directory is writable by bind user
   file:
@@ -53,6 +79,10 @@
     group: bind
     mode: '0755'
     state: directory
+  tags:
+    - bind9
+    - dns
+    - config
 
 - name: Check for corrupted journal files
   shell: |
@@ -64,6 +94,10 @@
   register: corrupt_journals
   changed_when: false
   failed_when: false
+  tags:
+    - bind9
+    - dns
+    - validate
 
 - name: Remove corrupted journal files if found
   file:
@@ -72,19 +106,34 @@
   loop: "{{ corrupt_journals.stdout_lines }}"
   when: corrupt_journals.stdout_lines | length > 0
   notify: Restart bind9
+  tags:
+    - bind9
+    - dns
+    - validate
 
 - name: Flush handlers to ensure bind9 is restarted if needed
   meta: flush_handlers
+  tags:
+    - bind9
+    - dns
 
 - name: Wait for DNS server to be responsive
   wait_for:
     host: 127.0.0.1
     port: 53
     timeout: 30
+  tags:
+    - bind9
+    - dns
+    - validate
 
 - name: Wait a few seconds for DNS to fully initialize
   pause:
     seconds: 3
+  tags:
+    - bind9
+    - dns
+    - validate
 
 - name: Check if zones are actually loaded in BIND
   shell: |
@@ -101,6 +150,11 @@
   register: zone_status_check
   changed_when: false
   failed_when: false
+  tags:
+    - bind9
+    - dns
+    - zones
+    - validate
 
 - name: Remove all journal files if zones failed to load
   block:
@@ -129,6 +183,11 @@
       pause:
         seconds: 3
   when: "'failed=0' not in zone_status_check.stdout"
+  tags:
+    - bind9
+    - dns
+    - zones
+    - service
 
 - name: Verify DNS resolution is working
   command: dig +short +time=2 +tries=3 @127.0.0.1 cloudflare.com
@@ -137,3 +196,7 @@
   delay: 2
   until: dns_test.rc == 0 and dns_test.stdout != ""
   changed_when: false
+  tags:
+    - bind9
+    - dns
+    - validate

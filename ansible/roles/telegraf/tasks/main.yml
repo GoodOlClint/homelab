@@ -4,6 +4,9 @@
   stat:
     path: /usr/share/keyrings/influxdata.gpg
   register: influxdata_gpg_key
+  tags:
+    - telegraf
+    - packages
 
 - name: Download InfluxData GPG key to temp file
   ansible.builtin.get_url:
@@ -11,6 +14,9 @@
     dest: /tmp/influxdata.gpg.key
     mode: '0644'
   when: not influxdata_gpg_key.stat.exists
+  tags:
+    - telegraf
+    - packages
 
 - name: Convert InfluxData GPG key to dearmored format
   ansible.builtin.command:
@@ -18,12 +24,18 @@
   args:
     creates: /usr/share/keyrings/influxdata.gpg
   when: not influxdata_gpg_key.stat.exists
+  tags:
+    - telegraf
+    - packages
 
 - name: Check if InfluxData APT repo is present
   ansible.builtin.shell: grep -q '^deb .*/influxdata' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null
   register: influxdata_repo_present
   changed_when: false
   failed_when: false
+  tags:
+    - telegraf
+    - packages
 
 - name: Add InfluxData official APT repository
   ansible.builtin.apt_repository:
@@ -31,12 +43,18 @@
     state: present
     filename: influxdata
   when: influxdata_repo_present.rc != 0
+  tags:
+    - telegraf
+    - packages
 
 - name: Check if Telegraf is installed
   ansible.builtin.shell: dpkg -l | grep -qw telegraf
   register: telegraf_installed
   changed_when: false
   failed_when: false
+  tags:
+    - telegraf
+    - packages
 
 - name: Ensure Telegraf is installed
   apt:
@@ -44,11 +62,17 @@
     state: present
     update_cache: yes
   when: telegraf_installed.rc != 0
+  tags:
+    - telegraf
+    - packages
 
 - name: Check if Telegraf OpenObserve config exists
   stat:
     path: /etc/telegraf/telegraf.d/openobserve.conf
   register: telegraf_openobserve_conf
+  tags:
+    - telegraf
+    - config
 
 - name: Configure Telegraf to send metrics to OpenObserve
   template:
@@ -56,12 +80,19 @@
     dest: /etc/telegraf/telegraf.d/openobserve.conf
     mode: '0644'
   notify: Restart Telegraf
+  tags:
+    - telegraf
+    - config
 
 - name: Validate Telegraf configuration syntax
   command: telegraf --config /etc/telegraf/telegraf.conf --config-directory /etc/telegraf/telegraf.d config
   register: telegraf_test
   changed_when: false
   failed_when: telegraf_test.rc != 0
+  tags:
+    - telegraf
+    - config
+    - validate
 
 - name: Ensure Telegraf is started and enabled
   systemd:
@@ -69,3 +100,7 @@
     state: started
     enabled: yes
   when: telegraf_installed.rc == 0
+  tags:
+    - telegraf
+    - service
+

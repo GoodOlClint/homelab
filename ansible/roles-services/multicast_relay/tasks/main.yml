@@ -8,12 +8,18 @@
       - python3-netifaces
     state: present
     update_cache: yes
+  tags:
+    - multicast_relay
+    - packages
 
 - name: Clone multicast-relay repository
   git:
     repo: https://github.com/alsmith/multicast-relay.git
     dest: /bin/multicast-relay
     force: yes
+  tags:
+    - multicast_relay
+    - install
 
 - name: Copy ifFilter.json from inventory host_vars (or adjust as needed)
   copy:
@@ -22,6 +28,9 @@
     owner: root
     group: root
     mode: '0644'
+  tags:
+    - multicast_relay
+    - config
 
 - name: Configure logrotate for multicast-relay
   copy:
@@ -36,6 +45,10 @@
           endscript
          rotate 7
       }
+  tags:
+    - multicast_relay
+    - config
+    - logging
 
 - name: Create systemd service for multicast-relay
   copy:
@@ -56,13 +69,23 @@
 
       [Install]
       WantedBy=multi-user.target
+  tags:
+    - multicast_relay
+    - config
+    - service
 
 - name: Reload systemd daemon
   systemd:
     daemon_reload: yes
+  tags:
+    - multicast_relay
+    - service
 
 - name: Start and enable multicast-relay service
   systemd:
     name: multicast-relay
     state: started
     enabled: yes
+  tags:
+    - multicast_relay
+    - service

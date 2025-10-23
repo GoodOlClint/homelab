@@ -5,18 +5,33 @@
   stat:
     path: /etc/apt/trusted.gpg.d/proxmox-release-bookworm.gpg
   register: pbs_gpg_key
+  tags:
+    - pbs_client
+    - pbs
+    - backup
+    - packages
 
 - name: Install Proxmox Backup Server repository key
   shell: |
     wget https://enterprise.proxmox.com/debian/proxmox-release-bookworm.gpg \
       -O /etc/apt/trusted.gpg.d/proxmox-release-bookworm.gpg
   when: not pbs_gpg_key.stat.exists
+  tags:
+    - pbs_client
+    - pbs
+    - backup
+    - packages
 
 - name: Check if Proxmox repo is present
   shell: grep -q "pbs-client" /etc/apt/sources.list.d/pbs-client.list
   register: pbs_repo_check
   failed_when: false
   changed_when: false
+  tags:
+    - pbs_client
+    - pbs
+    - backup
+    - packages
 
 - name: Add Proxmox Backup Client repository
   copy:
@@ -27,23 +42,43 @@
     mode: '0644'
   when: pbs_repo_check.rc != 0
   register: pbs_repo_added
+  tags:
+    - pbs_client
+    - pbs
+    - backup
+    - packages
 
 - name: Update apt cache if repo was added
   apt:
     update_cache: yes
   when: pbs_repo_added is changed
+  tags:
+    - pbs_client
+    - pbs
+    - backup
+    - packages
 
 - name: Install proxmox-backup-client
   apt:
     name: proxmox-backup-client
     state: present
   when: pbs_client_install | default(true)
+  tags:
+    - pbs_client
+    - pbs
+    - backup
+    - packages
 
 - name: Ensure /etc/proxmox-backup directory exists
   file:
     path: /etc/proxmox-backup
     state: directory
     mode: '0755'
+  tags:
+    - pbs_client
+    - pbs
+    - backup
+    - config
 
 - name: Create PBS environment file for authentication
   template:
@@ -52,6 +87,11 @@
     mode: '0600'
     owner: root
     group: root
+  tags:
+    - pbs_client
+    - pbs
+    - backup
+    - config
 
 - name: Verify PBS connection
   shell: |
@@ -59,8 +99,18 @@
   register: pbs_connection_test
   failed_when: false
   changed_when: false
+  tags:
+    - pbs_client
+    - pbs
+    - backup
+    - validate
 
 - name: Display PBS connection status
   debug:
     msg: "PBS Connection: {{ 'SUCCESS' if pbs_connection_test.rc == 0 else 'FAILED - ' + pbs_connection_test.stderr }}"
   when: pbs_connection_test is defined and pbs_connection_test.rc is defined
+  tags:
+    - pbs_client
+    - pbs
+    - backup
+    - validate

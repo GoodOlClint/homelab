@@ -9,10 +9,20 @@
     status_code: [200, 401, 404]
   register: openobserve_api_check
   ignore_errors: yes
+  tags:
+    - openobserve_dashboards
+    - monitoring
+    - dashboards
+    - validate
 
 - name: Display OpenObserve API status
   debug:
     msg: "OpenObserve API is {{ 'accessible' if openobserve_api_check.status == 200 else 'not accessible' }}"
+  tags:
+    - openobserve_dashboards
+    - monitoring
+    - dashboards
+    - validate
 
 - name: Create dashboards directory on OpenObserve host
   file:
@@ -20,6 +30,10 @@
     state: directory
     mode: '0755'
   become: yes
+  tags:
+    - openobserve_dashboards
+    - monitoring
+    - dashboards
 
 - name: Copy PBS backup dashboard to OpenObserve host
   copy:
@@ -27,6 +41,10 @@
     dest: /opt/openobserve/dashboards/pbs_backup_dashboard.json
     mode: '0644'
   become: yes
+  tags:
+    - openobserve_dashboards
+    - monitoring
+    - dashboards
 
 - name: Copy PBS storage dashboard to OpenObserve host
   copy:
@@ -34,6 +52,10 @@
     dest: /opt/openobserve/dashboards/pbs_storage_dashboard.json
     mode: '0644'
   become: yes
+  tags:
+    - openobserve_dashboards
+    - monitoring
+    - dashboards
 
 - name: Display dashboard import instructions
   debug:
@@ -85,3 +107,7 @@
       - System-level errors
       
       ============================================
+  tags:
+    - openobserve_dashboards
+    - monitoring
+    - dashboards
