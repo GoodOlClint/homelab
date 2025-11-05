@@ -25,9 +25,9 @@
 
     - name: Update all globally installed npm packages (including Homebridge plugins)
       ansible.builtin.shell: |
-        npm update -g
+        npm update -g 2>&1 | tee /tmp/npm-update.log
       register: plugin_update
-      changed_when: plugin_update.stdout != ""
+      changed_when: "'up to date' not in plugin_update.stdout"
 
     - name: Restart Homebridge service after updates
       ansible.builtin.systemd:
@@ -45,7 +45,9 @@
         files:
           - docker-compose.yml
         pull: always
+      register: docker_pull_result
       when: inventory_hostname == 'docker'
+      changed_when: "'Recreate' in docker_pull_result.stderr"
 
     - name: Pull latest images for plex services
       community.docker.docker_compose_v2:
@@ -53,7 +55,9 @@
         files:
           - docker-compose-plex-services.yml
         pull: always
+      register: plex_pull_result
       when: inventory_hostname == 'plex-services'
+      changed_when: "'Recreate' in plex_pull_result.stderr"
 
     - name: Restart docker services with latest images
       community.docker.docker_compose_v2:
@@ -61,7 +65,9 @@
         files:
           - docker-compose.yml
         state: present
-      when: inventory_hostname == 'docker'
+      when: 
+        - inventory_hostname == 'docker'
+        - docker_pull_result.changed | default(false)
 
     - name: Restart plex services with latest images
       community.docker.docker_compose_v2:
@@ -69,7 +75,9 @@
         files:
           - docker-compose-plex-services.yml
         state: present
-      when: inventory_hostname == 'plex-services'
+      when: 
+        - inventory_hostname == 'plex-services'
+        - plex_pull_result.changed | default(false)
 
     - name: Prune unused Docker images
       shell: docker image prune -af
