@@ -23,6 +23,52 @@
     - docker
     - packages
 
+- name: Read existing Docker daemon.json
+  ansible.builtin.slurp:
+    src: /etc/docker/daemon.json
+  register: daemon_json_content
+  ignore_errors: true
+  tags:
+    - plex_services
+    - docker
+    - logging
+    - config
+
+- name: Parse existing Docker daemon configuration
+  set_fact:
+    daemon_config: "{{ daemon_json_content.content | b64decode | from_json if daemon_json_content.content is defined else {} }}"
+  tags:
+    - plex_services
+    - docker
+    - logging
+    - config
+
+- name: Merge logging configuration into Docker daemon config
+  set_fact:
+    daemon_config: "{{ daemon_config | combine({'log-driver': 'syslog', 'log-opts': {'syslog-address': 'udp://' + openobserve_listen_host + ':5514', 'syslog-format': 'rfc5424', 'tag': ansible_hostname + '/{{.Name}}'}}) }}"
+  tags:
+    - plex_services
+    - docker
+    - logging
+    - config
+    - docker
+    - logging
+    - config
+
+- name: Write updated Docker daemon.json
+  ansible.builtin.copy:
+    dest: /etc/docker/daemon.json
+    content: "{{ daemon_config | to_nice_json }}"
+    mode: '0644'
+    owner: root
+    group: root
+  notify: restart docker
+  tags:
+    - plex_services
+    - docker
+    - logging
+    - config
+
 - name: Create plex-services system group
   group:
     name: "{{ plex_services_group }}"

@@ -1,4 +1,11 @@
 ---
+- name: restart docker
+  ansible.builtin.systemd:
+    name: docker
+    state: restarted
+    daemon_reload: yes
+  listen: "restart docker"
+
 - name: restart plex services docker compose
   community.docker.docker_compose_v2:
     project_src: /docker

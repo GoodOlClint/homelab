@@ -43,8 +43,6 @@ services:
     container_name: sonarr
     image: ghcr.io/hotio/sonarr:latest
     restart: unless-stopped
-    logging:
-      driver: json-file
     ports:
       - 8989:8989
     depends_on:
@@ -71,8 +69,6 @@ services:
     container_name: radarr
     image: ghcr.io/hotio/radarr:latest
     restart: unless-stopped
-    logging:
-      driver: json-file
     ports:
       - 7878:7878
     depends_on:
@@ -99,8 +95,6 @@ services:
     container_name: tautulli
     image: ghcr.io/hotio/tautulli:latest
     restart: unless-stopped
-    logging:
-      driver: json-file
     ports:
       - 8181:8181
     environment:
@@ -154,8 +148,6 @@ services:
     container_name: prowlarr
     image: ghcr.io/hotio/prowlarr:latest
     restart: unless-stopped
-    logging:
-      driver: json-file
     ports:
       - "9696:9696"
     depends_on:
@@ -181,8 +173,6 @@ services:
     container_name: bazarr
     image: ghcr.io/hotio/bazarr:latest
     restart: unless-stopped
-    logging:
-      driver: json-file
     ports:
       - 6767:6767
     depends_on:
@@ -215,8 +205,6 @@ services:
     container_name: lidarr
     image: ghcr.io/hotio/lidarr:latest
     restart: unless-stopped
-    logging:
-      driver: json-file
     ports:
       - 8686:8686
     depends_on:
@@ -243,8 +231,6 @@ services:
     container_name: readarr
     image: ghcr.io/hotio/readarr:latest
     restart: unless-stopped
-    logging:
-      driver: json-file
     ports:
       - 8787:8787
     depends_on:
@@ -271,8 +257,6 @@ services:
     container_name: sabnzbd
     image: ghcr.io/hotio/sabnzbd:latest
     restart: unless-stopped
-    logging:
-      driver: json-file
     ports:
       - 8080:8080
     environment:
@@ -311,8 +295,6 @@ services:
     container_name: recyclarr
     image: ghcr.io/recyclarr/recyclarr:latest
     restart: unless-stopped
-    logging:
-      driver: json-file
     environment:
       - PUID={{ plex_services['recyclarr'].PUID | default(1000) }}
       - PGID={{ plex_services['recyclarr'].PGID | default(1000) }}

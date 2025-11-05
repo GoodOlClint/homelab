@@ -98,6 +98,45 @@
     - nvidia
     - service
 
+- name: Read existing Docker daemon.json
+  ansible.builtin.slurp:
+    src: /etc/docker/daemon.json
+  register: daemon_json_content
+  ignore_errors: true
+  tags:
+    - docker
+    - logging
+    - config
+
+- name: Parse existing Docker daemon configuration
+  set_fact:
+    daemon_config: "{{ daemon_json_content.content | b64decode | from_json if daemon_json_content.content is defined else {} }}"
+  tags:
+    - docker
+    - logging
+    - config
+
+- name: Merge logging configuration into Docker daemon config
+  set_fact:
+    daemon_config: "{{ daemon_config | combine({'log-driver': 'syslog', 'log-opts': {'syslog-address': 'udp://' + openobserve_listen_host + ':5514', 'syslog-format': 'rfc5424', 'tag': ansible_hostname + '/{{.Name}}'}}) }}"
+  tags:
+    - docker
+    - logging
+    - config
+
+- name: Write updated Docker daemon.json
+  ansible.builtin.copy:
+    dest: /etc/docker/daemon.json
+    content: "{{ daemon_config | to_nice_json }}"
+    mode: '0644'
+    owner: root
+    group: root
+  notify: restart docker
+  tags:
+    - docker
+    - logging
+    - config
+
 - name: Verify CUDA container works
   community.docker.docker_container:
     name: nvidia-gpu-validation
