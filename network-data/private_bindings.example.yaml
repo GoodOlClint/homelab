@@ -1,0 +1,55 @@
+version: 1
+
+metadata:
+  profile: private-bindings-template
+  description: "Local-only site-specific VLAN/CIDR/interface bindings"
+
+zones:
+  management:
+    vlan_id: 10
+    interface: "REPLACE_WITH_PFSENSE_INTERFACE"
+    cidr_v4: "REPLACE_WITH_CIDR"
+  storage:
+    vlan_id: 20
+    interface: "REPLACE_WITH_PFSENSE_INTERFACE"
+    cidr_v4: "REPLACE_WITH_CIDR"
+  infrastructure:
+    vlan_id: 30
+    interface: "REPLACE_WITH_PFSENSE_INTERFACE"
+    cidr_v4: "REPLACE_WITH_CIDR"
+  services:
+    vlan_id: 40
+    interface: "REPLACE_WITH_PFSENSE_INTERFACE"
+    cidr_v4: "REPLACE_WITH_CIDR"
+  media:
+    vlan_id: 50
+    interface: "REPLACE_WITH_PFSENSE_INTERFACE"
+    cidr_v4: "REPLACE_WITH_CIDR"
+  core:
+    vlan_id: 100
+    interface: "REPLACE_WITH_PFSENSE_INTERFACE"
+    cidr_v4: "REPLACE_WITH_CIDR"
+  work:
+    vlan_id: 110
+    interface: "REPLACE_WITH_PFSENSE_INTERFACE"
+    cidr_v4: "REPLACE_WITH_CIDR"
+  iot:
+    vlan_id: 120
+    interface: "REPLACE_WITH_PFSENSE_INTERFACE"
+    cidr_v4: "REPLACE_WITH_CIDR"
+  sonos:
+    vlan_id: 121
+    interface: "REPLACE_WITH_PFSENSE_INTERFACE"
+    cidr_v4: "REPLACE_WITH_CIDR"
+  vivint:
+    vlan_id: 122
+    interface: "REPLACE_WITH_PFSENSE_INTERFACE"
+    cidr_v4: "REPLACE_WITH_CIDR"
+  guest:
+    vlan_id: 130
+    interface: "REPLACE_WITH_PFSENSE_INTERFACE"
+    cidr_v4: "REPLACE_WITH_CIDR"
+
+hosts:
+  mdns_relay: "REPLACE_WITH_IP_OR_DNS"
+  dns: "REPLACE_WITH_IP_OR_DNS"

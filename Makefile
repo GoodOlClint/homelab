@@ -1,8 +1,23 @@
 # Makefile for Homelab Automation
 
-.PHONY: all infra services inventory ansible apply update plan destroy
+.PHONY: all infra services inventory ansible apply update plan destroy validate-public-policy security-check security-check-range setup-hooks bootstrap-local
 
 all: apply
+
+validate-public-policy:
+	@python3 scripts/validate_public_policy.py network-data/public_policy.yaml
+
+security-check:
+	@bash scripts/security_guardrails.sh --staged
+
+security-check-range:
+	@bash scripts/security_guardrails.sh --range HEAD~1..HEAD
+
+setup-hooks:
+	@pre-commit install --install-hooks
+
+bootstrap-local:
+	@bash scripts/bootstrap_local_config.sh
 
 init:
 	@python3 -m venv .venv
@@ -63,4 +78,3 @@ clean-ssh:
 	@. .venv/bin/activate && python3 -c "import yaml; f=open('ansible/inventory/vms.yaml'); ips=[h['ansible_host'] for h in yaml.safe_load(f)['all']['hosts'].values()]; [__import__('os').system(f'ssh-keygen -R {ip}') for ip in ips]"
 
 clean: clean-services clean-infra clean-ssh
-

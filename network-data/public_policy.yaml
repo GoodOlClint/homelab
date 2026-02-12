@@ -1,0 +1,70 @@
+version: 1
+
+metadata:
+  profile: public
+  description: "Publishable network policy intent without site-specific addressing"
+
+zones:
+  management: {}
+  storage: {}
+  infrastructure: {}
+  services: {}
+  media: {}
+  core: {}
+  work: {}
+  iot: {}
+  sonos: {}
+  vivint: {}
+  guest: {}
+
+aliases:
+  service_groups:
+    mdns_discovery:
+      proto: udp
+      ports: [5353]
+    airplay_control:
+      proto: tcp
+      ports: [7000, 7100, 5000, 5001]
+    airplay_streaming:
+      proto: tcp
+      ports: [7010, 7011]
+    ntp:
+      proto: udp
+      ports: [123]
+
+rules:
+  - id: allow-mdns-work-to-sonos
+    action: pass
+    from_zone: work
+    to_zone: sonos
+    service: mdns_discovery
+    state: keep
+    log: true
+    note: "AirPlay and service discovery between segmented user zones"
+
+  - id: allow-airplay-work-to-media
+    action: pass
+    from_zone: work
+    to_zone: media
+    service: airplay_control
+    state: keep
+    log: true
+    note: "AirPlay control channels from work devices to media services"
+
+  - id: allow-ntp-iot-to-infrastructure
+    action: pass
+    from_zone: iot
+    to_zone: infrastructure
+    service: ntp
+    state: keep
+    log: false
+    note: "Permit time sync while maintaining segmentation"
+
+  - id: deny-iot-to-management
+    action: block
+    from_zone: iot
+    to_zone: management
+    service: any
+    state: none
+    log: true
+    note: "Default deny from IoT to management"

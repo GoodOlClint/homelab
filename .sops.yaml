@@ -1,0 +1,10 @@
+creation_rules:
+  - path_regex: ansible/group_vars/secrets\.sops\.ya?ml$
+    encrypted_regex: '^(data|stringData|secrets|passwords|tokens|keys)$'
+    age: >-
+      REPLACE_WITH_AGE_PUBLIC_KEY
+
+  - path_regex: network-data/local/.*\.sops\.ya?ml$
+    encrypted_regex: '^(.*)$'
+    age: >-
+      REPLACE_WITH_AGE_PUBLIC_KEY

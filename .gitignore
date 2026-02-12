@@ -16,9 +16,7 @@ host_vars/vault/
 *.vault
 
 # Documentation files
-*.md
 !README.md
-README.md
 
 # SSH keys and certificates
 *.pem
@@ -39,6 +37,14 @@ secrets.yml
 secrets.yaml
 credentials.yml
 credentials.yaml
+
+# PR0 local-only data overlays
+network-data/local/**
+!network-data/local/.gitkeep
+ansible/group_vars/local/**
+!ansible/group_vars/local/.gitkeep
+!ansible/group_vars/local/*.example.yml
+ansible/group_vars/secrets.sops.yml
 
 # macOS system files
 .DS_Store
@@ -104,6 +110,7 @@ Homebrew/
 # macOS Python
 __pycache__/
 *.pyc
+.pre-commit-cache/
 
 # macOS Node
 node_modules/

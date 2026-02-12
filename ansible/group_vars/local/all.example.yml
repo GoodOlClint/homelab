@@ -1,0 +1,12 @@
+# Local-only inventory variables (not tracked)
+# Copy to ansible/group_vars/local/all.yml and set real values.
+
+local_network:
+  domain_suffix: "REPLACE_WITH_DOMAIN"
+
+local_services:
+  openobserve_listen_host: "REPLACE_WITH_HOST"
+  openobserve_listen_port: 5080
+
+# If not using sops immediately, keep temporary plain values only in this local file.
+# Prefer moving credentials into ansible/group_vars/secrets.sops.yml.
