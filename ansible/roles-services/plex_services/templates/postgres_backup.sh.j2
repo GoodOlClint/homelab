@@ -13,7 +13,7 @@ LOG_FILE="/var/log/postgres_backup.log"
 
 # PostgreSQL connection details
 POSTGRES_USER="{{ postgres_user | default('qstick') }}"
-POSTGRES_PASSWORD="{{ postgres_password | default('qstick') }}"
+POSTGRES_PASSWORD="{{ (secrets | default({})).get('postgres_password', postgres_password | default('qstick')) }}"
 POSTGRES_HOST="localhost"
 POSTGRES_PORT="5432"
 
@@ -54,7 +54,7 @@ PGPASSWORD="$POSTGRES_PASSWORD" pg_dumpall -h "$POSTGRES_HOST" -p "$POSTGRES_POR
 if [ $? -eq 0 ]; then
     gzip "$GLOBALS_FILE"
     log "Successfully created globals backup: ${GLOBALS_FILE}.gz"
-    
+
     # Upload globals to SMB if enabled
     if [ "$SMB_ENABLED" = true ]; then
         if [ -n "$SMB_DOMAIN" ]; then
@@ -79,31 +79,31 @@ fi
 for DB in $DATABASES; do
     log "Backing up database: $DB"
     BACKUP_FILE="$BACKUP_DIR/${DB}_${TIMESTAMP}.dump"
-    
+
     # Create compressed backup in custom format (better for pg_restore)
     PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -Fc -f "$BACKUP_FILE" "$DB"
-    
+
     if [ $? -eq 0 ]; then
         log "Successfully created backup: $BACKUP_FILE"
-        
+
         # Upload to SMB if enabled
         if [ "$SMB_ENABLED" = true ]; then
             log "Uploading backup to SMB share: $SMB_SERVER/$SMB_SHARE/$REMOTE_BACKUP_PATH/"
-            
+
             # Create remote directory structure
             if [ -n "$SMB_DOMAIN" ]; then
                 smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_DOMAIN/$SMB_USER%$SMB_PASS" -c "mkdir \"$REMOTE_BACKUP_PATH\" 2>/dev/null; exit" 2>/dev/null || true
             else
                 smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_USER%$SMB_PASS" -c "mkdir \"$REMOTE_BACKUP_PATH\" 2>/dev/null; exit" 2>/dev/null || true
             fi
-            
+
             # Upload backup file
             if [ -n "$SMB_DOMAIN" ]; then
                 smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_DOMAIN/$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; put \"$BACKUP_FILE\" \"$(basename "$BACKUP_FILE")\""
             else
                 smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; put \"$BACKUP_FILE\" \"$(basename "$BACKUP_FILE")\""
             fi
-            
+
             if [ $? -eq 0 ]; then
                 log "Successfully uploaded backup to SMB share"
             else
@@ -123,20 +123,20 @@ find "$BACKUP_DIR" -name "*.sql.gz" -type f -mtime +$RETENTION_DAYS -delete
 # Clean up old remote backups if SMB is enabled
 if [ "$SMB_ENABLED" = true ]; then
     log "Cleaning up remote backups older than $RETENTION_DAYS days"
-    
+
     # Get list of remote files and delete old ones
     CUTOFF_DATE=$(date -d "$RETENTION_DAYS days ago" +%Y%m%d)
-    
+
     if [ -n "$SMB_DOMAIN" ]; then
         REMOTE_FILES=$(smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_DOMAIN/$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; ls" 2>/dev/null | grep -E "\.(dump|sql\.gz)$" | awk '{print $1}' || true)
     else
         REMOTE_FILES=$(smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; ls" 2>/dev/null | grep -E "\.(dump|sql\.gz)$" | awk '{print $1}' || true)
     fi
-    
+
     for FILE in $REMOTE_FILES; do
         # Extract date from filename (assuming format: dbname_YYYYMMDD_HHMMSS.sql.gz)
         FILE_DATE=$(echo "$FILE" | grep -o '[0-9]\{8\}_[0-9]\{6\}' | cut -d'_' -f1 || true)
-        
+
         if [ -n "$FILE_DATE" ] && [ "$FILE_DATE" -lt "$CUTOFF_DATE" ]; then
             log "Deleting old remote backup: $FILE"
             if [ -n "$SMB_DOMAIN" ]; then

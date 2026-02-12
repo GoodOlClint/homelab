@@ -12,7 +12,7 @@ LOG_FILE="/var/log/postgres_pbs_backup.log"
 
 # PostgreSQL connection details
 POSTGRES_USER="{{ postgres_user | default('qstick') }}"
-POSTGRES_PASSWORD="{{ postgres_password | default('qstick') }}"
+POSTGRES_PASSWORD="{{ (secrets | default({})).get('postgres_password', postgres_password | default('qstick')) }}"
 POSTGRES_HOST="localhost"
 POSTGRES_PORT="5432"
 
@@ -66,14 +66,14 @@ if [ "$PBS_ENABLED" = true ]; then
     if ! command -v proxmox-backup-client &> /dev/null; then
         error_exit "proxmox-backup-client not found. Install with: apt install proxmox-backup-client"
     fi
-    
+
     # Test PBS connection and create namespace if needed
     log "Testing PBS connection..."
     set +e  # Temporarily disable exit on error for PBS test
     proxmox-backup-client snapshot list --ns "$PBS_NAMESPACE" &>/dev/null
     PBS_TEST_EXIT=$?
     set -e  # Re-enable exit on error
-    
+
     if [ $PBS_TEST_EXIT -ne 0 ] && [ $PBS_TEST_EXIT -ne 255 ]; then
         log "WARNING: Cannot connect to PBS (exit code: $PBS_TEST_EXIT), falling back to local backup only"
         PBS_ENABLED=false
@@ -119,28 +119,28 @@ fi
 for DB in $DATABASES; do
     log "Backing up database: $DB"
     BACKUP_FILE="$BACKUP_DIR/${DB}_${TIMESTAMP}.dump"
-    
+
     # Create compressed backup in custom format (better for pg_restore)
     # Dump inside container, redirect to host filesystem
     docker exec postgres pg_dump -U "$POSTGRES_USER" -Fc "$DB" > "$BACKUP_FILE"
-    
+
     if [ $? -ne 0 ]; then
         log "WARNING: Failed to backup database: $DB"
         continue
     fi
-    
+
     log "Successfully created backup: $BACKUP_FILE"
 done
 
 # Upload to PBS if enabled
 if [ "$PBS_ENABLED" = true ]; then
     log "Uploading backups to Proxmox Backup Server..."
-    
+
     # Create backup ID (PBS adds timestamp automatically)
     BACKUP_ID="postgres"
-    
+
     log "Backing up to PBS repository: $PBS_REPOSITORY"
-    
+
     # Execute PBS backup - backup the entire directory
     # The .pxar format archives directories, so we backup the whole backup dir
     proxmox-backup-client backup \
@@ -148,10 +148,10 @@ if [ "$PBS_ENABLED" = true ]; then
         --ns "$PBS_NAMESPACE" \
         --backup-id "$BACKUP_ID" \
         --backup-time "$(date +%s)"
-    
+
     if [ $? -eq 0 ]; then
         log "Successfully uploaded backups to PBS"
-        
+
         # List recent backups
         log "Recent PBS backups:"
         proxmox-backup-client snapshot list --ns "$PBS_NAMESPACE" | tail -n 5

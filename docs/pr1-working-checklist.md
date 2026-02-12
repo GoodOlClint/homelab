@@ -28,6 +28,7 @@ Goal: move runtime configuration off tracked sensitive files while keeping deplo
   - [x] Any DB/service passwords in templates
 - [ ] Refactor roles/templates to read from `secrets.*` namespace where applicable
   - [x] First migration slice applied for monitoring + tunnel paths (with fallback)
+  - [x] Second migration slice applied for PostgreSQL service password consumers (with fallback)
   - [ ] Remaining role/template consumers migrated
 - [ ] Add non-secret defaults/placeholders for required vars in tracked files
 - [ ] Validate all affected playbooks in check mode (`--check`) where possible

@@ -7,7 +7,7 @@ services:
     ports:
       - 5432:5432
     environment:
-      - POSTGRES_PASSWORD={{ postgres_password | default('changeme') }}
+      - POSTGRES_PASSWORD={{ (secrets | default({})).get('postgres_password', postgres_password | default('changeme')) }}
       - POSTGRES_USER={{ postgres_user | default('qstick') }}
       - POSTGRES_DB={{ postgres_default_db | default('qstick') }}
       - TZ={{ timezone }}
