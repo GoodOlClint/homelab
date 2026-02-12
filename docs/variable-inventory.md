@@ -71,6 +71,21 @@ Action for PR2: extend this set to include remaining required keys (OpenObserve/
 3. Ensure no template/task fails when secrets file is absent in dev/test contexts.
 4. After full cutover, remove legacy fallbacks in a cleanup PR.
 
+## Current Migration Status (end of PR1)
+
+- Completed in code (fallback implemented):
+  - OpenObserve root password consumers
+  - Grafana admin password consumers
+  - Proxmox token value consumer (monitoring exporter)
+  - UniFi admin/monitoring password consumers
+  - Synology admin password consumer
+  - Cloudflare tunnel token consumers
+  - PBS backup/api token consumers in active templates/tasks
+  - PostgreSQL service root password consumers
+- Remaining for PR2 completion:
+  - Consolidate legacy variable names and remove compatibility fallbacks after cutover
+  - Update any non-active/legacy roles that still directly reference legacy secret vars
+
 ## Validation Plan for PR2
 
 - Run check mode on changed playbooks/roles.

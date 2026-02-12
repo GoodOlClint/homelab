@@ -8,7 +8,7 @@
     body_format: form-urlencoded
     validate_certs: false
     url_username: "{{ synology_admin_user | default('admin') }}"
-    url_password: "{{ synology_admin_password }}"
+    url_password: "{{ (secrets | default({})).get('synology_admin_password', synology_admin_password) }}"
     force_basic_auth: true
   register: synology_login
   no_log: true
@@ -18,7 +18,7 @@
   ansible.builtin.debug:
     msg: |
       WARNING: Synology DSM API for SNMP configuration requires manual setup or SSH access.
-      
+
       Please enable SNMP manually via DSM Web Interface:
       1. Login to DSM at https://{{ synology_host }}:5001
       2. Go to Control Panel → Terminal & SNMP
@@ -27,7 +27,7 @@
       5. Select SNMPv1, SNMPv2c service
       6. Set Community name to: {{ synology_snmp_community }}
       7. Click Apply
-      
+
       Alternatively, if SSH is enabled, we can configure via command line.
 
 - name: Check if Synology SSH is accessible

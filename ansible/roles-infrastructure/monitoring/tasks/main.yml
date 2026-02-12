@@ -273,6 +273,6 @@
       - "OpenObserve is available at: http://{{ ansible_host }}:{{ openobserve_listen_port }}"
       - "Grafana is available at: http://{{ ansible_host }}:3000"
       - "Prometheus is available at: http://{{ ansible_host }}:9090"
-      - "Grafana default credentials: admin / {{ grafana_admin_password }}"
+      - "Grafana default credentials: admin / {{ (secrets | default({})).get('grafana_admin_password', grafana_admin_password) }}"
   tags:
     - monitoring

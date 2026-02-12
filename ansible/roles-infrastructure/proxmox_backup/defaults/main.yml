@@ -45,7 +45,7 @@ pbs_users:
     # API token will be auto-generated (no password needed for token auth)
 
 # PBS root password (default admin user)
-pbs_root_password: "{{ pbs_admin_password | default('changeme') }}"
+pbs_root_password: "{{ (secrets | default({})).get('pbs_admin_password', pbs_admin_password | default('changeme')) }}"
 
 # PBS namespaces for organization
 pbs_namespaces:

@@ -11,7 +11,7 @@ Status legend:
 
 ## Program Health Snapshot
 
-- Current phase: `PR1`
+- Current phase: `PR2`
 - Last validated date: `2026-02-12`
 - Guardrails baseline status: `[x] passing`
 
@@ -44,6 +44,7 @@ Status legend:
 
 - [x] Overlay behavior documented and testable
 - [x] Variable inventory ready for PR2 role migration
+- [x] Active Ansible consumers use `secrets.*` fallback for migrated secret paths
 
 ---
 

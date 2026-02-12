@@ -34,7 +34,7 @@ services:
     environment:
       - TZ={{ timezone }}
       - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD={{ grafana_admin_password }}
+      - GF_SECURITY_ADMIN_PASSWORD={{ (secrets | default({})).get('grafana_admin_password', grafana_admin_password) }}
       - GF_INSTALL_PLUGINS=
       - GF_SERVER_ROOT_URL=http://{{ ansible_host }}:3000
       - GF_AUTH_ANONYMOUS_ENABLED=false

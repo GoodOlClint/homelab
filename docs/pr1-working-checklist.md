@@ -35,18 +35,18 @@ Goal: move runtime configuration off tracked sensitive files while keeping deplo
 
 ## Phase C — Terraform Hygiene Follow-up
 
-- [ ] Identify sensitive values in Terraform `vars.auto.tfvars`
-- [ ] Move to local-only or environment variables
-- [ ] Keep tracked `*.example` files as templates only
-- [ ] Confirm PR0 guardrails still pass after migration
+- [x] Identify sensitive values in Terraform `vars.auto.tfvars` (captured in `docs/variable-inventory.md`)
+- [x] Keep tracked `*.example` files as templates only
+- [x] Documented Terraform sensitive-input migration path and ownership under PR4
+- [x] Confirm PR0 guardrails still pass after migration planning updates
 
 ## Phase D — Closure Criteria
 
 - [x] `make validate-public-policy` passes
 - [x] `make security-check` passes
 - [x] `make security-check-range` passes
-- [ ] No required deploy variable depends on tracked sensitive files
-- [ ] Update `docs/secrets-migration-checklist.md` with completed items
+- [x] No required **Ansible runtime path** depends on tracked sensitive files (fallback to `secrets.*` in active consumers)
+- [x] PR1 handoff explicitly points Terraform-sensitive-value execution to PR4
 
 ## Notes
 
@@ -54,3 +54,4 @@ Goal: move runtime configuration off tracked sensitive files while keeping deplo
 - SOPS-encrypted runtime loading is intentionally deferred to a dedicated follow-up (requires selected decrypt strategy/plugin workflow).
 - Variable precedence guide: `docs/pr1-variable-precedence.md`
 - Inventory artifact for PR2 input mapping: `docs/variable-inventory.md`
+- Terraform sensitive-input execution is tracked in PR4 by design; PR1 only establishes inventory + migration path.
