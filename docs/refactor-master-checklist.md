@@ -52,22 +52,26 @@ Status legend:
 
 ### Scope Checklist
 
-- [ ] Create migration map from legacy vars to `secrets.*`
-- [ ] Refactor highest-risk roles/templates first
+- [x] Create migration map from legacy vars to `secrets.*`
+- [-] Refactor highest-risk roles/templates first
 - [ ] Add safe defaults/placeholders for non-secret tracked vars
 - [ ] Remove hard dependency on tracked secrets in `group_vars/all.yml`
 
 ### Verification Checklist
 
-- [ ] `make validate-public-policy`
-- [ ] `make security-check`
+- [x] `make validate-public-policy`
+- [x] `make security-check`
 - [ ] `make security-check-range`
-- [ ] `ansible-playbook --check` for changed playbooks succeeds
+- [x] `ansible-playbook --check` for changed playbooks succeeds
 
 ### PR2 Done Definition
 
 - [ ] Required runtime secrets are sourced from local/sops paths
 - [ ] No role requires tracked secret values to run
+
+### PR2 Artifacts
+
+- [x] `docs/pr2-working-checklist.md`
 
 ---
 

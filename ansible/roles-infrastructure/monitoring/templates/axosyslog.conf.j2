@@ -42,7 +42,7 @@ destination d_openobserve {
         organization("default")
         stream("syslog")
         user("{{ openobserve_root_user_email }}")
-        password("{{ (secrets | default({})).get('openobserve_root_user_pass', openobserve_root_user_pass) }}")
+        password("{{ secrets.openobserve_root_user_pass }}")
     );
 };
 

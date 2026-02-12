@@ -7,7 +7,7 @@ services:
     ports:
       - 5432:5432
     environment:
-      - POSTGRES_PASSWORD={{ (secrets | default({})).get('postgres_password', postgres_password | default('changeme')) }}
+      - POSTGRES_PASSWORD={{ secrets.postgres_password }}
       - POSTGRES_USER={{ postgres_user | default('qstick') }}
       - POSTGRES_DB={{ postgres_default_db | default('qstick') }}
       - TZ={{ timezone }}
@@ -282,7 +282,7 @@ services:
     restart: unless-stopped
     command: tunnel run
     environment:
-      - TUNNEL_TOKEN={{ (secrets | default({})).get('cloudflared_tunnel_token', cloudflared_tunnel_token | default('')) }}
+      - TUNNEL_TOKEN={{ secrets.cloudflared_tunnel_token }}
     healthcheck:
       test: ["CMD", "cloudflared", "--version"]
       interval: 30s

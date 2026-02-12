@@ -274,7 +274,7 @@
   community.postgresql.postgresql_user:
     login_host: localhost
     login_user: "{{ postgres_user }}"
-    login_password: "{{ (secrets | default({})).get('postgres_password', postgres_password) }}"
+    login_password: "{{ secrets.postgres_password }}"
     login_db: "{{ postgres_default_db }}"
     name: "{{ item.value.db_user }}"
     password: "{{ item.value.db_password }}"
@@ -317,7 +317,7 @@
   community.postgresql.postgresql_db:
     login_host: localhost
     login_user: "{{ postgres_user }}"
-    login_password: "{{ (secrets | default({})).get('postgres_password', postgres_password) }}"
+    login_password: "{{ secrets.postgres_password }}"
     name: "{{ item.db_name }}"
     owner: "{{ item.db_user }}"
     state: present
@@ -334,7 +334,7 @@
   community.postgresql.postgresql_privs:
     login_host: localhost
     login_user: "{{ postgres_user }}"
-    login_password: "{{ (secrets | default({})).get('postgres_password', postgres_password) }}"
+    login_password: "{{ secrets.postgres_password }}"
     login_db: "{{ item.db_name }}"
     role: "{{ item.db_user }}"
     privs: ALL
@@ -346,7 +346,7 @@
   community.postgresql.postgresql_privs:
     login_host: localhost
     login_user: "{{ postgres_user }}"
-    login_password: "{{ (secrets | default({})).get('postgres_password', postgres_password) }}"
+    login_password: "{{ secrets.postgres_password }}"
     login_db: "{{ item.db_name }}"
     role: "{{ item.db_user }}"
     objs: public

@@ -20,6 +20,20 @@
         file: "{{ playbook_dir }}/../group_vars/local/all.yml"
       when: local_override_vars_file.stat.exists
       run_once: true
+
+    - name: Check for secrets vars file
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/../group_vars/secrets.sops.yml"
+      register: secrets_vars_file
+      delegate_to: localhost
+      become: false
+      run_once: true
+
+    - name: Load secrets vars when present
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../group_vars/secrets.sops.yml"
+      when: secrets_vars_file.stat.exists
+      run_once: true
   roles:
     - role: ../roles-infrastructure/monitoring-users
       tags:

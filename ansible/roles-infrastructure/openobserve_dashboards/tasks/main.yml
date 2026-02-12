@@ -4,7 +4,7 @@
     url: "http://{{ openobserve_listen_host }}:{{ openobserve_listen_port }}/api/default/_search"
     method: GET
     user: "{{ openobserve_root_user_email }}"
-    password: "{{ (secrets | default({})).get('openobserve_root_user_pass', openobserve_root_user_pass) }}"
+    password: "{{ secrets.openobserve_root_user_pass }}"
     force_basic_auth: yes
     status_code: [200, 401, 404]
   register: openobserve_api_check
