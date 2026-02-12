@@ -6,6 +6,20 @@
   gather_facts: false
   vars_files:
     - ../group_vars/all.yml
+  pre_tasks: &load_local_overrides
+    - name: Check for local override vars file
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/../group_vars/local/all.yml"
+      register: local_override_vars_file
+      delegate_to: localhost
+      become: false
+      run_once: true
+
+    - name: Load local override vars when present
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../group_vars/local/all.yml"
+      when: local_override_vars_file.stat.exists
+      run_once: true
   roles:
     - role: ../roles-infrastructure/monitoring-users
       tags:
@@ -17,6 +31,7 @@
   become: true
   vars_files:
     - ../group_vars/all.yml
+  pre_tasks: *load_local_overrides
   roles:
     - bind9
     - rsyslog_client
@@ -27,6 +42,7 @@
   become: true
   vars_files:
     - ../group_vars/all.yml
+  pre_tasks: *load_local_overrides
   roles:
     - adguard
     - rsyslog_client
@@ -37,6 +53,7 @@
   become: true
   vars_files:
     - ../group_vars/all.yml
+  pre_tasks: *load_local_overrides
   roles:
     - dns_config
     - monitoring
@@ -48,6 +65,7 @@
   become: true
   vars_files:
     - ../group_vars/all.yml
+  pre_tasks: *load_local_overrides
   roles:
     - dns_config
     - proxmox_backup

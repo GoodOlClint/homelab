@@ -4,5 +4,19 @@
   become: yes
   vars_files:
     - ../group_vars/all.yml
+  pre_tasks:
+    - name: Check for local override vars file
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/../group_vars/local/all.yml"
+      register: local_override_vars_file
+      delegate_to: localhost
+      become: false
+      run_once: true
+
+    - name: Load local override vars when present
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../group_vars/local/all.yml"
+      when: local_override_vars_file.stat.exists
+      run_once: true
   roles:
     - docker

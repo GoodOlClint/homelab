@@ -15,8 +15,8 @@ Goal: move runtime configuration off tracked sensitive files while keeping deplo
   - [x] `ansible/playbooks/infrastructure.yml`
   - [x] `ansible/playbooks/services.yml`
   - [x] `ansible/playbooks/docker.yml`
-- [ ] Add a dry-run smoke command for overlay loading (single host)
-- [ ] Document precedence rules (`group_vars/all.yml` vs `group_vars/local/all.yml`)
+- [x] Add a dry-run smoke command for overlay loading (single host)
+- [x] Document precedence rules (`group_vars/all.yml` vs `group_vars/local/all.yml`)
 
 ## Phase B — Secret Consumption Migration
 
@@ -49,3 +49,4 @@ Goal: move runtime configuration off tracked sensitive files while keeping deplo
 
 - Current PR1 implementation is additive and non-breaking: if `ansible/group_vars/local/all.yml` exists, values are loaded at play runtime and can override tracked defaults.
 - SOPS-encrypted runtime loading is intentionally deferred to a dedicated follow-up (requires selected decrypt strategy/plugin workflow).
+- Variable precedence guide: `docs/pr1-variable-precedence.md`
