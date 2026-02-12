@@ -20,12 +20,12 @@ Goal: move runtime configuration off tracked sensitive files while keeping deplo
 
 ## Phase B — Secret Consumption Migration
 
-- [ ] Inventory secret variables currently read from tracked files
-  - [ ] UniFi credentials
-  - [ ] Proxmox API credentials/tokens
-  - [ ] PBS credentials/tokens
-  - [ ] Cloudflare tunnel token
-  - [ ] Any DB/service passwords in templates
+- [x] Inventory secret variables currently read from tracked files
+  - [x] UniFi credentials
+  - [x] Proxmox API credentials/tokens
+  - [x] PBS credentials/tokens
+  - [x] Cloudflare tunnel token
+  - [x] Any DB/service passwords in templates
 - [ ] Refactor roles/templates to read from `secrets.*` namespace where applicable
 - [ ] Add non-secret defaults/placeholders for required vars in tracked files
 - [ ] Validate all affected playbooks in check mode (`--check`) where possible
@@ -50,3 +50,4 @@ Goal: move runtime configuration off tracked sensitive files while keeping deplo
 - Current PR1 implementation is additive and non-breaking: if `ansible/group_vars/local/all.yml` exists, values are loaded at play runtime and can override tracked defaults.
 - SOPS-encrypted runtime loading is intentionally deferred to a dedicated follow-up (requires selected decrypt strategy/plugin workflow).
 - Variable precedence guide: `docs/pr1-variable-precedence.md`
+- Inventory artifact for PR2 input mapping: `docs/variable-inventory.md`

@@ -23,9 +23,9 @@ Status legend:
 
 - [x] Validate PR0 baseline on current `main`
 - [x] Add optional local overlay loading in active playbooks
-- [ ] Add smoke-check command(s) for overlay loading
-- [ ] Document variable precedence behavior and examples
-- [ ] Build complete sensitive-variable inventory (source -> consumer)
+- [x] Add smoke-check command(s) for overlay loading
+- [x] Document variable precedence behavior and examples
+- [x] Build complete sensitive-variable inventory (source -> consumer)
 
 ### Verification Checklist
 
@@ -37,12 +37,13 @@ Status legend:
 ### Artifacts
 
 - [x] `docs/pr1-working-checklist.md`
-- [ ] `docs/variable-inventory.md` (to be created)
+- [x] `docs/variable-inventory.md`
+- [x] `docs/pr1-variable-precedence.md`
 
 ### PR1 Done Definition
 
-- [ ] Overlay behavior documented and testable
-- [ ] Variable inventory ready for PR2 role migration
+- [x] Overlay behavior documented and testable
+- [x] Variable inventory ready for PR2 role migration
 
 ---
 
