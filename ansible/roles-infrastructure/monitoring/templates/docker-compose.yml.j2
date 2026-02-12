@@ -166,7 +166,7 @@ services:
       - TZ={{ timezone }}
       - PVE_USER={{ proxmox_user | default('monitoring@pve') }}
       - PVE_TOKEN_NAME={{ proxmox_token_name }}
-      - PVE_TOKEN_VALUE={{ proxmox_token_value }}
+      - PVE_TOKEN_VALUE={{ (secrets | default({})).get('proxmox_token_value', proxmox_token_value) }}
       - PVE_VERIFY_SSL={{ proxmox_verify_ssl | default('false') }}
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:9221/metrics"]
@@ -232,7 +232,7 @@ services:
       - UP_UNIFI_DEFAULT_ROLE=unifi-poller
       - UP_UNIFI_DEFAULT_URL={{ unifi_controller_url }}
       - UP_UNIFI_DEFAULT_USER={{ unifi_user }}
-      - UP_UNIFI_DEFAULT_PASS={{ unifi_password }}
+      - UP_UNIFI_DEFAULT_PASS={{ (secrets | default({})).get('unifi_password', unifi_password) }}
       - UP_UNIFI_DEFAULT_VERIFY_SSL={{ unifi_verify_ssl | default('false') }}
       - UP_PROMETHEUS_HTTP_LISTEN=0.0.0.0:9130
       - UP_PROMETHEUS_NAMESPACE=unpoller
@@ -260,7 +260,7 @@ services:
       - PBS_ENDPOINT=https://{{ pbs_host }}:8007
       - PBS_USERNAME={{ pbs_username | default('root@pam') }}
       - PBS_API_TOKEN_NAME={{ pbs_api_token_name }}
-      - PBS_API_TOKEN={{ pbs_api_token }}
+      - PBS_API_TOKEN={{ (secrets | default({})).get('pbs_api_token', pbs_api_token) }}
       - PBS_INSECURE={{ pbs_insecure | default('false') }}
       - PBS_TIMEOUT=5s
       - PBS_LOGLEVEL=info

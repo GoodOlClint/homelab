@@ -4,7 +4,7 @@
     url: "http://{{ openobserve_listen_host }}:{{ openobserve_listen_port }}/api/default/_search"
     method: GET
     user: "{{ openobserve_root_user_email }}"
-    password: "{{ openobserve_root_user_pass }}"
+    password: "{{ (secrets | default({})).get('openobserve_root_user_pass', openobserve_root_user_pass) }}"
     force_basic_auth: yes
     status_code: [200, 401, 404]
   register: openobserve_api_check
@@ -63,32 +63,33 @@
       ============================================
       OpenObserve Dashboards Ready for Import
       ============================================
-      
+
       Dashboard files have been copied to:
       /opt/openobserve/dashboards/
-      
+
       Dashboards available:
       1. pbs_backup_dashboard.json - Backup Status & Activity
       2. pbs_storage_dashboard.json - Storage & Performance
-      
+
       To import dashboards:
       1. Access OpenObserve: http://{{ openobserve_listen_host }}:{{ openobserve_listen_port }}
       2. Login with: {{ openobserve_root_user_email }}
       3. Navigate to: Dashboards > Import
       4. Upload the JSON files from /opt/openobserve/dashboards/
-      
+
       Or use the OpenObserve API to import programmatically:
-      
-      curl -u "{{ openobserve_root_user_email }}:{{ openobserve_root_user_pass }}" \
+
+      export OPENOBSERVE_BASIC_AUTH="<openobserve-user-and-password>"
+      curl --user "$OPENOBSERVE_BASIC_AUTH" \
         -X POST \
         -H "Content-Type: application/json" \
         -d @/opt/openobserve/dashboards/pbs_backup_dashboard.json \
         "http://{{ openobserve_listen_host }}:{{ openobserve_listen_port }}/api/default/dashboards"
-      
+
       ============================================
-      
+
       Dashboard Features:
-      
+
       PBS Backup Status Dashboard:
       - Backup success rate (pie chart)
       - Recent backup jobs (table)
@@ -96,7 +97,7 @@
       - Backup errors and warnings
       - Per-host backup statistics
       - Real-time status indicators
-      
+
       PBS Storage & Performance Dashboard:
       - Datastore usage gauge
       - Garbage collection activity
@@ -105,7 +106,7 @@
       - iSCSI storage health
       - Backup throughput metrics
       - System-level errors
-      
+
       ============================================
   tags:
     - openobserve_dashboards

@@ -42,7 +42,7 @@ destination d_openobserve {
         organization("default")
         stream("syslog")
         user("{{ openobserve_root_user_email }}")
-        password("{{ openobserve_root_user_pass }}")
+        password("{{ (secrets | default({})).get('openobserve_root_user_pass', openobserve_root_user_pass) }}")
     );
 };
 
@@ -50,17 +50,17 @@ destination d_openobserve {
 log {
     source(s_network_udp);
     source(s_network_tcp);
-    
+
     # Parse syslog format
     parser {
         syslog-parser(flags(syslog-protocol));
     };
-    
+
     # Add additional fields
     rewrite {
         set("syslog", value("stream_name"));
     };
-    
+
     # Send to OpenObserve
     destination(d_openobserve);
 };

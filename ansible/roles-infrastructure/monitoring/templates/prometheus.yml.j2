@@ -10,7 +10,7 @@ remote_write:
   - url: http://openobserve:5080/api/default/prometheus/api/v1/write
     basic_auth:
       username: {{ openobserve_root_user_email }}
-      password: {{ openobserve_root_user_pass }}
+      password: {{ (secrets | default({})).get('openobserve_root_user_pass', openobserve_root_user_pass) }}
 
 scrape_configs:
   # Prometheus itself
@@ -227,5 +227,3 @@ scrape_configs:
         labels:
           instance: 'proxmox-backup'
           role: 'infrastructure'
-
-

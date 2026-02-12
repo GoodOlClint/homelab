@@ -8,7 +8,7 @@
     body_format: json
     body:
       username: "{{ unifi_admin_user | default(unifi_user) }}"
-      password: "{{ unifi_admin_password | default(unifi_password) }}"
+      password: "{{ (secrets | default({})).get('unifi_admin_password', unifi_admin_password | default(unifi_password)) }}"
     validate_certs: false
     timeout: 10
     status_code: [200]
@@ -44,7 +44,7 @@
       cmd: "create-admin"
       name: "{{ unifi_monitoring_user }}"
       email: "{{ unifi_monitoring_email | default('monitoring@localhost') }}"
-      x_password: "{{ unifi_monitoring_password | default(unifi_password) }}"
+      x_password: "{{ (secrets | default({})).get('unifi_monitoring_password', unifi_monitoring_password | default(unifi_password)) }}"
       role: "{{ unifi_monitoring_role }}"
       requires_new_password: false
     validate_certs: false
@@ -63,7 +63,7 @@
     body:
       cmd: "set-admin"
       admin: "{{ unifi_monitoring_user }}"
-      x_password: "{{ unifi_monitoring_password | default(unifi_password) }}"
+      x_password: "{{ (secrets | default({})).get('unifi_monitoring_password', unifi_monitoring_password | default(unifi_password)) }}"
     validate_certs: false
     headers:
       Cookie: "{{ unifi_login.cookies_string }}"

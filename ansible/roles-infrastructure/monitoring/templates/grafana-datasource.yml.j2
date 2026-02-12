@@ -20,10 +20,9 @@ datasources:
     basicAuth: true
     basicAuthUser: {{ openobserve_root_user_email }}
     secureJsonData:
-      basicAuthPassword: {{ openobserve_root_user_pass }}
+      basicAuthPassword: {{ (secrets | default({})).get('openobserve_root_user_pass', openobserve_root_user_pass) }}
     isDefault: false
     editable: true
     jsonData:
       httpMethod: POST
       timeInterval: 15s
-

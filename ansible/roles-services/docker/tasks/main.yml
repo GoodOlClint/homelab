@@ -239,7 +239,7 @@
     owner: root
     group: root
   notify: restart docker services
-  when: cloudflared_tunnel_token is defined and cloudflared_tunnel_token != ""
+  when: (secrets | default({})).get('cloudflared_tunnel_token', cloudflared_tunnel_token | default('')) != ""
   tags:
     - docker
     - config
@@ -268,7 +268,7 @@
       - docker-compose.yml
     state: present
   environment:
-    CLOUDFLARED_TUNNEL_TOKEN: "{{ cloudflared_tunnel_token }}"
+    CLOUDFLARED_TUNNEL_TOKEN: "{{ (secrets | default({})).get('cloudflared_tunnel_token', cloudflared_tunnel_token | default('')) }}"
   retries: 3
   delay: 30
   register: compose_result
@@ -322,4 +322,3 @@
     - backup
     - pbs
     - cron
-
