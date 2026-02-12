@@ -29,10 +29,10 @@ Status legend:
 
 ### Verification Checklist
 
-- [ ] `make validate-public-policy`
-- [ ] `make security-check`
-- [ ] `make security-check-range`
-- [ ] Ansible smoke-check completed for at least 2 playbooks
+- [x] `make validate-public-policy`
+- [x] `make security-check`
+- [x] `make security-check-range`
+- [x] Ansible smoke-check completed for at least 2 playbooks
 
 ### Artifacts
 

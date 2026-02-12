@@ -31,7 +31,7 @@ Goal: move runtime configuration off tracked sensitive files while keeping deplo
   - [x] Second migration slice applied for PostgreSQL service password consumers (with fallback)
   - [ ] Remaining role/template consumers migrated
 - [ ] Add non-secret defaults/placeholders for required vars in tracked files
-- [ ] Validate all affected playbooks in check mode (`--check`) where possible
+- [x] Validate all affected playbooks in check mode (`--check`) where possible
 
 ## Phase C — Terraform Hygiene Follow-up
 
@@ -42,9 +42,9 @@ Goal: move runtime configuration off tracked sensitive files while keeping deplo
 
 ## Phase D — Closure Criteria
 
-- [ ] `make validate-public-policy` passes
-- [ ] `make security-check` passes
-- [ ] `make security-check-range` passes
+- [x] `make validate-public-policy` passes
+- [x] `make security-check` passes
+- [x] `make security-check-range` passes
 - [ ] No required deploy variable depends on tracked sensitive files
 - [ ] Update `docs/secrets-migration-checklist.md` with completed items
 
