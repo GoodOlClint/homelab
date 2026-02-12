@@ -19,14 +19,34 @@ Goal: complete migration from legacy secret vars to explicit `secrets.*` usage.
 ## Phase B — Placeholder and Contract Hygiene
 
 - [x] Extend `ansible/group_vars/secrets.sops.example.yml` with required keys used by strict consumers
-- [ ] Add documented required-secrets contract table (keys + roles consuming them)
-- [ ] Confirm no strict secret key is missing from example scaffold
+- [x] Add documented required-secrets contract table (keys + roles consuming them)
+- [x] Confirm no strict secret key is missing from example scaffold
+
+### Required Secret Contract
+
+| Secret key | Consuming paths |
+|---|---|
+| `secrets.openobserve_root_user_pass` | monitoring templates, openobserve dashboards tasks |
+| `secrets.grafana_admin_password` | monitoring docker compose and status/debug output |
+| `secrets.proxmox_token_value` | monitoring pve exporter template |
+| `secrets.unifi_admin_password` | monitoring-users UniFi admin API tasks |
+| `secrets.unifi_monitoring_password` | monitoring-users UniFi monitoring-user tasks |
+| `secrets.unifi_password` | monitoring stack env for UniFi poller |
+| `secrets.synology_admin_password` | monitoring-users Synology setup tasks |
+| `secrets.pbs_admin_password` | proxmox backup defaults (`pbs_root_password`) |
+| `secrets.pbs_backup_user_password` | proxmox backup user-create task |
+| `secrets.pbs_backup_token` | pbs client env + backup repository password wiring |
+| `secrets.pbs_api_token` | monitoring PBS exporter template |
+| `secrets.pbs_monitoring_token` | legacy compatibility var mapping in tracked vars |
+| `secrets.cloudflared_tunnel_token` | docker + plex services cloudflared templates/tasks |
+| `secrets.postgres_password` | plex services postgres tasks/templates |
+| `secrets.plex_smb_pass` | plex backup/restore templates |
 
 ## Phase C — Legacy Surface Reduction
 
-- [ ] Remove direct runtime reliance on secret literals in tracked `ansible/group_vars/all.yml`
-- [ ] Keep only non-secret defaults/placeholders where needed
-- [ ] Update docs to indicate old var names are deprecated
+- [x] Remove direct runtime reliance on secret literals in tracked `ansible/group_vars/all.yml`
+- [x] Keep only non-secret defaults/placeholders where needed
+- [x] Update docs to indicate old var names are deprecated
 
 ## Verification
 
@@ -37,7 +57,4 @@ Goal: complete migration from legacy secret vars to explicit `secrets.*` usage.
 
 ## Remaining to close PR2
 
-1. Document required secret key contract.
-2. Replace/remove remaining legacy secret literals in tracked vars.
-3. Re-run guardrails and smoke checks.
-4. Mark PR2 done in `docs/refactor-master-checklist.md`.
+All PR2 checklist items are complete.

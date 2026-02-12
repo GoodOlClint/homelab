@@ -18,7 +18,7 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 
 echo "[$(date)] Starting Plex config restore..."
 
-PLEX_SMB_PASS="{{ plex_smb_pass }}"
+PLEX_SMB_PASS="{{ secrets.plex_smb_pass }}"
 PLEX_SMB_MOUNT="{{ plex_smb_mount }}"
 PLEX_SMB_SHARE="{{ plex_smb_share }}"
 PLEX_SMB_USER="{{ plex_smb_user }}"
@@ -40,13 +40,13 @@ echo "[$(date)] Looking for backup archives..."
 test_archive_integrity() {
     local archive_path="$1"
     echo "[$(date)] Testing archive integrity: $(basename "$archive_path")"
-    
+
     # Test if archive can be listed
     if ! tar -tzf "$archive_path" >/dev/null 2>&1; then
         echo "[$(date)] Archive integrity test failed: tar listing failed"
         return 1
     fi
-    
+
     # Create temp directory for extraction test
     local test_dir=$(mktemp -d)
     if ! tar -xzf "$archive_path" -C "$test_dir" 2>/dev/null; then
@@ -54,7 +54,7 @@ test_archive_integrity() {
         rm -rf "$test_dir"
         return 1
     fi
-    
+
     # Test database integrity if databases exist
     if [ -f "$test_dir/com.plexapp.plugins.library.db" ]; then
         local integrity=$("$PLEX_SQLITE" "$test_dir/com.plexapp.plugins.library.db" "PRAGMA integrity_check;" 2>/dev/null | tail -n 1)
@@ -64,7 +64,7 @@ test_archive_integrity() {
             return 1
         fi
     fi
-    
+
     if [ -f "$test_dir/com.plexapp.plugins.library.blobs.db" ]; then
         local integrity_blobs=$("$PLEX_SQLITE" "$test_dir/com.plexapp.plugins.library.blobs.db" "PRAGMA integrity_check;" 2>/dev/null | tail -n 1)
         if [ "$integrity_blobs" != "ok" ]; then
@@ -73,7 +73,7 @@ test_archive_integrity() {
             return 1
         fi
     fi
-    
+
     rm -rf "$test_dir"
     echo "[$(date)] Archive integrity test passed: $(basename "$archive_path")"
     return 0

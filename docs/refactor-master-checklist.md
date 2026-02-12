@@ -11,7 +11,7 @@ Status legend:
 
 ## Program Health Snapshot
 
-- Current phase: `PR2`
+- Current phase: `PR3`
 - Last validated date: `2026-02-12`
 - Guardrails baseline status: `[x] passing`
 
@@ -53,21 +53,21 @@ Status legend:
 ### Scope Checklist
 
 - [x] Create migration map from legacy vars to `secrets.*`
-- [-] Refactor highest-risk roles/templates first
-- [ ] Add safe defaults/placeholders for non-secret tracked vars
-- [ ] Remove hard dependency on tracked secrets in `group_vars/all.yml`
+- [x] Refactor highest-risk roles/templates first
+- [x] Add safe defaults/placeholders for non-secret tracked vars
+- [x] Remove hard dependency on tracked secrets in `group_vars/all.yml`
 
 ### Verification Checklist
 
 - [x] `make validate-public-policy`
 - [x] `make security-check`
-- [ ] `make security-check-range`
+- [x] `make security-check-range`
 - [x] `ansible-playbook --check` for changed playbooks succeeds
 
 ### PR2 Done Definition
 
-- [ ] Required runtime secrets are sourced from local/sops paths
-- [ ] No role requires tracked secret values to run
+- [x] Required runtime secrets are sourced from local/sops paths
+- [x] No role requires tracked secret values to run
 
 ### PR2 Artifacts
 

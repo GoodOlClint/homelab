@@ -194,7 +194,7 @@
     fstype: "{{ pbs_iscsi_filesystem }}"
     dev: "{{ iscsi_device_path.stdout }}"
     opts: -L pbs-datastore
-  when: 
+  when:
     - pbs_storage_backend == 'iscsi'
     - iscsi_formatted.rc != 0
   tags:
@@ -370,7 +370,7 @@
   shell: |
     proxmox-backup-manager user create {{ item.username }}@{{ item.realm }} \
       {% if item.comment is defined %}--comment "{{ item.comment }}"{% endif %} \
-      {% if pbs_backup_user_password is defined %}--password "{{ pbs_backup_user_password }}"{% endif %}
+      {% if secrets.pbs_backup_user_password is defined %}--password "{{ secrets.pbs_backup_user_password }}"{% endif %}
   loop: "{{ pbs_users }}"
   when: pbs_user_list.stdout is defined and (pbs_user_list.stdout | from_json | selectattr('userid', 'equalto', item.username + '@' + item.realm) | list | length == 0)
   no_log: true
@@ -558,24 +558,24 @@
       Proxmox Backup Server Configuration Complete
       ============================================
       Web Interface: https://{{ ansible_host }}:8007
-      
+
       Datastores configured:
       {% for ds in pbs_datastores %}
       - {{ ds.name }}: {{ ds.path }}
       {% endfor %}
-      
+
       Namespaces configured:
       {% for ns in pbs_namespaces %}
       - {{ ns.datastore }}:{{ ns.namespace }}
       {% endfor %}
-      
+
       Users configured:
       {% for user in pbs_users %}
       - {{ user.username }}@{{ user.realm }}
       {% endfor %}
-      
+
       Logs forwarded to: OpenObserve
-      
+
       Next steps:
       1. Access web UI at https://{{ ansible_host }}:8007
       2. Login with root@pam
