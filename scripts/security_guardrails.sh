@@ -4,7 +4,9 @@ set -euo pipefail
 MODE="staged"
 RANGE=""
 
-PROTECTED_PATH_REGEX='(^|/)(ansible/group_vars/all\.yml|terraform/(infrastructure|services)/vars\.auto\.tfvars|terraform/(infrastructure|services)/terraform\.tfstate(\.backup)?|ansible/inventory/vms\.yaml)$'
+PROTECTED_CORE_PATH_REGEX='(^|/)(ansible/group_vars/all\.yml|terraform/(infrastructure|services)/terraform\.tfstate(\.backup)?|ansible/inventory/vms\.yaml)$'
+PROTECTED_TFVARS_REGEX='(^|/)terraform/(infrastructure|services)/vars\.auto\.tfvars$'
+ALLOW_TFVARS_MIGRATION="${GUARDRAILS_ALLOW_TFVARS_EDIT:-0}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -34,12 +36,25 @@ changed_files() {
 }
 
 echo "[guardrails] checking protected paths"
-if changed_files | grep -E "$PROTECTED_PATH_REGEX" >/dev/null 2>&1; then
+if changed_files | grep -E "$PROTECTED_CORE_PATH_REGEX" >/dev/null 2>&1; then
   echo "[guardrails] blocked: commit touches protected high-risk files." >&2
   echo "[guardrails] move secrets/topology to local overlays or encrypted sops files before committing." >&2
   echo "[guardrails] blocked files:" >&2
-  changed_files | grep -E "$PROTECTED_PATH_REGEX" | sed 's/^/  - /' >&2
+  changed_files | grep -E "$PROTECTED_CORE_PATH_REGEX" | sed 's/^/  - /' >&2
   exit 1
+fi
+
+if changed_files | grep -E "$PROTECTED_TFVARS_REGEX" >/dev/null 2>&1; then
+  if [[ "$ALLOW_TFVARS_MIGRATION" == "1" ]]; then
+    echo "[guardrails] warning: tfvars protected-path override enabled (GUARDRAILS_ALLOW_TFVARS_EDIT=1)"
+    echo "[guardrails] ensure edits are placeholder-only and never include real secrets"
+  else
+    echo "[guardrails] blocked: commit touches protected terraform vars.auto.tfvars files." >&2
+    echo "[guardrails] for controlled migration only, set GUARDRAILS_ALLOW_TFVARS_EDIT=1" >&2
+    echo "[guardrails] blocked files:" >&2
+    changed_files | grep -E "$PROTECTED_TFVARS_REGEX" | sed 's/^/  - /' >&2
+    exit 1
+  fi
 fi
 
 echo "[guardrails] validating publishable policy files"

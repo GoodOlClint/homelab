@@ -53,3 +53,16 @@ To complete PR4 migration execution safely:
 1. Move live runtime usage to local-only/env flow (this runbook + new make targets).
 2. In a controlled follow-up, sanitize tracked `vars.auto.tfvars` to placeholders/examples only,
    while preserving guardrail enforcement posture.
+
+### Controlled commit override for placeholder-only tfvars edits
+
+`vars.auto.tfvars` files remain protected by default.
+During the one-time sanitization commit, enable this explicit override:
+
+- `GUARDRAILS_ALLOW_TFVARS_EDIT=1 git commit -m "PR4: sanitize tracked tfvars placeholders"`
+
+Notes:
+
+- Override only relaxes protection for `terraform/*/vars.auto.tfvars`.
+- Other protected paths remain blocked.
+- `gitleaks` scanning still runs and must pass.
