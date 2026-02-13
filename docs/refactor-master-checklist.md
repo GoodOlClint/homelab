@@ -128,15 +128,19 @@ Status legend:
 - [x] `Makefile` secure Terraform targets
 - [x] `scripts/bootstrap_local_config.sh` terraform local tfvars bootstrap
 
+### PR4 Note
+
+- [ ] Final secure-plan verification depends on real local values in `vars.local.auto.tfvars`
+
 ---
 
 ## PR5 — Policy Model Expansion
 
 ### Scope Checklist
 
-- [ ] Expand public policy coverage for all active zones and core flows
+- [-] Expand public policy coverage for all active zones and core flows
 - [ ] Keep private mappings only in local/encrypted bindings
-- [ ] Strengthen validation checks for policy schema/consistency
+- [x] Strengthen validation checks for policy schema/consistency
 
 ### Verification Checklist
 
@@ -146,6 +150,11 @@ Status legend:
 ### PR5 Done Definition
 
 - [ ] Policy model is complete enough for renderer adoption
+
+### PR5 Artifacts
+
+- [x] `docs/pr5-working-checklist.md`
+- [x] `scripts/validate_public_policy.py` structural validation enhancements
 
 ---
 
