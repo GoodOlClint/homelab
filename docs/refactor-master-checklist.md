@@ -163,18 +163,25 @@ Status legend:
 
 ### Scope Checklist
 
-- [ ] Implement deterministic renderer
-- [ ] Produce auditable generated artifacts
-- [ ] Add docs for generation and review workflow
+- [x] Implement deterministic renderer
+- [x] Produce auditable generated artifacts
+- [x] Add docs for generation and review workflow
 
 ### Verification Checklist
 
-- [ ] Renderer output reproducible from same inputs
-- [ ] Guardrails and generator checks pass
+- [x] Renderer output reproducible from same inputs
+- [x] Guardrails and generator checks pass
 
 ### PR6 Done Definition
 
 - [ ] One supported generated output path is production-ready
+
+### PR6 Artifacts
+
+- [x] `scripts/render_policy_artifact.py`
+- [x] `docs/pr6-render-pipeline.md`
+- [x] `docs/pr6-working-checklist.md`
+- [x] `network-data/generated/policy_render.public.json`
 
 ---
 

@@ -1,6 +1,6 @@
 # Makefile for Homelab Automation
 
-.PHONY: all infra services inventory ansible apply update plan destroy validate-public-policy security-check security-check-range setup-hooks bootstrap-local pr1-overlay-smoke pr3-secrets-check pr4-tf-check tf-plan-infra-secure tf-plan-services-secure tf-apply-infra-secure tf-apply-services-secure
+.PHONY: all infra services inventory ansible apply update plan destroy validate-public-policy security-check security-check-range setup-hooks bootstrap-local pr1-overlay-smoke pr3-secrets-check pr4-tf-check tf-plan-infra-secure tf-plan-services-secure tf-apply-infra-secure tf-apply-services-secure pr6-render pr6-render-check pr6-render-local
 
 all: apply
 
@@ -39,6 +39,15 @@ tf-apply-infra-secure:
 
 tf-apply-services-secure:
 	@cd terraform/services && terraform init && terraform apply -no-color -auto-approve -var-file=vars.local.auto.tfvars
+
+pr6-render:
+	@python3 scripts/render_policy_artifact.py --public network-data/public_policy.yaml --private network-data/private_bindings.example.yaml --output network-data/generated/policy_render.public.json
+
+pr6-render-check:
+	@python3 scripts/render_policy_artifact.py --public network-data/public_policy.yaml --private network-data/private_bindings.example.yaml --output network-data/generated/policy_render.public.json --check
+
+pr6-render-local:
+	@python3 scripts/render_policy_artifact.py --public network-data/public_policy.yaml --private network-data/local/private_bindings.yaml --output network-data/local/rendered/policy_render.local.json
 
 init:
 	@python3 -m venv .venv

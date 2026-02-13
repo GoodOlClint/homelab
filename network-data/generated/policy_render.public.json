@@ -1,0 +1,345 @@
+{
+  "artifact_version": 1,
+  "inputs": {
+    "private_bindings_path": "network-data/private_bindings.example.yaml",
+    "private_bindings_sha256": "da619d06c2cdcd5e488cef5bfc2f7ab3064ec66823bd5413db627783b37684ed",
+    "public_policy_path": "network-data/public_policy.yaml",
+    "public_policy_sha256": "116d5f39a952300c0f995c156cf05a56b2cc757a2d00cc719c8e08f2c07d2a43"
+  },
+  "rules": [
+    {
+      "action": "pass",
+      "from_zone": "work",
+      "id": "allow-airplay-work-to-media",
+      "log": true,
+      "note": "AirPlay control channels from work devices to media services",
+      "service": "airplay_control",
+      "state": "keep",
+      "to_zone": "media"
+    },
+    {
+      "action": "pass",
+      "from_zone": "core",
+      "id": "allow-dns-core-to-infrastructure",
+      "log": false,
+      "note": "Allow DNS queries from core clients to infrastructure DNS",
+      "service": "dns",
+      "state": "keep",
+      "to_zone": "infrastructure"
+    },
+    {
+      "action": "pass",
+      "from_zone": "guest",
+      "id": "allow-dns-guest-to-infrastructure",
+      "log": false,
+      "note": "Allow DNS queries from guest clients to infrastructure DNS",
+      "service": "dns",
+      "state": "keep",
+      "to_zone": "infrastructure"
+    },
+    {
+      "action": "pass",
+      "from_zone": "iot",
+      "id": "allow-dns-iot-to-infrastructure",
+      "log": false,
+      "note": "Allow DNS queries from IoT clients to infrastructure DNS",
+      "service": "dns",
+      "state": "keep",
+      "to_zone": "infrastructure"
+    },
+    {
+      "action": "pass",
+      "from_zone": "sonos",
+      "id": "allow-dns-sonos-to-infrastructure",
+      "log": false,
+      "note": "Allow DNS queries from Sonos zone to infrastructure DNS",
+      "service": "dns",
+      "state": "keep",
+      "to_zone": "infrastructure"
+    },
+    {
+      "action": "pass",
+      "from_zone": "core",
+      "id": "allow-dns-tcp-core-to-infrastructure",
+      "log": false,
+      "note": "Allow DNS TCP fallback from core clients to infrastructure DNS",
+      "service": "dns_tcp",
+      "state": "keep",
+      "to_zone": "infrastructure"
+    },
+    {
+      "action": "pass",
+      "from_zone": "guest",
+      "id": "allow-dns-tcp-guest-to-infrastructure",
+      "log": false,
+      "note": "Allow DNS TCP fallback from guest clients to infrastructure DNS",
+      "service": "dns_tcp",
+      "state": "keep",
+      "to_zone": "infrastructure"
+    },
+    {
+      "action": "pass",
+      "from_zone": "iot",
+      "id": "allow-dns-tcp-iot-to-infrastructure",
+      "log": false,
+      "note": "Allow DNS TCP fallback from IoT clients to infrastructure DNS",
+      "service": "dns_tcp",
+      "state": "keep",
+      "to_zone": "infrastructure"
+    },
+    {
+      "action": "pass",
+      "from_zone": "sonos",
+      "id": "allow-dns-tcp-sonos-to-infrastructure",
+      "log": false,
+      "note": "Allow DNS TCP fallback from Sonos zone to infrastructure DNS",
+      "service": "dns_tcp",
+      "state": "keep",
+      "to_zone": "infrastructure"
+    },
+    {
+      "action": "pass",
+      "from_zone": "vivint",
+      "id": "allow-dns-tcp-vivint-to-infrastructure",
+      "log": false,
+      "note": "Allow DNS TCP fallback from Vivint zone to infrastructure DNS",
+      "service": "dns_tcp",
+      "state": "keep",
+      "to_zone": "infrastructure"
+    },
+    {
+      "action": "pass",
+      "from_zone": "work",
+      "id": "allow-dns-tcp-work-to-infrastructure",
+      "log": false,
+      "note": "Allow DNS TCP fallback from work clients to infrastructure DNS",
+      "service": "dns_tcp",
+      "state": "keep",
+      "to_zone": "infrastructure"
+    },
+    {
+      "action": "pass",
+      "from_zone": "vivint",
+      "id": "allow-dns-vivint-to-infrastructure",
+      "log": false,
+      "note": "Allow DNS queries from Vivint zone to infrastructure DNS",
+      "service": "dns",
+      "state": "keep",
+      "to_zone": "infrastructure"
+    },
+    {
+      "action": "pass",
+      "from_zone": "work",
+      "id": "allow-dns-work-to-infrastructure",
+      "log": false,
+      "note": "Allow DNS queries from work clients to infrastructure DNS",
+      "service": "dns",
+      "state": "keep",
+      "to_zone": "infrastructure"
+    },
+    {
+      "action": "pass",
+      "from_zone": "management",
+      "id": "allow-management-to-infrastructure-ssh",
+      "log": true,
+      "note": "Allow administrative SSH access from management zone to infrastructure hosts",
+      "service": "ssh_admin",
+      "state": "keep",
+      "to_zone": "infrastructure"
+    },
+    {
+      "action": "pass",
+      "from_zone": "management",
+      "id": "allow-management-to-media-ssh",
+      "log": true,
+      "note": "Allow administrative SSH access from management zone to media hosts",
+      "service": "ssh_admin",
+      "state": "keep",
+      "to_zone": "media"
+    },
+    {
+      "action": "pass",
+      "from_zone": "management",
+      "id": "allow-management-to-services-ssh",
+      "log": true,
+      "note": "Allow administrative SSH access from management zone to service hosts",
+      "service": "ssh_admin",
+      "state": "keep",
+      "to_zone": "services"
+    },
+    {
+      "action": "pass",
+      "from_zone": "work",
+      "id": "allow-mdns-work-to-sonos",
+      "log": true,
+      "note": "AirPlay and service discovery between segmented user zones",
+      "service": "mdns_discovery",
+      "state": "keep",
+      "to_zone": "sonos"
+    },
+    {
+      "action": "pass",
+      "from_zone": "media",
+      "id": "allow-media-to-infrastructure-pbs",
+      "log": true,
+      "note": "Allow media backup clients to reach PBS API",
+      "service": "pbs_api",
+      "state": "keep",
+      "to_zone": "infrastructure"
+    },
+    {
+      "action": "pass",
+      "from_zone": "media",
+      "id": "allow-media-to-storage-nfs",
+      "log": true,
+      "note": "Allow legacy NFS backup path for media workloads",
+      "service": "nfs_legacy",
+      "state": "keep",
+      "to_zone": "storage"
+    },
+    {
+      "action": "pass",
+      "from_zone": "iot",
+      "id": "allow-ntp-iot-to-infrastructure",
+      "log": false,
+      "note": "Permit time sync while maintaining segmentation",
+      "service": "ntp",
+      "state": "keep",
+      "to_zone": "infrastructure"
+    },
+    {
+      "action": "pass",
+      "from_zone": "services",
+      "id": "allow-services-to-infrastructure-pbs",
+      "log": true,
+      "note": "Allow service backup clients to reach PBS API",
+      "service": "pbs_api",
+      "state": "keep",
+      "to_zone": "infrastructure"
+    },
+    {
+      "action": "pass",
+      "from_zone": "services",
+      "id": "allow-services-to-storage-nfs",
+      "log": true,
+      "note": "Allow legacy NFS backup path for service workloads",
+      "service": "nfs_legacy",
+      "state": "keep",
+      "to_zone": "storage"
+    },
+    {
+      "action": "block",
+      "from_zone": "guest",
+      "id": "deny-guest-to-management",
+      "log": true,
+      "note": "Default deny from guest zone to management",
+      "service": "any",
+      "state": "none",
+      "to_zone": "management"
+    },
+    {
+      "action": "block",
+      "from_zone": "iot",
+      "id": "deny-iot-to-management",
+      "log": true,
+      "note": "Default deny from IoT to management",
+      "service": "any",
+      "state": "none",
+      "to_zone": "management"
+    },
+    {
+      "action": "block",
+      "from_zone": "sonos",
+      "id": "deny-sonos-to-management",
+      "log": true,
+      "note": "Default deny from Sonos zone to management",
+      "service": "any",
+      "state": "none",
+      "to_zone": "management"
+    },
+    {
+      "action": "block",
+      "from_zone": "vivint",
+      "id": "deny-vivint-to-management",
+      "log": true,
+      "note": "Default deny from Vivint zone to management",
+      "service": "any",
+      "state": "none",
+      "to_zone": "management"
+    }
+  ],
+  "service_groups": [
+    "airplay_control",
+    "airplay_streaming",
+    "dns",
+    "dns_tcp",
+    "mdns_discovery",
+    "nfs_legacy",
+    "ntp",
+    "pbs_api",
+    "ssh_admin"
+  ],
+  "summary": {
+    "private_zone_bindings_found": 11,
+    "rule_count": 26,
+    "service_group_count": 9,
+    "zone_count": 11
+  },
+  "zones": [
+    {
+      "has_private_binding": true,
+      "name": "core",
+      "private_required_fields_missing": []
+    },
+    {
+      "has_private_binding": true,
+      "name": "guest",
+      "private_required_fields_missing": []
+    },
+    {
+      "has_private_binding": true,
+      "name": "infrastructure",
+      "private_required_fields_missing": []
+    },
+    {
+      "has_private_binding": true,
+      "name": "iot",
+      "private_required_fields_missing": []
+    },
+    {
+      "has_private_binding": true,
+      "name": "management",
+      "private_required_fields_missing": []
+    },
+    {
+      "has_private_binding": true,
+      "name": "media",
+      "private_required_fields_missing": []
+    },
+    {
+      "has_private_binding": true,
+      "name": "services",
+      "private_required_fields_missing": []
+    },
+    {
+      "has_private_binding": true,
+      "name": "sonos",
+      "private_required_fields_missing": []
+    },
+    {
+      "has_private_binding": true,
+      "name": "storage",
+      "private_required_fields_missing": []
+    },
+    {
+      "has_private_binding": true,
+      "name": "vivint",
+      "private_required_fields_missing": []
+    },
+    {
+      "has_private_binding": true,
+      "name": "work",
+      "private_required_fields_missing": []
+    }
+  ]
+}
