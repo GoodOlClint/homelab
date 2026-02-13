@@ -156,6 +156,15 @@ rules:
     log: false
     note: "Allow DNS queries from guest clients to infrastructure DNS"
 
+  - id: allow-dns-vivint-to-infrastructure
+    action: pass
+    from_zone: vivint
+    to_zone: infrastructure
+    service: dns
+    state: keep
+    log: false
+    note: "Allow DNS queries from Vivint zone to infrastructure DNS"
+
   - id: allow-dns-tcp-guest-to-infrastructure
     action: pass
     from_zone: guest
@@ -164,6 +173,15 @@ rules:
     state: keep
     log: false
     note: "Allow DNS TCP fallback from guest clients to infrastructure DNS"
+
+  - id: allow-dns-tcp-vivint-to-infrastructure
+    action: pass
+    from_zone: vivint
+    to_zone: infrastructure
+    service: dns_tcp
+    state: keep
+    log: false
+    note: "Allow DNS TCP fallback from Vivint zone to infrastructure DNS"
 
   - id: allow-services-to-infrastructure-pbs
     action: pass
@@ -236,3 +254,30 @@ rules:
     state: none
     log: true
     note: "Default deny from IoT to management"
+
+  - id: deny-guest-to-management
+    action: block
+    from_zone: guest
+    to_zone: management
+    service: any
+    state: none
+    log: true
+    note: "Default deny from guest zone to management"
+
+  - id: deny-vivint-to-management
+    action: block
+    from_zone: vivint
+    to_zone: management
+    service: any
+    state: none
+    log: true
+    note: "Default deny from Vivint zone to management"
+
+  - id: deny-sonos-to-management
+    action: block
+    from_zone: sonos
+    to_zone: management
+    service: any
+    state: none
+    log: true
+    note: "Default deny from Sonos zone to management"

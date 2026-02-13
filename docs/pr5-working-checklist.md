@@ -11,7 +11,7 @@ Goal: expand publishable network policy coverage while keeping topology data pri
 ## Phase B — Coverage Expansion
 
 - [x] Inventory active zone-to-zone flows from current infrastructure/services behavior
-- [-] Add missing policy intents for core service dependencies
+- [x] Add missing policy intents for core service dependencies
 - [ ] Keep all address/interface specifics in private bindings only
 
 ## Phase C — Validation and Review

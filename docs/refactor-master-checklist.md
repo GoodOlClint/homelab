@@ -138,14 +138,14 @@ Status legend:
 
 ### Scope Checklist
 
-- [-] Expand public policy coverage for all active zones and core flows
+- [x] Expand public policy coverage for all active zones and core flows
 - [x] Keep private mappings only in local/encrypted bindings
 - [x] Strengthen validation checks for policy schema/consistency
 
 ### Verification Checklist
 
 - [x] Validation catches malformed policies
-- [-] Policy review confirms complete intended flow coverage
+- [x] Policy review confirms complete intended flow coverage
 
 ### PR5 Done Definition
 
