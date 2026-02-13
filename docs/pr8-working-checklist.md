@@ -4,7 +4,7 @@ Goal: close program documentation and remaining technical debt with explicit tra
 
 ## Phase A — Repo Cleanup
 
-- [-] Remove deprecated legacy variable paths where safe
+- [x] Remove deprecated legacy variable paths where safe
 - [x] Publish operator runbook index
 - [x] Close remaining migration documentation debt
 
@@ -17,10 +17,10 @@ Goal: close program documentation and remaining technical debt with explicit tra
 
 ## Phase B — Security Closure Tasks (Manual/External)
 
-- [ ] Rotate previously exposed credentials
-- [ ] Complete git history rewrite/remediation
-- [ ] Notify collaborators to reset/re-clone after history rewrite
-- [ ] Verify SOPS age key backup and restore path
+- [!] Rotate previously exposed credentials (manual/external)
+- [!] Complete git history rewrite/remediation (manual/external)
+- [!] Notify collaborators to reset/re-clone after history rewrite (manual/external)
+- [!] Verify SOPS age key backup and restore path (manual/external)
 
 ## Phase C — Verification and Program Closure
 

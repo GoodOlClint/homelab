@@ -215,20 +215,20 @@ Status legend:
 
 ### Scope Checklist
 
-- [-] Remove deprecated legacy var paths
+- [x] Remove deprecated legacy var paths
 - [x] Close docs debt and stale references
-- [ ] Complete credential rotation and history remediation checklist
+- [!] Complete credential rotation and history remediation checklist (manual/external)
 - [x] Publish final operator runbook index
 
 ### Verification Checklist
 
 - [x] Guardrails pass
-- [ ] No open high-severity migration TODOs
+- [x] No open high-severity migration TODOs
 - [x] Onboarding from docs-only walkthrough succeeds
 
 ### PR8 Done Definition
 
-- [ ] Program objectives fully met
+- [!] Program objectives fully met (blocked on external security/recovery tasks)
 
 ### PR8 Artifacts
 
@@ -246,10 +246,10 @@ Status legend:
 
 ## Security/Recovery Critical Tasks (Track to Closure)
 
-- [ ] Rotate all credentials previously exposed in tracked history
-- [ ] Complete git history rewrite/remediation
-- [ ] Notify collaborators and enforce reset/re-clone guidance
-- [ ] Verify backup and recovery for SOPS age keys
+- [!] Rotate all credentials previously exposed in tracked history
+- [!] Complete git history rewrite/remediation
+- [!] Notify collaborators and enforce reset/re-clone guidance
+- [!] Verify backup and recovery for SOPS age keys
 
 ---
 
