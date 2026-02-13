@@ -224,7 +224,7 @@ Status legend:
 
 - [x] Guardrails pass
 - [ ] No open high-severity migration TODOs
-- [ ] Onboarding from docs-only walkthrough succeeds
+- [x] Onboarding from docs-only walkthrough succeeds
 
 ### PR8 Done Definition
 

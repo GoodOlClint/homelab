@@ -27,7 +27,7 @@ Goal: close program documentation and remaining technical debt with explicit tra
 - [x] `make validate-public-policy`
 - [x] `make security-check`
 - [x] `make security-check-range`
-- [ ] Docs-only onboarding walkthrough succeeds
+- [x] Docs-only onboarding walkthrough succeeds
 
 ## Artifacts
 
