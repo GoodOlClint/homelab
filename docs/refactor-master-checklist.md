@@ -11,7 +11,7 @@ Status legend:
 
 ## Program Health Snapshot
 
-- Current phase: `PR4`
+- Current phase: `PR6`
 - Last validated date: `2026-02-12`
 - Guardrails baseline status: `[x] passing`
 
@@ -149,7 +149,7 @@ Status legend:
 
 ### PR5 Done Definition
 
-- [ ] Policy model is complete enough for renderer adoption
+- [x] Policy model is complete enough for renderer adoption
 
 ### PR5 Artifacts
 

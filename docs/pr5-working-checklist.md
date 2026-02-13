@@ -12,14 +12,14 @@ Goal: expand publishable network policy coverage while keeping topology data pri
 
 - [x] Inventory active zone-to-zone flows from current infrastructure/services behavior
 - [x] Add missing policy intents for core service dependencies
-- [ ] Keep all address/interface specifics in private bindings only
+- [x] Keep all address/interface specifics in private bindings only
 
 ## Phase C — Validation and Review
 
 - [x] `make validate-public-policy`
 - [x] `make security-check`
 - [x] `make security-check-range`
-- [-] Manual review for intent completeness and non-sensitive content
+- [x] Manual review for intent completeness and non-sensitive content
 
 ## Artifacts
 
