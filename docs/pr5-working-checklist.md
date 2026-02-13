@@ -16,9 +16,9 @@ Goal: expand publishable network policy coverage while keeping topology data pri
 
 ## Phase C — Validation and Review
 
-- [ ] `make validate-public-policy`
-- [ ] `make security-check`
-- [ ] `make security-check-range`
+- [x] `make validate-public-policy`
+- [x] `make security-check`
+- [x] `make security-check-range`
 - [-] Manual review for intent completeness and non-sensitive content
 
 ## Artifacts

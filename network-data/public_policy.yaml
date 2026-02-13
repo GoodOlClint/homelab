@@ -43,6 +43,9 @@ aliases:
     nfs_legacy:
       proto: tcp
       ports: [2049]
+    ssh_admin:
+      proto: tcp
+      ports: [22]
 
 rules:
   - id: allow-mdns-work-to-sonos
@@ -197,6 +200,33 @@ rules:
     state: keep
     log: true
     note: "Allow legacy NFS backup path for media workloads"
+
+  - id: allow-management-to-infrastructure-ssh
+    action: pass
+    from_zone: management
+    to_zone: infrastructure
+    service: ssh_admin
+    state: keep
+    log: true
+    note: "Allow administrative SSH access from management zone to infrastructure hosts"
+
+  - id: allow-management-to-services-ssh
+    action: pass
+    from_zone: management
+    to_zone: services
+    service: ssh_admin
+    state: keep
+    log: true
+    note: "Allow administrative SSH access from management zone to service hosts"
+
+  - id: allow-management-to-media-ssh
+    action: pass
+    from_zone: management
+    to_zone: media
+    service: ssh_admin
+    state: keep
+    log: true
+    note: "Allow administrative SSH access from management zone to media hosts"
 
   - id: deny-iot-to-management
     action: block

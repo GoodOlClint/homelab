@@ -144,7 +144,7 @@ Status legend:
 
 ### Verification Checklist
 
-- [ ] Validation catches malformed policies
+- [x] Validation catches malformed policies
 - [-] Policy review confirms complete intended flow coverage
 
 ### PR5 Done Definition
