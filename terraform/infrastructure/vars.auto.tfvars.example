@@ -14,7 +14,7 @@ virtual_machine_timezone     = "America/Chicago"
 # VM User Password (optional)
 # Generate with: mkpasswd --method=sha-512 --rounds=4096
 # If not set or null, password authentication will be disabled (SSH key only)
-virtual_machine_password_hash = "$6$rounds=4096$gJDlessiwfV5Gd5Y$XXOA1Bd0J1Pf5fJtqZ8khu7/WixTDvrdfHuuTqOryULcqffigBhvP6mcWOEwwfHVHNhelSCg1RmrPqUV/E.cv0"  # Use environment variable: TF_VAR_virtual_machine_password_hash
+virtual_machine_password_hash = ""  # Use environment variable: TF_VAR_virtual_machine_password_hash
 
 # Storage Configuration
 primary_disk_storage   = "iscsi-ssd-lvm"

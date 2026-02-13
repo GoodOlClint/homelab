@@ -1,6 +1,6 @@
 # Makefile for Homelab Automation
 
-.PHONY: all infra services inventory ansible apply update plan destroy validate-public-policy security-check security-check-range setup-hooks bootstrap-local pr1-overlay-smoke pr3-secrets-check
+.PHONY: all infra services inventory ansible apply update plan destroy validate-public-policy security-check security-check-range setup-hooks bootstrap-local pr1-overlay-smoke pr3-secrets-check pr4-tf-check tf-plan-infra-secure tf-plan-services-secure tf-apply-infra-secure tf-apply-services-secure
 
 all: apply
 
@@ -24,6 +24,21 @@ pr1-overlay-smoke:
 
 pr3-secrets-check:
 	@bash scripts/validate_sops_workflow.sh --mode local
+
+pr4-tf-check:
+	@bash scripts/validate_terraform_sensitive_inputs.sh --mode local
+
+tf-plan-infra-secure:
+	@cd terraform/infrastructure && terraform init && terraform plan -no-color -var-file=vars.local.auto.tfvars
+
+tf-plan-services-secure:
+	@cd terraform/services && terraform init && terraform plan -no-color -var-file=vars.local.auto.tfvars
+
+tf-apply-infra-secure:
+	@cd terraform/infrastructure && terraform init && terraform apply -no-color -auto-approve -var-file=vars.local.auto.tfvars
+
+tf-apply-services-secure:
+	@cd terraform/services && terraform init && terraform apply -no-color -auto-approve -var-file=vars.local.auto.tfvars
 
 init:
 	@python3 -m venv .venv

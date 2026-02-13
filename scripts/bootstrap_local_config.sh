@@ -26,4 +26,18 @@ else
   echo "Exists: ansible/group_vars/secrets.sops.yml"
 fi
 
+if [[ ! -f "$ROOT_DIR/terraform/infrastructure/vars.local.auto.tfvars" ]]; then
+  cp "$ROOT_DIR/terraform/infrastructure/vars.auto.tfvars.example" "$ROOT_DIR/terraform/infrastructure/vars.local.auto.tfvars"
+  echo "Created terraform/infrastructure/vars.local.auto.tfvars"
+else
+  echo "Exists: terraform/infrastructure/vars.local.auto.tfvars"
+fi
+
+if [[ ! -f "$ROOT_DIR/terraform/services/vars.local.auto.tfvars" ]]; then
+  cp "$ROOT_DIR/terraform/services/vars.auto.tfvars.example" "$ROOT_DIR/terraform/services/vars.local.auto.tfvars"
+  echo "Created terraform/services/vars.local.auto.tfvars"
+else
+  echo "Exists: terraform/services/vars.local.auto.tfvars"
+fi
+
 echo "Bootstrap complete. Review and fill local files before running Terraform/Ansible."

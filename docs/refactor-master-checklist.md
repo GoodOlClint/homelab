@@ -106,19 +106,27 @@ Status legend:
 
 ### Scope Checklist
 
-- [ ] Inventory sensitive Terraform inputs in tracked files
-- [ ] Move sensitive values to local-only/encrypted input path
-- [ ] Add/refresh tracked example templates
-- [ ] Update Make/docs for new Terraform input process
+- [x] Inventory sensitive Terraform inputs in tracked files
+- [-] Move sensitive values to local-only/encrypted input path
+- [x] Add/refresh tracked example templates
+- [x] Update Make/docs for new Terraform input process
 
 ### Verification Checklist
 
 - [ ] Terraform plan works with new secure input path
-- [ ] Guardrails remain green
+- [x] Guardrails remain green
 
 ### PR4 Done Definition
 
 - [ ] No sensitive Terraform value required in tracked tfvars
+
+### PR4 Artifacts
+
+- [x] `docs/pr4-working-checklist.md`
+- [x] `docs/pr4-terraform-sensitive-inputs.md`
+- [x] `scripts/validate_terraform_sensitive_inputs.sh`
+- [x] `Makefile` secure Terraform targets
+- [x] `scripts/bootstrap_local_config.sh` terraform local tfvars bootstrap
 
 ---
 
