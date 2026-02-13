@@ -36,6 +36,27 @@ Use one of these two secure methods:
    - `make tf-plan-infra-secure`
    - `make tf-plan-services-secure`
 
+## Local Value Fill Checklist (Required Before Plan)
+
+For both files below, replace placeholders with real local values:
+
+- `terraform/infrastructure/vars.local.auto.tfvars`
+- `terraform/services/vars.local.auto.tfvars`
+
+Required keys:
+
+- `virtual_environment_endpoint`
+- `virtual_environment_password`
+- `unifi_password`
+- `unifi_api_url`
+- `ssh_public_key_path` (must point to an existing local public key)
+
+Fast readiness command:
+
+- `make pr4-tf-check`
+
+If readiness fails, fix reported placeholder/missing values first, then rerun.
+
 ## CI-Safe Pattern
 
 - Inject sensitive values as `TF_VAR_*` environment variables from CI secret manager.

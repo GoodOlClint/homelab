@@ -12,7 +12,7 @@ Goal: move Terraform sensitive values to local-only/env-based inputs and stop re
 
 - [x] Add helper validation script for Terraform sensitive input readiness
 - [x] Add Make targets for secure Terraform commands
-- [ ] Optional: CI guidance for secure Terraform variable injection
+- [x] Optional: CI guidance for secure Terraform variable injection
 
 ## Phase C — Migration Execution
 
