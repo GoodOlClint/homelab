@@ -216,9 +216,9 @@ Status legend:
 ### Scope Checklist
 
 - [ ] Remove deprecated legacy var paths
-- [ ] Close docs debt and stale references
+- [-] Close docs debt and stale references
 - [ ] Complete credential rotation and history remediation checklist
-- [ ] Publish final operator runbook index
+- [x] Publish final operator runbook index
 
 ### Verification Checklist
 
@@ -229,6 +229,11 @@ Status legend:
 ### PR8 Done Definition
 
 - [ ] Program objectives fully met
+
+### PR8 Artifacts
+
+- [x] `docs/pr8-working-checklist.md`
+- [x] `docs/operator-runbook-index.md`
 
 ---
 
