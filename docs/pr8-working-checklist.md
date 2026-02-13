@@ -12,6 +12,8 @@ Goal: close program documentation and remaining technical debt with explicit tra
 
 - [x] Generate repository-wide deprecated variable reference report
 - [x] Add repeatable audit command (`make pr8-audit-deprecated`)
+- [x] Add repeatable deprecated usage guard (`make pr8-deprecated-check`)
+- [ ] Resolve remaining warning set from deprecated usage guard
 
 ## Phase B — Security Closure Tasks (Manual/External)
 
@@ -33,3 +35,4 @@ Goal: close program documentation and remaining technical debt with explicit tra
 - [x] `docs/operator-runbook-index.md`
 - [x] `docs/pr8-deprecated-var-audit.md`
 - [x] `scripts/audit_deprecated_vars.py`
+- [x] `scripts/check_deprecated_var_usage.py`

@@ -237,6 +237,8 @@ Status legend:
 - [x] `docs/pr8-deprecated-var-audit.md`
 - [x] `scripts/audit_deprecated_vars.py`
 - [x] `Makefile` target `pr8-audit-deprecated`
+- [x] `scripts/check_deprecated_var_usage.py`
+- [x] `Makefile` target `pr8-deprecated-check`
 
 ---
 
