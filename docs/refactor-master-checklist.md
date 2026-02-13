@@ -107,7 +107,7 @@ Status legend:
 ### Scope Checklist
 
 - [x] Inventory sensitive Terraform inputs in tracked files
-- [-] Move sensitive values to local-only/encrypted input path
+- [x] Move sensitive values to local-only/encrypted input path
 - [x] Add/refresh tracked example templates
 - [x] Update Make/docs for new Terraform input process
 
@@ -118,7 +118,7 @@ Status legend:
 
 ### PR4 Done Definition
 
-- [ ] No sensitive Terraform value required in tracked tfvars
+- [x] No sensitive Terraform value required in tracked tfvars
 
 ### PR4 Artifacts
 

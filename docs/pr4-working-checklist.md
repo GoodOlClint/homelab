@@ -16,9 +16,9 @@ Goal: move Terraform sensitive values to local-only/env-based inputs and stop re
 
 ## Phase C — Migration Execution
 
-- [ ] Move real sensitive values out of tracked `vars.auto.tfvars` in both Terraform roots
-- [ ] Keep tracked tfvars content as non-secret placeholders/examples only
-- [ ] Confirm no sensitive Terraform values remain in tracked tfvars
+- [x] Move real sensitive values out of tracked `vars.auto.tfvars` in both Terraform roots
+- [x] Keep tracked tfvars content as non-secret placeholders/examples only
+- [x] Confirm no sensitive Terraform values remain in tracked tfvars
 
 ## Verification
 
