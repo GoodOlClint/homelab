@@ -1,6 +1,6 @@
 # Makefile for Homelab Automation
 
-.PHONY: all infra services inventory ansible apply update plan destroy validate-public-policy security-check security-check-range setup-hooks bootstrap-local pr1-overlay-smoke
+.PHONY: all infra services inventory ansible apply update plan destroy validate-public-policy security-check security-check-range setup-hooks bootstrap-local pr1-overlay-smoke pr3-secrets-check
 
 all: apply
 
@@ -21,6 +21,9 @@ bootstrap-local:
 
 pr1-overlay-smoke:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/docker.yml --limit docker --check --list-tasks
+
+pr3-secrets-check:
+	@bash scripts/validate_sops_workflow.sh --mode local
 
 init:
 	@python3 -m venv .venv

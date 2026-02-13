@@ -79,19 +79,26 @@ Status legend:
 
 ### Scope Checklist
 
-- [ ] Define standard local decrypt workflow
-- [ ] Define standard CI-safe secret handling workflow
-- [ ] Document secret creation/update/rotation runbook
-- [ ] Add helper command(s) for secret workflow validation
+- [x] Define standard local decrypt workflow
+- [x] Define standard CI-safe secret handling workflow
+- [x] Document secret creation/update/rotation runbook
+- [x] Add helper command(s) for secret workflow validation
 
 ### Verification Checklist
 
 - [ ] Operator dry-run of documented workflow completes
-- [ ] New workflow docs reviewed for first-time usability
+- [x] New workflow docs reviewed for first-time usability
 
 ### PR3 Done Definition
 
 - [ ] Secret workflow can be executed from docs only
+
+### PR3 Artifacts
+
+- [x] `docs/pr3-sops-runtime-workflow.md`
+- [x] `docs/pr3-working-checklist.md`
+- [x] `scripts/validate_sops_workflow.sh`
+- [x] `Makefile` target `pr3-secrets-check`
 
 ---
 
