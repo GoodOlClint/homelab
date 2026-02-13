@@ -11,7 +11,7 @@ Status legend:
 
 ## Program Health Snapshot
 
-- Current phase: `PR3`
+- Current phase: `PR4`
 - Last validated date: `2026-02-12`
 - Guardrails baseline status: `[x] passing`
 
@@ -86,12 +86,12 @@ Status legend:
 
 ### Verification Checklist
 
-- [ ] Operator dry-run of documented workflow completes
+- [x] Operator dry-run of documented workflow completes
 - [x] New workflow docs reviewed for first-time usability
 
 ### PR3 Done Definition
 
-- [ ] Secret workflow can be executed from docs only
+- [x] Secret workflow can be executed from docs only
 
 ### PR3 Artifacts
 

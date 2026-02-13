@@ -22,7 +22,7 @@ Goal: standardize encrypted secret handling across local operator runs and CI-sa
 
 ## Verification
 
-- [ ] `make pr3-secrets-check`
+- [x] `make pr3-secrets-check`
 - [x] `make security-check`
 - [x] `make security-check-range`
 
