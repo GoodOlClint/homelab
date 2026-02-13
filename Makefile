@@ -1,6 +1,6 @@
 # Makefile for Homelab Automation
 
-.PHONY: all infra services inventory ansible apply update plan destroy validate-public-policy security-check security-check-range setup-hooks bootstrap-local pr1-overlay-smoke pr3-secrets-check pr4-tf-check tf-plan-infra-secure tf-plan-services-secure tf-apply-infra-secure tf-apply-services-secure pr6-render pr6-render-check pr6-render-local pr7-consumer-smoke pr8-audit-deprecated pr8-deprecated-check
+.PHONY: all infra services inventory ansible apply update plan destroy validate-public-policy security-check security-check-range setup-hooks bootstrap-local pr1-overlay-smoke pr3-secrets-check pr4-tf-check tf-plan-infra-secure tf-plan-services-secure tf-apply-infra-secure tf-apply-services-secure pr6-render pr6-render-check pr6-render-local pr7-consumer-smoke pr8-audit-deprecated pr8-deprecated-check pr8-onboarding-smoke
 
 all: apply
 
@@ -57,6 +57,16 @@ pr8-audit-deprecated:
 
 pr8-deprecated-check:
 	@python3 scripts/check_deprecated_var_usage.py --root .
+
+pr8-onboarding-smoke:
+	@make validate-public-policy
+	@make security-check
+	@make security-check-range
+	@make pr6-render
+	@make pr6-render-check
+	@make pr7-consumer-smoke
+	@make pr8-audit-deprecated
+	@make pr8-deprecated-check
 
 init:
 	@python3 -m venv .venv

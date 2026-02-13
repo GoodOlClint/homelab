@@ -6,7 +6,7 @@ Goal: close program documentation and remaining technical debt with explicit tra
 
 - [-] Remove deprecated legacy variable paths where safe
 - [x] Publish operator runbook index
-- [-] Close remaining migration documentation debt
+- [x] Close remaining migration documentation debt
 
 ## Phase A.1 — Deprecated Variable Audit
 
@@ -36,3 +36,4 @@ Goal: close program documentation and remaining technical debt with explicit tra
 - [x] `docs/pr8-deprecated-var-audit.md`
 - [x] `scripts/audit_deprecated_vars.py`
 - [x] `scripts/check_deprecated_var_usage.py`
+- [x] `docs/onboarding-walkthrough.md`

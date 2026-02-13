@@ -216,7 +216,7 @@ Status legend:
 ### Scope Checklist
 
 - [-] Remove deprecated legacy var paths
-- [-] Close docs debt and stale references
+- [x] Close docs debt and stale references
 - [ ] Complete credential rotation and history remediation checklist
 - [x] Publish final operator runbook index
 
@@ -239,6 +239,8 @@ Status legend:
 - [x] `Makefile` target `pr8-audit-deprecated`
 - [x] `scripts/check_deprecated_var_usage.py`
 - [x] `Makefile` target `pr8-deprecated-check`
+- [x] `docs/onboarding-walkthrough.md`
+- [x] `Makefile` target `pr8-onboarding-smoke`
 
 ---
 
