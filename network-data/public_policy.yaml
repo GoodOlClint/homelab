@@ -31,6 +31,18 @@ aliases:
     ntp:
       proto: udp
       ports: [123]
+    dns:
+      proto: udp
+      ports: [53]
+    dns_tcp:
+      proto: tcp
+      ports: [53]
+    pbs_api:
+      proto: tcp
+      ports: [8007]
+    nfs_legacy:
+      proto: tcp
+      ports: [2049]
 
 rules:
   - id: allow-mdns-work-to-sonos
@@ -59,6 +71,132 @@ rules:
     state: keep
     log: false
     note: "Permit time sync while maintaining segmentation"
+
+  - id: allow-dns-core-to-infrastructure
+    action: pass
+    from_zone: core
+    to_zone: infrastructure
+    service: dns
+    state: keep
+    log: false
+    note: "Allow DNS queries from core clients to infrastructure DNS"
+
+  - id: allow-dns-tcp-core-to-infrastructure
+    action: pass
+    from_zone: core
+    to_zone: infrastructure
+    service: dns_tcp
+    state: keep
+    log: false
+    note: "Allow DNS TCP fallback from core clients to infrastructure DNS"
+
+  - id: allow-dns-work-to-infrastructure
+    action: pass
+    from_zone: work
+    to_zone: infrastructure
+    service: dns
+    state: keep
+    log: false
+    note: "Allow DNS queries from work clients to infrastructure DNS"
+
+  - id: allow-dns-tcp-work-to-infrastructure
+    action: pass
+    from_zone: work
+    to_zone: infrastructure
+    service: dns_tcp
+    state: keep
+    log: false
+    note: "Allow DNS TCP fallback from work clients to infrastructure DNS"
+
+  - id: allow-dns-iot-to-infrastructure
+    action: pass
+    from_zone: iot
+    to_zone: infrastructure
+    service: dns
+    state: keep
+    log: false
+    note: "Allow DNS queries from IoT clients to infrastructure DNS"
+
+  - id: allow-dns-tcp-iot-to-infrastructure
+    action: pass
+    from_zone: iot
+    to_zone: infrastructure
+    service: dns_tcp
+    state: keep
+    log: false
+    note: "Allow DNS TCP fallback from IoT clients to infrastructure DNS"
+
+  - id: allow-dns-sonos-to-infrastructure
+    action: pass
+    from_zone: sonos
+    to_zone: infrastructure
+    service: dns
+    state: keep
+    log: false
+    note: "Allow DNS queries from Sonos zone to infrastructure DNS"
+
+  - id: allow-dns-tcp-sonos-to-infrastructure
+    action: pass
+    from_zone: sonos
+    to_zone: infrastructure
+    service: dns_tcp
+    state: keep
+    log: false
+    note: "Allow DNS TCP fallback from Sonos zone to infrastructure DNS"
+
+  - id: allow-dns-guest-to-infrastructure
+    action: pass
+    from_zone: guest
+    to_zone: infrastructure
+    service: dns
+    state: keep
+    log: false
+    note: "Allow DNS queries from guest clients to infrastructure DNS"
+
+  - id: allow-dns-tcp-guest-to-infrastructure
+    action: pass
+    from_zone: guest
+    to_zone: infrastructure
+    service: dns_tcp
+    state: keep
+    log: false
+    note: "Allow DNS TCP fallback from guest clients to infrastructure DNS"
+
+  - id: allow-services-to-infrastructure-pbs
+    action: pass
+    from_zone: services
+    to_zone: infrastructure
+    service: pbs_api
+    state: keep
+    log: true
+    note: "Allow service backup clients to reach PBS API"
+
+  - id: allow-media-to-infrastructure-pbs
+    action: pass
+    from_zone: media
+    to_zone: infrastructure
+    service: pbs_api
+    state: keep
+    log: true
+    note: "Allow media backup clients to reach PBS API"
+
+  - id: allow-services-to-storage-nfs
+    action: pass
+    from_zone: services
+    to_zone: storage
+    service: nfs_legacy
+    state: keep
+    log: true
+    note: "Allow legacy NFS backup path for service workloads"
+
+  - id: allow-media-to-storage-nfs
+    action: pass
+    from_zone: media
+    to_zone: storage
+    service: nfs_legacy
+    state: keep
+    log: true
+    note: "Allow legacy NFS backup path for media workloads"
 
   - id: deny-iot-to-management
     action: block
