@@ -449,7 +449,7 @@
       Value: {{ pbs_token_output.stdout }}
       ============================================
       Add to ansible vault:
-      pbs_backup_token: "{{ pbs_token_output.stdout }}"
+      secrets.pbs_backup_token: "{{ pbs_token_output.stdout }}"
   when: pbs_token_output is changed and pbs_token_output.stdout is defined
 
 # API Token Generation - Monitoring User
@@ -475,7 +475,7 @@
       Value: {{ pbs_monitoring_token_output.stdout }}
       ============================================
       Add to ansible vault:
-      pbs_monitoring_token: "{{ pbs_monitoring_token_output.stdout }}"
+        secrets.pbs_monitoring_token: "{{ pbs_monitoring_token_output.stdout }}"
   when: pbs_monitoring_token_output is changed and pbs_monitoring_token_output.stdout is defined
 
 # Grant monitoring user Audit (read-only) permissions

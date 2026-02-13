@@ -215,14 +215,14 @@ Status legend:
 
 ### Scope Checklist
 
-- [ ] Remove deprecated legacy var paths
+- [-] Remove deprecated legacy var paths
 - [-] Close docs debt and stale references
 - [ ] Complete credential rotation and history remediation checklist
 - [x] Publish final operator runbook index
 
 ### Verification Checklist
 
-- [ ] Guardrails pass
+- [x] Guardrails pass
 - [ ] No open high-severity migration TODOs
 - [ ] Onboarding from docs-only walkthrough succeeds
 
