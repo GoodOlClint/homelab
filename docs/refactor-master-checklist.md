@@ -139,7 +139,7 @@ Status legend:
 ### Scope Checklist
 
 - [-] Expand public policy coverage for all active zones and core flows
-- [ ] Keep private mappings only in local/encrypted bindings
+- [x] Keep private mappings only in local/encrypted bindings
 - [x] Strengthen validation checks for policy schema/consistency
 
 ### Verification Checklist
@@ -155,6 +155,7 @@ Status legend:
 
 - [x] `docs/pr5-working-checklist.md`
 - [x] `scripts/validate_public_policy.py` structural validation enhancements
+- [x] `docs/pr5-policy-flow-inventory.md`
 
 ---
 

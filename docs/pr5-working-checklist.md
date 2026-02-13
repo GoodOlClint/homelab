@@ -10,7 +10,7 @@ Goal: expand publishable network policy coverage while keeping topology data pri
 
 ## Phase B — Coverage Expansion
 
-- [ ] Inventory active zone-to-zone flows from current infrastructure/services behavior
+- [x] Inventory active zone-to-zone flows from current infrastructure/services behavior
 - [ ] Add missing policy intents for core service dependencies
 - [ ] Keep all address/interface specifics in private bindings only
 
@@ -24,4 +24,5 @@ Goal: expand publishable network policy coverage while keeping topology data pri
 ## Artifacts
 
 - [x] `docs/pr5-working-checklist.md`
+- [x] `docs/pr5-policy-flow-inventory.md`
 - [x] `scripts/validate_public_policy.py` structural validation enhancements
