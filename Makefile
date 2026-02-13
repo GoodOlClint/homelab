@@ -1,6 +1,6 @@
 # Makefile for Homelab Automation
 
-.PHONY: all infra services inventory ansible apply update plan destroy validate-public-policy security-check security-check-range setup-hooks bootstrap-local pr1-overlay-smoke pr3-secrets-check pr4-tf-check tf-plan-infra-secure tf-plan-services-secure tf-apply-infra-secure tf-apply-services-secure pr6-render pr6-render-check pr6-render-local
+.PHONY: all infra services inventory ansible apply update plan destroy validate-public-policy security-check security-check-range setup-hooks bootstrap-local pr1-overlay-smoke pr3-secrets-check pr4-tf-check tf-plan-infra-secure tf-plan-services-secure tf-apply-infra-secure tf-apply-services-secure pr6-render pr6-render-check pr6-render-local pr7-consumer-smoke
 
 all: apply
 
@@ -48,6 +48,9 @@ pr6-render-check:
 
 pr6-render-local:
 	@python3 scripts/render_policy_artifact.py --public network-data/public_policy.yaml --private network-data/local/private_bindings.yaml --output network-data/local/rendered/policy_render.local.json
+
+pr7-consumer-smoke:
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/proxmox.yaml ansible/playbooks/infrastructure.yml --check --list-tasks -e use_rendered_policy=true
 
 init:
 	@python3 -m venv .venv

@@ -11,7 +11,7 @@ Status legend:
 
 ## Program Health Snapshot
 
-- Current phase: `PR7`
+- Current phase: `PR8`
 - Last validated date: `2026-02-12`
 - Guardrails baseline status: `[x] passing`
 
@@ -189,18 +189,25 @@ Status legend:
 
 ### Scope Checklist
 
-- [ ] Integrate generated output into one consumer with safety toggle
-- [ ] Create cutover and rollback runbook
-- [ ] Validate expected behavior in controlled rollout
+- [x] Integrate generated output into one consumer with safety toggle
+- [x] Create cutover and rollback runbook
+- [x] Validate expected behavior in controlled rollout
 
 ### Verification Checklist
 
-- [ ] Consumer behavior matches policy intent
-- [ ] Rollback tested and documented
+- [x] Consumer behavior matches policy intent
+- [x] Rollback tested and documented
 
 ### PR7 Done Definition
 
-- [ ] Generated policy path runs safely in active workflow
+- [x] Generated policy path runs safely in active workflow
+
+### PR7 Artifacts
+
+- [x] `docs/pr7-working-checklist.md`
+- [x] `docs/pr7-controlled-adoption.md`
+- [x] `ansible/playbooks/infrastructure.yml` rendered-policy toggle integration
+- [x] `Makefile` target `pr7-consumer-smoke`
 
 ---
 

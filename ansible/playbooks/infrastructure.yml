@@ -34,6 +34,38 @@
         file: "{{ playbook_dir }}/../group_vars/secrets.sops.yml"
       when: secrets_vars_file.stat.exists
       run_once: true
+
+    - name: Check for rendered policy artifact when enabled
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/../../network-data/generated/policy_render.public.json"
+      register: rendered_policy_artifact_file
+      delegate_to: localhost
+      become: false
+      run_once: true
+      when: use_rendered_policy | default(false)
+
+    - name: Require rendered policy artifact when enabled
+      ansible.builtin.assert:
+        that:
+          - rendered_policy_artifact_file.stat.exists
+        fail_msg: "Rendered policy artifact missing. Run: make pr6-render"
+      run_once: true
+      when: use_rendered_policy | default(false)
+
+    - name: Load rendered policy artifact when enabled
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../../network-data/generated/policy_render.public.json"
+        name: rendered_policy
+      run_once: true
+      when: use_rendered_policy | default(false)
+
+    - name: Show rendered policy artifact summary when enabled
+      ansible.builtin.debug:
+        msg: >-
+          Rendered policy enabled: zones={{ rendered_policy.summary.zone_count }},
+          rules={{ rendered_policy.summary.rule_count }}
+      run_once: true
+      when: use_rendered_policy | default(false)
   roles:
     - role: ../roles-infrastructure/monitoring-users
       tags:
