@@ -234,6 +234,9 @@ Status legend:
 
 - [x] `docs/pr8-working-checklist.md`
 - [x] `docs/operator-runbook-index.md`
+- [x] `docs/pr8-deprecated-var-audit.md`
+- [x] `scripts/audit_deprecated_vars.py`
+- [x] `Makefile` target `pr8-audit-deprecated`
 
 ---
 

@@ -4,9 +4,14 @@ Goal: close program documentation and remaining technical debt with explicit tra
 
 ## Phase A — Repo Cleanup
 
-- [ ] Remove deprecated legacy variable paths where safe
+- [-] Remove deprecated legacy variable paths where safe
 - [x] Publish operator runbook index
-- [ ] Close remaining migration documentation debt
+- [-] Close remaining migration documentation debt
+
+## Phase A.1 — Deprecated Variable Audit
+
+- [x] Generate repository-wide deprecated variable reference report
+- [x] Add repeatable audit command (`make pr8-audit-deprecated`)
 
 ## Phase B — Security Closure Tasks (Manual/External)
 
@@ -26,3 +31,5 @@ Goal: close program documentation and remaining technical debt with explicit tra
 
 - [x] `docs/pr8-working-checklist.md`
 - [x] `docs/operator-runbook-index.md`
+- [x] `docs/pr8-deprecated-var-audit.md`
+- [x] `scripts/audit_deprecated_vars.py`
