@@ -1,0 +1,43 @@
+---
+# Alpine LBU — read-only root filesystem
+# Only relevant for diskless Alpine installs; skipped on persistent-disk VPS
+
+- name: Check if LBU is configured
+  ansible.builtin.stat:
+    path: /etc/lbu/lbu.conf
+  register: lbu_conf
+  tags:
+    - lbu
+
+- name: Configure LBU media (persist to disk)
+  ansible.builtin.lineinfile:
+    path: /etc/lbu/lbu.conf
+    regexp: '^LBU_MEDIA='
+    line: 'LBU_MEDIA=mmcblk0p1'
+  when: lbu_conf.stat.exists
+  tags:
+    - lbu
+
+- name: Include essential paths in LBU
+  ansible.builtin.command: "lbu include {{ item }}"
+  loop:
+    - /etc/wireguard
+    - /etc/nftables.nft
+    - /etc/ssh
+    - /etc/fail2ban
+    - /etc/telegraf
+    - /etc/rsyslog.d
+    - /etc/crontabs
+    - /home/{{ vps_service_user }}/.ssh
+  changed_when: false
+  failed_when: false
+  when: lbu_conf.stat.exists
+  tags:
+    - lbu
+
+- name: Commit current configuration to LBU
+  ansible.builtin.command: lbu commit
+  changed_when: true
+  when: lbu_conf.stat.exists
+  tags:
+    - lbu

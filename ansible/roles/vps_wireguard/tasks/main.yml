@@ -1,0 +1,169 @@
+---
+# VPS WireGuard Relay — tunnel to pfSense
+#
+# Key management:
+#   - If secrets.vps_wg_private_key is set → use it (rebuild scenario)
+#   - Otherwise → generate a new keypair on the VPS (first deploy)
+#   - In both cases, the public key is displayed so you can configure pfSense
+
+- name: Install WireGuard tools
+  ansible.builtin.apk:
+    name: wireguard-tools
+    state: present
+    update_cache: yes
+  tags:
+    - vps_wireguard
+    - packages
+
+- name: Enable IPv4 forwarding
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_forward
+    value: '1'
+    sysctl_set: yes
+    state: present
+    reload: yes
+  tags:
+    - vps_wireguard
+    - sysctl
+
+- name: Ensure /etc/wireguard directory exists
+  ansible.builtin.file:
+    path: /etc/wireguard
+    state: directory
+    mode: '0700'
+    owner: root
+    group: root
+  tags:
+    - vps_wireguard
+    - config
+
+# Key management — determine whether to generate or reuse
+- name: Check if SOPS private key is provided
+  ansible.builtin.set_fact:
+    wg_key_from_sops: "{{ secrets.vps_wg_private_key | default('') is truthy and secrets.vps_wg_private_key | default('REPLACE_ME') != 'REPLACE_ME' }}"
+  tags:
+    - vps_wireguard
+    - config
+
+- name: Use SOPS private key (rebuild scenario)
+  ansible.builtin.set_fact:
+    wg_private_key: "{{ secrets.vps_wg_private_key }}"
+  when: wg_key_from_sops
+  no_log: true
+  tags:
+    - vps_wireguard
+    - config
+
+- name: Generate new WireGuard private key (first deploy)
+  ansible.builtin.command: wg genkey
+  register: wg_genkey_result
+  changed_when: false
+  when: not wg_key_from_sops
+  no_log: true
+  tags:
+    - vps_wireguard
+    - config
+
+- name: Set generated private key fact
+  ansible.builtin.set_fact:
+    wg_private_key: "{{ wg_genkey_result.stdout }}"
+  when: not wg_key_from_sops
+  no_log: true
+  tags:
+    - vps_wireguard
+    - config
+
+- name: Derive public key from private key
+  ansible.builtin.shell:
+    cmd: "echo '{{ wg_private_key }}' | wg pubkey"
+  register: wg_pubkey_result
+  changed_when: false
+  no_log: true
+  tags:
+    - vps_wireguard
+    - config
+
+- name: Set public key fact
+  ansible.builtin.set_fact:
+    wg_public_key: "{{ wg_pubkey_result.stdout }}"
+  tags:
+    - vps_wireguard
+    - config
+
+- name: Deploy WireGuard configuration
+  ansible.builtin.template:
+    src: wg0.conf.j2
+    dest: "/etc/wireguard/{{ wg_interface }}.conf"
+    owner: root
+    group: root
+    mode: '0600'
+  notify: Restart WireGuard
+  tags:
+    - vps_wireguard
+    - config
+
+- name: Deploy OpenRC init script for WireGuard
+  ansible.builtin.template:
+    src: wg-quick.initd.j2
+    dest: "/etc/init.d/wg-quick.{{ wg_interface }}"
+    owner: root
+    group: root
+    mode: '0755'
+  tags:
+    - vps_wireguard
+    - service
+
+- name: Enable WireGuard interface on boot
+  ansible.builtin.service:
+    name: "wg-quick.{{ wg_interface }}"
+    enabled: yes
+  tags:
+    - vps_wireguard
+    - service
+
+- name: Start WireGuard interface
+  ansible.builtin.service:
+    name: "wg-quick.{{ wg_interface }}"
+    state: started
+  tags:
+    - vps_wireguard
+    - service
+
+- name: Check WireGuard interface is up
+  ansible.builtin.command: wg show {{ wg_interface }}
+  register: wg_show
+  changed_when: false
+  failed_when: wg_show.rc != 0
+  tags:
+    - vps_wireguard
+    - validate
+
+# Display key info — always show public key, show private key only on first deploy
+- name: Display VPS WireGuard public key
+  ansible.builtin.debug:
+    msg: "VPS public key: {{ wg_public_key }}"
+  tags:
+    - vps_wireguard
+    - validate
+
+- name: Display new keypair for saving (first deploy only)
+  ansible.builtin.debug:
+    msg: |
+      ╔══════════════════════════════════════════════════════════════╗
+      ║  NEW VPS KEYPAIR GENERATED — save these!                   ║
+      ╠══════════════════════════════════════════════════════════════╣
+      ║  Public key  (for pfSense peer):                           ║
+      ║  {{ wg_public_key }}
+      ║                                                            ║
+      ║  Private key (save to secrets.sops.yml → vps_wg_private_key):
+      ║  {{ wg_private_key }}
+      ╠══════════════════════════════════════════════════════════════╣
+      ║  Next steps:                                               ║
+      ║  1. Add public key to pfSense WireGuard peer config        ║
+      ║  2. Save private key to secrets.sops.yml                   ║
+      ║  3. Future rebuilds will reuse the SOPS key automatically  ║
+      ╚══════════════════════════════════════════════════════════════╝
+  when: not wg_key_from_sops
+  tags:
+    - vps_wireguard
+    - validate

@@ -1,0 +1,22 @@
+---
+# VPS nftables Configuration
+
+nft_wg_interface: wg0
+nft_public_interface: eth0
+nft_tunnel_peer_ip: ""  # Set in group_vars/secrets (pfSense tunnel peer IP)
+
+# Port forwarding rules (public → pfSense via WireGuard tunnel)
+nft_forward_rules:
+  - { proto: tcp, port: 32400, comment: "Plex" }
+  - { proto: udp, port: "2456-2458", comment: "Valheim" }
+  - { proto: udp, port: 51820, comment: "Mobile WireGuard" }
+
+# Rate limiting on Plex (new connections per minute per source IP)
+nft_rate_limit_tcp_32400: "10/minute"
+
+# GeoIP filtering
+nft_geoip_enabled: false
+nft_geoip_allowed_countries:
+  - "US"
+nft_maxmind_license_key: "{{ secrets.maxmind_license_key | default('') }}"
+nft_maxmind_db_path: "/var/lib/geoip"

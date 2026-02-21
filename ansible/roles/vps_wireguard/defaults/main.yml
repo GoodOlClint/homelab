@@ -1,0 +1,17 @@
+---
+# VPS WireGuard Relay Configuration
+
+wg_interface: wg0
+wg_listen_port: 51821
+wg_tunnel_address: ""  # Set in group_vars/secrets (VPN transit address with CIDR)
+
+# pfSense peer — no endpoint (learned from incoming handshake)
+wg_peer_allowed_ips: ""  # Set in group_vars/secrets (pfSense tunnel IP + allowed subnets)
+
+# VPS private key: generated on first deploy, or injected from SOPS for rebuilds.
+# If secrets.vps_wg_private_key is set (and not "REPLACE_ME"), it will be used.
+# Otherwise, a new keypair is generated and displayed for you to save.
+# wg_private_key is set dynamically in tasks/main.yml
+
+# pfSense public key: MUST be in SOPS secrets (you get this from pfSense WireGuard tunnel config)
+# wg_pfsense_public_key: "{{ secrets.pfsense_wg_public_key }}"

@@ -1,0 +1,32 @@
+#!/sbin/openrc-run
+# OpenRC init script for wg-quick
+
+INTERFACE="{{ wg_interface }}"
+CONF="/etc/wireguard/${INTERFACE}.conf"
+
+depend() {
+    need net
+    use dns
+}
+
+start() {
+    ebegin "Starting WireGuard interface ${INTERFACE}"
+    wg-quick up "${INTERFACE}"
+    eend $?
+}
+
+stop() {
+    ebegin "Stopping WireGuard interface ${INTERFACE}"
+    wg-quick down "${INTERFACE}"
+    eend $?
+}
+
+status() {
+    if wg show "${INTERFACE}" >/dev/null 2>&1; then
+        einfo "WireGuard interface ${INTERFACE} is up"
+        return 0
+    else
+        einfo "WireGuard interface ${INTERFACE} is down"
+        return 3
+    fi
+}

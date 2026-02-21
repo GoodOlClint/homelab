@@ -1,0 +1,52 @@
+---
+# VPS Hardening — Alpine Linux
+# Orchestrates all hardening subtasks
+
+- name: Configure SSH hardening
+  ansible.builtin.include_tasks: ssh.yml
+  tags:
+    - vps_hardening
+    - ssh
+
+- name: Configure fail2ban
+  ansible.builtin.include_tasks: fail2ban.yml
+  tags:
+    - vps_hardening
+    - fail2ban
+
+- name: Configure AIDE file integrity monitoring
+  ansible.builtin.include_tasks: aide.yml
+  when: vps_aide_enabled
+  tags:
+    - vps_hardening
+    - aide
+
+- name: Configure Alpine LBU (read-only root)
+  ansible.builtin.include_tasks: lbu.yml
+  when: vps_lbu_enabled
+  tags:
+    - vps_hardening
+    - lbu
+
+- name: Apply sysctl hardening
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_set: yes
+    state: present
+    reload: yes
+  loop: "{{ vps_sysctl_settings | dict2items }}"
+  tags:
+    - vps_hardening
+    - sysctl
+
+- name: Remove unnecessary packages
+  ansible.builtin.apk:
+    name:
+      - fortify-headers
+      - apk-tools-doc
+    state: absent
+  failed_when: false
+  tags:
+    - vps_hardening
+    - packages

@@ -1,0 +1,42 @@
+#!/bin/sh
+# GeoIP database update for nftables filtering
+# Managed by Ansible — do not edit manually
+
+set -e
+
+DB_DIR="{{ nft_maxmind_db_path }}"
+LICENSE_KEY="{{ nft_maxmind_license_key }}"
+TEMP_DIR=$(mktemp -d)
+
+# Download MaxMind GeoLite2 Country database
+wget -q -O "$TEMP_DIR/GeoLite2-Country-CSV.zip" \
+  "https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-Country-CSV&license_key=${LICENSE_KEY}&suffix=zip"
+
+# Extract
+unzip -q -o "$TEMP_DIR/GeoLite2-Country-CSV.zip" -d "$TEMP_DIR"
+
+# Build nftables-compatible IP sets for allowed countries
+mkdir -p "$DB_DIR"
+> "$DB_DIR/allowed-countries-v4.nft"
+
+for COUNTRY in {{ nft_geoip_allowed_countries | join(' ') }}; do
+  # Get geoname_id for country
+  GEONAME_ID=$(grep ",$COUNTRY," "$TEMP_DIR"/GeoLite2-Country-CSV_*/GeoLite2-Country-Locations-en.csv | head -1 | cut -d, -f1)
+  if [ -n "$GEONAME_ID" ]; then
+    # Extract IPv4 networks for this country
+    grep ",$GEONAME_ID," "$TEMP_DIR"/GeoLite2-Country-CSV_*/GeoLite2-Country-Blocks-IPv4.csv | cut -d, -f1 >> "$DB_DIR/allowed-countries-v4.nft"
+  fi
+done
+
+# Clean up
+rm -rf "$TEMP_DIR"
+
+# Reload nftables if GeoIP sets changed
+if nft list ruleset | grep -q "geoip"; then
+  nft flush set inet filter geoip_allowed
+  while IFS= read -r cidr; do
+    nft add element inet filter geoip_allowed "{ $cidr }"
+  done < "$DB_DIR/allowed-countries-v4.nft"
+fi
+
+logger -t geoip-update "GeoIP database updated successfully"

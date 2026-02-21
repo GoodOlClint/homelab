@@ -1,0 +1,15 @@
+# fail2ban jail configuration for VPS
+# Managed by Ansible — do not edit manually
+
+[DEFAULT]
+bantime = {{ vps_fail2ban_bantime }}
+findtime = {{ vps_fail2ban_findtime }}
+maxretry = {{ vps_fail2ban_maxretry }}
+backend = auto
+banaction = nftables[type=allports]
+
+[sshd]
+enabled = true
+port = {{ vps_ssh_port }}
+logpath = /var/log/messages
+filter = sshd

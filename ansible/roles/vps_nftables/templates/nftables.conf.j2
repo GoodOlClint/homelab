@@ -1,0 +1,93 @@
+#!/usr/sbin/nft -f
+# VPS WireGuard Relay — nftables ruleset
+# Managed by Ansible — do not edit manually
+
+flush ruleset
+
+table inet filter {
+    chain input {
+        type filter hook input priority 0; policy drop;
+
+        # Allow established/related connections
+        ct state established,related accept
+
+        # Allow loopback
+        iif lo accept
+
+        # ICMP (rate-limited)
+        ip protocol icmp icmp type { echo-request, echo-reply, destination-unreachable, time-exceeded } limit rate 10/second accept
+        ip protocol icmp drop
+
+        # WireGuard tunnel from pfSense (public interface)
+        iif {{ nft_public_interface }} udp dport {{ wg_listen_port | default(51821) }} accept
+
+        # SSH only on WireGuard tunnel interface
+        iif {{ nft_wg_interface }} tcp dport 22 accept
+
+        # Log and drop everything else
+        log prefix "nft-input-drop: " flags all counter drop
+    }
+
+    chain forward {
+        type filter hook forward priority 0; policy drop;
+
+        # Allow established/related
+        ct state established,related accept
+
+{% for rule in nft_forward_rules %}
+{% if '-' in rule.port | string %}
+{% set port_range = rule.port | replace('-', '-') %}
+        # {{ rule.comment }}
+{% if rule.proto == 'tcp' and rule.port | string == '32400' %}
+        iif {{ nft_public_interface }} oif {{ nft_wg_interface }} {{ rule.proto }} dport {{ port_range }} ct state new limit rate {{ nft_rate_limit_tcp_32400 }} log prefix "nft-fwd-new-{{ rule.comment | lower | replace(' ', '-') }}: " accept
+{% else %}
+        iif {{ nft_public_interface }} oif {{ nft_wg_interface }} {{ rule.proto }} dport {{ port_range }} ct state new log prefix "nft-fwd-new-{{ rule.comment | lower | replace(' ', '-') }}: " accept
+{% endif %}
+{% else %}
+        # {{ rule.comment }}
+{% if rule.proto == 'tcp' and rule.port | string == '32400' %}
+        iif {{ nft_public_interface }} oif {{ nft_wg_interface }} {{ rule.proto }} dport {{ rule.port }} ct state new limit rate {{ nft_rate_limit_tcp_32400 }} log prefix "nft-fwd-new-{{ rule.comment | lower | replace(' ', '-') }}: " accept
+{% else %}
+        iif {{ nft_public_interface }} oif {{ nft_wg_interface }} {{ rule.proto }} dport {{ rule.port }} ct state new log prefix "nft-fwd-new-{{ rule.comment | lower | replace(' ', '-') }}: " accept
+{% endif %}
+{% endif %}
+{% endfor %}
+
+        # Allow return traffic from tunnel to public
+        iif {{ nft_wg_interface }} oif {{ nft_public_interface }} accept
+
+        # Log and drop everything else
+        log prefix "nft-forward-drop: " flags all counter drop
+    }
+
+    chain output {
+        type filter hook output priority 0; policy accept;
+    }
+}
+
+table ip nat {
+    chain prerouting {
+        type nat hook prerouting priority -100; policy accept;
+
+{% for rule in nft_forward_rules %}
+{% if '-' in rule.port | string %}
+{% set port_range = rule.port | replace('-', '-') %}
+        # DNAT: {{ rule.comment }}
+        iif {{ nft_public_interface }} {{ rule.proto }} dport {{ port_range }} dnat to {{ nft_tunnel_peer_ip }}
+{% else %}
+        # DNAT: {{ rule.comment }}
+        iif {{ nft_public_interface }} {{ rule.proto }} dport {{ rule.port }} dnat to {{ nft_tunnel_peer_ip }}
+{% endif %}
+{% endfor %}
+    }
+
+    chain postrouting {
+        type nat hook postrouting priority 100; policy accept;
+
+        # Masquerade traffic going out the WireGuard tunnel
+        oif {{ nft_wg_interface }} masquerade
+
+        # Masquerade traffic going out the public interface
+        oif {{ nft_public_interface }} masquerade
+    }
+}

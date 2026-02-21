@@ -1,0 +1,57 @@
+---
+# SSH Hardening — key-only, tunnel IP only
+
+- name: Install sudo
+  ansible.builtin.apk:
+    name: sudo
+    state: present
+  tags:
+    - ssh
+
+- name: Create service account
+  ansible.builtin.user:
+    name: "{{ vps_service_user }}"
+    shell: "{{ vps_service_user_shell }}"
+    groups: wheel
+    append: yes
+    create_home: yes
+  tags:
+    - ssh
+
+- name: Unlock service account for key-only SSH login
+  ansible.builtin.replace:
+    path: /etc/shadow
+    regexp: '^({{ vps_service_user }}):!(.*)$'
+    replace: '\1:*\2'
+  tags:
+    - ssh
+
+- name: Configure sudo for service account
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers.d/{{ vps_service_user }}
+    line: "{{ vps_service_user }} ALL=(ALL) NOPASSWD: ALL"
+    create: yes
+    mode: '0440'
+    validate: 'visudo -cf %s'
+  tags:
+    - ssh
+
+- name: Set up SSH authorized key for service account
+  ansible.posix.authorized_key:
+    user: "{{ vps_service_user }}"
+    key: "{{ vps_ssh_authorized_key }}"
+    state: present
+  tags:
+    - ssh
+
+- name: Deploy hardened sshd_config
+  ansible.builtin.template:
+    src: sshd_config.j2
+    dest: /etc/ssh/sshd_config
+    owner: root
+    group: root
+    mode: '0600'
+    validate: 'sshd -t -f %s'
+  notify: Restart sshd
+  tags:
+    - ssh

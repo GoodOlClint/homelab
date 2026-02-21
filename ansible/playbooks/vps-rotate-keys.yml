@@ -1,0 +1,70 @@
+---
+# VPS WireGuard Key Rotation
+# Generates a new keypair, updates VPS config, and displays the new public key
+# for manual update in pfSense.
+#
+# Usage: make vps-rotate-keys
+# After running, update pfSense WireGuard peer with the new public key,
+# then update secrets.sops.yml with the new private key.
+
+- name: Rotate VPS WireGuard Keys
+  hosts: vps
+  become: true
+  vars_files:
+    - ../group_vars/all.yml
+  pre_tasks:
+    - name: Check for secrets vars file
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/../group_vars/secrets.sops.yml"
+      register: secrets_vars_file
+      delegate_to: localhost
+      become: false
+      run_once: true
+
+    - name: Load secrets vars when present
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../group_vars/secrets.sops.yml"
+      when: secrets_vars_file.stat.exists
+      run_once: true
+
+  tasks:
+    - name: Generate new WireGuard private key
+      ansible.builtin.command: wg genkey
+      register: new_private_key
+      changed_when: false
+      no_log: true
+
+    - name: Derive new public key
+      ansible.builtin.shell:
+        cmd: "echo '{{ new_private_key.stdout }}' | wg pubkey"
+      register: new_public_key
+      changed_when: false
+
+    - name: Update WireGuard config with new private key
+      ansible.builtin.lineinfile:
+        path: /etc/wireguard/wg0.conf
+        regexp: '^PrivateKey\s*='
+        line: "PrivateKey = {{ new_private_key.stdout }}"
+      no_log: true
+      notify: Restart WireGuard
+
+    - name: Display new public key
+      ansible.builtin.debug:
+        msg: |
+          ╔══════════════════════════════════════════════════╗
+          ║  NEW VPS PUBLIC KEY (update pfSense with this)  ║
+          ╠══════════════════════════════════════════════════╣
+          ║  {{ new_public_key.stdout }}
+          ╠══════════════════════════════════════════════════╣
+          ║  Next steps:                                    ║
+          ║  1. Update pfSense WireGuard peer public key    ║
+          ║  2. Update secrets.sops.yml vps_wg_private_key  ║
+          ║  3. Verify tunnel reconnects within 25 seconds  ║
+          ╚══════════════════════════════════════════════════╝
+
+  handlers:
+    - name: Restart WireGuard
+      ansible.builtin.command: wg syncconf wg0 <(wg-quick strip wg0)
+      args:
+        executable: /bin/bash
+      changed_when: true

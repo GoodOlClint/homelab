@@ -1,0 +1,38 @@
+---
+# VPS Hardening Configuration (Alpine Linux)
+
+# SSH — standard port, tunnel-only access
+vps_ssh_port: 22
+vps_ssh_listen_address: ""  # Set in group_vars/secrets (VPN transit subnet)
+vps_ssh_authorized_key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/id_ed25519.pub') }}"
+
+# Service account (replaces root login after hardening)
+vps_service_user: "goodolclint"
+vps_service_user_shell: "/bin/ash"
+
+# fail2ban
+vps_fail2ban_maxretry: 3
+vps_fail2ban_bantime: 3600
+vps_fail2ban_findtime: 600
+
+# AIDE file integrity monitoring (from Alpine edge/testing repo)
+vps_aide_enabled: true
+vps_aide_cron_hour: "4"
+vps_aide_cron_minute: "30"
+
+# LBU (Alpine Local Backup — only for diskless/RAM installs, not persistent-disk VPS)
+vps_lbu_enabled: false
+
+# Sysctl hardening
+vps_sysctl_settings:
+  net.ipv4.conf.all.rp_filter: 1
+  net.ipv4.conf.default.rp_filter: 1
+  net.ipv4.conf.all.accept_source_route: 0
+  net.ipv4.conf.default.accept_source_route: 0
+  net.ipv4.conf.all.accept_redirects: 0
+  net.ipv4.conf.default.accept_redirects: 0
+  net.ipv4.conf.all.send_redirects: 0
+  net.ipv4.conf.default.send_redirects: 0
+  net.ipv4.icmp_echo_ignore_broadcasts: 1
+  net.ipv4.conf.all.log_martians: 1
+  kernel.sysrq: 0

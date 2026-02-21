@@ -1,0 +1,86 @@
+---
+# VPS WireGuard Relay — Full Provisioning
+# Configures: WireGuard tunnel, nftables forwarding, SSH hardening,
+# fail2ban, AIDE, Telegraf metrics, rsyslog log shipping
+
+- name: Configure VPS WireGuard Relay
+  hosts: vps
+  become: true
+  vars_files:
+    - ../group_vars/all.yml
+  gather_facts: false
+  pre_tasks:
+    - name: Wait for VPS SSH to become available
+      ansible.builtin.wait_for_connection:
+        delay: 10
+        timeout: 300
+      tags:
+        - always
+
+    - name: Gather facts after connection is ready
+      ansible.builtin.setup:
+      tags:
+        - always
+
+    - name: Check for local override vars file
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/../group_vars/local/all.yml"
+      register: local_override_vars_file
+      delegate_to: localhost
+      become: false
+      run_once: true
+
+    - name: Load local override vars when present
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../group_vars/local/all.yml"
+      when: local_override_vars_file.stat.exists
+      run_once: true
+
+    - name: Check for secrets vars file
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/../group_vars/secrets.sops.yml"
+      register: secrets_vars_file
+      delegate_to: localhost
+      become: false
+      run_once: true
+
+    - name: Load secrets vars when present
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../group_vars/secrets.sops.yml"
+      when: secrets_vars_file.stat.exists
+      run_once: true
+
+    - name: Load canonical VLAN definitions
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../../network-data/vlans.yaml"
+        name: network_data
+      run_once: true
+
+  roles:
+    - vps_wireguard
+    - vps_nftables
+    - vps_hardening
+    - rsyslog_client
+    - telegraf
+
+  post_tasks:
+    - name: Verify WireGuard interface is up
+      ansible.builtin.command: wg show wg0
+      register: wg_status
+      changed_when: false
+      failed_when: wg_status.rc != 0
+
+    - name: Verify nftables rules are loaded
+      ansible.builtin.command: nft list ruleset
+      register: nft_rules
+      changed_when: false
+      failed_when: "'chain forward' not in nft_rules.stdout | lower"
+
+    - name: Check listening ports
+      ansible.builtin.command: ss -tlnup
+      register: ss_output
+      changed_when: false
+
+    - name: Display listening services
+      ansible.builtin.debug:
+        msg: "{{ ss_output.stdout_lines }}"

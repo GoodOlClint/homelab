@@ -1,0 +1,75 @@
+---
+# AIDE — file integrity monitoring
+
+- name: Enable Alpine edge/testing repository (for AIDE)
+  ansible.builtin.lineinfile:
+    path: /etc/apk/repositories
+    line: "@testing https://dl-cdn.alpinelinux.org/alpine/edge/testing"
+    state: present
+  register: testing_repo
+  tags:
+    - aide
+
+- name: Update apk cache after enabling testing repo
+  ansible.builtin.apk:
+    update_cache: yes
+  when: testing_repo.changed
+  tags:
+    - aide
+
+- name: Install AIDE from testing repo
+  ansible.builtin.command: apk add aide@testing
+  register: aide_install
+  changed_when: "'Installing aide' in aide_install.stdout"
+  tags:
+    - aide
+
+- name: Deploy AIDE configuration
+  ansible.builtin.template:
+    src: aide.conf.j2
+    dest: /etc/aide.conf
+    owner: root
+    group: root
+    mode: '0600'
+  tags:
+    - aide
+
+- name: Ensure AIDE database directory exists
+  ansible.builtin.file:
+    path: /var/lib/aide
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+  tags:
+    - aide
+
+- name: Check if AIDE database exists
+  ansible.builtin.stat:
+    path: /var/lib/aide/aide.db
+  register: aide_db
+  tags:
+    - aide
+
+- name: Initialize AIDE database
+  ansible.builtin.command: aide --init
+  when: not aide_db.stat.exists
+  tags:
+    - aide
+
+- name: Move new AIDE database into place
+  ansible.builtin.command: mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db
+  args:
+    removes: /var/lib/aide/aide.db.new
+  when: not aide_db.stat.exists
+  tags:
+    - aide
+
+- name: Schedule daily AIDE check
+  ansible.builtin.cron:
+    name: "AIDE file integrity check"
+    job: "/usr/bin/aide --check 2>&1 | logger -t aide-check"
+    hour: "{{ vps_aide_cron_hour }}"
+    minute: "{{ vps_aide_cron_minute }}"
+  tags:
+    - aide

@@ -1,0 +1,34 @@
+# AIDE configuration for VPS WireGuard Relay
+# Managed by Ansible — do not edit manually
+
+database_in=file:/var/lib/aide/aide.db
+database_out=file:/var/lib/aide/aide.db.new
+
+# Rule definitions
+NORMAL = p+i+n+u+g+s+b+m+c+sha256
+
+# Directories to monitor
+/etc NORMAL
+/usr/bin NORMAL
+/usr/sbin NORMAL
+/usr/local/bin NORMAL
+/boot NORMAL
+
+# WireGuard config (alert on any change)
+/etc/wireguard NORMAL
+
+# nftables config
+/etc/nftables.conf NORMAL
+
+# SSH config
+/etc/ssh/sshd_config NORMAL
+
+# Exclude volatile paths
+!/var/log
+!/var/cache
+!/tmp
+!/var/tmp
+!/proc
+!/sys
+!/dev
+!/run
