@@ -19,7 +19,7 @@
 #   }
 #   name         = each.value.name
 #   vlan_id      = each.value.id
-#   subnet       = try(each.value.subnet, "172.16.${each.value.id}.0/24")
+#   subnet       = try(each.value.subnet, "${local.network_data.ipv4_prefix}.${each.value.id}.0/24")
 #   purpose      = "corporate"
 #   dhcp_enabled = false  # DHCP managed by pfSense
 # }

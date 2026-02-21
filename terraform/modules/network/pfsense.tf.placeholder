@@ -26,5 +26,5 @@
 #   interface   = each.key
 #   range_from  = each.value.dhcp_range_start
 #   range_to    = each.value.dhcp_range_end
-#   gateway     = cidrhost("172.16.${each.value.id}.0/24", 1)
+#   gateway     = cidrhost("${local.network_data.ipv4_prefix}.${each.value.id}.0/24", 1)
 # }
