@@ -109,6 +109,7 @@
     - dns_config
     - pbs_client
     - plex
+    - plex_certificate
     - rsyslog_client
     - telegraf
 
