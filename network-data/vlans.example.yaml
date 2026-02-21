@@ -1,0 +1,229 @@
+# Canonical VLAN/Network Definitions — EXAMPLE TEMPLATE
+# Copy to vlans.yaml and fill in site-specific values.
+# vlans.yaml is gitignored — it contains your actual network bindings.
+#
+# Consumed by:
+#   - Terraform: yamldecode(file("...")) in modules/network/
+#   - Ansible:   include_vars in playbook pre_tasks
+#
+# Subnet derivation:
+#   IPv4 subnets follow {ipv4_prefix}.{vlan_id}.0/24 (computed by consumers unless overridden)
+#   IPv6 subnets follow {ipv6_prefix}:{vlan_id_hex}::/64 (computed by consumers unless overridden)
+#   Gateways follow {ipv4_prefix}.{vlan_id}.1 (computed by consumers unless overridden)
+
+# --- Site-wide configuration ---
+
+ipv4_prefix: "REPLACE_WITH_IPV4_PREFIX"          # e.g., "172.16"
+ipv6_prefix: "REPLACE_WITH_IPV6_PREFIX"          # e.g., "fd00:abcd:1234"
+domain_suffix: "REPLACE_WITH_DOMAIN"             # e.g., "homelab.internal"
+
+# Bootstrap DNS for cloud-init (public DNS first so VMs boot before internal DNS is up)
+dns_servers:
+  - "1.1.1.1"                                     # Public bootstrap (OK to keep)
+  - "REPLACE_WITH_INTERNAL_DNS_IP"                 # Internal DNS server
+
+# Which VLAN key is the management/SSH VLAN (used by hardening role)
+management_vlan: "management"                      # Key name (abstract, not an ID)
+
+# DNS server configuration for Ansible dns_zones generation
+dns_server:
+  dns_ipv4: "REPLACE_WITH_DNS_IPV4"               # AdGuard Home address
+  dns_ipv6: "REPLACE_WITH_DNS_IPV6"               # AdGuard Home IPv6
+  bind_ipv4: "REPLACE_WITH_BIND_IPV4"             # BIND9 authoritative address
+  zone_vlans: ["management", "core", "storage", "work", "iot", "sonos", "guest"]
+
+# --- Proxmox SDN Zones ---
+sdn_zones:
+  Homelab:
+    bridge: "REPLACE_WITH_BRIDGE"                  # e.g., "vmbr1"
+    mtu: 1500
+  Storage:
+    bridge: "REPLACE_WITH_BRIDGE"                  # e.g., "vmbr2"
+    mtu: 9000
+
+# --- VLAN Definitions ---
+# Keys are lowercase descriptive names. Policy fields have real values.
+# Binding fields (id, bridge, dhcp_range_*, sdn_zone) use REPLACE placeholders.
+#
+# Optional override fields (computed from id + top-level prefixes if omitted):
+#   subnet, gateway, ipv6_subnet, mtu
+
+vlans:
+  management:
+    id: REPLACE_WITH_VLAN_ID                       # e.g., 10
+    name: "Management"
+    bridge: "REPLACE_WITH_SDN_VNET"                # e.g., "Mgmt"
+    sdn_zone: "Homelab"
+    description: "Management VLAN — SSH/Ansible access"
+    domain_prefix: "mgmt"
+    dhcp_enabled: true
+    dhcp_range_start: "REPLACE"
+    dhcp_range_end: "REPLACE"
+    client_isolation: false
+    allows_mdns: false
+    is_wireguard: false
+    managed_by: ["pfsense", "unifi"]
+
+  storage:
+    id: REPLACE_WITH_VLAN_ID
+    name: "Storage"
+    bridge: "REPLACE_WITH_SDN_VNET"
+    sdn_zone: "Storage"
+    mtu: 9000
+    description: "Storage network — NFS/iSCSI to NAS, jumbo frames"
+    domain_prefix: "storage"
+    dhcp_enabled: true
+    dhcp_range_start: "REPLACE"
+    dhcp_range_end: "REPLACE"
+    client_isolation: false
+    allows_mdns: false
+    is_wireguard: false
+    managed_by: ["pfsense", "unifi"]
+
+  infrastructure:
+    id: REPLACE_WITH_VLAN_ID
+    name: "Infrastructure"
+    bridge: "REPLACE_WITH_SDN_VNET"
+    sdn_zone: "Homelab"
+    description: "Infrastructure VLAN — Proxmox hosts"
+    domain_prefix: "infra"
+    dhcp_enabled: true
+    dhcp_range_start: "REPLACE"
+    dhcp_range_end: "REPLACE"
+    client_isolation: false
+    allows_mdns: false
+    is_wireguard: false
+    managed_by: ["pfsense", "unifi"]
+
+  services:
+    id: REPLACE_WITH_VLAN_ID
+    name: "Services"
+    bridge: "REPLACE_WITH_SDN_VNET"
+    sdn_zone: "Homelab"
+    description: "Services VLAN — DNS, monitoring, and other shared services"
+    domain_prefix: "services"
+    dhcp_enabled: true
+    dhcp_range_start: "REPLACE"
+    dhcp_range_end: "REPLACE"
+    client_isolation: false
+    allows_mdns: false
+    is_wireguard: false
+    managed_by: ["pfsense", "unifi"]
+
+  media:
+    id: REPLACE_WITH_VLAN_ID
+    name: "Media"
+    bridge: "REPLACE_WITH_SDN_VNET"
+    sdn_zone: "Homelab"
+    description: "Media VLAN — Plex and media streaming services"
+    domain_prefix: "media"
+    dhcp_enabled: true
+    dhcp_range_start: "REPLACE"
+    dhcp_range_end: "REPLACE"
+    client_isolation: false
+    allows_mdns: false
+    is_wireguard: false
+    managed_by: ["pfsense", "unifi"]
+
+  vpn:
+    id: REPLACE_WITH_VLAN_ID
+    name: "VPN"
+    bridge: null
+    sdn_zone: null
+    description: "WireGuard VPN subnet on pfSense — not a switched VLAN"
+    domain_prefix: "vpn"
+    dhcp_enabled: false
+    client_isolation: false
+    allows_mdns: false
+    is_wireguard: true
+    managed_by: ["pfsense"]
+
+  core:
+    id: REPLACE_WITH_VLAN_ID
+    name: "Core"
+    bridge: "REPLACE_WITH_SDN_VNET"
+    sdn_zone: "Homelab"
+    description: "Core network — primary user devices, workstations, servers"
+    domain_prefix: "core"
+    dhcp_enabled: true
+    dhcp_range_start: "REPLACE"
+    dhcp_range_end: "REPLACE"
+    client_isolation: false
+    allows_mdns: false
+    is_wireguard: false
+    managed_by: ["pfsense", "unifi"]
+
+  work:
+    id: REPLACE_WITH_VLAN_ID
+    name: "Work"
+    bridge: "REPLACE_WITH_SDN_VNET"
+    sdn_zone: "Homelab"
+    description: "Work network — work server and work devices"
+    domain_prefix: "work"
+    dhcp_enabled: true
+    dhcp_range_start: "REPLACE"
+    dhcp_range_end: "REPLACE"
+    client_isolation: false
+    allows_mdns: false
+    is_wireguard: false
+    managed_by: ["pfsense", "unifi"]
+
+  iot:
+    id: REPLACE_WITH_VLAN_ID
+    name: "IoT"
+    bridge: "REPLACE_WITH_SDN_VNET"
+    sdn_zone: "Homelab"
+    description: "IoT network — smart home devices, client isolation enabled"
+    domain_prefix: "iot"
+    dhcp_enabled: true
+    dhcp_range_start: "REPLACE"
+    dhcp_range_end: "REPLACE"
+    client_isolation: true
+    allows_mdns: false
+    is_wireguard: false
+    managed_by: ["pfsense", "unifi"]
+
+  sonos:
+    id: REPLACE_WITH_VLAN_ID
+    name: "Sonos"
+    bridge: "REPLACE_WITH_SDN_VNET"
+    sdn_zone: "Homelab"
+    description: "Sonos network — IoT without client isolation, allows mDNS/SSDP"
+    domain_prefix: "sonos"
+    dhcp_enabled: true
+    dhcp_range_start: "REPLACE"
+    dhcp_range_end: "REPLACE"
+    client_isolation: false
+    allows_mdns: true
+    is_wireguard: false
+    managed_by: ["pfsense", "unifi"]
+
+  vivint:
+    id: REPLACE_WITH_VLAN_ID
+    name: "Vivint"
+    bridge: "REPLACE_WITH_SDN_VNET"
+    sdn_zone: "Homelab"
+    description: "Vivint network — PoE cameras, no client isolation"
+    domain_prefix: "vivint"
+    dhcp_enabled: true
+    dhcp_range_start: "REPLACE"
+    dhcp_range_end: "REPLACE"
+    client_isolation: false
+    allows_mdns: false
+    is_wireguard: false
+    managed_by: ["pfsense", "unifi"]
+
+  guest:
+    id: REPLACE_WITH_VLAN_ID
+    name: "Guest"
+    bridge: "REPLACE_WITH_SDN_VNET"
+    sdn_zone: "Homelab"
+    description: "Guest network — client isolation enabled"
+    domain_prefix: "guest"
+    dhcp_enabled: true
+    dhcp_range_start: "REPLACE"
+    dhcp_range_end: "REPLACE"
+    client_isolation: true
+    allows_mdns: false
+    is_wireguard: false
+    managed_by: ["pfsense", "unifi"]
