@@ -69,7 +69,6 @@
       loop: "{{ network_data.dns_server.zone_vlans }}"
       run_once: true
   roles:
-    - vm_bootstrap
     - dns_config
     - nvidia_licensing
     - rsyslog_client
@@ -82,22 +81,8 @@
     - ../group_vars/all.yml
   pre_tasks: *load_local_overrides
   roles:
-    - vm_bootstrap
     - dns_config
     - homebridge
-    - rsyslog_client
-    - telegraf
-
-- name: Configure multicast-relay VM
-  hosts: multicast-relay
-  become: yes
-  vars_files:
-    - ../group_vars/all.yml
-  pre_tasks: *load_local_overrides
-  roles:
-    - vm_bootstrap
-    - dns_config
-    - multicast_relay
     - rsyslog_client
     - telegraf
 
@@ -108,7 +93,6 @@
     - ../group_vars/all.yml
   pre_tasks: *load_local_overrides
   roles:
-    - vm_bootstrap
     - dns_config
     - pbs_client
     - docker
@@ -122,7 +106,6 @@
     - ../group_vars/all.yml
   pre_tasks: *load_local_overrides
   roles:
-    - vm_bootstrap
     - dns_config
     - pbs_client
     - plex
@@ -136,7 +119,6 @@
     - ../group_vars/all.yml
   pre_tasks: *load_local_overrides
   roles:
-    - vm_bootstrap
     - dns_config
     - pbs_client
     - plex_services

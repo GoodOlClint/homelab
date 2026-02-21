@@ -136,7 +136,6 @@
     - ../group_vars/all.yml
   pre_tasks: *load_local_overrides
   roles:
-    - vm_bootstrap
     - bind9
   tags:
     - phase1
@@ -149,7 +148,6 @@
     - ../group_vars/all.yml
   pre_tasks: *load_local_overrides
   roles:
-    - vm_bootstrap
     - adguard
   tags:
     - phase1
@@ -162,7 +160,6 @@
     - ../group_vars/all.yml
   pre_tasks: *load_local_overrides
   roles:
-    - vm_bootstrap
     - dns_config
     - monitoring
   tags:
@@ -176,7 +173,6 @@
     - ../group_vars/all.yml
   pre_tasks: *load_local_overrides
   roles:
-    - vm_bootstrap
     - dns_config
     - proxmox_backup
   tags:
