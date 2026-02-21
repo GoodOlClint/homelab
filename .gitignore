@@ -1,3 +1,10 @@
+# Accidental directory artifacts
+--force/
+
+# Network bindings (site-specific implementation details)
+network-data/vlans.yaml
+network-data/private_bindings.yaml
+
 # Terraform sensitive files
 *.tfvars
 *.tfvars.json
@@ -14,6 +21,12 @@ group_vars/vault.yml
 group_vars/vault/
 host_vars/vault/
 *.vault
+
+# Packer build artifacts and cache
+packer/ubuntu-24.04/packer_cache/
+packer/ubuntu-24.04/output-*
+packer/ubuntu-24.04/*.auto.pkrvars.hcl
+!packer/ubuntu-24.04/*.auto.pkrvars.hcl.example
 
 # Documentation files
 !README.md
