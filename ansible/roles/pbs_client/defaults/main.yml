@@ -1,7 +1,7 @@
 ---
 # Proxmox Backup Client Configuration
 pbs_client_install: true
-pbs_server_host: "proxmox-backup.core.goodolclint.internal"
+pbs_server_host: ""  # Set in group_vars (derived from vlans.yaml at runtime)
 pbs_server_port: 8007
 pbs_datastore: "synology"
 pbs_username: "backup@pbs"

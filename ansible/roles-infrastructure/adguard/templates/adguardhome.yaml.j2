@@ -1,7 +1,7 @@
 # AdGuard Home configuration
 # ANSIBLE MANAGED FILE
 
-# HTTP settings  
+# HTTP settings
 http:
   pprof:
     port: 6060
@@ -20,16 +20,12 @@ theme: auto
 # DNS settings
 dns:
   bind_hosts:
-    - 127.0.0.1
-    - ::1
-{% for ip in dns_listen_ips %}
-    - {{ ip }}
-{% endfor %}
-{% for ipv6 in dns_listen_ipv6s %}
-    - {{ ipv6 }}
-{% endfor %}
+    - 0.0.0.0
+{% if dns_listen_ipv6s | length > 0 %}
+    - "::"
+{% endif %}
   port: 53
-  
+
   # Anonymous stats and rate limiting
   anonymize_client_ip: false
   ratelimit: 20
@@ -37,27 +33,40 @@ dns:
   ratelimit_subnet_len_ipv6: 56
   ratelimit_whitelist: []
   refuse_any: true
-  
+
   # Upstream DNS servers
   upstream_dns:
+    # Internet upstreams (default for non-local queries)
     - 1.1.1.1
     - 1.0.0.1
     - 8.8.8.8
     - 8.8.4.4
+{% if dns_listen_ipv6s | length > 0 %}
     - 2606:4700:4700::1111
     - 2606:4700:4700::1001
     - 2001:4860:4860::8888
     - 2001:4860:4860::8844
-  
+{% endif %}
+    # Local zone routing — forward to BIND for authoritative local resolution
+{% for vlan, zone_data in dns_zones.items() %}
+    - "[/{{ zone_data.zone }}/]{{ zone_data.bind_ip }}"
+{% endfor %}
+    # Reverse DNS for internal subnets
+{% for vlan, zone_data in dns_zones.items() %}
+    - "[/{{ zone_data.vlan_id }}.{{ ipv4_prefix_reversed }}.in-addr.arpa/]{{ zone_data.bind_ip }}"
+{% endfor %}
+
   upstream_dns_file: ""
   bootstrap_dns:
     - 9.9.9.9
     - 149.112.112.112
     - 1.1.1.1
+{% if dns_listen_ipv6s | length > 0 %}
     - 2620:fe::fe
     - 2620:fe::9
     - 2606:4700:4700::1111
-  
+{% endif %}
+
   fallback_dns: []
   upstream_mode: load_balance
   fastest_timeout: 1s
@@ -67,28 +76,28 @@ dns:
     - version.bind
     - id.server
     - hostname.bind
-  
+
   trusted_proxies:
     - 127.0.0.0/8
     - ::1/128
-  
+
   # Cache settings
   cache_size: 4194304
   cache_ttl_min: 0
   cache_ttl_max: 0
   cache_optimistic: false
-  
+
   # Additional DNS settings
   bogus_nxdomain: []
   aaaa_disabled: false
   enable_dnssec: false
-  
+
   # EDNS settings
   edns_client_subnet:
     custom_ip: ""
     enabled: false
     use_custom: false
-  
+
   max_goroutines: 300
   handle_ddr: true
   ipset: []
@@ -98,7 +107,9 @@ dns:
   private_networks: []
   use_private_ptr_resolvers: true
   local_ptr_upstreams:
-    - 172.16.100.53
+{% for vlan, zone_data in dns_zones.items() %}
+    - {{ zone_data.bind_ip }}
+{% endfor %}
   use_dns64: false
   dns64_prefixes: []
   serve_http3: false
@@ -206,7 +217,7 @@ filtering:
   blocking_mode: default
   parental_block_host: family-block.dns.adguard.com
   safebrowsing_block_host: standard-block.dns.adguard.com
-  
+
   # DNS rewrites for local zones
   rewrites:
 {% for vlan, zone_data in dns_zones.items() %}
@@ -249,14 +260,14 @@ filtering:
 {% if hostvars['plex'] is defined and hostvars['plex']['ansible_host'] is defined %}
     # Cross-VLAN access - Plex on storage network
     - domain: plex.{{ dns_zones.vlan20.zone }}
-      answer: {{ hostvars['plex']['ansible_host'] | regex_replace('^172\\.16\\.100\\.', '172.16.20.') }}
+      answer: {{ hostvars['plex']['ansible_host'] | replace(core_vlan_prefix, storage_vlan_prefix) }}
 {% endif %}
 {% if hostvars['docker'] is defined and hostvars['docker']['ansible_host'] is defined %}
     # Cross-VLAN access - Docker on storage network
     - domain: docker.{{ dns_zones.vlan20.zone }}
-      answer: {{ hostvars['docker']['ansible_host'] | regex_replace('^172\\.16\\.100\\.', '172.16.20.') }}
+      answer: {{ hostvars['docker']['ansible_host'] | replace(core_vlan_prefix, storage_vlan_prefix) }}
 {% endif %}
-  
+
   safe_fs_patterns: []
   safebrowsing_cache_size: 1048576
   safesearch_cache_size: 1048576

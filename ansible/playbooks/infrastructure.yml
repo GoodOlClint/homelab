@@ -1,5 +1,14 @@
 ---
-# Provision monitoring users first (run on localhost, delegates to target hosts)
+# Infrastructure Playbook — Two-Phase Provisioning
+#
+# Phase 1: Bootstrap core services (DNS, AdGuard, OpenObserve, PBS)
+#   Each VM gets its primary role only — no monitoring clients yet.
+#   Order matters: DNS → AdGuard → OpenObserve → proxmox-backup
+#
+# Phase 2: Monitoring clients (rsyslog + telegraf) on all infrastructure VMs
+#   Runs after OpenObserve is up and ready to receive logs/metrics.
+
+# --- Pre-flight: Provision monitoring users ---
 - name: Provision monitoring users for infrastructure
   hosts: localhost
   connection: local
@@ -33,6 +42,50 @@
       ansible.builtin.include_vars:
         file: "{{ playbook_dir }}/../group_vars/secrets.sops.yml"
       when: secrets_vars_file.stat.exists
+      run_once: true
+
+    - name: Load canonical VLAN definitions
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../../network-data/vlans.yaml"
+        name: network_data
+      run_once: true
+
+    - name: Set management subnet fact
+      ansible.builtin.set_fact:
+        management_subnet: "{{ network_data.ipv4_prefix }}.{{ network_data.vlans[network_data.management_vlan].id }}.0/24"
+      run_once: true
+
+    - name: Compute VLAN prefixes for IP translation
+      ansible.builtin.set_fact:
+        mgmt_vlan_prefix: "{{ network_data.ipv4_prefix }}.{{ network_data.vlans[network_data.management_vlan].id }}."
+        services_vlan_prefix: "{{ network_data.ipv4_prefix }}.{{ network_data.vlans.services.id }}."
+        storage_vlan_prefix: "{{ network_data.ipv4_prefix }}.{{ network_data.vlans.storage.id }}."
+        core_vlan_prefix: "{{ network_data.ipv4_prefix }}.{{ network_data.vlans.core.id }}."
+        ipv4_prefix_reversed: "{{ network_data.ipv4_prefix.split('.') | reverse | join('.') }}"
+        internal_network_cidr: "{{ network_data.ipv4_prefix }}.0.0/12"
+      run_once: true
+
+    - name: Build dns_zones from canonical VLAN data
+      ansible.builtin.set_fact:
+        dns_zones: >-
+          {{ dns_zones | default({}) | combine({
+            'vlan' ~ network_data.vlans[item].id: {
+              'zone': network_data.vlans[item].domain_prefix ~ '.' ~ network_data.domain_suffix,
+              'vlan_id': network_data.vlans[item].id,
+              'dns_ip': network_data.dns_server.dns_ipv4,
+              'dns_ipv6': network_data.dns_server.dns_ipv6,
+              'bind_ip': network_data.dns_server.bind_ipv4
+            }
+          }) }}
+      loop: "{{ network_data.dns_server.zone_vlans }}"
+      run_once: true
+
+    - name: Require dns_zones
+      ansible.builtin.assert:
+        that:
+          - dns_zones is mapping
+          - dns_zones | length > 0
+        fail_msg: "Failed to build dns_zones from network-data/vlans.yaml"
       run_once: true
 
     - name: Check for rendered policy artifact when enabled
@@ -72,48 +125,77 @@
         - monitoring-users
         - users
 
-- name: Configure dns VM
+# ============================================================
+# Phase 1: Bootstrap core services (no monitoring clients)
+# ============================================================
+
+- name: "Phase 1: Configure dns VM (BIND9)"
   hosts: dns
   become: true
   vars_files:
     - ../group_vars/all.yml
   pre_tasks: *load_local_overrides
   roles:
+    - vm_bootstrap
     - bind9
-    - rsyslog_client
-    - telegraf
+  tags:
+    - phase1
+    - dns
 
-- name: Configure AdGuard VM
+- name: "Phase 1: Configure AdGuard VM"
   hosts: adguard
   become: true
   vars_files:
     - ../group_vars/all.yml
   pre_tasks: *load_local_overrides
   roles:
+    - vm_bootstrap
     - adguard
-    - rsyslog_client
-    - telegraf
+  tags:
+    - phase1
+    - adguard
 
-- name: Configure OpenObserve Monitoring VM
+- name: "Phase 1: Configure OpenObserve Monitoring VM"
   hosts: openobserve
   become: true
   vars_files:
     - ../group_vars/all.yml
   pre_tasks: *load_local_overrides
   roles:
+    - vm_bootstrap
     - dns_config
     - monitoring
-    - rsyslog_client
-    - telegraf
+  tags:
+    - phase1
+    - openobserve
 
-- name: Configure proxmox-backup VM
+- name: "Phase 1: Configure proxmox-backup VM"
   hosts: proxmox-backup
   become: true
   vars_files:
     - ../group_vars/all.yml
   pre_tasks: *load_local_overrides
   roles:
+    - vm_bootstrap
     - dns_config
     - proxmox_backup
+  tags:
+    - phase1
+    - proxmox-backup
+
+# ============================================================
+# Phase 2: Monitoring clients (OpenObserve is now running)
+# ============================================================
+
+- name: "Phase 2: Configure monitoring clients on all infrastructure VMs"
+  hosts: dns,adguard,openobserve,proxmox-backup
+  become: true
+  vars_files:
+    - ../group_vars/all.yml
+  pre_tasks: *load_local_overrides
+  roles:
     - rsyslog_client
     - telegraf
+  tags:
+    - phase2
+    - monitoring

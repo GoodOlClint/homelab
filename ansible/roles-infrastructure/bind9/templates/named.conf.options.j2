@@ -1,12 +1,21 @@
 options {
     directory "/var/cache/bind";
-    forwarders {
-        {{ adguard_ip | default('172.16.100.15') }};
-    };
+
+    // Authoritative only — no recursion, no forwarding
+    // AdGuard handles recursive resolution for clients
+    recursion no;
+
+    // Listen on all interfaces (firewall controls access)
     listen-on { any; };
-    allow-query { any; };
-    recursion yes;
+    listen-on-v6 { any; };
+
+    // Restrict queries to internal networks only
+    allow-query {
+        127.0.0.1;
+        ::1;
+        {{ internal_network_cidr | default(network_data.ipv4_prefix ~ '.0.0/12') }};
+    };
+
     dnssec-validation no;
     auth-nxdomain no;
-    listen-on-v6 { any; };
 };

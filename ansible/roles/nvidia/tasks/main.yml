@@ -69,14 +69,23 @@
     - nvidia
     - license
 
-- name: Check if token exists and is valid (not expired)
+- name: Set expected DLS server IP
+  ansible.builtin.set_fact:
+    expected_dls_ip: "{{ hostvars['nvidia-licensing'].ansible_host | replace(mgmt_vlan_prefix, services_vlan_prefix) }}"
+  tags:
+    - nvidia
+    - license
+
+- name: Check if token exists and is valid (not expired, correct server)
   ansible.builtin.shell: |
     if [ -f "{{ nvidia_token_file.stdout }}" ]; then
       payload=$(cut -d. -f2 < "{{ nvidia_token_file.stdout }}" | tr '_-' '/+' | base64 -d 2>/dev/null)
       exp=$(echo "$payload" | grep -o '"exp":[0-9]*' | head -n1 | grep -o '[0-9]*')
       now=$(date +%s)
       if [ -n "$exp" ] && [ "$exp" -gt "$now" ]; then
-        exit 0
+        if echo "$payload" | grep -q '{{ expected_dls_ip }}'; then
+          exit 0
+        fi
       fi
     fi
     exit 1
@@ -87,9 +96,16 @@
     - nvidia
     - license
 
-- name: Download NVIDIA client configuration token from DLS if missing or expired
+- name: Remove stale tokens referencing wrong DLS server
+  ansible.builtin.shell: rm -f /etc/nvidia/ClientConfigToken/client_configuration_token_*.tok
+  when: nvidia_token_valid.rc != 0 and nvidia_token_file.stdout | length > 0
+  tags:
+    - nvidia
+    - license
+
+- name: Download NVIDIA client configuration token from DLS
   ansible.builtin.shell: |
-    curl --insecure -L -X GET "https://{{ hostvars['nvidia-licensing'].ansible_host }}/-/client-token" \
+    curl --insecure --connect-timeout 10 --max-time 30 -L -X GET "https://{{ expected_dls_ip }}/-/client-token" \
       -o /etc/nvidia/ClientConfigToken/client_configuration_token_$(date '+%d-%m-%Y-%H-%M-%S').tok
   register: dls_token_result
   changed_when: dls_token_result.rc == 0
@@ -128,4 +144,3 @@
     - nvidia
     - license
     - validate
-

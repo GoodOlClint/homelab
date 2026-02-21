@@ -32,7 +32,44 @@
         file: "{{ playbook_dir }}/../group_vars/secrets.sops.yml"
       when: secrets_vars_file.stat.exists
       run_once: true
+
+    - name: Load canonical VLAN definitions
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../../network-data/vlans.yaml"
+        name: network_data
+      run_once: true
+
+    - name: Set management subnet fact
+      ansible.builtin.set_fact:
+        management_subnet: "{{ network_data.ipv4_prefix }}.{{ network_data.vlans[network_data.management_vlan].id }}.0/24"
+      run_once: true
+
+    - name: Compute VLAN prefixes for IP translation
+      ansible.builtin.set_fact:
+        mgmt_vlan_prefix: "{{ network_data.ipv4_prefix }}.{{ network_data.vlans[network_data.management_vlan].id }}."
+        services_vlan_prefix: "{{ network_data.ipv4_prefix }}.{{ network_data.vlans.services.id }}."
+        storage_vlan_prefix: "{{ network_data.ipv4_prefix }}.{{ network_data.vlans.storage.id }}."
+        core_vlan_prefix: "{{ network_data.ipv4_prefix }}.{{ network_data.vlans.core.id }}."
+        ipv4_prefix_reversed: "{{ network_data.ipv4_prefix.split('.') | reverse | join('.') }}"
+        internal_network_cidr: "{{ network_data.ipv4_prefix }}.0.0/12"
+      run_once: true
+
+    - name: Build dns_zones from canonical VLAN data
+      ansible.builtin.set_fact:
+        dns_zones: >-
+          {{ dns_zones | default({}) | combine({
+            'vlan' ~ network_data.vlans[item].id: {
+              'zone': network_data.vlans[item].domain_prefix ~ '.' ~ network_data.domain_suffix,
+              'vlan_id': network_data.vlans[item].id,
+              'dns_ip': network_data.dns_server.dns_ipv4,
+              'dns_ipv6': network_data.dns_server.dns_ipv6,
+              'bind_ip': network_data.dns_server.bind_ipv4
+            }
+          }) }}
+      loop: "{{ network_data.dns_server.zone_vlans }}"
+      run_once: true
   roles:
+    - vm_bootstrap
     - dns_config
     - nvidia_licensing
     - rsyslog_client
@@ -45,6 +82,7 @@
     - ../group_vars/all.yml
   pre_tasks: *load_local_overrides
   roles:
+    - vm_bootstrap
     - dns_config
     - homebridge
     - rsyslog_client
@@ -57,6 +95,7 @@
     - ../group_vars/all.yml
   pre_tasks: *load_local_overrides
   roles:
+    - vm_bootstrap
     - dns_config
     - multicast_relay
     - rsyslog_client
@@ -69,7 +108,9 @@
     - ../group_vars/all.yml
   pre_tasks: *load_local_overrides
   roles:
+    - vm_bootstrap
     - dns_config
+    - pbs_client
     - docker
     - rsyslog_client
     - telegraf
@@ -81,7 +122,9 @@
     - ../group_vars/all.yml
   pre_tasks: *load_local_overrides
   roles:
+    - vm_bootstrap
     - dns_config
+    - pbs_client
     - plex
     - rsyslog_client
     - telegraf
@@ -93,7 +136,9 @@
     - ../group_vars/all.yml
   pre_tasks: *load_local_overrides
   roles:
+    - vm_bootstrap
     - dns_config
+    - pbs_client
     - plex_services
     - rsyslog_client
     - telegraf

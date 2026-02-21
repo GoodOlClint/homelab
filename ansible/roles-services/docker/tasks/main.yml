@@ -182,7 +182,7 @@
     group: root
     mode: '0644'
   vars:
-    docker_nfs_server: "172.16.20.10"
+    docker_nfs_server: ""  # Set in group_vars (storage NAS IP)
     docker_nfs_path: "/volume1/docker"
     plex_nfs_path: "/volume1/plex/data"
     radarr_user: 2001
