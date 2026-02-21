@@ -1,0 +1,58 @@
+---
+- name: Configure pfSense DHCP and DNS registration
+  hosts: pfsense
+  gather_facts: false
+  pre_tasks:
+    - name: Load canonical VLAN definitions
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../../network-data/vlans.yaml"
+        name: network_data
+      delegate_to: localhost
+      become: false
+      run_once: true
+
+    - name: Check for secrets vars file
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/../group_vars/secrets.sops.yml"
+      register: secrets_vars_file
+      delegate_to: localhost
+      become: false
+      run_once: true
+
+    - name: Load secrets vars when present
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../group_vars/secrets.sops.yml"
+      when: secrets_vars_file.stat.exists
+      run_once: true
+
+    - name: Check for private bindings file
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/../../network-data/local/private_bindings.yaml"
+      register: private_bindings_file
+      delegate_to: localhost
+      become: false
+      run_once: true
+
+    - name: Require private bindings (contains pfSense interface names)
+      ansible.builtin.assert:
+        that:
+          - private_bindings_file.stat.exists
+        fail_msg: >-
+          Missing network-data/local/private_bindings.yaml.
+          Copy from network-data/private_bindings.example.yaml and fill in pfSense interface names.
+
+    - name: Load private bindings
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../../network-data/local/private_bindings.yaml"
+        name: private_bindings
+      run_once: true
+
+    - name: Build pfsense_interfaces from zones
+      ansible.builtin.set_fact:
+        pfsense_interfaces: >-
+          {{ dict(private_bindings.zones.keys() | list |
+             zip(private_bindings.zones.values() | map(attribute='interface') | list)) }}
+      run_once: true
+
+  roles:
+    - pfsense

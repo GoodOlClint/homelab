@@ -1,0 +1,13 @@
+---
+# UniFi Controller Handlers
+
+- name: Restart UniFi
+  systemd:
+    name: unifi
+    state: restarted
+    daemon_reload: true
+
+- name: Restart MongoDB
+  systemd:
+    name: mongod
+    state: restarted

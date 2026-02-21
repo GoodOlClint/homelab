@@ -1,0 +1,34 @@
+---
+# UniFi Controller Installation via Glenn R.'s community script
+# https://community.ui.com/questions/UniFi-OS-Server-Installation-Scripts/ccbc7530-dd61-40a7-82ec-22b17f027776
+
+- name: Check if UniFi is already installed
+  ansible.builtin.stat:
+    path: /usr/lib/unifi
+  register: unifi_installed
+
+- name: Download UniFi installation script
+  ansible.builtin.get_url:
+    url: https://get.glennr.nl/unifi/install/install_latest/unifi-latest.sh
+    dest: /tmp/unifi-install.sh
+    mode: '0755'
+  when: not unifi_installed.stat.exists
+
+- name: Run UniFi installation script
+  ansible.builtin.command:
+    cmd: bash /tmp/unifi-install.sh --skip --add-signing-keys
+  when: not unifi_installed.stat.exists
+  notify: Restart UniFi
+
+- name: Clean up installation script
+  ansible.builtin.file:
+    path: /tmp/unifi-install.sh
+    state: absent
+
+- name: Create backup directory
+  ansible.builtin.file:
+    path: "{{ unifi_backup_dir }}"
+    state: directory
+    owner: "{{ unifi_user }}"
+    group: "{{ unifi_group }}"
+    mode: '0755'

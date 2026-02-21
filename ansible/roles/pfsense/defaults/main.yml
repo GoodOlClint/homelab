@@ -1,0 +1,13 @@
+---
+# DHCP lease times (seconds)
+pfsense_dhcp_default_lease: 86400    # 24 hours
+pfsense_dhcp_max_lease: 172800       # 48 hours
+
+# DNS servers handed to DHCP clients (AdGuard Home on Services VLAN)
+pfsense_dhcp_dns_servers:
+  - "{{ network_data.dns_server.dns_ipv4 }}"
+
+# RFC 2136 dynamic DNS update settings
+pfsense_ddns_key_name: "dhcp-update-key"
+pfsense_ddns_algorithm: "hmac-sha256"
+pfsense_ddns_key_secret: "{{ secrets.bind_tsig_key_secret }}"

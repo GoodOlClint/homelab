@@ -1,0 +1,28 @@
+---
+# Main tasks for UniFi Controller installation
+
+- name: Include installation tasks
+  include_tasks: install.yml
+  tags: [unifi, install]
+
+- name: Include configuration tasks
+  include_tasks: configure.yml
+  tags: [unifi, configure]
+
+- name: Include backup tasks
+  include_tasks: backup.yml
+  when: unifi_backup_enabled
+  tags: [unifi, backup]
+
+- name: Include firewall tasks
+  include_tasks: firewall.yml
+  when: unifi_configure_firewall
+  tags: [unifi, firewall]
+
+- name: Ensure UniFi service is started and enabled
+  systemd:
+    name: unifi
+    state: started
+    enabled: true
+    daemon_reload: true
+  tags: [unifi, service]

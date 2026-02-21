@@ -1,0 +1,45 @@
+#!/bin/bash
+# UniFi Controller Backup Script
+# Managed by Ansible - do not edit manually
+
+set -euo pipefail
+
+BACKUP_DIR="{{ unifi_backup_dir }}"
+UNIFI_DIR="{{ unifi_base_dir }}"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+BACKUP_FILE="${BACKUP_DIR}/unifi-backup-${TIMESTAMP}.unf"
+
+echo "Starting UniFi Controller backup at $(date)"
+
+# Create backup directory if it doesn't exist
+mkdir -p "${BACKUP_DIR}"
+
+# Stop UniFi service
+echo "Stopping UniFi service..."
+systemctl stop unifi
+
+# Backup MongoDB database
+echo "Backing up MongoDB database..."
+mongodump --db unifi --out "${BACKUP_DIR}/mongo-${TIMESTAMP}"
+mongodump --db unifi_stat --out "${BACKUP_DIR}/mongo-${TIMESTAMP}"
+
+# Create tar archive of MongoDB backup and UniFi data
+echo "Creating backup archive..."
+tar -czf "${BACKUP_FILE}" \
+    -C "${BACKUP_DIR}" "mongo-${TIMESTAMP}" \
+    -C "${UNIFI_DIR}" data/sites \
+    -C "${UNIFI_DIR}" data/system.properties 2>/dev/null || true
+
+# Remove temporary MongoDB dump
+rm -rf "${BACKUP_DIR}/mongo-${TIMESTAMP}"
+
+# Start UniFi service
+echo "Starting UniFi service..."
+systemctl start unifi
+
+# Set proper permissions
+chown {{ unifi_user }}:{{ unifi_group }} "${BACKUP_FILE}"
+chmod 600 "${BACKUP_FILE}"
+
+echo "Backup completed: ${BACKUP_FILE}"
+echo "Backup size: $(du -h "${BACKUP_FILE}" | cut -f1)"

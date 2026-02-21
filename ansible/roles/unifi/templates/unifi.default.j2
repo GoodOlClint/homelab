@@ -1,0 +1,8 @@
+# UniFi Controller JVM Options
+# Managed by Ansible - do not edit manually
+
+# Java memory settings
+JAVA_OPTS="-Xms{{ unifi_xms }}M -Xmx{{ unifi_xmx }}M"
+
+# Additional JVM options
+JVM_OPTS="-Djava.awt.headless=true -Dfile.encoding=UTF-8"

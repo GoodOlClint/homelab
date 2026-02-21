@@ -1,0 +1,14 @@
+# pfSense inventory — copy to pfsense.yaml and fill in values
+# Prerequisites:
+#   - SSH enabled on pfSense (System > Advanced > Secure Shell)
+#   - Admin user with SSH key auth configured
+#   - pfSense-pkg-sudo installed (System > Package Manager)
+#   - pfSense Plus 24.11+ (required by pfsensible.core >= 0.7.0)
+all:
+  hosts:
+    pfsense:
+      ansible_host: REPLACE_WITH_PFSENSE_IP
+      ansible_user: ansible
+      ansible_python_interpreter: /usr/local/bin/python3.11
+      ansible_become: true
+      ansible_become_method: sudo

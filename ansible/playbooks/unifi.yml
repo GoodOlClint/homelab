@@ -1,0 +1,56 @@
+---
+# UniFi Controller Deployment Playbook
+
+- name: Deploy UniFi Network Controller
+  hosts: unifi
+  become: true
+  vars_files:
+    - ../group_vars/all.yml
+
+  pre_tasks:
+    - name: Load local variable overrides
+      include_vars:
+        file: "../group_vars/local/overrides.yml"
+      failed_when: false
+      tags: always
+
+  roles:
+    - unifi
+    - rsyslog_client
+    - telegraf
+
+  post_tasks:
+    - name: Wait for UniFi service to be ready
+      wait_for:
+        port: 8443
+        host: "{{ ansible_default_ipv4.address }}"
+        timeout: 120
+        delay: 10
+
+    - name: Display UniFi Controller access information
+      debug:
+        msg:
+          - "=============================================="
+          - "UniFi Controller installation complete!"
+          - "=============================================="
+          - ""
+          - "Access URL: https://{{ ansible_hostname }}.{{ domain_suffix | default('lab.internal') }}:8443"
+          - "Alternative: https://{{ ansible_default_ipv4.address }}:8443"
+          - ""
+          - "First-time setup:"
+          - "  1. Accept the EULA"
+          - "  2. Create admin account"
+          - "  3. Configure controller name"
+          - "  4. Skip UniFi account (optional)"
+          - "  5. Configure network settings"
+          - ""
+          - "Backup/Restore commands:"
+          - "  Backup:  sudo /usr/local/bin/backup-unifi"
+          - "  Restore: sudo /usr/local/bin/restore-unifi <backup-file>"
+          - "  Location: /var/backups/unifi/"
+          - ""
+          - "Service management:"
+          - "  Status:  sudo systemctl status unifi"
+          - "  Restart: sudo systemctl restart unifi"
+          - "  Logs:    sudo journalctl -u unifi -f"
+          - "=============================================="

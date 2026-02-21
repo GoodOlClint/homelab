@@ -1,0 +1,57 @@
+---
+# UniFi Controller Firewall Configuration
+
+- name: Allow UniFi Controller web interface (HTTPS)
+  ufw:
+    rule: allow
+    port: "{{ unifi_https_port }}"
+    proto: tcp
+    comment: "UniFi Controller HTTPS"
+
+- name: Allow UniFi Controller web interface (HTTP redirect)
+  ufw:
+    rule: allow
+    port: "{{ unifi_http_port }}"
+    proto: tcp
+    comment: "UniFi Controller HTTP"
+
+- name: Allow UniFi Guest Portal (HTTPS)
+  ufw:
+    rule: allow
+    port: "{{ unifi_portal_https_port }}"
+    proto: tcp
+    comment: "UniFi Guest Portal HTTPS"
+
+- name: Allow UniFi Guest Portal (HTTP redirect)
+  ufw:
+    rule: allow
+    port: "{{ unifi_portal_http_port }}"
+    proto: tcp
+    comment: "UniFi Guest Portal HTTP"
+
+- name: Allow UniFi STUN
+  ufw:
+    rule: allow
+    port: "3478"
+    proto: udp
+    comment: "UniFi STUN"
+
+- name: Allow UniFi device discovery
+  ufw:
+    rule: allow
+    port: "10001"
+    proto: udp
+    comment: "UniFi AP Discovery"
+
+- name: Allow UniFi device communication
+  ufw:
+    rule: allow
+    port: "8080"
+    proto: tcp
+    comment: "UniFi Device Communication"
+    from_ip: "{{ item }}"
+  loop: "{{ unifi_firewall_allowed_ips }}"
+
+- name: Reload UFW
+  ufw:
+    state: reloaded

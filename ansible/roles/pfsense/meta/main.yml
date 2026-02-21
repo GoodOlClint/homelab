@@ -1,0 +1,9 @@
+---
+dependencies: []
+
+galaxy_info:
+  role_name: pfsense
+  description: "Configure pfSense DHCP server scopes with RFC 2136 dynamic DNS registration"
+
+collections:
+  - pfsensible.core

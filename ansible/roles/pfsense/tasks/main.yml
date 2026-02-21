@@ -1,0 +1,37 @@
+---
+# Configure DHCP server scopes on pfSense — one per VLAN with DHCP enabled.
+# VLANs in dns_server.zone_vlans also get RFC 2136 dynamic DNS registration to BIND.
+
+- name: Validate required variables
+  ansible.builtin.assert:
+    that:
+      - network_data is defined
+      - network_data.vlans is mapping
+      - pfsense_interfaces is defined
+      - pfsense_interfaces is mapping
+    fail_msg: "Missing required variables: network_data (from vlans.yaml) and pfsense_interfaces (from private_bindings)"
+
+- name: Configure DHCP server for {{ item.key }} VLAN
+  pfsensible.core.pfsense_dhcp_server:
+    interface: "{{ pfsense_interfaces[item.key] }}"
+    enable: true
+    range_from: "{{ item.value.dhcp_range_start }}"
+    range_to: "{{ item.value.dhcp_range_end }}"
+    gateway: "{{ network_data.ipv4_prefix }}.{{ item.value.id }}.1"
+    domain: "{{ item.value.domain_prefix }}.{{ network_data.domain_suffix }}"
+    dnsserver: "{{ pfsense_dhcp_dns_servers }}"
+    defaultleasetime: "{{ pfsense_dhcp_default_lease }}"
+    maxleasetime: "{{ pfsense_dhcp_max_lease }}"
+    # RFC 2136 DDNS — only for VLANs that have a BIND listener
+    ddnsupdate: "{{ true if item.key in network_data.dns_server.zone_vlans else omit }}"
+    ddnsdomain: "{{ (item.value.domain_prefix ~ '.' ~ network_data.domain_suffix) if item.key in network_data.dns_server.zone_vlans else omit }}"
+    ddnsdomainprimary: "{{ network_data.dns_server.bind_ipv4 if item.key in network_data.dns_server.zone_vlans else omit }}"
+    ddnsdomainkeyname: "{{ pfsense_ddns_key_name if item.key in network_data.dns_server.zone_vlans else omit }}"
+    ddnsdomainkeyalgorithm: "{{ pfsense_ddns_algorithm if item.key in network_data.dns_server.zone_vlans else omit }}"
+    ddnsdomainkey: "{{ pfsense_ddns_key_secret if item.key in network_data.dns_server.zone_vlans else omit }}"
+  loop: "{{ network_data.vlans | dict2items }}"
+  loop_control:
+    label: "{{ item.key }} (vlan{{ item.value.id }})"
+  when:
+    - item.value.dhcp_enabled | default(false)
+    - item.key in pfsense_interfaces

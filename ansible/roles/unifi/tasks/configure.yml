@@ -1,0 +1,37 @@
+---
+# UniFi Controller Configuration Tasks
+
+- name: Configure UniFi system properties
+  template:
+    src: system.properties.j2
+    dest: "{{ unifi_data_dir }}/system.properties"
+    owner: "{{ unifi_user }}"
+    group: "{{ unifi_group }}"
+    mode: '0644'
+  notify: Restart UniFi
+
+- name: Configure UniFi JVM options
+  template:
+    src: unifi.default.j2
+    dest: /etc/default/unifi
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart UniFi
+
+- name: Ensure UniFi data directory permissions
+  file:
+    path: "{{ unifi_data_dir }}"
+    state: directory
+    owner: "{{ unifi_user }}"
+    group: "{{ unifi_group }}"
+    mode: '0755'
+    recurse: false
+
+- name: Ensure UniFi log directory permissions
+  file:
+    path: "{{ unifi_log_dir }}"
+    state: directory
+    owner: "{{ unifi_user }}"
+    group: "{{ unifi_group }}"
+    mode: '0755'

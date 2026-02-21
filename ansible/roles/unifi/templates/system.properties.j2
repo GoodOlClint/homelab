@@ -1,0 +1,16 @@
+# UniFi Controller System Properties
+# Managed by Ansible - do not edit manually
+
+# Ports
+unifi.http.port={{ unifi_http_port }}
+unifi.https.port={{ unifi_https_port }}
+portal.http.port={{ unifi_portal_http_port }}
+portal.https.port={{ unifi_portal_https_port }}
+
+# MongoDB
+db.mongo.local=false
+db.mongo.uri=mongodb://127.0.0.1:27017/unifi
+statdb.mongo.uri=mongodb://127.0.0.1:27017/unifi_stat
+
+# Logging
+unifi.logStdout=true
