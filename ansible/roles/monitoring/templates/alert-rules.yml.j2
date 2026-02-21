@@ -1,0 +1,199 @@
+groups:
+  - name: host_alerts
+    rules:
+      - alert: HostDown
+        expr: up{job="telegraf"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host {{ '{{' }} $labels.instance {{ '}}' }} is down"
+          description: "Telegraf on {{ '{{' }} $labels.instance {{ '}}' }} has been unreachable for more than 2 minutes."
+
+      - alert: HostHighCpuUsage
+        expr: 100 - (avg by (instance) (rate(cpu_usage_idle[5m])) * 100) > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage on {{ '{{' }} $labels.instance {{ '}}' }}"
+          description: "CPU usage on {{ '{{' }} $labels.instance {{ '}}' }} has been above 90% for 5 minutes (current: {{ '{{' }} $value | printf \"%.1f\" {{ '}}' }}%)."
+
+      - alert: HostHighMemoryUsage
+        expr: mem_used_percent > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ '{{' }} $labels.instance {{ '}}' }}"
+          description: "Memory usage on {{ '{{' }} $labels.instance {{ '}}' }} is above 90% (current: {{ '{{' }} $value | printf \"%.1f\" {{ '}}' }}%)."
+
+      - alert: HostDiskAlmostFull
+        expr: disk_used_percent{fstype!~"tmpfs|devtmpfs|overlay"} > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk almost full on {{ '{{' }} $labels.instance {{ '}}' }}"
+          description: "Disk {{ '{{' }} $labels.path {{ '}}' }} on {{ '{{' }} $labels.instance {{ '}}' }} is {{ '{{' }} $value | printf \"%.1f\" {{ '}}' }}% full."
+
+      - alert: HostDiskFull
+        expr: disk_used_percent{fstype!~"tmpfs|devtmpfs|overlay"} > 95
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk critically full on {{ '{{' }} $labels.instance {{ '}}' }}"
+          description: "Disk {{ '{{' }} $labels.path {{ '}}' }} on {{ '{{' }} $labels.instance {{ '}}' }} is {{ '{{' }} $value | printf \"%.1f\" {{ '}}' }}% full. Immediate action required."
+
+      - alert: HostHighPacketLoss
+        expr: ping_percent_packet_loss > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High packet loss from {{ '{{' }} $labels.instance {{ '}}' }} to {{ '{{' }} $labels.url {{ '}}' }}"
+          description: "Packet loss is {{ '{{' }} $value | printf \"%.1f\" {{ '}}' }}% for 5 minutes."
+
+  - name: service_alerts
+    rules:
+      - alert: ServiceEndpointDown
+        expr: probe_success{job="blackbox-http"} == 0
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HTTP endpoint down: {{ '{{' }} $labels.instance {{ '}}' }}"
+          description: "Blackbox probe to {{ '{{' }} $labels.instance {{ '}}' }} has been failing for 3 minutes."
+
+      - alert: DNSResolutionFailure
+        expr: probe_success{job="blackbox-dns"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "DNS resolution failing for zone {{ '{{' }} $labels.zone {{ '}}' }}"
+          description: "DNS probe to {{ '{{' }} $labels.instance {{ '}}' }} for zone {{ '{{' }} $labels.zone {{ '}}' }} has been failing for 2 minutes."
+
+      - alert: HostUnreachable
+        expr: probe_success{job="blackbox-ping"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host unreachable: {{ '{{' }} $labels.instance {{ '}}' }}"
+          description: "ICMP ping to {{ '{{' }} $labels.instance {{ '}}' }} has been failing for 2 minutes."
+
+      - alert: ServiceHealthCheckFailing
+        expr: http_response_result_code != 0
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Health check failing on {{ '{{' }} $labels.instance {{ '}}' }}"
+          description: "HTTP health check to {{ '{{' }} $labels.server {{ '}}' }} on {{ '{{' }} $labels.instance {{ '}}' }} has been failing for 3 minutes."
+
+      - alert: SSLCertificateExpiringSoon
+        expr: probe_ssl_earliest_cert_expiry - time() < 86400 * 30
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "SSL certificate expiring soon: {{ '{{' }} $labels.instance {{ '}}' }}"
+          description: "SSL certificate for {{ '{{' }} $labels.instance {{ '}}' }} expires in {{ '{{' }} $value | humanizeDuration {{ '}}' }}."
+
+      - alert: SSLCertificateExpiryCritical
+        expr: probe_ssl_earliest_cert_expiry - time() < 86400 * 7
+        for: 1h
+        labels:
+          severity: critical
+        annotations:
+          summary: "SSL certificate expiring in < 7 days: {{ '{{' }} $labels.instance {{ '}}' }}"
+          description: "SSL certificate for {{ '{{' }} $labels.instance {{ '}}' }} expires in {{ '{{' }} $value | humanizeDuration {{ '}}' }}. Renew immediately."
+
+  - name: infrastructure_alerts
+    rules:
+      - alert: ProxmoxNodeDown
+        expr: pve_up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Proxmox node unreachable"
+          description: "Cannot reach Proxmox VE API. The hypervisor may be down."
+
+      - alert: PBSBackupStale
+        expr: (time() - pbs_snapshot_vm_last_timestamp) > 129600
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Backup stale for {{ '{{' }} $labels.vm_name {{ '}}' }}"
+          description: "Last backup for {{ '{{' }} $labels.vm_name {{ '}}' }} is older than 36 hours."
+
+      - alert: PBSDatastoreAlmostFull
+        expr: (pbs_datastore_used_bytes / pbs_datastore_size_bytes) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PBS datastore {{ '{{' }} $labels.datastore {{ '}}' }} almost full"
+          description: "Datastore {{ '{{' }} $labels.datastore {{ '}}' }} is {{ '{{' }} $value | printf \"%.1f\" {{ '}}' }}% full."
+
+      - alert: SpeedtestDegraded
+        expr: speedtest_download_bits_per_second < 100000000
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Internet speed degraded"
+          description: "Download speed is {{ '{{' }} $value | humanize1024 {{ '}}' }}bps, below 100Mbps threshold."
+
+  - name: container_alerts
+    rules:
+      - alert: ContainerUnhealthy
+        expr: docker_container_health_failing == 1
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container unhealthy: {{ '{{' }} $labels.container_name {{ '}}' }} on {{ '{{' }} $labels.instance {{ '}}' }}"
+          description: "Docker container {{ '{{' }} $labels.container_name {{ '}}' }} health check has been failing for 3 minutes."
+
+      - alert: ContainerHighCPU
+        expr: rate(docker_container_cpu_usage_percent[5m]) > 90
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container high CPU: {{ '{{' }} $labels.container_name {{ '}}' }}"
+          description: "Container {{ '{{' }} $labels.container_name {{ '}}' }} CPU usage is above 90% for 10 minutes."
+
+      - alert: ContainerHighMemory
+        expr: docker_container_mem_usage_percent > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container high memory: {{ '{{' }} $labels.container_name {{ '}}' }}"
+          description: "Container {{ '{{' }} $labels.container_name {{ '}}' }} memory usage is {{ '{{' }} $value | printf \"%.1f\" {{ '}}' }}%."
+
+  - name: monitoring_self_alerts
+    rules:
+      - alert: PrometheusTargetMissing
+        expr: up == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus target missing: {{ '{{' }} $labels.job {{ '}}' }}/{{ '{{' }} $labels.instance {{ '}}' }}"
+          description: "Prometheus target {{ '{{' }} $labels.instance {{ '}}' }} in job {{ '{{' }} $labels.job {{ '}}' }} has been down for 5 minutes."
+
+      - alert: PrometheusRemoteWriteErrors
+        expr: rate(prometheus_remote_storage_failed_samples_total[5m]) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus remote write errors"
+          description: "Prometheus is failing to write samples to OpenObserve."

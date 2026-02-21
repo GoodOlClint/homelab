@@ -152,6 +152,31 @@ services:
     networks:
       - monitoring
 
+  # Alertmanager - Alert Routing and Notifications
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: alertmanager
+    restart: unless-stopped
+    ports:
+      - "9093:9093"
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    environment:
+      - TZ={{ timezone }}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /opt/monitoring/alertmanager:/etc/alertmanager
+      - alertmanager-data:/alertmanager
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9093/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - monitoring
+
   # Proxmox VE Exporter - Proxmox Host Metrics
   proxmox-exporter:
     image: prompve/prometheus-pve-exporter
@@ -281,3 +306,4 @@ networks:
 
 volumes:
   prometheus-data:
+  alertmanager-data:

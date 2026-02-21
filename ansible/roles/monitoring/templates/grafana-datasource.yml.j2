@@ -26,3 +26,13 @@ datasources:
     jsonData:
       httpMethod: POST
       timeInterval: 15s
+
+  - name: Alertmanager
+    uid: alertmanager
+    type: alertmanager
+    access: proxy
+    url: http://alertmanager:9093
+    editable: true
+    jsonData:
+      implementation: prometheus
+      handleGrafanaManagedAlerts: false

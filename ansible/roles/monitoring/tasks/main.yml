@@ -59,6 +59,7 @@
     - /opt/monitoring/proxmox
     - /opt/monitoring/snmp
     - /opt/monitoring/axosyslog
+    - /opt/monitoring/alertmanager
     - /var/lib/openobserve
   tags:
     - monitoring
@@ -214,6 +215,27 @@
   tags:
     - monitoring
     - prometheus
+    - config
+
+- name: Create Prometheus alert rules
+  template:
+    src: alert-rules.yml.j2
+    dest: /opt/monitoring/prometheus/alert-rules.yml
+    mode: '0644'
+  tags:
+    - monitoring
+    - prometheus
+    - alerting
+    - config
+
+- name: Create Alertmanager configuration
+  template:
+    src: alertmanager.yml.j2
+    dest: /opt/monitoring/alertmanager/alertmanager.yml
+    mode: '0600'
+  tags:
+    - monitoring
+    - alertmanager
     - config
 
 - name: Create Blackbox Exporter configuration

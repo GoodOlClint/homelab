@@ -45,6 +45,14 @@ modules:
       transport_protocol: "tcp"
       preferred_ip_protocol: "ip4"
 
+  tls_connect:
+    prober: tcp
+    timeout: 5s
+    tcp:
+      tls: true
+      tls_config:
+        insecure_skip_verify: true
+
   ssh_banner:
     prober: tcp
     timeout: 5s

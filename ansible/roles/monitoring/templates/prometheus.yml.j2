@@ -5,6 +5,16 @@ global:
     cluster: 'homelab'
     environment: 'production'
 
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
+# Alert rules
+rule_files:
+  - '/etc/prometheus/alert-rules.yml'
+
 # Remote write to OpenObserve
 remote_write:
   - url: http://openobserve:5080/api/default/prometheus/api/v1/write
@@ -95,6 +105,28 @@ scrape_configs:
 {% endif %}
           - 8.8.8.8  # Google DNS
           - 1.1.1.1  # Cloudflare DNS
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox:9115
+
+  # TLS Certificate Expiry Monitoring
+  - job_name: 'blackbox-tls'
+    metrics_path: /probe
+    params:
+      module: [tls_connect]
+    static_configs:
+      - targets:
+          - {{ proxmox_host }}:8006        # Proxmox VE
+{% if hostvars['proxmox-backup'] is defined and hostvars['proxmox-backup'].ansible_host is defined %}
+          - {{ hostvars['proxmox-backup'].ansible_host }}:8007  # PBS
+{% endif %}
+{% if hostvars['unifi'] is defined and hostvars['unifi'].ansible_host is defined %}
+          - {{ hostvars['unifi'].ansible_host }}:8443  # UniFi Controller
+{% endif %}
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
