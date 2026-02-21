@@ -1,8 +1,0 @@
----
-- name: Deploy OpenObserve Dashboards
-  hosts: openobserve
-  become: true
-  vars_files:
-    - ../group_vars/all.yml
-  roles:
-    - ../roles-infrastructure/openobserve_dashboards
