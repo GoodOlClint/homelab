@@ -10,7 +10,7 @@ remote_write:
   - url: http://openobserve:5080/api/default/prometheus/api/v1/write
     basic_auth:
       username: {{ openobserve_root_user_email }}
-      password: {{ secrets.openobserve_root_user_pass }}
+      password: {{ openobserve_root_user_pass }}
 
 scrape_configs:
   # Prometheus itself

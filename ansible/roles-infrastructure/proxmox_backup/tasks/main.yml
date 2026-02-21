@@ -341,12 +341,40 @@
     - backup
     - datastore
 
-- name: Create datastores
+- name: Create datastores via CLI
   shell: |
     proxmox-backup-manager datastore create {{ item.name }} {{ item.path }}{% if item.comment is defined %} --comment "{{ item.comment }}"{% endif %}{% if item.gc_schedule is defined %} --gc-schedule "{{ item.gc_schedule }}"{% endif %}{% if item.prune_schedule is defined %} --prune-schedule "{{ item.prune_schedule }}"{% endif %}{% if item.keep_last is defined %} --keep-last {{ item.keep_last }}{% endif %}{% if item.keep_hourly is defined and item.keep_hourly > 0 %} --keep-hourly {{ item.keep_hourly }}{% endif %}{% if item.keep_daily is defined %} --keep-daily {{ item.keep_daily }}{% endif %}{% if item.keep_weekly is defined %} --keep-weekly {{ item.keep_weekly }}{% endif %}{% if item.keep_monthly is defined %} --keep-monthly {{ item.keep_monthly }}{% endif %}{% if item.keep_yearly is defined %} --keep-yearly {{ item.keep_yearly }}{% endif %}
   loop: "{{ pbs_datastores }}"
-  when: pbs_datastore_list.stdout is defined and pbs_datastore_list.stdout != "" and (pbs_datastore_list.stdout | from_json | selectattr('name', 'equalto', item.name) | list | length == 0)
+  when:
+    - pbs_datastore_list.stdout is defined
+    - (pbs_datastore_list.stdout | default('[]') | from_json | selectattr('name', 'equalto', item.name) | list | length == 0)
   register: datastore_created
+  failed_when: false
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - datastore
+    - config
+
+# If CLI fails with "path not empty", register existing datastore via config file
+- name: Register existing datastores via config (path not empty)
+  ansible.builtin.blockinfile:
+    path: /etc/proxmox-backup/datastore.cfg
+    marker: "# {mark} ANSIBLE MANAGED - {{ item.item.name }}"
+    block: |2
+      datastore: {{ item.item.name }}
+      	path {{ item.item.path }}
+      	comment {{ item.item.comment | default('Managed by Ansible') }}
+    create: yes
+    owner: root
+    group: www-data
+    mode: '0640'
+  loop: "{{ datastore_created.results | default([]) }}"
+  when:
+    - item.rc is defined
+    - item.rc != 0
+  notify: Restart proxmox-backup-proxy
   tags:
     - proxmox_backup
     - pbs

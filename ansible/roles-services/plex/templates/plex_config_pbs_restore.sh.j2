@@ -68,7 +68,7 @@ fi
 
 # Parse JSON to find the most recent snapshot
 # Format: [namespace:]<type>/<ID>/<timestamp>
-LATEST_SNAPSHOT=$(echo "$SNAPSHOTS" | jq -r '.[] | select(.["backup-type"] == "host") | .["backup-id"] + "/" + (.["backup-time"] | tostring)' | sort -r | head -n 1)
+LATEST_SNAPSHOT=$(echo "$SNAPSHOTS" | jq -r '.[] | select(.["backup-type"] == "host") | .["backup-id"] + "/" + (.["backup-time"] | todate)' | sort -r | head -n 1)
 
 if [ -z "$LATEST_SNAPSHOT" ]; then
     error_exit "No backups found in PBS namespace '$PBS_NAMESPACE'"

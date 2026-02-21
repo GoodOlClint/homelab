@@ -1,9 +1,2 @@
 ---
-- name: Restart networking
-  ansible.builtin.systemd:
-    name: networking
-    state: restarted
-  when:
-    - ansible_os_family == "Debian"
-    - ansible_facts['service_mgr'] == "systemd"
-    - ansible_facts.services is defined and 'networking.service' in ansible_facts.services
+# No handlers needed — resolvectl changes are applied immediately

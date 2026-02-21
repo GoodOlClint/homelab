@@ -13,19 +13,20 @@
   string_as_label = true
   export_timestamp = true
 
-# Note: Remote write disabled - Prometheus scrapes from :9273 instead
-# This avoids issues with string-valued metrics being dropped
-#{% if hostvars['openobserve'] is defined and hostvars['openobserve'].ansible_host is defined %}
-#[[outputs.http]]
-#  url = "http://{{ hostvars['openobserve'].ansible_host }}:{{ openobserve_listen_port }}/api/default/prometheus/api/v1/write"
-#  method = "POST"
-#  data_format = "prometheusremotewrite"
-#  [outputs.http.headers]
-#    Content-Type = "application/x-protobuf"
-#    Content-Encoding = "snappy"
-#    X-Prometheus-Remote-Write-Version = "0.1.0"
-#    Authorization = "Basic {{ (openobserve_root_user_email + ':' + secrets.openobserve_root_user_pass) | b64encode }}"
-#{% endif %}
+{# Note: Remote write disabled - Prometheus scrapes from :9273 instead
+   This avoids issues with string-valued metrics being dropped
+{% if hostvars['openobserve'] is defined and hostvars['openobserve'].ansible_host is defined %}
+[[outputs.http]]
+  url = "http://{{ hostvars['openobserve'].ansible_host }}:{{ openobserve_listen_port }}/api/default/prometheus/api/v1/write"
+  method = "POST"
+  data_format = "prometheusremotewrite"
+  [outputs.http.headers]
+    Content-Type = "application/x-protobuf"
+    Content-Encoding = "snappy"
+    X-Prometheus-Remote-Write-Version = "0.1.0"
+    Authorization = "Basic {{ (openobserve_root_user_email + ':' + secrets.openobserve_root_user_pass) | b64encode }}"
+{% endif %}
+#}
 
 # System Metrics
 [[inputs.cpu]]
@@ -42,7 +43,7 @@
 [[inputs.diskio]]
 
 [[inputs.net]]
-  interfaces = ["eth*", "en*"]
+  interfaces = ["eth*", "en*", "wg*"]
 
 [[inputs.netstat]]
 
@@ -140,7 +141,11 @@
 
 # Log file monitoring using tail with grok parser
 [[inputs.tail]]
+{% if ansible_os_family | default('Debian') == 'Alpine' %}
+  files = ["/var/log/messages"]
+{% else %}
   files = ["/var/log/syslog"]
+{% endif %}
   from_beginning = false
   data_format = "grok"
   grok_patterns = ["%{SYSLOGTIMESTAMP:timestamp} %{SYSLOGHOST:host} %{DATA:program}(?:\\[%{POSINT:pid}\\])?: %{GREEDYDATA:message}"]

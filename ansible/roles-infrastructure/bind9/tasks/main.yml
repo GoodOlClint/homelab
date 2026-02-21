@@ -13,7 +13,7 @@
     - dns
     - packages
 
-- name: Configure named.conf.options for forwarding to AdGuard
+- name: Configure named.conf.options
   template:
     src: named.conf.options.j2
     dest: /etc/bind/named.conf.options
@@ -36,22 +36,27 @@
     - config
     - zones
 
-- name: Check if zone files exist
+# --- Forward zone files ---
+
+- name: Check if forward zone files exist
   stat:
-    path: "/etc/bind/db.{{ item.zone }}"
-  loop: "{{ dns_zones.values() }}"
-  register: zone_files_stat
+    path: "/etc/bind/db.{{ item.value.zone }}"
+  loop: "{{ dns_zones | dict2items }}"
+  register: forward_zone_files_stat
   tags:
     - bind9
     - dns
     - zones
 
-- name: Configure zone files for all zones (only if they don't exist)
+- name: Create forward zone files (only if they don't exist)
   template:
     src: db.zone.j2
-    dest: "/etc/bind/db.{{ item.item.zone }}"
+    dest: "/etc/bind/db.{{ item.item.value.zone }}"
     mode: '0644'
-  loop: "{{ zone_files_stat.results }}"
+  vars:
+    zone_name: "{{ item.item.value.zone }}"
+    zone_dns_ip: "{{ item.item.value.dns_ip }}"
+  loop: "{{ forward_zone_files_stat.results }}"
   when: not item.stat.exists
   notify: Restart bind9
   tags:
@@ -60,17 +65,60 @@
     - zones
     - config
 
-- name: Set ownership of zone files to bind user for dynamic updates
+- name: Set ownership of forward zone files
   file:
-    path: "/etc/bind/db.{{ item.zone }}"
+    path: "/etc/bind/db.{{ item.value.zone }}"
     owner: bind
     group: bind
     mode: '0644'
-  loop: "{{ dns_zones.values() }}"
+  loop: "{{ dns_zones | dict2items }}"
   tags:
     - bind9
     - dns
     - zones
+
+# --- Reverse zone files ---
+
+- name: Check if reverse zone files exist
+  stat:
+    path: "/etc/bind/db.{{ item.value.vlan_id }}.16.172.in-addr.arpa"
+  loop: "{{ dns_zones | dict2items }}"
+  register: reverse_zone_files_stat
+  tags:
+    - bind9
+    - dns
+    - zones
+
+- name: Create reverse zone files (only if they don't exist)
+  template:
+    src: db.reverse-zone.j2
+    dest: "/etc/bind/db.{{ item.item.value.vlan_id }}.16.172.in-addr.arpa"
+    mode: '0644'
+  vars:
+    forward_zone: "{{ item.item.value.zone }}"
+    zone_dns_ip: "{{ item.item.value.dns_ip }}"
+  loop: "{{ reverse_zone_files_stat.results }}"
+  when: not item.stat.exists
+  notify: Restart bind9
+  tags:
+    - bind9
+    - dns
+    - zones
+    - config
+
+- name: Set ownership of reverse zone files
+  file:
+    path: "/etc/bind/db.{{ item.value.vlan_id }}.16.172.in-addr.arpa"
+    owner: bind
+    group: bind
+    mode: '0644'
+  loop: "{{ dns_zones | dict2items }}"
+  tags:
+    - bind9
+    - dns
+    - zones
+
+# --- Directory and permissions ---
 
 - name: Ensure /etc/bind directory is writable by bind user
   file:
@@ -83,6 +131,8 @@
     - bind9
     - dns
     - config
+
+# --- Journal file validation ---
 
 - name: Check for corrupted journal files
   shell: |
@@ -111,6 +161,8 @@
     - dns
     - validate
 
+# --- Service health checks ---
+
 - name: Flush handlers to ensure bind9 is restarted if needed
   meta: flush_handlers
   tags:
@@ -135,7 +187,7 @@
     - dns
     - validate
 
-- name: Check if zones are actually loaded in BIND
+- name: Check if forward zones are loaded in BIND
   shell: |
     loaded=0
     failed=0
@@ -189,8 +241,8 @@
     - zones
     - service
 
-- name: Verify DNS resolution is working
-  command: dig +short +time=2 +tries=3 @127.0.0.1 cloudflare.com
+- name: Verify BIND is responding for local zones
+  command: dig +short +time=2 +tries=3 @127.0.0.1 {{ (dns_zones.values() | first).zone }} SOA
   register: dns_test
   retries: 5
   delay: 2

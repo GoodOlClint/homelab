@@ -1,5 +1,26 @@
 ---
 # Tasks for DNS VM (AdGuard Home)
+
+# Disable systemd-resolved stub listener so AdGuard can bind to port 53
+- name: Disable systemd-resolved stub listener
+  lineinfile:
+    path: /etc/systemd/resolved.conf
+    regexp: '^#?DNSStubListener='
+    line: 'DNSStubListener=no'
+    backup: yes
+  notify: Restart systemd-resolved
+  tags:
+    - adguard
+    - dns
+    - resolved
+
+- name: Flush handlers to restart systemd-resolved now
+  meta: flush_handlers
+  tags:
+    - adguard
+    - dns
+    - resolved
+
 - name: Ensure required packages are installed
   apt:
     name:
@@ -83,10 +104,10 @@
     - dns
     - config
 
-- name: Gather all interface IPs (except loopback)
+- name: Gather all interface IPs (exclude loopback and management IP)
   set_fact:
-    dns_listen_ips: "{{ ansible_all_ipv4_addresses | difference(['127.0.0.1']) }}"
-    dns_listen_ipv6s: "{{ ansible_all_ipv6_addresses | difference(['::1']) | select('match', '^(?!fe80:).*') | list }}"
+    dns_listen_ips: "{{ ansible_facts['all_ipv4_addresses'] | difference(['127.0.0.1', ansible_host]) }}"
+    dns_listen_ipv6s: "{{ ansible_facts['all_ipv6_addresses'] | difference(['::1']) | select('match', '^(?!fe80:).*') | list }}"
   tags:
     - adguard
     - dns
@@ -132,7 +153,7 @@
 - name: Wait for AdGuard Home to start
   wait_for:
     port: 53
-    host: "{{ ansible_default_ipv4.address }}"
+    host: 127.0.0.1
     timeout: 60
   tags:
     - adguard
@@ -142,7 +163,7 @@
 - name: Wait for AdGuard Home web interface
   wait_for:
     port: 3000
-    host: "{{ ansible_default_ipv4.address }}"
+    host: 127.0.0.1
     timeout: 60
   tags:
     - adguard
@@ -166,8 +187,8 @@
     - dns
     - validate
 
-- name: Test external DNS resolution through AdGuard Home on main interface
-  command: dig @{{ ansible_default_ipv4.address }} google.com +short
+- name: Test external DNS resolution through AdGuard Home
+  command: dig @127.0.0.1 google.com +short
   register: external_dns_test
   failed_when: external_dns_test.rc != 0 or external_dns_test.stdout == ""
   changed_when: false
@@ -180,7 +201,7 @@
     - test
 
 - name: Test local zone resolution through AdGuard Home
-  command: dig @{{ ansible_default_ipv4.address }} dns.{{ dns_zones.vlan100.zone }} +short
+  command: dig @127.0.0.1 ns.{{ (dns_zones.values() | first).zone }} +short
   register: local_dns_test
   failed_when: local_dns_test.rc != 0 or local_dns_test.stdout == ""
   changed_when: false
@@ -241,11 +262,11 @@
   debug:
     msg: |
       AdGuard Home is now running!
-      Web Interface: http://{{ ansible_default_ipv4.address }}:3000
+      Web Interface: http://{{ ansible_host }}:3000
       Default login: admin / Change this password!
-      DNS Server IPv4: {{ ansible_default_ipv4.address }}:53
+      DNS Server: {{ dns_listen_ips | first | default('127.0.0.1') }}:53
       DNS Server IPv6: {{ '[' + dns_listen_ipv6s[0] + ']:53' if dns_listen_ipv6s | length > 0 else 'Not available' }}
-      
+
       Available DNS interfaces:
       {% for ip in dns_listen_ips %}
       - IPv4: {{ ip }}:53
@@ -256,4 +277,3 @@
   tags:
     - adguard
     - dns
-

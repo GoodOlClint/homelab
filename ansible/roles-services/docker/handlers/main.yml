@@ -10,6 +10,5 @@
     project_src: /opt
     files:
       - docker-compose.yml
-    state: present
-    restarted: true
+    state: restarted
   listen: "restart docker services"

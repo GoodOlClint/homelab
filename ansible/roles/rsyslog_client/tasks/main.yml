@@ -1,16 +1,25 @@
 ---
 - name: Ensure rsyslog is installed
-  apt:
+  ansible.builtin.package:
     name: rsyslog
     state: present
-    update_cache: yes
   tags:
     - rsyslog_client
     - logging
     - packages
 
+- name: Ensure rsyslog.d directory exists
+  ansible.builtin.file:
+    path: /etc/rsyslog.d
+    state: directory
+    mode: '0755'
+  tags:
+    - rsyslog_client
+    - logging
+    - config
+
 - name: Configure rsyslog to forward logs to openobserve
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /etc/rsyslog.d/99-openobserve.conf
     line: "*.* @{{ hostvars[groups['all'] | select('search', 'openobserve') | list | first]['ansible_host'] }}:5514"
     create: yes
@@ -20,7 +29,7 @@
     - config
 
 - name: Restart rsyslog
-  systemd:
+  ansible.builtin.service:
     name: rsyslog
     state: restarted
   tags:

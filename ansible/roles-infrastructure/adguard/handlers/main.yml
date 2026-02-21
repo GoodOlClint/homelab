@@ -3,6 +3,11 @@
   systemd:
     daemon_reload: yes
 
+- name: Restart systemd-resolved
+  systemd:
+    name: systemd-resolved
+    state: restarted
+
 - name: Restart adguardhome
   systemd:
     name: adguardhome

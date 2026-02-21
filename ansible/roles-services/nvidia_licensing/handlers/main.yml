@@ -1,0 +1,6 @@
+---
+- name: Restart fastapi-dls
+  ansible.builtin.systemd:
+    name: fastapi-dls
+    state: restarted
+    daemon_reload: yes

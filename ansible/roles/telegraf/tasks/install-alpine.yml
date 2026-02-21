@@ -1,0 +1,33 @@
+---
+# Telegraf installation for Alpine Linux (apk)
+
+- name: Enable community repository for Telegraf
+  ansible.builtin.lineinfile:
+    path: /etc/apk/repositories
+    regexp: '^#(.*/community)$'
+    line: '\1'
+    backrefs: yes
+  tags:
+    - telegraf
+    - packages
+
+- name: Install Telegraf via apk
+  ansible.builtin.apk:
+    name: telegraf
+    state: present
+    update_cache: yes
+  tags:
+    - telegraf
+    - packages
+
+- name: Ensure Telegraf config directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - /etc/telegraf
+    - /etc/telegraf/telegraf.d
+  tags:
+    - telegraf
+    - config

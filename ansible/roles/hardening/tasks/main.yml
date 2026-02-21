@@ -12,52 +12,66 @@
     - firewall
     - packages
 
-- name: Allow SSH
-  ufw:
-    rule: allow
-    port: 22
-    proto: tcp
-  become: true
-  tags:
-    - hardening
-    - firewall
-
-- name: Allow required service ports
-  ufw:
-    rule: allow
-    port: "{{ item }}"
-    proto: tcp
-  loop: "{{ hardening_allowed_ports | default([]) }}"
-  when: hardening_allowed_ports is defined
-  become: true
-  tags:
-    - hardening
-    - firewall
-
-- name: Set default UFW policies
+- name: Reset UFW rules before applying managed firewall policy
   ufw:
     state: reset
+  when:
+    - (hardening_ufw_default_policies | default([]) | length) > 0 or (hardening_ufw_rules | default([]) | length) > 0
   become: true
   tags:
     - hardening
     - firewall
 
-- name: Set UFW default deny incoming
+- name: Apply managed UFW default policies
   ufw:
-    direction: incoming
-    policy: deny
+    direction: "{{ item.direction }}"
+    policy: "{{ item.policy }}"
+  loop: "{{ hardening_ufw_default_policies | default([]) }}"
+  when: (hardening_ufw_default_policies | default([]) | length) > 0
   become: true
   tags:
     - hardening
     - firewall
 
-- name: Enable UFW
+- name: Apply managed UFW explicit rules
+  ufw:
+    rule: "{{ item.rule }}"
+    port: "{{ item.port | default(omit) }}"
+    proto: "{{ item.proto | default(omit) }}"
+    from_ip: "{{ item.from_ip | default(omit) }}"
+    to_ip: "{{ item.to_ip | default(omit) }}"
+    direction: "{{ item.direction | default(omit) }}"
+    interface: "{{ item.interface | default(omit) }}"
+    route: "{{ item.route | default(omit) }}"
+  loop: "{{ hardening_ufw_rules | default([]) }}"
+  when: (hardening_ufw_rules | default([]) | length) > 0
+  become: true
+  tags:
+    - hardening
+    - firewall
+
+- name: Enable UFW when managed policy is supplied
   ufw:
     state: enabled
+  when:
+    - (hardening_ufw_default_policies | default([]) | length) > 0 or (hardening_ufw_rules | default([]) | length) > 0
   become: true
   tags:
     - hardening
     - firewall
+
+- name: Restrict SSH to management interface only
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?ListenAddress '
+    line: 'ListenAddress {{ ansible_host }}'
+    state: present
+  notify: Restart SSH
+  become: true
+  tags:
+    - hardening
+    - ssh
+    - security
 
 - name: Disable SSH password authentication
   lineinfile:
@@ -155,4 +169,3 @@
     - hardening
     - permissions
     - security
- 

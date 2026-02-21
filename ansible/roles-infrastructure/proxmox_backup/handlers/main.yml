@@ -1,2 +1,5 @@
 ---
-# Handlers for proxmox_backup role
+- name: Restart proxmox-backup-proxy
+  ansible.builtin.systemd:
+    name: proxmox-backup-proxy
+    state: restarted
