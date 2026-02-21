@@ -120,7 +120,7 @@
       run_once: true
       when: use_rendered_policy | default(false)
   roles:
-    - role: ../roles-infrastructure/monitoring-users
+    - role: monitoring_users
       tags:
         - monitoring-users
         - users

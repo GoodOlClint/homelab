@@ -60,14 +60,14 @@ if [ "$PBS_ENABLED" = true ]; then
     if ! command -v proxmox-backup-client &> /dev/null; then
         error_exit "proxmox-backup-client not found. Install with: apt install proxmox-backup-client"
     fi
-    
+
     # Test PBS connection and create namespace if needed
     log "Testing PBS connection..."
     set +e  # Temporarily disable exit on error for PBS test
     proxmox-backup-client snapshot list --ns "$PBS_NAMESPACE" &>/dev/null
     PBS_TEST_EXIT=$?
     set -e  # Re-enable exit on error
-    
+
     if [ $PBS_TEST_EXIT -ne 0 ] && [ $PBS_TEST_EXIT -ne 255 ]; then
         log "WARNING: Cannot connect to PBS (exit code: $PBS_TEST_EXIT), falling back to local backup only"
         PBS_ENABLED=false
@@ -128,26 +128,26 @@ mkdir -p "$BACKUP_DIR/containers"
 
 for container in $CONTAINERS; do
     log "Processing container: $container"
-    
+
     # Create container-specific backup directory
     CONTAINER_DIR="$BACKUP_DIR/containers/$container"
     mkdir -p "$CONTAINER_DIR"
-    
+
     # Export container configuration as JSON
     log "  Exporting configuration for $container"
     docker inspect "$container" > "$CONTAINER_DIR/inspect.json" 2>/dev/null || log "  WARNING: Failed to inspect $container"
-    
+
     # Export container logs (last 1000 lines)
     log "  Exporting logs for $container"
     docker logs --tail 1000 "$container" > "$CONTAINER_DIR/logs.txt" 2>&1 || log "  WARNING: Failed to get logs for $container"
-    
+
     # Get container's volumes
     VOLUMES=$(docker inspect -f '{% raw %}{{ range .Mounts }}{{ .Source }}:{{ .Destination }}:{{ .Type }}{{ println }}{{ end }}{% endraw %}' "$container" 2>/dev/null || true)
-    
+
     if [ -n "$VOLUMES" ]; then
         mkdir -p "$CONTAINER_DIR/volumes"
         log "  Recording volume information for $container"
-        
+
         while IFS=: read -r source dest type; do
             if [ -n "$source" ] && [ -n "$dest" ]; then
                 # Only backup config directories, skip large data/media volumes
@@ -175,13 +175,13 @@ for container in $CONTAINERS; do
                         else
                             VOLUME_NAME=$(basename "$dest" | sed 's/[^a-zA-Z0-9._-]/_/g')
                             log "    Backing up volume (${SIZE}MB): $source -> $dest (type: $type)"
-                            
+
                             # Create a marker file with volume info
                             echo "Source: $source" > "$CONTAINER_DIR/volumes/${VOLUME_NAME}.info"
                             echo "Destination: $dest" >> "$CONTAINER_DIR/volumes/${VOLUME_NAME}.info"
                             echo "Type: $type" >> "$CONTAINER_DIR/volumes/${VOLUME_NAME}.info"
                             echo "Size: ${SIZE}MB" >> "$CONTAINER_DIR/volumes/${VOLUME_NAME}.info"
-                            
+
                             # Backup the volume data
                             rsync -a "$source/" "$CONTAINER_DIR/volumes/$VOLUME_NAME/" 2>/dev/null || log "    WARNING: Failed to backup volume $source"
                         fi
@@ -221,22 +221,22 @@ EOF
 # Upload to PBS if enabled
 if [ "$PBS_ENABLED" = true ]; then
     log "Uploading backups to Proxmox Backup Server..."
-    
+
     # Create backup ID using actual hostname (no timestamp - PBS adds that)
     BACKUP_ID="${BACKUP_HOSTNAME}-docker"
-    
+
     log "Backing up to PBS repository: $PBS_REPOSITORY"
-    
+
     # Execute PBS backup - backup the entire directory
     proxmox-backup-client backup \
         "docker-backup.pxar:$BACKUP_DIR" \
         --ns "$PBS_NAMESPACE" \
         --backup-id "$BACKUP_ID" \
         --backup-time "$(date +%s)"
-    
+
     if [ $? -eq 0 ]; then
         log "Successfully uploaded backups to PBS"
-        
+
         # List recent backups
         log "Recent PBS backups:"
         proxmox-backup-client snapshot list --ns "$PBS_NAMESPACE" | tail -n 5

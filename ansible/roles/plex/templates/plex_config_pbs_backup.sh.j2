@@ -70,14 +70,14 @@ if [ "$PBS_ENABLED" = true ]; then
     if ! command -v proxmox-backup-client &> /dev/null; then
         error_exit "proxmox-backup-client not found. Install with: apt install proxmox-backup-client"
     fi
-    
+
     # Test PBS connection and create namespace if needed
     log "Testing PBS connection..."
     set +e  # Temporarily disable exit on error for PBS test
     proxmox-backup-client snapshot list --ns "$PBS_NAMESPACE" &>/dev/null
     PBS_TEST_EXIT=$?
     set -e  # Re-enable exit on error
-    
+
     if [ $PBS_TEST_EXIT -ne 0 ] && [ $PBS_TEST_EXIT -ne 255 ]; then
         log "WARNING: Cannot connect to PBS (exit code: $PBS_TEST_EXIT), falling back to local backup only"
         PBS_ENABLED=false
@@ -161,22 +161,22 @@ fi
 # Upload to PBS if enabled
 if [ "$PBS_ENABLED" = true ]; then
     log "Uploading backups to Proxmox Backup Server..."
-    
+
     # Create backup ID (PBS adds timestamp automatically)
     BACKUP_ID="plex-config"
-    
+
     log "Backing up to PBS repository: $PBS_REPOSITORY"
-    
+
     # Execute PBS backup - backup the entire directory
     proxmox-backup-client backup \
         "plex-config.pxar:$BACKUP_DIR" \
         --ns "$PBS_NAMESPACE" \
         --backup-id "$BACKUP_ID" \
         --backup-time "$(date +%s)"
-    
+
     if [ $? -eq 0 ]; then
         log "Successfully uploaded backups to PBS"
-        
+
         # List recent backups
         log "Recent PBS backups:"
         proxmox-backup-client snapshot list --ns "$PBS_NAMESPACE" | tail -n 5

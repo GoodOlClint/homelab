@@ -199,7 +199,7 @@
 
 - name: Restore Plex config from PBS if not already installed
   ansible.builtin.shell: /usr/local/bin/plex_config_pbs_restore.sh
-  when: 
+  when:
     - not plex_installed.stat.exists
     - pbs_backup_enabled | default(true)
   args:
@@ -212,7 +212,7 @@
 
 - name: Restore Plex config from SMB if not already installed (fallback)
   ansible.builtin.shell: /usr/local/bin/plex_config_restore.sh
-  when: 
+  when:
     - not plex_installed.stat.exists
     - not (pbs_backup_enabled | default(true))
   args:

@@ -1,6 +1,0 @@
----
-- name: Configure infrastructure VMs
-  import_playbook: infrastructure.yml
-
-- name: Configure service VMs
-  import_playbook: services.yml

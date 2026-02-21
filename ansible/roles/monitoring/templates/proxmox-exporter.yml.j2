@@ -5,7 +5,7 @@ default:
   verify_ssl: {{ proxmox_verify_ssl }}
   timeout: 5
   module: [pve]
-  
+
 pve:
   - name: proxmox
     url: https://{{ proxmox_host }}:8006
