@@ -1,0 +1,18 @@
+# Packer Variables for Ubuntu 24.04 Template Build
+# Copy this file to variables.auto.pkrvars.hcl and fill in your values
+# You can reuse values from terraform/infrastructure/vars.local.auto.tfvars
+
+# Proxmox Connection (copy from Terraform)
+proxmox_url      = "https://proxmox.example.internal:8006/api2/json"
+proxmox_username = "root@pam"
+proxmox_node     = "pve"
+storage_pool     = "local-ssd"
+
+# Proxmox API Token (create a new one for Packer)
+# In Proxmox: Datacenter > Permissions > API Tokens > Add
+proxmox_token = "your-packer-api-token-secret-here"
+
+# Optional overrides (uncomment to customize)
+# network_bridge = "vmbr0"
+# iso_storage_pool = "local"
+# insecure_skip_tls_verify = true

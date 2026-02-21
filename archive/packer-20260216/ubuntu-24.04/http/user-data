@@ -1,0 +1,30 @@
+#cloud-config
+autoinstall:
+  version: 1
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+  network:
+    network:
+      version: 2
+      ethernets:
+        ens18:
+          dhcp4: true
+  storage:
+    layout:
+      name: direct
+  identity:
+    hostname: packer-build
+    username: packer
+    password: "$6$saltsalt$eWwzB8NsnzXoqwWcOO6uEVzQ5ZohAdKgL6rIPMq5OgmNbHSyBHrDQkOZzqKKHa/F9Mp7rYyAiHB.reGkw.iqL1"  # password: packer
+  ssh:
+    install-server: yes
+    allow-pw: yes
+  packages:
+    - cloud-init
+    - qemu-guest-agent
+  late-commands:
+    - echo 'packer ALL=(ALL) NOPASSWD:ALL' > /target/etc/sudoers.d/packer
+    - chmod 440 /target/etc/sudoers.d/packer
+    - curtin in-target --target=/target -- systemctl enable qemu-guest-agent
+    - curtin in-target --target=/target -- systemctl start qemu-guest-agent
