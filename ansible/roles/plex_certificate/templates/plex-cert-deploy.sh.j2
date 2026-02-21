@@ -1,0 +1,27 @@
+#!/bin/bash
+# Certbot deploy hook: convert Let's Encrypt cert to PKCS#12 for Plex
+# Runs after each successful renewal (called by certbot --deploy-hook)
+# Managed by Ansible — do not edit manually
+
+set -euo pipefail
+
+CERT_DIR="{{ plex_cert_dir }}"
+PFX_PATH="{{ plex_pfx_path }}"
+PFX_PASS="{{ secrets.plex_cert_pfx_password }}"
+
+# Convert PEM to PKCS#12
+openssl pkcs12 -export \
+  -out "${PFX_PATH}" \
+  -inkey "${CERT_DIR}/privkey.pem" \
+  -in "${CERT_DIR}/cert.pem" \
+  -certfile "${CERT_DIR}/chain.pem" \
+  -passout "pass:${PFX_PASS}"
+
+# Set ownership so Plex can read it
+chown plex:plex "${PFX_PATH}"
+chmod 0600 "${PFX_PATH}"
+
+# Restart Plex to pick up the new certificate
+systemctl restart plexmediaserver
+
+logger -t plex-cert-deploy "Plex certificate renewed and converted to PKCS#12"

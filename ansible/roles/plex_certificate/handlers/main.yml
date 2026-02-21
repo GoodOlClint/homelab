@@ -1,0 +1,9 @@
+---
+- name: convert pfx and restart plex
+  ansible.builtin.command:
+    cmd: "{{ plex_certbot_deploy_hook }}"
+
+- name: restart plex
+  ansible.builtin.systemd:
+    name: plexmediaserver
+    state: restarted

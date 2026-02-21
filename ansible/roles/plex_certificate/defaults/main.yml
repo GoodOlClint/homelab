@@ -1,0 +1,12 @@
+---
+# Let's Encrypt certificate for Plex
+plex_cert_domain: "plex.clintflix.tv"
+plex_cert_email: "goodolclint@gmail.com"
+
+# Paths
+plex_cert_dir: "/etc/letsencrypt/live/{{ plex_cert_domain }}"
+plex_pfx_path: "/var/lib/plexmediaserver/plex_certificate.pfx"
+plex_preferences_path: "/var/lib/plexmediaserver/Library/Application Support/Plex Media Server/Preferences.xml"
+
+# Certbot
+plex_certbot_deploy_hook: "/usr/local/bin/plex-cert-deploy.sh"
