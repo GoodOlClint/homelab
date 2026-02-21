@@ -1,4 +1,4 @@
-# Services Configuration Template
+# Homelab Configuration Template
 # Copy this file to vars.auto.tfvars and fill in your actual values
 # DO NOT commit vars.auto.tfvars with real secrets to version control
 
@@ -29,23 +29,18 @@ unifi_password = "YOUR_UNIFI_PASSWORD_HERE"  # Use environment variable: TF_VAR_
 unifi_api_url  = "https://your_unifi_controller:8443"
 unifi_site     = "default"
 
-# Domain Configuration
-domain_suffix = "your_domain.internal"
+# Note: VM configurations are defined in vm-configs.tf
+# Note: domain_suffix is sourced from network-data/vlans.yaml (canonical source of truth)
+# VLAN definitions are in network-data/vlans.yaml (shared canonical source)
 
-# Network Mapping
-unifi_network_mapping = {
-  "vlan1" = {
-    unifi_network_name = "Core"
-    bridge            = "vmbr0"
-    description       = "Core network for services"
-  }
-  "vlan2" = {
-    unifi_network_name = "IOT"
-    bridge            = "vmbr0"
-    description       = "IOT network"
-  }
-}
+# Vultr VPS Configuration
+vultr_api_key      = "YOUR_VULTR_API_KEY_HERE"  # Use environment variable: TF_VAR_vultr_api_key
+vps_region         = "dfw"                       # Dallas
+vps_plan           = "vc2-1c-1gb"                # $5/mo: 1 vCPU, 1GB RAM, 1TB bandwidth
+vps_label          = "wireguard-relay"
+vps_provisioning   = false                       # Set true only during initial provisioning
+# Note: VPS SSH key is read from ssh_public_key_path (shared with Proxmox VMs)
 
-# Note: VM configurations are now defined in vm-configs.tf
-# This keeps infrastructure definitions in version control while
-# keeping secrets in this .tfvars file
+# Cloudflare Configuration
+cloudflare_api_token = "YOUR_CLOUDFLARE_API_TOKEN_HERE"  # Use environment variable: TF_VAR_cloudflare_api_token
+cloudflare_zone_id   = "YOUR_CLOUDFLARE_ZONE_ID_HERE"    # Zone ID for clintflix.tv

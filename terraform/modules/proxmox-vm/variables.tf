@@ -1,20 +1,4 @@
-# Proxmox connection variables
-variable "virtual_environment_endpoint" {
-  type        = string
-  description = "The endpoint for the Proxmox Virtual Environment API (example: https://host:port)"
-}
-
-variable "virtual_environment_password" {
-  type        = string
-  description = "The password for the Proxmox Virtual Environment API"
-  sensitive   = true
-}
-
-variable "virtual_environment_username" {
-  type        = string
-  description = "The username and realm for the Proxmox Virtual Environment API (example: root@pam)"
-}
-
+# Proxmox node/storage variables (provider credentials configured at root level)
 variable "virtual_environment_node" {
   type        = string
   description = "The name of the node in the proxmox datacenter to perform actions against"
@@ -43,12 +27,6 @@ variable "primary_disk_storage" {
   default     = "iscsi-ssd-lvm"
 }
 
-variable "secondary_disk_storage" {
-  type        = string
-  description = "The storage backend for secondary VM disks (e.g., iscsi-hdd-lvm)"
-  default     = "iscsi-hdd-lvm"
-}
-
 # IPv6 Configuration
 variable "ipv6_config" {
   description = "Global IPv6 configuration options"
@@ -71,7 +49,9 @@ variable "vm_configurations" {
   description = "VM configuration mapping - list of VMs to create with their specifications"
   type = list(object({
     name         = string                        # Unique VM name (used for hostname if hostname not specified)
-    vlans        = list(string)                  # List of VLAN names to connect VM to (must exist in unifi_network_mapping)
+    vm_id           = optional(number, null)        # Explicit Proxmox VMID (also sets static management IP). null = auto-assign + DHCP on management VLAN.
+    mgmt_ip_offset  = optional(number, null)        # Override management IP offset (default: use vm_id). Decouples management IP from VMID.
+    vlans        = list(string)                  # List of VLAN names to connect VM to (must exist in vlans variable)
     ip_offset    = optional(number, null)        # Static IP offset within VLAN subnet (null = DHCP)
     ipv6_offset  = optional(number, null)        # Static IPv6 offset within VLAN subnet (null = SLAAC/auto)
     ipv6_mode    = optional(string, "auto")      # IPv6 mode: "static", "slaac", "disabled", or "auto"
@@ -102,42 +82,9 @@ variable "gpu_mapping" {
   }
 }
 
-# Unifi variables
-variable "unifi_username" {
-  type        = string
-  description = "Username for Unifi Controller API access"
-}
-
-variable "unifi_password" {
-  type        = string
-  description = "Password for Unifi Controller API access"
-  sensitive   = true
-}
-
-variable "unifi_api_url" {
-  type        = string
-  description = "URL for Unifi Controller API (e.g., https://unifi.example.com:8443)"
-}
-
-variable "unifi_site" {
-  type        = string
-  description = "Unifi site name (default: 'default')"
-  default     = "default"
-}
-
-variable "unifi_network_mapping" {
-  description = "Mapping of VLAN names to Unifi network configurations - defines how VLANs in VM configs map to actual Unifi networks"
-  type = map(object({
-    unifi_network_name = string                 # Name of the network in Unifi Controller
-    bridge             = string                 # Proxmox bridge name (e.g., "vmbr0")
-    description        = optional(string, "")   # Human-readable description
-    mtu                = optional(number, 1500) # Maximum Transmission Unit size
-  }))
-}
-
-# Static VLAN overrides (optional)
+# Static VLAN configuration (required)
 variable "vlans" {
-  description = "Static VLAN configuration overrides (optional when using Unifi integration)"
+  description = "Static VLAN configuration - defines all VLANs used by VMs"
   type = map(object({
     vlan_id     = number
     bridge      = string
@@ -171,6 +118,36 @@ variable "create_cloud_image" {
 
 variable "domain_suffix" {
   type        = string
-  description = "Domain suffix for VM FQDNs"
-  default     = "homelab.internal"
+  description = "Domain suffix for VM FQDNs (sourced from vlans.yaml)"
+}
+
+# Packer template configuration
+variable "use_packer_template" {
+  type        = bool
+  description = "Use Packer-built template instead of cloud image (no cloud-init)"
+  default     = false
+}
+
+variable "packer_template_name" {
+  type        = string
+  description = "Name of Packer template to use (empty = auto-detect latest ubuntu-24.04-base-* template)"
+  default     = ""
+}
+
+variable "packer_template_vm_id" {
+  type        = number
+  description = "Packer template VM ID for cloning (if null, will try auto-detection)"
+  default     = null
+}
+
+variable "management_vlan" {
+  type        = string
+  description = "VLAN key for management access (SSH/Ansible). Management IP is computed from VMID as cidrhost(mgmt_subnet, vm_id)."
+  default     = "vlan10"
+}
+
+variable "dns_servers" {
+  type        = list(string)
+  description = "DNS servers applied to all VM interfaces via cloud-init (sourced from network-data/vlans.yaml)"
+  default     = []
 }

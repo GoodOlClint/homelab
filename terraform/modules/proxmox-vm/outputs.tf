@@ -40,18 +40,13 @@ output "vm_mac_addresses" {
   }
 }
 
-output "vm_vlan100_ips" {
-  description = "Map of VM names to their VLAN 100 IP addresses"
-  value       = local.vm_vlan100_ips
-}
-
-output "unifi_vlans" {
-  description = "Map of VLAN configurations from Unifi"
-  value       = local.unifi_vlans
+output "vm_management_ips" {
+  description = "Map of VM names to their management IP"
+  value       = local.vm_management_ips
 }
 
 output "merged_vlans" {
-  description = "Map of merged VLAN configurations (Unifi + static overrides)"
+  description = "Map of static VLAN configurations"
   value       = local.merged_vlans
 }
 

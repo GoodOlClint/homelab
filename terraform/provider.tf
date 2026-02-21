@@ -1,5 +1,5 @@
-# Terraform Provider Configuration for Services
-# This configures the providers needed for VM creation and network management
+# Terraform Provider Configuration
+# Consolidated project managing all homelab VMs, SDN, and network infrastructure
 
 terraform {
   required_providers {
@@ -14,8 +14,16 @@ terraform {
     local = {
       source = "hashicorp/local" # Local file provider for SSH keys and outputs
     }
+    vultr = {
+      source  = "vultr/vultr" # Vultr provider for VPS relay
+      version = "~> 2.29"
+    }
+    cloudflare = {
+      source  = "cloudflare/cloudflare" # Cloudflare provider for DNS management
+      version = "~> 5.0"
+    }
   }
-  required_version = ">= 1.0"
+  required_version = ">= 1.5"
 }
 
 # Proxmox VE provider configuration
@@ -38,4 +46,14 @@ provider "unifi" {
 
   # Allow unverified TLS for local controllers
   allow_insecure = true
+}
+
+# Vultr provider configuration (VPS relay)
+provider "vultr" {
+  api_key = var.vultr_api_key
+}
+
+# Cloudflare provider configuration (DNS management)
+provider "cloudflare" {
+  api_token = var.cloudflare_api_token
 }

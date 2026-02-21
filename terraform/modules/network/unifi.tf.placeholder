@@ -1,0 +1,25 @@
+# UniFi Provisioning (Future)
+#
+# This file is a placeholder for future UniFi network management via the
+# ubiquiti-community/unifi Terraform provider or Ansible. When implemented,
+# this would manage:
+#
+# - UniFi networks/VLANs (matching SDN VNET definitions)
+# - Switch port profiles (VLAN assignments per port)
+# - WLAN/SSID mappings (4 SSIDs across VLANs)
+#
+# The infrastructure project already has the unifi provider configured.
+# Move network-related UniFi resources here when ready.
+#
+# Example resource structure:
+#
+# resource "unifi_network" "vlans" {
+#   for_each = { for k, v in local.network_data.vlans : k => v
+#     if contains(try(v.managed_by, []), "unifi") && !try(v.is_wireguard, false)
+#   }
+#   name         = each.value.name
+#   vlan_id      = each.value.id
+#   subnet       = try(each.value.subnet, "172.16.${each.value.id}.0/24")
+#   purpose      = "corporate"
+#   dhcp_enabled = false  # DHCP managed by pfSense
+# }

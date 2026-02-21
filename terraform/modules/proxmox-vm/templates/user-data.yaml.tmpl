@@ -18,9 +18,11 @@ users:
 timezone: ${timezone}
 %{ endif }
 package_update: true
+package_upgrade: true
 packages:
     - qemu-guest-agent
 runcmd:
     - systemctl enable qemu-guest-agent
     - systemctl start qemu-guest-agent
+    - touch /var/lib/vm_bootstrap_complete
     - echo "done" > /tmp/cloud-config.done

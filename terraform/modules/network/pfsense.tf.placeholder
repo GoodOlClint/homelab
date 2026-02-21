@@ -1,0 +1,30 @@
+# pfSense Provisioning (Future)
+#
+# This file is a placeholder for future pfSense REST API integration via the
+# pfrest package (https://pfrest.org/). When implemented, this would manage:
+#
+# - VLAN interfaces on the Netgate 6100
+# - DHCP scopes per VLAN (using dhcp_range_start/dhcp_range_end from vlans.yaml)
+# - Firewall aliases (VLAN subnets, service groups)
+# - Firewall rules (from network-data/public_policy.yaml)
+#
+# Prerequisites:
+# - Install pfrest package on the Netgate 6100
+# - Add a Terraform provider for pfSense REST API
+# - Add pfSense credentials to variables
+#
+# Example resource structure:
+#
+# resource "pfsense_interface_vlan" "vlans" {
+#   for_each = local.managed_vnets
+#   tag      = each.value.id
+#   if       = "igb1"  # Parent interface
+# }
+#
+# resource "pfsense_dhcp_server" "dhcp" {
+#   for_each    = { for k, v in local.network_data.vlans : k => v if try(v.dhcp_enabled, false) }
+#   interface   = each.key
+#   range_from  = each.value.dhcp_range_start
+#   range_to    = each.value.dhcp_range_end
+#   gateway     = cidrhost("172.16.${each.value.id}.0/24", 1)
+# }

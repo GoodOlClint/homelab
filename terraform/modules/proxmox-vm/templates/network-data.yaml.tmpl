@@ -10,7 +10,7 @@ ethernets:
     dhcp4: ${iface.dhcp}
 %{ if iface.dhcp ~}
     dhcp4-overrides:
-%{ if iface.is_primary ~}
+%{ if iface.is_gateway || iface.is_primary ~}
       route-metric: 100
 %{ else ~}
       route-metric: 200
@@ -37,12 +37,31 @@ ethernets:
 %{ endif ~}
 %{ endif }
 %{ if !iface.dhcp && iface.gateway != "" }
-    gateway4: ${iface.gateway}
-%{ endif }
+    routes:
+%{ if !iface.is_gateway ~}
+      - to: ${iface.subnet}
+        scope: link
+        table: ${iface.routing_table}
+%{ endif ~}
+      - to: default
+        via: ${iface.gateway}
+%{ if !iface.is_gateway ~}
+        table: ${iface.routing_table}
+%{ endif ~}
 %{ if iface.gateway_v6 != "" }
-    gateway6: ${iface.gateway_v6}
+      - to: "::/0"
+        via: ${iface.gateway_v6}
+%{ if !iface.is_gateway ~}
+        table: ${iface.routing_table}
+%{ endif ~}
 %{ endif }
-%{ if !iface.dhcp && length(iface.dns_servers) > 0 }
+%{ if !iface.is_gateway }
+    routing-policy:
+      - from: ${iface.address}/${iface.prefix}
+        table: ${iface.routing_table}
+%{ endif }
+%{ endif }
+%{ if length(iface.dns_servers) > 0 }
     nameservers:
       addresses:
 %{ for dns in iface.dns_servers ~}

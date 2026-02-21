@@ -6,6 +6,7 @@ variable "virtual_environment_endpoint" {
 variable "virtual_environment_password" {
   type        = string
   description = "The password for the Proxmox Virtual Environment API"
+  sensitive   = true
 }
 
 variable "virtual_environment_username" {
@@ -39,24 +40,6 @@ variable "virtual_machine_password_hash" {
   description = "Password hash for VM user account (optional - if not provided, password authentication will be disabled)"
   default     = null
   sensitive   = true
-}
-
-variable "nvidia_url" {
-  description = "Url containing the Nvidia Grid driver to download into VMs"
-  type        = string
-}
-
-variable "vlans" {
-  description = "Static VLAN configuration overrides (optional when using Unifi integration)"
-  type = map(object({
-    vlan_id     = number
-    bridge      = string
-    subnet      = string                 # IPv4 subnet
-    subnet_v6   = optional(string, null) # IPv6 subnet - if null, IPv6 is disabled for this VLAN
-    mtu         = optional(number, 1500)
-    description = optional(string, "")
-  }))
-  default = {} # Empty by default when using Unifi integration
 }
 
 variable "ipv6_config" {
@@ -124,16 +107,6 @@ variable "unifi_site" {
   default     = "default"
 }
 
-variable "unifi_network_mapping" {
-  description = "Mapping of VLAN names to Unifi network names"
-  type = map(object({
-    unifi_network_name = string
-    bridge             = string
-    description        = optional(string, "")
-    mtu                = optional(number, 1500)
-  }))
-}
-
 variable "ssh_public_key_path" {
   type        = string
   description = "Path to SSH public key file"
@@ -146,7 +119,64 @@ variable "create_cloud_image" {
   default     = true
 }
 
-variable "domain_suffix" {
+# Packer template configuration
+variable "use_packer_template" {
+  type        = bool
+  description = "Use Packer-built template instead of cloud image (no cloud-init)"
+  default     = false
+}
+
+variable "packer_template_name" {
   type        = string
-  description = "Domain suffix for VM FQDNs"
+  description = "Name of Packer template to use (empty = auto-detect latest)"
+  default     = ""
+}
+
+# ──────────────────────────────────────────────
+# Vultr VPS Configuration
+# ──────────────────────────────────────────────
+
+variable "vultr_api_key" {
+  type        = string
+  description = "Vultr API key for VPS provisioning"
+  sensitive   = true
+}
+
+variable "vps_region" {
+  type        = string
+  description = "Vultr region for VPS deployment"
+  default     = "dfw"
+}
+
+variable "vps_plan" {
+  type        = string
+  description = "Vultr plan for VPS instance (vc2-1c-1gb = $5/mo: 1 vCPU, 1GB RAM, 1TB bandwidth)"
+  default     = "vc2-1c-1gb"
+}
+
+variable "vps_label" {
+  type        = string
+  description = "Label for the VPS instance"
+  default     = "wireguard-relay"
+}
+
+variable "vps_provisioning" {
+  type        = bool
+  description = "When true, opens SSH in Vultr firewall for initial provisioning. Set to false after first Ansible run."
+  default     = false
+}
+
+# ──────────────────────────────────────────────
+# Cloudflare Configuration
+# ──────────────────────────────────────────────
+
+variable "cloudflare_api_token" {
+  type        = string
+  description = "Cloudflare API token for DNS management"
+  sensitive   = true
+}
+
+variable "cloudflare_zone_id" {
+  type        = string
+  description = "Cloudflare zone ID for clintflix.tv"
 }
