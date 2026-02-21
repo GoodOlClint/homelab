@@ -25,7 +25,21 @@
     - certificate
     - tls
 
-# Step 3: Request certificate (idempotent)
+# Step 3: Deploy the PKCS#12 conversion + restart script
+# Must exist before certbot runs (certbot validates --deploy-hook path)
+- name: Deploy certbot deploy hook script
+  ansible.builtin.template:
+    src: plex-cert-deploy.sh.j2
+    dest: "{{ plex_certbot_deploy_hook }}"
+    owner: root
+    group: root
+    mode: "0750"
+  tags:
+    - plex
+    - certificate
+    - tls
+
+# Step 4: Request certificate (idempotent)
 - name: Check if certificate already exists
   ansible.builtin.stat:
     path: "{{ plex_cert_dir }}/fullchain.pem"
@@ -47,20 +61,6 @@
       --non-interactive
       --deploy-hook {{ plex_certbot_deploy_hook }}
   when: not plex_cert_file.stat.exists
-  notify: convert pfx and restart plex
-  tags:
-    - plex
-    - certificate
-    - tls
-
-# Step 4: Deploy the PKCS#12 conversion + restart script
-- name: Deploy certbot deploy hook script
-  ansible.builtin.template:
-    src: plex-cert-deploy.sh.j2
-    dest: "{{ plex_certbot_deploy_hook }}"
-    owner: root
-    group: root
-    mode: "0750"
   tags:
     - plex
     - certificate
