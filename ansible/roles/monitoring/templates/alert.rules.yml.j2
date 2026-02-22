@@ -1,0 +1,68 @@
+groups:
+  - name: infrastructure
+    rules:
+      - alert: HostDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host {{ $labels.instance }} is down"
+
+      - alert: WireGuardPeerStale
+        expr: time() - wireguard_latest_handshake_seconds > 180
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "WireGuard peer {{ $labels.public_key }} handshake older than 3 minutes"
+
+      - alert: TLSCertExpiringSoon
+        expr: probe_ssl_earliest_cert_expiry - time() < 86400 * 14
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "TLS certificate for {{ $labels.instance }} expires in less than 14 days"
+
+      - alert: HighMemoryUsage
+        expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Memory usage above 90% on {{ $labels.instance }}"
+
+      - alert: HighDiskUsage
+        expr: (1 - node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"}) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk usage above 85% on {{ $labels.instance }}:{{ $labels.mountpoint }}"
+
+      - alert: PBSBackupStale
+        expr: time() - pbs_snapshot_timestamp > 86400 * 2
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "PBS backup for {{ $labels.namespace }} is older than 2 days"
+
+  - name: services
+    rules:
+      - alert: PlexDown
+        expr: probe_success{job="blackbox-http", instance=~".*:32400.*"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Plex is unreachable"
+
+      - alert: DNSResolutionFailure
+        expr: probe_success{job="blackbox-dns"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "DNS resolution failing for {{ $labels.zone }}"

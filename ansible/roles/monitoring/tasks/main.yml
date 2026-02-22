@@ -217,6 +217,16 @@
     - prometheus
     - config
 
+- name: Create Prometheus alerting rules
+  template:
+    src: alert.rules.yml.j2
+    dest: /opt/monitoring/prometheus/alert.rules.yml
+    mode: '0644'
+  tags:
+    - monitoring
+    - prometheus
+    - config
+
 - name: Create Blackbox Exporter configuration
   template:
     src: blackbox.yml.j2

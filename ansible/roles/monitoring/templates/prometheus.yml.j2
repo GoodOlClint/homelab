@@ -5,6 +5,9 @@ global:
     cluster: 'homelab'
     environment: 'production'
 
+rule_files:
+  - /etc/prometheus/alert.rules.yml
+
 # Remote write to OpenObserve
 remote_write:
   - url: http://openobserve:5080/api/default/prometheus/api/v1/write
@@ -227,3 +230,19 @@ scrape_configs:
         labels:
           instance: 'proxmox-backup'
           role: 'infrastructure'
+
+  # TLS Certificate Monitoring
+  - job_name: 'blackbox-tls'
+    metrics_path: /probe
+    params:
+      module: [tls_connect]
+    static_configs:
+      - targets:
+          - plex.clintflix.tv:32400
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox:9115
