@@ -1,0 +1,15 @@
+---
+# Authentik SSO Configuration
+authentik_version: "2024.12"
+authentik_port: 9443
+authentik_http_port: 9000
+
+# PostgreSQL for Authentik
+authentik_postgres_db: "authentik"
+authentik_postgres_user: "authentik"
+
+# Deployment paths
+authentik_base_dir: "/opt/authentik"
+authentik_media_dir: "{{ authentik_base_dir }}/media"
+authentik_templates_dir: "{{ authentik_base_dir }}/templates"
+authentik_certs_dir: "{{ authentik_base_dir }}/certs"

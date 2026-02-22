@@ -1,0 +1,35 @@
+---
+- name: Create Authentik directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{ authentik_base_dir }}"
+    - "{{ authentik_media_dir }}"
+    - "{{ authentik_templates_dir }}"
+    - "{{ authentik_certs_dir }}"
+  tags:
+    - authentik
+    - config
+
+- name: Deploy Authentik docker-compose
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ authentik_base_dir }}/docker-compose.yml"
+    mode: '0644'
+  tags:
+    - authentik
+    - config
+
+- name: Deploy Authentik containers
+  community.docker.docker_compose_v2:
+    project_src: "{{ authentik_base_dir }}"
+    state: present
+  retries: 3
+  delay: 15
+  register: authentik_compose_result
+  until: authentik_compose_result is succeeded
+  tags:
+    - authentik
+    - deploy
