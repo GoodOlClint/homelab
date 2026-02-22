@@ -4,6 +4,7 @@
 # SSH — standard port, tunnel-only access
 vps_ssh_port: 22
 vps_ssh_listen_address: "{{ secrets.vps_ssh_listen_address | default('') }}"
+vps_ssh_listen_address_v6: "{{ secrets.vps_ssh_listen_address_v6 | default('') }}"
 vps_ssh_authorized_key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/id_ed25519.pub') }}"
 
 # Service account (replaces root login after hardening)
@@ -36,3 +37,10 @@ vps_sysctl_settings:
   net.ipv4.icmp_echo_ignore_broadcasts: 1
   net.ipv4.conf.all.log_martians: 1
   kernel.sysrq: 0
+  # IPv6 hardening
+  net.ipv6.conf.all.accept_source_route: 0
+  net.ipv6.conf.default.accept_source_route: 0
+  net.ipv6.conf.all.accept_redirects: 0
+  net.ipv6.conf.default.accept_redirects: 0
+  net.ipv6.conf.all.accept_ra: 2
+  net.ipv6.conf.default.accept_ra: 2

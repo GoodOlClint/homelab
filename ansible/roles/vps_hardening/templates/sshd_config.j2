@@ -1,10 +1,13 @@
 # Hardened sshd_config for VPS WireGuard Relay
 # Managed by Ansible — do not edit manually
 
-# Listen only on WireGuard tunnel IP
+# Listen only on WireGuard tunnel IPs
 Port {{ vps_ssh_port }}
 {% if vps_ssh_listen_address %}
 ListenAddress {{ vps_ssh_listen_address }}
+{% endif %}
+{% if vps_ssh_listen_address_v6 %}
+ListenAddress {{ vps_ssh_listen_address_v6 }}
 {% endif %}
 
 # Authentication
