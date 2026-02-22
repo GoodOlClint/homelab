@@ -76,6 +76,16 @@
       changed_when: false
       failed_when: "'chain forward' not in nft_rules.stdout | lower"
 
+    - name: Wait for WireGuard handshake (up to 60s, rebuild only)
+      ansible.builtin.shell: |
+        wg show wg0 latest-handshakes | awk '{print $2}'
+      register: wg_handshake
+      changed_when: false
+      until: wg_handshake.stdout | int > 0
+      retries: 12
+      delay: 5
+      when: wg_key_from_sops | default(false)
+
     - name: Check listening ports
       ansible.builtin.command: ss -tlnup
       register: ss_output

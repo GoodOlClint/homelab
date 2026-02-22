@@ -3,7 +3,8 @@
 
 nft_wg_interface: wg0
 nft_public_interface: eth0
-nft_tunnel_peer_ip: ""  # Set in group_vars/secrets (pfSense tunnel peer IP)
+nft_wg_listen_port: 51821
+nft_tunnel_peer_ip: "{{ secrets.nft_tunnel_peer_ip | default('') }}"
 
 # Port forwarding rules (public → pfSense via WireGuard tunnel)
 nft_forward_rules:

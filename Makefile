@@ -58,7 +58,7 @@ vps-deploy:
 	@cd terraform && terraform init && terraform apply -no-color -auto-approve -var vps_provisioning=true
 	@echo "Phase 2: Configuring VPS via Ansible (IP from terraform output)..."
 	$(eval VPS_IP := $(shell cd terraform && terraform output -raw vps_reserved_ip))
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vps.yaml -i ansible/inventory/vms.yaml ansible/playbooks/vps.yml -e "ansible_host=$(VPS_IP)"
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vps.yaml -i ansible/inventory/vms.yaml ansible/playbooks/vps.yml -e "ansible_host=$(VPS_IP) ansible_user=root"
 	@echo "Phase 3: Closing SSH in Vultr firewall..."
 	@cd terraform && terraform apply -no-color -auto-approve -var vps_provisioning=false
 	@echo "VPS deployment complete. SSH now only accessible via WireGuard tunnel."

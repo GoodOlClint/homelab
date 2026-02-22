@@ -3,14 +3,15 @@
 
 # Listen only on WireGuard tunnel IP
 Port {{ vps_ssh_port }}
+{% if vps_ssh_listen_address %}
 ListenAddress {{ vps_ssh_listen_address }}
+{% endif %}
 
 # Authentication
 PermitRootLogin no
 PubkeyAuthentication yes
 PasswordAuthentication no
 ChallengeResponseAuthentication no
-UsePAM no
 AuthenticationMethods publickey
 MaxAuthTries 3
 LoginGraceTime 30

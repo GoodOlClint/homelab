@@ -6,6 +6,21 @@
 #   - Otherwise → generate a new keypair on the VPS (first deploy)
 #   - In both cases, the public key is displayed so you can configure pfSense
 
+- name: Validate required WireGuard variables
+  ansible.builtin.assert:
+    that:
+      - wg_tunnel_address | default('') | length > 0
+      - wg_peer_allowed_ips | default('') | length > 0
+      - secrets.pfsense_wg_public_key | default('REPLACE_ME') != 'REPLACE_ME'
+    fail_msg: >-
+      Missing required WireGuard config. Set in secrets.sops.yml:
+      wg_tunnel_address (VPS tunnel IP with CIDR),
+      wg_peer_allowed_ips (CIDRs routed to pfSense),
+      pfsense_wg_public_key (pfSense tunnel public key)
+  tags:
+    - vps_wireguard
+    - validate
+
 - name: Install WireGuard tools
   ansible.builtin.apk:
     name: wireguard-tools

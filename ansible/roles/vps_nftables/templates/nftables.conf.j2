@@ -19,7 +19,7 @@ table inet filter {
         ip protocol icmp drop
 
         # WireGuard tunnel from pfSense (public interface)
-        iif {{ nft_public_interface }} udp dport {{ wg_listen_port | default(51821) }} accept
+        iif {{ nft_public_interface }} udp dport {{ nft_wg_listen_port }} accept
 
         # SSH only on WireGuard tunnel interface
         iif {{ nft_wg_interface }} tcp dport 22 accept

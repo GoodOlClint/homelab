@@ -1,6 +1,17 @@
 ---
 # VPS nftables — default-deny, port forwarding, GeoIP, rate limiting
 
+- name: Validate required nftables variables
+  ansible.builtin.assert:
+    that:
+      - nft_tunnel_peer_ip | default('') | length > 0
+    fail_msg: >-
+      Missing required nftables config. Set nft_tunnel_peer_ip in
+      secrets.sops.yml (pfSense tunnel IP — DNAT target for forwarded traffic)
+  tags:
+    - vps_nftables
+    - validate
+
 - name: Install nftables
   ansible.builtin.apk:
     name: nftables

@@ -3,7 +3,7 @@
 
 # SSH — standard port, tunnel-only access
 vps_ssh_port: 22
-vps_ssh_listen_address: ""  # Set in group_vars/secrets (VPN transit subnet)
+vps_ssh_listen_address: "{{ secrets.vps_ssh_listen_address | default('') }}"
 vps_ssh_authorized_key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/id_ed25519.pub') }}"
 
 # Service account (replaces root login after hardening)

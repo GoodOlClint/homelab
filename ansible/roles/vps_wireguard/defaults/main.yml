@@ -3,10 +3,10 @@
 
 wg_interface: wg0
 wg_listen_port: 51821
-wg_tunnel_address: ""  # Set in group_vars/secrets (VPN transit address with CIDR)
+wg_tunnel_address: "{{ secrets.wg_tunnel_address | default('') }}"
 
 # pfSense peer — no endpoint (learned from incoming handshake)
-wg_peer_allowed_ips: ""  # Set in group_vars/secrets (pfSense tunnel IP + allowed subnets)
+wg_peer_allowed_ips: "{{ secrets.wg_peer_allowed_ips | default('') }}"
 
 # VPS private key: generated on first deploy, or injected from SOPS for rebuilds.
 # If secrets.vps_wg_private_key is set (and not "REPLACE_ME"), it will be used.

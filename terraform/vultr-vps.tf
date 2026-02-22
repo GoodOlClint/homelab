@@ -103,6 +103,16 @@ resource "vultr_firewall_rule" "mobile_wg" {
   notes             = "Mobile WireGuard relay"
 }
 
+# ICMP ping (for UptimeRobot and Uptime Kuma monitoring)
+resource "vultr_firewall_rule" "icmp" {
+  firewall_group_id = vultr_firewall_group.vps.id
+  protocol          = "icmp"
+  ip_type           = "v4"
+  subnet            = "0.0.0.0"
+  subnet_size       = 0
+  notes             = "ICMP ping — external monitoring"
+}
+
 # SSH — only during provisioning (two-phase firewall)
 resource "vultr_firewall_rule" "ssh_provisioning" {
   count             = var.vps_provisioning ? 1 : 0
