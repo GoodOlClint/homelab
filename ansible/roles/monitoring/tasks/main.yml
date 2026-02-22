@@ -282,10 +282,10 @@
   ansible.builtin.cron:
     name: "UptimeRobot heartbeat"
     user: root
-    job: "curl -fsS --max-time 10 {{ uptimerobot_heartbeat_url }} > /dev/null 2>&1"
+    job: "curl -fsS --max-time 10 {{ secrets.uptimerobot_heartbeat_url }} > /dev/null 2>&1"
     minute: "*"
-    state: "{{ 'present' if uptimerobot_heartbeat_url is defined and uptimerobot_heartbeat_url != '' else 'absent' }}"
-  when: uptimerobot_heartbeat_url is defined
+    state: "{{ 'present' if secrets.uptimerobot_heartbeat_url | default('') | length > 0 and secrets.uptimerobot_heartbeat_url != 'REPLACE_ME' else 'absent' }}"
+  when: secrets.uptimerobot_heartbeat_url is defined and secrets.uptimerobot_heartbeat_url != 'REPLACE_ME'
   tags:
     - monitoring
     - cron
