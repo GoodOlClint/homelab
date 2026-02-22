@@ -76,6 +76,25 @@
       changed_when: false
       failed_when: "'chain forward' not in nft_rules.stdout | lower"
 
+    - name: Verify IPv6 DNAT rules are loaded
+      ansible.builtin.command: nft list table ip6 nat
+      register: nft_v6_rules
+      changed_when: false
+      failed_when: "'dnat' not in nft_v6_rules.stdout | lower"
+      when: nft_tunnel_peer_ip_v6 | default('') | length > 0
+
+    - name: Verify VPS has IPv6 connectivity
+      ansible.builtin.command: ping6 -c 1 -W 5 2001:4860:4860::8888
+      register: ipv6_ping
+      changed_when: false
+      failed_when: false
+      when: nft_tunnel_peer_ip_v6 | default('') | length > 0
+
+    - name: Display IPv6 connectivity status
+      ansible.builtin.debug:
+        msg: "{{ 'IPv6 connectivity: OK' if ipv6_ping.rc == 0 else 'IPv6 connectivity: FAILED (may need to wait for SLAAC)' }}"
+      when: nft_tunnel_peer_ip_v6 | default('') | length > 0
+
     - name: Wait for WireGuard handshake (up to 60s, rebuild only)
       ansible.builtin.shell: |
         wg show wg0 latest-handshakes | awk '{print $2}'
