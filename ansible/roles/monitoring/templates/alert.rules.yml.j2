@@ -1,3 +1,4 @@
+{% raw %}
 groups:
   - name: infrastructure
     rules:
@@ -66,3 +67,4 @@ groups:
           severity: critical
         annotations:
           summary: "DNS resolution failing for {{ $labels.zone }}"
+{% endraw %}
