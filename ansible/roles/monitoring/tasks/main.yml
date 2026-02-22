@@ -60,6 +60,7 @@
     - /opt/monitoring/snmp
     - /opt/monitoring/axosyslog
     - /var/lib/openobserve
+    - /var/lib/uptime-kuma
   tags:
     - monitoring
 
