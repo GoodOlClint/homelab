@@ -41,6 +41,18 @@
     - vps_wireguard
     - sysctl
 
+- name: Enable IPv6 forwarding
+  ansible.posix.sysctl:
+    name: net.ipv6.conf.all.forwarding
+    value: '1'
+    sysctl_set: yes
+    state: present
+    reload: yes
+  when: wg_tunnel_address_v6 | default('') | length > 0
+  tags:
+    - vps_wireguard
+    - sysctl
+
 - name: Ensure /etc/wireguard directory exists
   ansible.builtin.file:
     path: /etc/wireguard
