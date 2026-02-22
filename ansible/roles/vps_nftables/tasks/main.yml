@@ -141,3 +141,13 @@
   tags:
     - vps_nftables
     - validate
+
+- name: Assert IPv6 DNAT rules exist
+  ansible.builtin.assert:
+    that:
+      - "nft_rules.stdout is search('dnat (ip6 )?to ' ~ nft_tunnel_peer_ip_v6)"
+    fail_msg: "IPv6 DNAT rule for {{ nft_tunnel_peer_ip_v6 }} not found in nftables ruleset"
+  when: nft_tunnel_peer_ip_v6 | default('') | length > 0
+  tags:
+    - vps_nftables
+    - validate

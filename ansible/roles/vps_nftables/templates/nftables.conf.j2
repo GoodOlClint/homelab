@@ -18,6 +18,9 @@ table inet filter {
         ip protocol icmp icmp type { echo-request, echo-reply, destination-unreachable, time-exceeded } limit rate 10/second accept
         ip protocol icmp drop
 
+        # ICMPv6 (required for NDP, router discovery, path MTU)
+        ip6 nexthdr icmpv6 icmpv6 type { echo-request, echo-reply, nd-neighbor-solicit, nd-neighbor-advert, nd-router-solicit, nd-router-advert, packet-too-big } accept
+
         # WireGuard tunnel from pfSense (public interface)
         iif {{ nft_public_interface }} udp dport {{ nft_wg_listen_port }} accept
 
@@ -91,3 +94,32 @@ table ip nat {
         oif {{ nft_public_interface }} masquerade
     }
 }
+{% if nft_tunnel_peer_ip_v6 %}
+
+table ip6 nat {
+    chain prerouting {
+        type nat hook prerouting priority -100; policy accept;
+
+{% for rule in nft_forward_rules %}
+{% if '-' in rule.port | string %}
+{% set port_range = rule.port | replace('-', '-') %}
+        # DNAT: {{ rule.comment }} (IPv6)
+        iif {{ nft_public_interface }} {{ rule.proto }} dport {{ port_range }} dnat to {{ nft_tunnel_peer_ip_v6 }}
+{% else %}
+        # DNAT: {{ rule.comment }} (IPv6)
+        iif {{ nft_public_interface }} {{ rule.proto }} dport {{ rule.port }} dnat to {{ nft_tunnel_peer_ip_v6 }}
+{% endif %}
+{% endfor %}
+    }
+
+    chain postrouting {
+        type nat hook postrouting priority 100; policy accept;
+
+        # Masquerade traffic going out the WireGuard tunnel
+        oif {{ nft_wg_interface }} masquerade
+
+        # Masquerade traffic going out the public interface
+        oif {{ nft_public_interface }} masquerade
+    }
+}
+{% endif %}
