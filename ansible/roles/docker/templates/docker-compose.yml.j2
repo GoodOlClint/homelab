@@ -231,6 +231,28 @@ services:
       - TZ={{ doge_node_timezone }}
     volumes:
       - doge-node_config:/data
+  valheim:
+    container_name: valheim
+    image: lloesche/valheim-server:latest
+    restart: unless-stopped
+    cap_add:
+      - sys_nice
+    ports:
+      - "2456-2458:2456-2458/udp"
+    environment:
+      - TZ={{ timezone }}
+      - SERVER_NAME={{ valheim_server_name }}
+      - WORLD_NAME={{ valheim_world_name }}
+      - SERVER_PASS={{ secrets.valheim_server_password }}
+      - SERVER_PUBLIC={{ valheim_server_public | default('false') }}
+      - BACKUPS_ENABLED=true
+      - BACKUPS_CRON=0 */6 * * *
+      - BACKUPS_MAX_COUNT=10
+      - UPDATE_CRON=0 4 * * *
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - valheim_config:/config
+      - valheim_data:/opt/valheim
 
 volumes:
 #  radarr_config:
@@ -317,6 +339,18 @@ volumes:
       type: nfs
       o: "addr={{ docker_nfs_server }},nfsvers=4,rsize=1048576,wsize=1048576,hard,intr,timeo=600"
       device: ":{{ docker_nfs_path }}/dogecoin"
+  valheim_config:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: "addr={{ docker_nfs_server }},nfsvers=4,rsize=1048576,wsize=1048576,hard,intr,timeo=600"
+      device: ":{{ docker_nfs_path }}/valheim/config"
+  valheim_data:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: "addr={{ docker_nfs_server }},nfsvers=4,rsize=1048576,wsize=1048576,hard,intr,timeo=600"
+      device: ":{{ docker_nfs_path }}/valheim/data"
 #  plex_media:
 #    driver: local
 #    driver_opts:
