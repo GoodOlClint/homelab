@@ -52,3 +52,8 @@ output "vps_instance_id" {
   description = "Vultr VPS instance ID"
   value       = vultr_instance.vps.id
 }
+
+output "vps_ipv6_address" {
+  description = "VPS IPv6 address (changes on rebuild — not reserved)"
+  value       = vultr_instance.vps.v6_main_ip
+}
