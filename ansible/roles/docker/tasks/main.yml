@@ -188,44 +188,44 @@
     radarr_user: 2001
     radarr_group: 988
     radarr_umask: '002'
-    radarr_timezone: 'America/Chicago'
+    radarr_timezone: "{{ timezone }}"
     sonarr_user: 2002
     sonarr_group: 988
     sonarr_umask: '002'
-    sonarr_timezone: 'America/Chicago'
+    sonarr_timezone: "{{ timezone }}"
     bazarr_user: 2004
     bazarr_group: 988
-    bazarr_timezone: 'America/Chicago'
+    bazarr_timezone: "{{ timezone }}"
     prowlarr_user: 2005
     prowlarr_group: 988
     prowlarr_umask: '002'
-    prowlarr_timezone: 'America/Chicago'
+    prowlarr_timezone: "{{ timezone }}"
     tautulli_user: 2006
     tautulli_group: 988
-    tautulli_timezone: 'America/Chicago'
+    tautulli_timezone: "{{ timezone }}"
     readarr_user: 2007
     readarr_group: 988
     readarr_umask: '002'
-    readarr_timezone: 'America/Chicago'
+    readarr_timezone: "{{ timezone }}"
     lidarr_user: 2008
     lidarr_group: 988
-    lidarr_timezone: 'America/Chicago'
+    lidarr_timezone: "{{ timezone }}"
     sabnzbd_user: 2003
     sabnzbd_group: 988
     sabnzbd_umask: '002'
-    sabnzbd_timezone: 'America/Chicago'
+    sabnzbd_timezone: "{{ timezone }}"
     plex_meta_manager_user: 1000
     plex_meta_manager_group: 988
-    plex_meta_manager_timezone: 'America/Chicago'
+    plex_meta_manager_timezone: "{{ timezone }}"
     ombi_user: 1000
     ombi_group: 988
-    ombi_timezone: 'America/Chicago'
-    ombi_mariadb_timezone: 'America/Chicago'
-    kiwix_timezone: 'America/Chicago'
+    ombi_timezone: "{{ timezone }}"
+    ombi_mariadb_timezone: "{{ timezone }}"
+    kiwix_timezone: "{{ timezone }}"
     boinc_user: 1000
     boinc_group: 988
-    boinc_timezone: 'America/Chicago'
-    doge_node_timezone: 'America/Chicago'
+    boinc_timezone: "{{ timezone }}"
+    doge_node_timezone: "{{ timezone }}"
   tags:
     - docker
     - config

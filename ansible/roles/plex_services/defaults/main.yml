@@ -1,0 +1,5 @@
+---
+# Default variables for plex_services role
+
+# Default timezone for plex-services containers
+timezone: "America/Chicago"
