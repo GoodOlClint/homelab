@@ -3,10 +3,13 @@
 
 - name: Check if Proxmox monitoring user exists
   ansible.builtin.command:
-    cmd: "pveum user list --output-format json"
+    cmd: "/usr/sbin/pveum user list --output-format json"
   register: proxmox_users_raw
   changed_when: false
   delegate_to: "{{ proxmox_host }}"
+  vars:
+    ansible_connection: ssh
+    ansible_user: root
 
 - name: Parse Proxmox users JSON
   ansible.builtin.set_fact:
@@ -18,40 +21,55 @@
 
 - name: Create Proxmox monitoring user
   ansible.builtin.command:
-    cmd: "pveum user add {{ proxmox_monitoring_user }} --comment '{{ proxmox_monitoring_comment }}'"
+    cmd: "/usr/sbin/pveum user add {{ proxmox_monitoring_user }} --comment '{{ proxmox_monitoring_comment }}'"
   when: not monitoring_user_exists
   delegate_to: "{{ proxmox_host }}"
   register: user_created
+  vars:
+    ansible_connection: ssh
+    ansible_user: root
 
 - name: Set Proxmox monitoring user password
   ansible.builtin.command:
-    cmd: "pveum passwd {{ proxmox_monitoring_user }}"
-    stdin: "{{ proxmox_password }}\n{{ proxmox_password }}\n"
+    cmd: "/usr/sbin/pveum passwd {{ proxmox_monitoring_user }}"
+    stdin: "{{ bootstrap.proxmox_password }}\n{{ bootstrap.proxmox_password }}\n"
   when: user_created.changed or monitoring_user_exists
   delegate_to: "{{ proxmox_host }}"
   no_log: true
   changed_when: true
+  vars:
+    ansible_connection: ssh
+    ansible_user: root
 
 - name: Check current ACL for monitoring user
   ansible.builtin.command:
-    cmd: "pveum acl list"
+    cmd: "/usr/sbin/pveum acl list"
   register: current_acl
   changed_when: false
   delegate_to: "{{ proxmox_host }}"
+  vars:
+    ansible_connection: ssh
+    ansible_user: root
 
 - name: Grant PVEAuditor role to monitoring user
   ansible.builtin.command:
-    cmd: "pveum aclmod / -user {{ proxmox_monitoring_user }} -role {{ proxmox_monitoring_role }}"
+    cmd: "/usr/sbin/pveum aclmod / -user {{ proxmox_monitoring_user }} -role {{ proxmox_monitoring_role }}"
   delegate_to: "{{ proxmox_host }}"
   when: proxmox_monitoring_user not in current_acl.stdout or proxmox_monitoring_role not in current_acl.stdout
   changed_when: true
+  vars:
+    ansible_connection: ssh
+    ansible_user: root
 
 - name: Verify monitoring user permissions
   ansible.builtin.command:
-    cmd: "pveum user permissions {{ proxmox_monitoring_user }}"
+    cmd: "/usr/sbin/pveum user permissions {{ proxmox_monitoring_user }}"
   register: user_permissions
   changed_when: false
   delegate_to: "{{ proxmox_host }}"
+  vars:
+    ansible_connection: ssh
+    ansible_user: root
 
 - name: Display Proxmox user permissions
   ansible.builtin.debug:

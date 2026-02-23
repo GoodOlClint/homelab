@@ -231,8 +231,8 @@ services:
       - TZ={{ timezone }}
       - UP_UNIFI_DEFAULT_ROLE=unifi-poller
       - UP_UNIFI_DEFAULT_URL={{ unifi_controller_url }}
-      - UP_UNIFI_DEFAULT_USER={{ unifi_user }}
-      - UP_UNIFI_DEFAULT_PASS={{ unifi_password }}
+      - UP_UNIFI_DEFAULT_USER={{ unifi_monitoring_user }}
+      - UP_UNIFI_DEFAULT_PASS={{ unifi_monitoring_password }}
       - UP_UNIFI_DEFAULT_VERIFY_SSL={{ unifi_verify_ssl | default('false') }}
       - UP_PROMETHEUS_HTTP_LISTEN=0.0.0.0:9130
       - UP_PROMETHEUS_NAMESPACE=unpoller
