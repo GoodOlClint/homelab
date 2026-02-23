@@ -218,8 +218,6 @@
 
     - name: Remove all journal files
       ansible.builtin.shell: rm -f /etc/bind/*.jnl
-      args:
-        warn: false
 
     - name: Start BIND service
       ansible.builtin.systemd:
