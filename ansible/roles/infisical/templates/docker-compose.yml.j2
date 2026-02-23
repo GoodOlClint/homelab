@@ -1,0 +1,55 @@
+services:
+  infisical:
+    image: infisical/infisical:{{ infisical_version }}
+    container_name: infisical
+    restart: unless-stopped
+    ports:
+      - "{{ infisical_port }}:8080"
+    environment:
+      - ENCRYPTION_KEY={{ infisical_encryption_key }}
+      - AUTH_SECRET={{ infisical_auth_secret }}
+      - DB_CONNECTION_URI=postgres://infisical:{{ infisical_postgres_password | urlencode }}@postgres:5432/infisical
+      - REDIS_URL=redis://redis:6379
+      - SITE_URL=http://{{ ansible_host | replace(mgmt_vlan_prefix, services_vlan_prefix) }}:{{ infisical_port }}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: infisical-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_PASSWORD={{ infisical_postgres_password }}
+      - POSTGRES_USER=infisical
+      - POSTGRES_DB=infisical
+    volumes:
+      - {{ infisical_data_dir }}/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U infisical"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    container_name: infisical-redis
+    restart: unless-stopped
+    command: --save 60 1 --loglevel warning
+    volumes:
+      - {{ infisical_data_dir }}/redis:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s

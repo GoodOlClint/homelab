@@ -1,0 +1,7 @@
+---
+infisical_version: "latest"
+infisical_port: 8080
+infisical_data_dir: /opt/infisical
+infisical_postgres_password: "{{ bootstrap.infisical_postgres_password | default(secrets.infisical_postgres_password | default('')) }}"
+infisical_encryption_key: "{{ bootstrap.infisical_encryption_key | default(secrets.infisical_encryption_key | default('')) }}"
+infisical_auth_secret: "{{ bootstrap.infisical_auth_secret | default(secrets.infisical_auth_secret | default('')) }}"

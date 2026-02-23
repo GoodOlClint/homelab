@@ -20,18 +20,63 @@
       when: local_override_vars_file.stat.exists
       run_once: true
 
-    - name: Check for secrets vars file
+    - name: Check for bootstrap credentials file
       ansible.builtin.stat:
-        path: "{{ playbook_dir }}/../group_vars/secrets.sops.yml"
-      register: secrets_vars_file
+        path: "{{ playbook_dir }}/../group_vars/bootstrap.sops.yml"
+      register: bootstrap_vars_file
       delegate_to: localhost
       become: false
       run_once: true
 
-    - name: Load secrets vars when present
+    - name: Load bootstrap credentials (SOPS Tier 1)
       ansible.builtin.include_vars:
-        file: "{{ playbook_dir }}/../group_vars/secrets.sops.yml"
-      when: secrets_vars_file.stat.exists
+        file: "{{ playbook_dir }}/../group_vars/bootstrap.sops.yml"
+      when: bootstrap_vars_file.stat.exists
+      run_once: true
+
+    - name: Check if Infisical is reachable
+      ansible.builtin.uri:
+        url: "{{ bootstrap.infisical_url }}/api/status"
+        method: GET
+        status_code: 200
+        timeout: 5
+      register: infisical_health
+      ignore_errors: true
+      delegate_to: localhost
+      become: false
+      run_once: true
+      when:
+        - bootstrap is defined
+        - bootstrap.infisical_url | default('REPLACE_ME') != 'REPLACE_ME'
+
+    - name: Load secrets from Infisical (Tier 2)
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/infisical_login.yml"
+      when:
+        - infisical_health is defined
+        - infisical_health is not skipped
+        - infisical_health is succeeded
+
+    - name: Fallback to SOPS secrets when Infisical unavailable
+      block:
+        - name: Check for legacy SOPS secrets file
+          ansible.builtin.stat:
+            path: "{{ playbook_dir }}/../group_vars/secrets.sops.yml"
+          register: secrets_vars_file
+          delegate_to: localhost
+          become: false
+
+        - name: Load SOPS secrets as fallback
+          ansible.builtin.include_vars:
+            file: "{{ playbook_dir }}/../group_vars/secrets.sops.yml"
+          when: secrets_vars_file.stat.exists
+
+        - name: Warn about SOPS fallback
+          ansible.builtin.debug:
+            msg: "WARNING: Infisical unreachable — using SOPS fallback. Secrets may be stale."
+      when: >-
+        infisical_health is not defined
+        or infisical_health is failed
+        or infisical_health is skipped
       run_once: true
   roles:
     - docker

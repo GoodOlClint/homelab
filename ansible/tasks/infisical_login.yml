@@ -1,0 +1,30 @@
+---
+# Authenticate to Infisical using Machine Identity (Universal Auth)
+# Bootstrap credentials come from SOPS Tier 1
+- name: Login to Infisical
+  infisical.vault.login:
+    url: "{{ bootstrap.infisical_url }}"
+    auth_method: universal_auth
+    universal_auth_client_id: "{{ bootstrap.infisical_client_id }}"
+    universal_auth_client_secret: "{{ bootstrap.infisical_client_secret }}"
+  register: infisical_login
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: Read all runtime secrets from Infisical
+  infisical.vault.read_secrets:
+    login_data: "{{ infisical_login.login_data }}"
+    project_id: "{{ bootstrap.infisical_project_id }}"
+    env_slug: "prod"
+    path: "/"
+    as_dict: true
+  register: _infisical_secrets
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: Set secrets fact for backward compatibility
+  ansible.builtin.set_fact:
+    secrets: "{{ dict(_infisical_secrets.secrets | dict2items | map(attribute='key') | map('lower') | zip(_infisical_secrets.secrets | dict2items | map(attribute='value'))) }}"
+  run_once: true

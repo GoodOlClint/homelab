@@ -1,0 +1,66 @@
+---
+- name: Validate Infisical secrets are configured
+  ansible.builtin.assert:
+    that:
+      - infisical_postgres_password | length > 0
+      - infisical_encryption_key | length > 0
+      - infisical_auth_secret | length > 0
+    fail_msg: >-
+      Missing Infisical deployment secrets. Set in bootstrap.sops.yml:
+      infisical_postgres_password, infisical_encryption_key, infisical_auth_secret
+
+- name: Create Infisical data directory
+  ansible.builtin.file:
+    path: "{{ infisical_data_dir }}"
+    state: directory
+    mode: '0755'
+    owner: root
+    group: root
+
+- name: Create Infisical postgres directory
+  ansible.builtin.file:
+    path: "{{ infisical_data_dir }}/postgres"
+    state: directory
+    mode: '0755'
+    owner: root
+    group: root
+
+- name: Create Infisical redis directory
+  ansible.builtin.file:
+    path: "{{ infisical_data_dir }}/redis"
+    state: directory
+    mode: '0755'
+    owner: '999'
+    group: '999'
+
+- name: Deploy Infisical docker-compose configuration
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ infisical_data_dir }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: '0600'
+  notify: Restart Infisical
+
+- name: Start Infisical services
+  community.docker.docker_compose_v2:
+    project_src: "{{ infisical_data_dir }}"
+    state: present
+  register: infisical_compose
+
+- name: Wait for Infisical to be healthy
+  ansible.builtin.uri:
+    url: "http://localhost:{{ infisical_port }}/api/status"
+    method: GET
+    status_code: 200
+    timeout: 10
+  register: infisical_health
+  until: infisical_health.status == 200
+  retries: 30
+  delay: 10
+
+- name: Display Infisical setup URL
+  ansible.builtin.debug:
+    msg: >-
+      Infisical is running! Complete initial setup at:
+      http://{{ ansible_host | replace(mgmt_vlan_prefix, services_vlan_prefix) }}:{{ infisical_port }}

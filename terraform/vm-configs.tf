@@ -60,6 +60,15 @@ locals {
       memory_mb       = 4096 # UniFi needs decent RAM for MongoDB
       disk_size_gb    = 50   # Space for MongoDB + backups
     },
+    {
+      name         = "infisical"
+      vm_id        = 105
+      vlans        = ["vlan10", "vlan40"]
+      ip_offset    = 105
+      cpu_cores    = 4
+      memory_mb    = 4096 # PostgreSQL + Redis + Infisical server
+      disk_size_gb = 30   # Database growth, audit logs
+    },
   ]
 
   # --- Services VMs ---

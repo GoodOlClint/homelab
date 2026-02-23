@@ -58,6 +58,8 @@ ansible/group_vars/local/**
 !ansible/group_vars/local/.gitkeep
 !ansible/group_vars/local/*.example.yml
 ansible/group_vars/secrets.sops.yml
+ansible/group_vars/bootstrap.sops.yml
+ansible/group_vars/secrets.sops.yml.bak
 
 # macOS system files
 .DS_Store

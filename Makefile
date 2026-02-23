@@ -1,18 +1,38 @@
 # Makefile for Homelab Automation
 
+# === Bootstrap Secrets ===
+# Read bootstrap secrets and export as TF_VAR_ environment variables.
+# Supports both SOPS-encrypted and plaintext YAML (for pre-SOPS setup).
+# Top-level exports ensure env vars propagate to ALL child processes.
+SOPS_BOOTSTRAP := ansible/group_vars/bootstrap.sops.yml
+# Helper: try sops decrypt first, fall back to plaintext YAML read
+VENV_PYTHON := $(CURDIR)/.venv/bin/python3
+_read_secret = $(shell sops -d --extract '["bootstrap"]["$(1)"]' $(SOPS_BOOTSTRAP) 2>/dev/null || $(VENV_PYTHON) -c "import yaml; print(yaml.safe_load(open('$(SOPS_BOOTSTRAP)'))['bootstrap']['$(1)'])" 2>/dev/null)
+
+export TF_VAR_virtual_environment_password := $(call _read_secret,proxmox_password)
+export TF_VAR_vultr_api_key := $(call _read_secret,vultr_api_key)
+export TF_VAR_cloudflare_api_token := $(call _read_secret,cloudflare_api_token)
+export TF_VAR_unifi_password := $(call _read_secret,unifi_admin_password)
+
 # === Core Operations ===
-.PHONY: all apply plan init terraform-apply inventory
+.PHONY: all apply plan init terraform-apply inventory bootstrap ansible-bootstrap
 
 all: apply
 
 apply: terraform-apply inventory ansible-all
+
+# First-time deployment: DNS + AdGuard + Infisical only (no Infisical dependency)
+bootstrap: terraform-apply inventory ansible-bootstrap
+
+ansible-bootstrap:
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/bootstrap.yml
 
 plan:
 	@cd terraform && terraform init && terraform plan -no-color
 
 init:
 	@python3 -m venv .venv
-	@. .venv/bin/activate && pip install pyyaml
+	@. .venv/bin/activate && pip install pyyaml infisicalsdk
 	@cd terraform && terraform init
 	@cd ansible && ansible-galaxy install -r requirements.yml --force
 
@@ -72,6 +92,21 @@ vps-rebuild: vps-destroy vps-deploy
 vps-rotate-keys:
 	$(eval VPS_IP := $(shell cd terraform && terraform output -raw vps_reserved_ip))
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vps.yaml ansible/playbooks/vps-rotate-keys.yml -e "ansible_host=$(VPS_IP)"
+
+# === Secrets Management ===
+.PHONY: infisical-seed infisical-backup
+
+# One-time: migrate SOPS secrets to Infisical
+infisical-seed:
+	@bash scripts/seed_infisical.sh
+
+# Export Infisical secrets back to SOPS (backup/disaster recovery)
+infisical-backup:
+	@echo "Backing up Infisical secrets to SOPS..."
+	@infisical secrets list --env prod --path / --format json | \
+		$(VENV_PYTHON) scripts/infisical_to_sops.py > ansible/group_vars/secrets.sops.yml.bak
+	@sops --encrypt --in-place ansible/group_vars/secrets.sops.yml.bak
+	@echo "Backup saved to ansible/group_vars/secrets.sops.yml.bak"
 
 # === Setup & Security ===
 .PHONY: setup-hooks bootstrap-local validate-public-policy security-check security-check-range

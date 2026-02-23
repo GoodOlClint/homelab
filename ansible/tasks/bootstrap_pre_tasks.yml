@@ -1,0 +1,145 @@
+---
+# Bootstrap pre_tasks — minimal facts loading for first-time deployment.
+# Unlike the full pre_tasks in infrastructure.yml, this does NOT:
+#   - Check/connect to Infisical (it doesn't exist yet)
+#   - Load secrets.sops.yml fallback
+#   - Run monitoring_users
+#   - Load rendered policy artifacts
+
+- name: Check for local override vars file
+  ansible.builtin.stat:
+    path: "{{ playbook_dir }}/../group_vars/local/all.yml"
+  register: local_override_vars_file
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: Load local override vars when present
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/../group_vars/local/all.yml"
+  when: local_override_vars_file.stat.exists
+  run_once: true
+
+- name: Require bootstrap credentials file
+  ansible.builtin.stat:
+    path: "{{ playbook_dir }}/../group_vars/bootstrap.sops.yml"
+  register: bootstrap_vars_file
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: Fail if bootstrap.sops.yml missing
+  ansible.builtin.assert:
+    that: bootstrap_vars_file.stat.exists
+    fail_msg: >-
+      bootstrap.sops.yml not found. Copy from bootstrap.sops.example.yml
+      and fill in Terraform provider credentials.
+  run_once: true
+
+- name: Load bootstrap credentials
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/../group_vars/bootstrap.sops.yml"
+  run_once: true
+
+# Auto-generate Infisical deployment secrets if still REPLACE_ME
+- name: Auto-generate Infisical postgres password if not set
+  ansible.builtin.command: openssl rand -hex 24
+  register: _gen_pg_pass
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  run_once: true
+  when: bootstrap.infisical_postgres_password | default('REPLACE_ME') == 'REPLACE_ME'
+
+- name: Auto-generate Infisical encryption key if not set
+  ansible.builtin.command: openssl rand -hex 16
+  register: _gen_enc_key
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  run_once: true
+  when: bootstrap.infisical_encryption_key | default('REPLACE_ME') == 'REPLACE_ME'
+
+- name: Auto-generate Infisical auth secret if not set
+  ansible.builtin.command: openssl rand -base64 32
+  register: _gen_auth_secret
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  run_once: true
+  when: bootstrap.infisical_auth_secret | default('REPLACE_ME') == 'REPLACE_ME'
+
+- name: Override bootstrap with generated Infisical secrets
+  ansible.builtin.set_fact:
+    bootstrap: >-
+      {{ bootstrap | combine({
+        'infisical_postgres_password': _gen_pg_pass.stdout | default(bootstrap.infisical_postgres_password),
+        'infisical_encryption_key': _gen_enc_key.stdout | default(bootstrap.infisical_encryption_key),
+        'infisical_auth_secret': _gen_auth_secret.stdout | default(bootstrap.infisical_auth_secret)
+      }) }}
+  run_once: true
+  when: >-
+    (_gen_pg_pass is not skipped)
+    or (_gen_enc_key is not skipped)
+    or (_gen_auth_secret is not skipped)
+
+- name: Display generated Infisical secrets (SAVE THESE)
+  ansible.builtin.debug:
+    msg: |
+      ============================================================
+      GENERATED INFISICAL SECRETS — save to bootstrap.sops.yml
+      (these cannot be changed after first Infisical deployment)
+
+        infisical_postgres_password: "{{ bootstrap.infisical_postgres_password }}"
+        infisical_encryption_key: "{{ bootstrap.infisical_encryption_key }}"
+        infisical_auth_secret: "{{ bootstrap.infisical_auth_secret }}"
+      ============================================================
+  run_once: true
+  when: >-
+    (_gen_pg_pass is not skipped)
+    or (_gen_enc_key is not skipped)
+    or (_gen_auth_secret is not skipped)
+
+- name: Load canonical VLAN definitions
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/../../network-data/vlans.yaml"
+    name: network_data
+  run_once: true
+
+- name: Set management subnet fact
+  ansible.builtin.set_fact:
+    management_subnet: "{{ network_data.ipv4_prefix }}.{{ network_data.vlans[network_data.management_vlan].id }}.0/24"
+  run_once: true
+
+- name: Compute VLAN prefixes for IP translation
+  ansible.builtin.set_fact:
+    mgmt_vlan_prefix: "{{ network_data.ipv4_prefix }}.{{ network_data.vlans[network_data.management_vlan].id }}."
+    services_vlan_prefix: "{{ network_data.ipv4_prefix }}.{{ network_data.vlans.services.id }}."
+    storage_vlan_prefix: "{{ network_data.ipv4_prefix }}.{{ network_data.vlans.storage.id }}."
+    core_vlan_prefix: "{{ network_data.ipv4_prefix }}.{{ network_data.vlans.core.id }}."
+    ipv4_prefix_reversed: "{{ network_data.ipv4_prefix.split('.') | reverse | join('.') }}"
+    internal_network_cidr: "{{ network_data.ipv4_prefix }}.0.0/12"
+  run_once: true
+
+- name: Build dns_zones from canonical VLAN data
+  ansible.builtin.set_fact:
+    dns_zones: >-
+      {{ dns_zones | default({}) | combine({
+        'vlan' ~ network_data.vlans[item].id: {
+          'zone': network_data.vlans[item].domain_prefix ~ '.' ~ network_data.domain_suffix,
+          'vlan_id': network_data.vlans[item].id,
+          'dns_ip': network_data.dns_server.dns_ipv4,
+          'dns_ipv6': network_data.dns_server.dns_ipv6,
+          'bind_ip': network_data.dns_server.bind_ipv4
+        }
+      }) }}
+  loop: "{{ network_data.dns_server.zone_vlans }}"
+  run_once: true
+
+- name: Require dns_zones
+  ansible.builtin.assert:
+    that:
+      - dns_zones is mapping
+      - dns_zones | length > 0
+    fail_msg: "Failed to build dns_zones from network-data/vlans.yaml"
+  run_once: true

@@ -1,4 +1,9 @@
 creation_rules:
+  - path_regex: ansible/group_vars/bootstrap\.sops\.ya?ml$
+    encrypted_regex: '^(bootstrap)$'
+    age: >-
+      REPLACE_WITH_AGE_PUBLIC_KEY
+
   - path_regex: ansible/group_vars/secrets\.sops\.ya?ml$
     encrypted_regex: '^(data|stringData|secrets|passwords|tokens|keys)$'
     age: >-

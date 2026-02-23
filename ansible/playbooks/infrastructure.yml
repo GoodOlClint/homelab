@@ -1,15 +1,20 @@
 ---
-# Infrastructure Playbook — Two-Phase Provisioning
+# Infrastructure Playbook — Three-Phase Provisioning
 #
-# Phase 1: Bootstrap core services (DNS, AdGuard, OpenObserve, PBS)
+# Pre-flight: Load secrets, VLAN data, and local overrides
+#
+# Phase 1: Bootstrap core services (DNS, AdGuard, OpenObserve, PBS, UniFi)
 #   Each VM gets its primary role only — no monitoring clients yet.
-#   Order matters: DNS → AdGuard → OpenObserve → proxmox-backup
+#   Order matters: DNS → AdGuard → OpenObserve → proxmox-backup → UniFi
 #
 # Phase 2: Monitoring clients (rsyslog + telegraf) on all infrastructure VMs
 #   Runs after OpenObserve is up and ready to receive logs/metrics.
+#
+# Phase 3: Provision monitoring users (Proxmox, UniFi, Synology)
+#   Runs last — all target services must be running first.
 
-# --- Pre-flight: Provision monitoring users ---
-- name: Provision monitoring users for infrastructure
+# --- Pre-flight: Load secrets, VLAN data, and overrides ---
+- name: Pre-flight setup
   hosts: localhost
   connection: local
   gather_facts: false
@@ -30,18 +35,76 @@
       when: local_override_vars_file.stat.exists
       run_once: true
 
-    - name: Check for secrets vars file
+    - name: Check for bootstrap credentials file
       ansible.builtin.stat:
-        path: "{{ playbook_dir }}/../group_vars/secrets.sops.yml"
-      register: secrets_vars_file
+        path: "{{ playbook_dir }}/../group_vars/bootstrap.sops.yml"
+      register: bootstrap_vars_file
       delegate_to: localhost
       become: false
       run_once: true
 
-    - name: Load secrets vars when present
+    - name: Load bootstrap credentials (SOPS Tier 1)
       ansible.builtin.include_vars:
-        file: "{{ playbook_dir }}/../group_vars/secrets.sops.yml"
-      when: secrets_vars_file.stat.exists
+        file: "{{ playbook_dir }}/../group_vars/bootstrap.sops.yml"
+      when: bootstrap_vars_file.stat.exists
+      run_once: true
+
+    - name: Check if Infisical is reachable
+      ansible.builtin.uri:
+        url: "{{ bootstrap.infisical_url }}/api/status"
+        method: GET
+        status_code: 200
+        timeout: 5
+      register: infisical_health
+      ignore_errors: true
+      delegate_to: localhost
+      become: false
+      run_once: true
+      when:
+        - bootstrap is defined
+        - bootstrap.infisical_url | default('REPLACE_ME') != 'REPLACE_ME'
+
+    - name: Load secrets from Infisical (Tier 2)
+      block:
+        - name: Attempt Infisical login and read secrets
+          ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/infisical_login.yml"
+      rescue:
+        - name: Record Infisical login failure
+          ansible.builtin.set_fact:
+            infisical_login_failed: true
+
+        - name: Warn about Infisical login failure
+          ansible.builtin.debug:
+            msg: "WARNING: Infisical login failed — will fall back to SOPS secrets."
+      when:
+        - infisical_health is defined
+        - infisical_health is not skipped
+        - infisical_health is succeeded
+      run_once: true
+
+    - name: Fallback to SOPS secrets when Infisical unavailable
+      block:
+        - name: Check for legacy SOPS secrets file
+          ansible.builtin.stat:
+            path: "{{ playbook_dir }}/../group_vars/secrets.sops.yml"
+          register: secrets_vars_file
+          delegate_to: localhost
+          become: false
+
+        - name: Load SOPS secrets as fallback
+          ansible.builtin.include_vars:
+            file: "{{ playbook_dir }}/../group_vars/secrets.sops.yml"
+          when: secrets_vars_file.stat.exists
+
+        - name: Warn about SOPS fallback
+          ansible.builtin.debug:
+            msg: "WARNING: Infisical unreachable or login failed — using SOPS fallback. Secrets may be stale."
+      when: >-
+        infisical_health is not defined
+        or infisical_health is skipped
+        or infisical_health is failed
+        or infisical_login_failed | default(false)
+        or secrets is not defined
       run_once: true
 
     - name: Load canonical VLAN definitions
@@ -119,11 +182,7 @@
           rules={{ rendered_policy.summary.rule_count }}
       run_once: true
       when: use_rendered_policy | default(false)
-  roles:
-    - role: monitoring_users
-      tags:
-        - monitoring-users
-        - users
+  roles: []
 
 # ============================================================
 # Phase 1: Bootstrap core services (no monitoring clients)
@@ -153,6 +212,21 @@
     - phase1
     - adguard
 
+- name: "Phase 1: Infisical secrets management"
+  hosts: infisical
+  become: true
+  vars_files:
+    - ../group_vars/all.yml
+  pre_tasks: *load_local_overrides
+  roles:
+    - dns_config
+    - geerlingguy.docker
+    - infisical
+    - hardening
+  tags:
+    - phase1
+    - infisical
+
 - name: "Phase 1: Configure OpenObserve Monitoring VM"
   hosts: openobserve
   become: true
@@ -179,12 +253,25 @@
     - phase1
     - proxmox-backup
 
+- name: "Phase 1: Configure UniFi Network Controller"
+  hosts: unifi
+  become: true
+  vars_files:
+    - ../group_vars/all.yml
+  pre_tasks: *load_local_overrides
+  roles:
+    - dns_config
+    - unifi
+  tags:
+    - phase1
+    - unifi
+
 # ============================================================
 # Phase 2: Monitoring clients (OpenObserve is now running)
 # ============================================================
 
 - name: "Phase 2: Configure monitoring clients on all infrastructure VMs"
-  hosts: dns,adguard,openobserve,proxmox-backup
+  hosts: dns,adguard,infisical,openobserve,proxmox-backup,unifi
   become: true
   vars_files:
     - ../group_vars/all.yml
@@ -195,3 +282,23 @@
   tags:
     - phase2
     - monitoring
+
+# ============================================================
+# Phase 3: Provision monitoring users (services are now running)
+# ============================================================
+
+- name: "Phase 3: Provision monitoring users"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - ../group_vars/all.yml
+  pre_tasks: *load_local_overrides
+  roles:
+    - role: monitoring_users
+      tags:
+        - monitoring-users
+        - users
+  tags:
+    - phase3
+    - monitoring-users

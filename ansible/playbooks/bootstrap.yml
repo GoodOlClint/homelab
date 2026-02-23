@@ -1,0 +1,107 @@
+---
+# Bootstrap Playbook — First-time deployment
+#
+# Use: make bootstrap
+#
+# Deploys the minimum infrastructure to break the chicken-and-egg problem:
+# AdGuard + Infisical. No Infisical or secrets.sops.yml dependency.
+# BIND9 (authoritative DNS) is NOT included — it needs runtime secrets
+# and is configured later via `make apply`.
+#
+# After this completes:
+#   1. Create Infisical admin account at the displayed URL
+#   2. Create project "homelab" with environment "prod"
+#   3. Create Machine Identity with Universal Auth
+#   4. Update bootstrap.sops.yml with infisical_url, client_id, client_secret, project_id
+#   5. Run: make infisical-seed (one-time SOPS → Infisical migration)
+#   6. Run: make apply (normal flow now works)
+
+# === Phase 0: Bootstrap facts (no Infisical, no secrets.sops.yml) ===
+- name: "Bootstrap: Load facts"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - ../group_vars/all.yml
+  pre_tasks:
+    - name: Load bootstrap facts
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/bootstrap_pre_tasks.yml"
+  tasks: []
+
+# === Phase 1: AdGuard ===
+- name: "Bootstrap Phase 1: Configure AdGuard"
+  hosts: adguard
+  become: true
+  vars_files:
+    - ../group_vars/all.yml
+  pre_tasks:
+    - name: Load bootstrap facts
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/bootstrap_pre_tasks.yml"
+  roles:
+    - adguard
+  tags:
+    - bootstrap
+    - adguard
+
+# === Phase 2: Infisical ===
+- name: "Bootstrap Phase 2: Deploy Infisical"
+  hosts: infisical
+  become: true
+  vars_files:
+    - ../group_vars/all.yml
+  pre_tasks:
+    - name: Load bootstrap facts
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/bootstrap_pre_tasks.yml"
+  roles:
+    - dns_config
+    - geerlingguy.docker
+    - infisical
+    - hardening
+  tags:
+    - bootstrap
+    - infisical
+
+# === Phase 3: Post-bootstrap instructions ===
+- name: "Bootstrap: Next steps"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - ../group_vars/all.yml
+  pre_tasks:
+    - name: Load bootstrap facts
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/bootstrap_pre_tasks.yml"
+  tasks:
+    - name: Display post-bootstrap instructions
+      ansible.builtin.debug:
+        msg: |
+          ============================================================
+          BOOTSTRAP COMPLETE — AdGuard and Infisical are running.
+          ============================================================
+
+          Complete these manual steps to finish setup:
+
+          1. Open Infisical at:
+             http://{{ hostvars['infisical']['ansible_host'] | replace(mgmt_vlan_prefix, services_vlan_prefix) }}:8080
+
+          2. Create your admin account
+
+          3. Create project "homelab" with environment "prod"
+
+          4. Create a Machine Identity:
+             - Organization Settings > Machine Identities
+             - Add Universal Auth method
+             - Copy the Client ID and Client Secret
+
+          5. Update bootstrap.sops.yml:
+             infisical_url: "http://{{ hostvars['infisical']['ansible_host'] | replace(mgmt_vlan_prefix, services_vlan_prefix) }}:8080"
+             infisical_client_id: "<Client ID from step 4>"
+             infisical_client_secret: "<Client Secret from step 4>"
+             infisical_project_id: "<Project UUID from Infisical UI>"
+
+          6. Seed Infisical with secrets (if you have a secrets.sops.yml):
+             make infisical-seed
+
+          7. Run the full deployment:
+             make apply
+          ============================================================
