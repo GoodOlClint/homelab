@@ -68,7 +68,7 @@
         files:
           - docker-compose.yml
         state: present
-      when: 
+      when:
         - inventory_hostname == 'docker'
         - docker_pull_result.changed | default(false)
 
@@ -78,7 +78,7 @@
         files:
           - docker-compose-plex-services.yml
         state: present
-      when: 
+      when:
         - inventory_hostname == 'plex-services'
         - plex_pull_result.changed | default(false)
 

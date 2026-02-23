@@ -15,12 +15,12 @@
           ============================================
           Proxmox Backup Client Installed
           ============================================
-          
+
           To use the backup client manually:
           1. Source the environment: . /etc/proxmox-backup/pbs-client.env
           2. List snapshots: proxmox-backup-client snapshot list
           3. Create backup: proxmox-backup-client backup <snapshot-name>.pxar:/path/to/backup
-          
+
           Automated backup scripts should be configured via their respective service roles.
           ============================================
       run_once: true

@@ -209,7 +209,7 @@ resource "vultr_instance" "vps" {
   reserved_ip_id    = vultr_reserved_ip.vps.id
   enable_ipv6       = true
   backups           = "disabled"
-  ddos_protection   = true
+  ddos_protection   = false # Set to true for ~$10/month Vultr DDoS mitigation (10 Gbps)
   activation_email  = false
 
   lifecycle {
