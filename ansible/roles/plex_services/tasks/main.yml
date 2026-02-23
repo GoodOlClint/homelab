@@ -218,7 +218,7 @@
     dest: /docker/docker-compose-plex-services.yml
     owner: root
     group: root
-    mode: '0644'
+    mode: '0600'
   notify:
     - restart plex services docker compose
   tags:
@@ -287,6 +287,7 @@
   loop_control:
     label: "{{ item.key }} DB user"
   when: item.value.db_user is defined
+  no_log: true
   tags:
     - plex_services
     - postgres
@@ -328,6 +329,7 @@
   loop_control:
     label: "{{ item.service }}: {{ item.db_name }}"
   when: item.db_user is defined
+  no_log: true
   tags:
     - plex_services
     - postgres
@@ -344,6 +346,7 @@
     type: database
     obj: "{{ item.db_name }}"
   loop: "{{ plex_service_db_pairs }}"
+  no_log: true
 
 - name: Grant schema privileges to service users
   community.postgresql.postgresql_privs:
@@ -360,6 +363,7 @@
   loop_control:
     label: "{{ item.service }}: {{ item.db_name }} schema privileges"
   when: item.db_user is defined
+  no_log: true
   tags:
     - plex_services
     - postgres
@@ -446,6 +450,7 @@
         - item.value.config is defined
         - item.value.db_password is defined
         - item.value.config | regex_search('\.xml$') is not none
+      no_log: true
 
     - name: Update XML config files with PostgresHost
       community.general.xml:
@@ -586,6 +591,7 @@
     owner: root
     group: root
     mode: '0600'
+  no_log: true
   tags:
     - plex_services
     - config
