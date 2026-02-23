@@ -23,7 +23,7 @@
     - name: Wait for UniFi service to be ready
       ansible.builtin.wait_for:
         port: 8443
-        host: "{{ ansible_default_ipv4.address }}"
+        host: "{{ ansible_facts['default_ipv4']['address'] }}"
         timeout: 120
         delay: 10
 
@@ -34,8 +34,8 @@
           - "UniFi Controller installation complete!"
           - "=============================================="
           - ""
-          - "Access URL: https://{{ ansible_hostname }}.{{ domain_suffix | default('lab.internal') }}:8443"
-          - "Alternative: https://{{ ansible_default_ipv4.address }}:8443"
+          - "Access URL: https://{{ ansible_facts['hostname'] }}.{{ domain_suffix | default('lab.internal') }}:8443"
+          - "Alternative: https://{{ ansible_facts['default_ipv4']['address'] }}:8443"
           - ""
           - "First-time setup:"
           - "  1. Accept the EULA"

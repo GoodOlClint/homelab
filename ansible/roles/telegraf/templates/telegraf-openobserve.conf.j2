@@ -141,7 +141,7 @@
 
 # Log file monitoring using tail with grok parser
 [[inputs.tail]]
-{% if ansible_os_family | default('Debian') == 'Alpine' %}
+{% if ansible_facts['os_family'] | default('Debian') == 'Alpine' %}
   files = ["/var/log/messages"]
 {% else %}
   files = ["/var/log/syslog"]

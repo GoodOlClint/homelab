@@ -18,7 +18,7 @@ PBS_ENV_FILE="/etc/proxmox-backup/pbs-client.env"
 PBS_NAMESPACE="{{ plex_pbs_namespace | default('plex') }}"
 
 # Backup hostname for PBS (defaults to actual hostname)
-BACKUP_HOSTNAME="{{ inventory_hostname | default(ansible_hostname) }}"
+BACKUP_HOSTNAME="{{ inventory_hostname | default(ansible_facts['hostname']) }}"
 
 # Logging function
 log() {

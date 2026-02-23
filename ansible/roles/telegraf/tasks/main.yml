@@ -2,11 +2,11 @@
 
 - name: Install Telegraf (Debian/Ubuntu)
   ansible.builtin.include_tasks: install-debian.yml
-  when: ansible_os_family == "Debian"
+  when: ansible_facts['os_family'] == "Debian"
 
 - name: Install Telegraf (Alpine)
   ansible.builtin.include_tasks: install-alpine.yml
-  when: ansible_os_family == "Alpine"
+  when: ansible_facts['os_family'] == "Alpine"
 
 - name: Configure Telegraf to send metrics to OpenObserve
   ansible.builtin.template:

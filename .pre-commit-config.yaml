@@ -15,3 +15,12 @@ repos:
         language: system
         pass_filenames: false
         stages: [pre-commit]
+      - id: no-tfvars-secrets
+        name: Check vars.auto.tfvars for leaked secrets
+        entry: >
+          bash -c 'if grep -iE "(password|secret|token|api_key)\s*=" terraform/vars.auto.tfvars 2>/dev/null | grep -v "^\s*#" | grep -v "REPLACE_ME" | grep -v '\''^$'\'' | grep -vE "password_hash\s*=\s*\"\""; then
+            echo "ERROR: vars.auto.tfvars contains secret-like values. Move them to bootstrap.sops.yml"; exit 1;
+          fi'
+        language: system
+        files: vars\.auto\.tfvars$
+        stages: [pre-commit]

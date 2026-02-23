@@ -34,7 +34,7 @@ PBS_ENABLED=false
 {% endif %}
 
 # Backup hostname for PBS (defaults to actual hostname)
-BACKUP_HOSTNAME="{{ inventory_hostname | default(ansible_hostname) }}"
+BACKUP_HOSTNAME="{{ inventory_hostname | default(ansible_facts['hostname']) }}"
 
 # Logging function
 log() {
