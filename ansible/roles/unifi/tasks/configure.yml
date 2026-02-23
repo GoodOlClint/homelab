@@ -2,7 +2,7 @@
 # UniFi Controller Configuration Tasks
 
 - name: Configure UniFi system properties
-  template:
+  ansible.builtin.template:
     src: system.properties.j2
     dest: "{{ unifi_data_dir }}/system.properties"
     owner: "{{ unifi_user }}"
@@ -11,7 +11,7 @@
   notify: Restart UniFi
 
 - name: Configure UniFi JVM options
-  template:
+  ansible.builtin.template:
     src: unifi.default.j2
     dest: /etc/default/unifi
     owner: root
@@ -20,7 +20,7 @@
   notify: Restart UniFi
 
 - name: Ensure UniFi data directory permissions
-  file:
+  ansible.builtin.file:
     path: "{{ unifi_data_dir }}"
     state: directory
     owner: "{{ unifi_user }}"
@@ -29,7 +29,7 @@
     recurse: false
 
 - name: Ensure UniFi log directory permissions
-  file:
+  ansible.builtin.file:
     path: "{{ unifi_log_dir }}"
     state: directory
     owner: "{{ unifi_user }}"

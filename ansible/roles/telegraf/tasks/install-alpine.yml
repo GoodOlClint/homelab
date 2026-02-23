@@ -6,7 +6,8 @@
     path: /etc/apk/repositories
     regexp: '^#(.*/community)$'
     line: '\1'
-    backrefs: yes
+    backrefs: true
+
   tags:
     - telegraf
     - packages
@@ -15,7 +16,8 @@
   ansible.builtin.apk:
     name: telegraf
     state: present
-    update_cache: yes
+    update_cache: true
+
   tags:
     - telegraf
     - packages

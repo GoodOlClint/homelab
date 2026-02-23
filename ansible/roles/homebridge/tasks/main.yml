@@ -19,21 +19,23 @@
     suites: stable
     components: [main]
     state: present
-    enabled: yes
+    enabled: true
+
   when: homebridge_repo_present.rc != 0
   tags:
     - homebridge
     - packages
 
 - name: Update apt cache
-  apt:
-    update_cache: yes
+  ansible.builtin.apt:
+    update_cache: true
+
   tags:
     - homebridge
     - packages
 
 - name: Install/Update Node.js LTS
-  apt:
+  ansible.builtin.apt:
     name:
       - nodejs
       - npm
@@ -44,7 +46,7 @@
     - nodejs
 
 - name: Install Homebridge
-  apt:
+  ansible.builtin.apt:
     name: homebridge
     state: present
   tags:
@@ -52,7 +54,7 @@
     - packages
 
 - name: Update Homebridge to latest version
-  apt:
+  ansible.builtin.apt:
     name: homebridge
     state: latest
   tags:
@@ -63,7 +65,8 @@
 - name: Update all Homebridge plugins
   community.general.npm:
     name: "*"
-    global: yes
+    global: true
+
     state: latest
   become: true
   tags:

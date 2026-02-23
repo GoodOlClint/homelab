@@ -1,20 +1,21 @@
 
 ---
 - name: Install bind9
-  apt:
+  ansible.builtin.apt:
     name:
       - bind9
       - bind9utils
       - dnsutils
     state: present
-    update_cache: yes
+    update_cache: true
+
   tags:
     - bind9
     - dns
     - packages
 
 - name: Configure named.conf.options
-  template:
+  ansible.builtin.template:
     src: named.conf.options.j2
     dest: /etc/bind/named.conf.options
     mode: '0644'
@@ -25,7 +26,7 @@
     - config
 
 - name: Configure named.conf.local for zones
-  template:
+  ansible.builtin.template:
     src: named.conf.local.j2
     dest: /etc/bind/named.conf.local
     mode: '0644'
@@ -39,7 +40,7 @@
 # --- Forward zone files ---
 
 - name: Check if forward zone files exist
-  stat:
+  ansible.builtin.stat:
     path: "/etc/bind/db.{{ item.value.zone }}"
   loop: "{{ dns_zones | dict2items }}"
   register: forward_zone_files_stat
@@ -49,7 +50,7 @@
     - zones
 
 - name: Create forward zone files (only if they don't exist)
-  template:
+  ansible.builtin.template:
     src: db.zone.j2
     dest: "/etc/bind/db.{{ item.item.value.zone }}"
     mode: '0644'
@@ -66,7 +67,7 @@
     - config
 
 - name: Set ownership of forward zone files
-  file:
+  ansible.builtin.file:
     path: "/etc/bind/db.{{ item.value.zone }}"
     owner: bind
     group: bind
@@ -80,7 +81,7 @@
 # --- Reverse zone files ---
 
 - name: Check if reverse zone files exist
-  stat:
+  ansible.builtin.stat:
     path: "/etc/bind/db.{{ item.value.vlan_id }}.16.172.in-addr.arpa"
   loop: "{{ dns_zones | dict2items }}"
   register: reverse_zone_files_stat
@@ -90,7 +91,7 @@
     - zones
 
 - name: Create reverse zone files (only if they don't exist)
-  template:
+  ansible.builtin.template:
     src: db.reverse-zone.j2
     dest: "/etc/bind/db.{{ item.item.value.vlan_id }}.16.172.in-addr.arpa"
     mode: '0644'
@@ -107,7 +108,7 @@
     - config
 
 - name: Set ownership of reverse zone files
-  file:
+  ansible.builtin.file:
     path: "/etc/bind/db.{{ item.value.vlan_id }}.16.172.in-addr.arpa"
     owner: bind
     group: bind
@@ -121,7 +122,7 @@
 # --- Directory and permissions ---
 
 - name: Ensure /etc/bind directory is writable by bind user
-  file:
+  ansible.builtin.file:
     path: /etc/bind
     owner: bind
     group: bind
@@ -135,7 +136,7 @@
 # --- Journal file validation ---
 
 - name: Check for corrupted journal files
-  shell: |
+  ansible.builtin.shell: |
     for zone in /etc/bind/db.*.jnl; do
       if [ -f "$zone" ]; then
         named-journalprint "$zone" > /dev/null 2>&1 || echo "$zone"
@@ -150,7 +151,7 @@
     - validate
 
 - name: Remove corrupted journal files if found
-  file:
+  ansible.builtin.file:
     path: "{{ item }}"
     state: absent
   loop: "{{ corrupt_journals.stdout_lines }}"
@@ -164,13 +165,13 @@
 # --- Service health checks ---
 
 - name: Flush handlers to ensure bind9 is restarted if needed
-  meta: flush_handlers
+  ansible.builtin.meta: flush_handlers
   tags:
     - bind9
     - dns
 
 - name: Wait for DNS server to be responsive
-  wait_for:
+  ansible.builtin.wait_for:
     host: 127.0.0.1
     port: 53
     timeout: 30
@@ -180,7 +181,7 @@
     - validate
 
 - name: Wait a few seconds for DNS to fully initialize
-  pause:
+  ansible.builtin.pause:
     seconds: 3
   tags:
     - bind9
@@ -188,7 +189,7 @@
     - validate
 
 - name: Check if forward zones are loaded in BIND
-  shell: |
+  ansible.builtin.shell: |
     loaded=0
     failed=0
     for zone in {{ dns_zones.values() | map(attribute='zone') | join(' ') }}; do
@@ -211,28 +212,28 @@
 - name: Remove all journal files if zones failed to load
   block:
     - name: Stop BIND service
-      systemd:
+      ansible.builtin.systemd:
         name: named
         state: stopped
 
     - name: Remove all journal files
-      shell: rm -f /etc/bind/*.jnl
+      ansible.builtin.shell: rm -f /etc/bind/*.jnl
       args:
         warn: false
 
     - name: Start BIND service
-      systemd:
+      ansible.builtin.systemd:
         name: named
         state: started
 
     - name: Wait for DNS to restart
-      wait_for:
+      ansible.builtin.wait_for:
         host: 127.0.0.1
         port: 53
         timeout: 30
 
     - name: Pause for DNS initialization
-      pause:
+      ansible.builtin.pause:
         seconds: 3
   when: "'failed=0' not in zone_status_check.stdout"
   tags:
@@ -242,7 +243,7 @@
     - service
 
 - name: Verify BIND is responding for local zones
-  command: dig +short +time=2 +tries=3 @127.0.0.1 {{ (dns_zones.values() | first).zone }} SOA
+  ansible.builtin.command: dig +short +time=2 +tries=3 @127.0.0.1 {{ (dns_zones.values() | first).zone }} SOA
   register: dns_test
   retries: 5
   delay: 2

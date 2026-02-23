@@ -1,6 +1,6 @@
 ---
 - name: Install NVIDIA GRID driver
-  import_role:
+  ansible.builtin.import_role:
     name: nvidia
   tags:
     - plex
@@ -19,7 +19,8 @@
 
 - name: Ensure NFS fstab entry and mount.
   ansible.posix.mount:
-    backup: yes
+    backup: true
+
     boot: "yes"
     path: "/mnt/plex"
     src: "{{ plex_nfs_src }}"
@@ -32,7 +33,7 @@
     - nfs
 
 - name: Mount /mnt/media
-  file:
+  ansible.builtin.file:
     src: /mnt/plex/data/media
     dest: /mnt/media
     state: link
@@ -41,7 +42,7 @@
     - storage
 
 - name: Check if Plex GPG key exists
-  stat:
+  ansible.builtin.stat:
     path: /usr/share/keyrings/plex.gpg
   register: plex_gpg_key
   tags:
@@ -99,7 +100,8 @@
   ansible.builtin.apt:
     name: plexmediaserver
     state: latest
-    update_cache: yes
+    update_cache: true
+
   when: not plex_installed.stat.exists
   tags:
     - plex

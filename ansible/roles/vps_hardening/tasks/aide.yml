@@ -12,7 +12,8 @@
 
 - name: Update apk cache after enabling testing repo
   ansible.builtin.apk:
-    update_cache: yes
+    update_cache: true
+
   when: testing_repo.changed
   tags:
     - aide

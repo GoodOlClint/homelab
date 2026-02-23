@@ -1,19 +1,20 @@
 ---
 - name: Ensure dependencies for OpenObserve
-  apt:
+  ansible.builtin.apt:
     name:
       - curl
       - wget
       - tar
     state: present
-    update_cache: yes
+    update_cache: true
+
   tags:
     - openobserve
     - monitoring
     - packages
 
 - name: Download OpenObserve release
-  get_url:
+  ansible.builtin.get_url:
     url: https://github.com/openobserve/openobserve/releases/download/v0.14.7/openobserve-v0.14.7-linux-amd64.tar.gz
     dest: /tmp/openobserve.tar.gz
     mode: '0644'
@@ -23,10 +24,11 @@
     - install
 
 - name: Extract OpenObserve
-  unarchive:
+  ansible.builtin.unarchive:
     src: /tmp/openobserve.tar.gz
     dest: /opt/
-    remote_src: yes
+    remote_src: true
+
     creates: /opt/openobserve
   tags:
     - openobserve
@@ -34,7 +36,7 @@
     - install
 
 - name: Create OpenObserve systemd service
-  copy:
+  ansible.builtin.copy:
     dest: /etc/systemd/system/openobserve.service
     content: |
       [Unit]
@@ -58,25 +60,27 @@
     - service
 
 - name: Reload systemd
-  systemd:
-    daemon_reload: yes
+  ansible.builtin.systemd:
+    daemon_reload: true
+
   tags:
     - openobserve
     - monitoring
     - service
 
 - name: Ensure OpenObserve is started and enabled
-  systemd:
+  ansible.builtin.systemd:
     name: openobserve
     state: started
-    enabled: yes
+    enabled: true
+
   tags:
     - openobserve
     - monitoring
     - service
 
 - name: Set fact for OpenObserve endpoint
-  set_fact:
+  ansible.builtin.set_fact:
     openobserve_metrics_endpoint: "http://{{ ansible_host | default(inventory_hostname) }}:5080/api/default/prometheus/api/v1/write"
   tags:
     - openobserve
@@ -84,7 +88,7 @@
     - config
 
 - name: Ensure /etc/openobserve directory exists
-  file:
+  ansible.builtin.file:
     path: /etc/openobserve
     state: directory
     mode: '0755'
@@ -94,7 +98,7 @@
     - config
 
 - name: Create sample configuration for metrics ingestion
-  copy:
+  ansible.builtin.copy:
     dest: /etc/openobserve/telegraf.conf
     content: |
       [[outputs.prometheus_remote_write]]
@@ -106,10 +110,11 @@
     - config
 
 - name: Restart Telegraf to apply new configuration
-  systemd:
+  ansible.builtin.systemd:
     name: telegraf
     state: restarted
-    enabled: yes
+    enabled: true
+
   tags:
     - openobserve
     - monitoring

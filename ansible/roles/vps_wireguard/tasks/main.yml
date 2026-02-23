@@ -25,7 +25,8 @@
   ansible.builtin.apk:
     name: wireguard-tools
     state: present
-    update_cache: yes
+    update_cache: true
+
   tags:
     - vps_wireguard
     - packages
@@ -34,9 +35,11 @@
   ansible.posix.sysctl:
     name: net.ipv4.ip_forward
     value: '1'
-    sysctl_set: yes
+    sysctl_set: true
+
     state: present
-    reload: yes
+    reload: true
+
   tags:
     - vps_wireguard
     - sysctl
@@ -45,9 +48,11 @@
   ansible.posix.sysctl:
     name: net.ipv6.conf.all.forwarding
     value: '1'
-    sysctl_set: yes
+    sysctl_set: true
+
     state: present
-    reload: yes
+    reload: true
+
   when: wg_tunnel_address_v6 | default('') | length > 0
   tags:
     - vps_wireguard
@@ -143,7 +148,8 @@
 - name: Enable WireGuard interface on boot
   ansible.builtin.service:
     name: "wg-quick.{{ wg_interface }}"
-    enabled: yes
+    enabled: true
+
   tags:
     - vps_wireguard
     - service

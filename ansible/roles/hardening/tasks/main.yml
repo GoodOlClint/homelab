@@ -3,7 +3,7 @@
 # Harden Linux VMs for security best practices
 
 - name: Ensure UFW is installed
-  apt:
+  ansible.builtin.apt:
     name: ufw
     state: present
   become: true
@@ -13,7 +13,7 @@
     - packages
 
 - name: Reset UFW rules before applying managed firewall policy
-  ufw:
+  community.general.ufw:
     state: reset
   when:
     - (hardening_ufw_default_policies | default([]) | length) > 0 or (hardening_ufw_rules | default([]) | length) > 0
@@ -23,7 +23,7 @@
     - firewall
 
 - name: Apply managed UFW default policies
-  ufw:
+  community.general.ufw:
     direction: "{{ item.direction }}"
     policy: "{{ item.policy }}"
   loop: "{{ hardening_ufw_default_policies | default([]) }}"
@@ -34,7 +34,7 @@
     - firewall
 
 - name: Apply managed UFW explicit rules
-  ufw:
+  community.general.ufw:
     rule: "{{ item.rule }}"
     port: "{{ item.port | default(omit) }}"
     proto: "{{ item.proto | default(omit) }}"
@@ -51,7 +51,7 @@
     - firewall
 
 - name: Enable UFW when managed policy is supplied
-  ufw:
+  community.general.ufw:
     state: enabled
   when:
     - (hardening_ufw_default_policies | default([]) | length) > 0 or (hardening_ufw_rules | default([]) | length) > 0
@@ -61,7 +61,7 @@
     - firewall
 
 - name: Restrict SSH to management interface only
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /etc/ssh/sshd_config
     regexp: '^#?ListenAddress '
     line: 'ListenAddress {{ ansible_host }}'
@@ -74,7 +74,7 @@
     - security
 
 - name: Disable SSH password authentication
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /etc/ssh/sshd_config
     regexp: '^PasswordAuthentication'
     line: 'PasswordAuthentication no'
@@ -87,7 +87,7 @@
     - security
 
 - name: Install unattended-upgrades
-  apt:
+  ansible.builtin.apt:
     name: unattended-upgrades
     state: present
   become: true
@@ -97,7 +97,7 @@
     - updates
 
 - name: Enable automatic security updates
-  copy:
+  ansible.builtin.copy:
     dest: /etc/apt/apt.conf.d/20auto-upgrades
     content: |
       APT::Periodic::Update-Package-Lists "1";
@@ -109,7 +109,7 @@
     - updates
 
 - name: Disable and stop unused services
-  service:
+  ansible.builtin.service:
     name: "{{ item }}"
     state: stopped
     enabled: false
@@ -121,7 +121,7 @@
     - services
 
 - name: Install auditd for auditing
-  apt:
+  ansible.builtin.apt:
     name: auditd
     state: present
   become: true
@@ -131,7 +131,7 @@
     - audit
 
 - name: Ensure auditd is running
-  service:
+  ansible.builtin.service:
     name: auditd
     state: started
     enabled: true
@@ -142,7 +142,7 @@
     - services
 
 - name: Harden sysctl settings
-  sysctl:
+  ansible.posix.sysctl:
     name: "{{ item.key }}"
     value: "{{ item.value }}"
     state: present
@@ -156,7 +156,7 @@
     - security
 
 - name: Set permissions on sensitive files
-  file:
+  ansible.builtin.file:
     path: "{{ item.path }}"
     owner: root
     group: root

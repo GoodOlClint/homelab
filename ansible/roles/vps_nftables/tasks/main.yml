@@ -16,7 +16,8 @@
   ansible.builtin.apk:
     name: nftables
     state: present
-    update_cache: yes
+    update_cache: true
+
   tags:
     - vps_nftables
     - packages

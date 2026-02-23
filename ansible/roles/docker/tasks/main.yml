@@ -1,6 +1,6 @@
 ---
 - name: Install NVIDIA GRID driver
-  import_role:
+  ansible.builtin.import_role:
     name: nvidia
   tags:
     - docker
@@ -8,7 +8,7 @@
     - driver
 
 - name: Install Docker using geerlingguy.docker
-  import_role:
+  ansible.builtin.import_role:
     name: geerlingguy.docker
   register: docker_role_result
   tags:
@@ -16,7 +16,7 @@
     - packages
 
 - name: Check if NVIDIA container toolkit GPG key exists
-  stat:
+  ansible.builtin.stat:
     path: /etc/apt/trusted.gpg.d/libnvidia-container.gpg
   register: nvidia_gpg_key
   tags:
@@ -24,11 +24,31 @@
     - nvidia
     - packages
 
-- name: Ensure nvidia-container-toolkit apt GPG key
-  ansible.builtin.apt_key:
+- name: Ensure apt keyrings directory exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+  tags:
+    - docker
+    - nvidia
+    - packages
+
+- name: Download nvidia-container-toolkit GPG key
+  ansible.builtin.get_url:
     url: https://nvidia.github.io/libnvidia-container/gpgkey
-    keyring: /etc/apt/trusted.gpg.d/libnvidia-container.gpg
-    state: present
+    dest: /etc/apt/keyrings/libnvidia-container.asc
+    mode: '0644'
+  when: not nvidia_gpg_key.stat.exists
+  tags:
+    - docker
+    - nvidia
+    - packages
+
+- name: Dearmor nvidia-container-toolkit GPG key
+  ansible.builtin.command:
+    cmd: gpg --dearmor -o /etc/apt/trusted.gpg.d/libnvidia-container.gpg /etc/apt/keyrings/libnvidia-container.asc
+    creates: /etc/apt/trusted.gpg.d/libnvidia-container.gpg
   when: not nvidia_gpg_key.stat.exists
   tags:
     - docker
@@ -109,7 +129,7 @@
     - config
 
 - name: Parse existing Docker daemon configuration
-  set_fact:
+  ansible.builtin.set_fact:
     daemon_config: "{{ daemon_json_content.content | b64decode | from_json if daemon_json_content.content is defined else {} }}"
   tags:
     - docker
@@ -117,7 +137,7 @@
     - config
 
 - name: Merge logging configuration into Docker daemon config
-  set_fact:
+  ansible.builtin.set_fact:
     daemon_config: "{{ daemon_config | combine({'log-driver': 'syslog', 'log-opts': {'syslog-address': 'udp://' + openobserve_listen_host + ':5514', 'syslog-format': 'rfc5424', 'tag': ansible_hostname + '/{{.Name}}'}}) }}"
   tags:
     - docker
@@ -175,7 +195,7 @@
 
 
 - name: Deploy docker-compose.yml to the docker VM
-  template:
+  ansible.builtin.template:
     src: templates/docker-compose.yml.j2
     dest: /opt/docker-compose.yml
     owner: root
@@ -232,7 +252,7 @@
     - compose
 
 - name: Create .env file for Docker Compose with secrets
-  template:
+  ansible.builtin.template:
     src: docker-env.j2
     dest: /opt/.env
     mode: '0600'
@@ -246,13 +266,13 @@
     - secrets
 
 - name: Set reboot required flag
-  set_fact:
+  ansible.builtin.set_fact:
     reboot_required: "{{ (nvidia_ctk_result is defined and nvidia_ctk_result is changed) or (docker_role_result is defined and docker_role_result is changed) }}"
   tags:
     - docker
 
 - name: Reboot system if major Docker configuration changes were made
-  reboot:
+  ansible.builtin.reboot:
     reboot_timeout: 300
     connect_timeout: 20
     test_command: systemctl is-active docker
@@ -279,16 +299,17 @@
     - deploy
 
 - name: Display final container status
-  shell: |
+  ansible.builtin.shell: |
     docker ps --format "table {% raw %}{{.Names}}\t{{.Status}}\t{{.Ports}}{% endraw %}"
   register: container_status
+  changed_when: false
   ignore_errors: true
   tags:
     - docker
     - validate
 
 - name: Show running containers
-  debug:
+  ansible.builtin.debug:
     msg: "{{ container_status.stdout_lines }}"
   when: container_status.stdout_lines is defined
   tags:

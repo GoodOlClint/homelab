@@ -1,6 +1,6 @@
 ---
 - name: Check if Proxmox Backup Server GPG key exists
-  stat:
+  ansible.builtin.stat:
     path: /etc/apt/trusted.gpg.d/proxmox-release-bookworm.gpg
   register: proxmox_gpg_key
   tags:
@@ -9,10 +9,22 @@
     - backup
     - packages
 
-- name: Install Proxmox Backup Server repository key
-  apt_key:
+- name: Ensure apt keyrings directory exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - packages
+
+- name: Download Proxmox Backup Server repository key
+  ansible.builtin.get_url:
     url: https://enterprise.proxmox.com/debian/proxmox-release-bookworm.gpg
-    state: present
+    dest: /etc/apt/keyrings/proxmox-release-bookworm.gpg
+    mode: '0644'
   when: not proxmox_gpg_key.stat.exists
   tags:
     - proxmox_backup
@@ -21,7 +33,7 @@
     - packages
 
 - name: Check if Proxmox Backup Server repo is present
-  shell: grep -q '^deb .*/pbs' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null
+  ansible.builtin.shell: grep -q '^deb .*/pbs' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null
   register: proxmox_backup_repo_present
   changed_when: false
   failed_when: false
@@ -32,8 +44,8 @@
     - packages
 
 - name: Add Proxmox Backup Server repository
-  apt_repository:
-    repo: "deb http://download.proxmox.com/debian/pbs bookworm pbs-no-subscription"
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/proxmox-release-bookworm.gpg] http://download.proxmox.com/debian/pbs bookworm pbs-no-subscription"
     state: present
     filename: proxmox-backup
   when: proxmox_backup_repo_present.rc != 0
@@ -55,10 +67,11 @@
     - packages
 
 - name: Install Proxmox Backup Server
-  apt:
+  ansible.builtin.apt:
     name: proxmox-backup-server
     state: present
-    update_cache: yes
+    update_cache: true
+
   when: proxmox_backup_installed.rc != 0
   tags:
     - proxmox_backup
@@ -67,10 +80,11 @@
     - packages
 
 - name: Ensure Proxmox Backup Server is started and enabled
-  systemd:
+  ansible.builtin.systemd:
     name: proxmox-backup
     state: started
-    enabled: yes
+    enabled: true
+
   tags:
     - proxmox_backup
     - pbs
@@ -94,10 +108,11 @@
     - packages
 
 - name: Ensure iSCSI initiator is started and enabled
-  systemd:
+  ansible.builtin.systemd:
     name: "{{ item }}"
     state: started
-    enabled: yes
+    enabled: true
+
   loop:
     - open-iscsi
     - iscsid
@@ -111,7 +126,7 @@
     - service
 
 - name: Discover iSCSI targets
-  shell: |
+  ansible.builtin.shell: |
     iscsiadm --mode discovery --type sendtargets --portal {{ pbs_iscsi_portal }}
   register: iscsi_discovery
   changed_when: false
@@ -124,7 +139,7 @@
     - iscsi
 
 - name: Login to iSCSI target
-  shell: |
+  ansible.builtin.shell: |
     iscsiadm --mode node --targetname {{ pbs_iscsi_target }} --portal {{ pbs_iscsi_portal }} --login
   register: iscsi_login
   failed_when: false
@@ -138,8 +153,9 @@
     - iscsi
 
 - name: Enable automatic iSCSI login on boot
-  shell: |
+  ansible.builtin.shell: |
     iscsiadm --mode node --targetname {{ pbs_iscsi_target }} --portal {{ pbs_iscsi_portal }} --op update --name node.startup --value automatic
+  changed_when: false
   when: pbs_storage_backend == 'iscsi'
   tags:
     - proxmox_backup
@@ -149,7 +165,7 @@
     - iscsi
 
 - name: Wait for iSCSI device to appear
-  wait_for:
+  ansible.builtin.wait_for:
     path: /dev/disk/by-path/ip-{{ pbs_iscsi_portal.split(':')[0] }}:{{ pbs_iscsi_portal.split(':')[1] }}-iscsi-{{ pbs_iscsi_target }}-lun-1
     state: present
     timeout: 30
@@ -163,7 +179,7 @@
     - iscsi
 
 - name: Get iSCSI device name
-  shell: |
+  ansible.builtin.shell: |
     readlink -f /dev/disk/by-path/ip-{{ pbs_iscsi_portal.split(':')[0] }}:{{ pbs_iscsi_portal.split(':')[1] }}-iscsi-{{ pbs_iscsi_target }}-lun-1
   register: iscsi_device_path
   changed_when: false
@@ -176,7 +192,7 @@
     - iscsi
 
 - name: Check if iSCSI device is formatted
-  shell: |
+  ansible.builtin.shell: |
     blkid {{ iscsi_device_path.stdout }}
   register: iscsi_formatted
   failed_when: false
@@ -190,7 +206,7 @@
     - iscsi
 
 - name: Format iSCSI LUN with {{ pbs_iscsi_filesystem }}
-  filesystem:
+  community.general.filesystem:
     fstype: "{{ pbs_iscsi_filesystem }}"
     dev: "{{ iscsi_device_path.stdout }}"
     opts: -L pbs-datastore
@@ -205,7 +221,7 @@
     - iscsi
 
 - name: Ensure iSCSI mount point exists
-  file:
+  ansible.builtin.file:
     path: "{{ pbs_iscsi_mount_path }}"
     state: directory
     owner: root
@@ -220,7 +236,7 @@
     - iscsi
 
 - name: Mount iSCSI LUN
-  mount:
+  ansible.posix.mount:
     path: "{{ pbs_iscsi_mount_path }}"
     src: "{{ iscsi_device_path.stdout }}"
     fstype: "{{ pbs_iscsi_filesystem }}"
@@ -236,7 +252,7 @@
 
 # Storage Configuration - NFS (legacy)
 - name: Ensure /mnt/backups exists
-  file:
+  ansible.builtin.file:
     path: /mnt/backups
     state: directory
     owner: root
@@ -266,7 +282,8 @@
 
 - name: Ensure NFS fstab entry and mount
   ansible.posix.mount:
-    backup: yes
+    backup: true
+
     boot: "yes"
     path: "/mnt/backups"
     src: "{{ proxmox_backup_nfs_src }}"
@@ -305,8 +322,9 @@
     - config
 
 - name: Update apt cache if repo was removed
-  apt:
-    update_cache: yes
+  ansible.builtin.apt:
+    update_cache: true
+
   when: proxmox_enterprise_repo_removed.changed or proxmox_enterprise_repo_line_removed.changed
   tags:
     - proxmox_backup
@@ -316,7 +334,7 @@
 
 # Datastore Configuration
 - name: Ensure datastore directories exist
-  file:
+  ansible.builtin.file:
     path: "{{ item.path }}"
     state: directory
     owner: backup
@@ -331,7 +349,7 @@
     - config
 
 - name: Check if datastores are already configured
-  shell: proxmox-backup-manager datastore list --output-format json
+  ansible.builtin.shell: proxmox-backup-manager datastore list --output-format json
   register: pbs_datastore_list
   changed_when: false
   failed_when: false
@@ -342,7 +360,7 @@
     - datastore
 
 - name: Create datastores via CLI
-  shell: |
+  ansible.builtin.shell: |
     proxmox-backup-manager datastore create {{ item.name }} {{ item.path }}{% if item.comment is defined %} --comment "{{ item.comment }}"{% endif %}{% if item.gc_schedule is defined %} --gc-schedule "{{ item.gc_schedule }}"{% endif %}{% if item.prune_schedule is defined %} --prune-schedule "{{ item.prune_schedule }}"{% endif %}{% if item.keep_last is defined %} --keep-last {{ item.keep_last }}{% endif %}{% if item.keep_hourly is defined and item.keep_hourly > 0 %} --keep-hourly {{ item.keep_hourly }}{% endif %}{% if item.keep_daily is defined %} --keep-daily {{ item.keep_daily }}{% endif %}{% if item.keep_weekly is defined %} --keep-weekly {{ item.keep_weekly }}{% endif %}{% if item.keep_monthly is defined %} --keep-monthly {{ item.keep_monthly }}{% endif %}{% if item.keep_yearly is defined %} --keep-yearly {{ item.keep_yearly }}{% endif %}
   loop: "{{ pbs_datastores }}"
   when:
@@ -366,7 +384,8 @@
       datastore: {{ item.item.name }}
       	path {{ item.item.path }}
       	comment {{ item.item.comment | default('Managed by Ansible') }}
-    create: yes
+    create: true
+
     owner: root
     group: www-data
     mode: '0640'
@@ -384,7 +403,7 @@
 
 # User Management
 - name: Check if backup user exists
-  shell: proxmox-backup-manager user list --output-format json
+  ansible.builtin.shell: proxmox-backup-manager user list --output-format json
   register: pbs_user_list
   changed_when: false
   failed_when: false
@@ -395,7 +414,7 @@
     - users
 
 - name: Create PBS users
-  shell: |
+  ansible.builtin.shell: |
     proxmox-backup-manager user create {{ item.username }}@{{ item.realm }} \
       {% if item.comment is defined %}--comment "{{ item.comment }}"{% endif %} \
       {% if secrets.pbs_backup_user_password is defined %}--password "{{ secrets.pbs_backup_user_password }}"{% endif %}
@@ -437,7 +456,7 @@
 
 # ACL Configuration
 - name: Grant backup user DatastoreAdmin permissions (needed for namespace creation)
-  shell: |
+  ansible.builtin.shell: |
     proxmox-backup-manager acl update /datastore/{{ item.name }} DatastoreAdmin \
       --auth-id backup@pbs
   loop: "{{ pbs_datastores }}"
@@ -446,7 +465,7 @@
   changed_when: acl_admin_updated.rc == 0
 
 - name: Grant API token DatastoreAdmin permissions (needed for namespace creation)
-  shell: |
+  ansible.builtin.shell: |
     proxmox-backup-manager acl update /datastore/{{ item.name }} DatastoreAdmin \
       --auth-id 'backup@pbs!backup-token'
   loop: "{{ pbs_datastores }}"
@@ -456,19 +475,19 @@
 
 # API Token Generation
 - name: Check if API token exists for backup user
-  shell: proxmox-backup-manager user list-tokens backup@pbs --output-format json
+  ansible.builtin.shell: proxmox-backup-manager user list-tokens backup@pbs --output-format json
   register: pbs_token_list
   changed_when: false
   failed_when: false
 
 - name: Generate API token for backup user
-  shell: |
+  ansible.builtin.shell: |
     proxmox-backup-manager user generate-token backup@pbs backup-token
   register: pbs_token_output
   when: pbs_token_list.stdout is defined and (pbs_token_list.stdout | from_json | length == 0)
 
 - name: Display API token (save this securely!)
-  debug:
+  ansible.builtin.debug:
     msg: |
       ============================================
       PBS API Token Generated (SAVE THIS!):
@@ -482,19 +501,19 @@
 
 # API Token Generation - Monitoring User
 - name: Check if API token exists for monitoring user
-  shell: proxmox-backup-manager user list-tokens monitoring@pbs --output-format json
+  ansible.builtin.shell: proxmox-backup-manager user list-tokens monitoring@pbs --output-format json
   register: pbs_monitoring_token_list
   changed_when: false
   failed_when: false
 
 - name: Generate API token for monitoring user
-  shell: |
+  ansible.builtin.shell: |
     proxmox-backup-manager user generate-token monitoring@pbs monitoring-token
   register: pbs_monitoring_token_output
   when: pbs_monitoring_token_list.stdout is defined and (pbs_monitoring_token_list.stdout | from_json | length == 0)
 
 - name: Display monitoring API token (save this securely!)
-  debug:
+  ansible.builtin.debug:
     msg: |
       ============================================
       PBS Monitoring API Token Generated (SAVE THIS!):
@@ -508,7 +527,7 @@
 
 # Grant monitoring user Audit (read-only) permissions
 - name: Grant monitoring user Audit permissions on datastores
-  shell: |
+  ansible.builtin.shell: |
     proxmox-backup-manager acl update /datastore/{{ item.name }} Audit \
       --auth-id monitoring@pbs
   loop: "{{ pbs_datastores }}"
@@ -517,7 +536,7 @@
   changed_when: acl_monitoring_updated.rc == 0
 
 - name: Grant monitoring token Audit permissions on datastores
-  shell: |
+  ansible.builtin.shell: |
     proxmox-backup-manager acl update /datastore/{{ item.name }} Audit \
       --auth-id 'monitoring@pbs!monitoring-token'
   loop: "{{ pbs_datastores }}"
@@ -526,7 +545,7 @@
   changed_when: acl_monitoring_token_updated.rc == 0
 
 - name: Grant monitoring user Audit permissions on system
-  shell: |
+  ansible.builtin.shell: |
     proxmox-backup-manager acl update / Audit \
       --auth-id monitoring@pbs
   register: acl_monitoring_system_updated
@@ -534,7 +553,7 @@
   changed_when: acl_monitoring_system_updated.rc == 0
 
 - name: Grant monitoring token Audit permissions on system
-  shell: |
+  ansible.builtin.shell: |
     proxmox-backup-manager acl update / Audit \
       --auth-id 'monitoring@pbs!monitoring-token'
   register: acl_monitoring_token_system_updated
@@ -543,7 +562,7 @@
 
 # Verification jobs
 - name: Configure verification jobs
-  shell: |
+  ansible.builtin.shell: |
     proxmox-backup-manager verify-job create verify-{{ item.name }} \
       --store {{ item.name }} \
       --schedule "{{ pbs_verify_schedule | default('weekly') }}"
@@ -554,7 +573,7 @@
 
 # GC jobs
 - name: Configure garbage collection jobs
-  shell: |
+  ansible.builtin.shell: |
     proxmox-backup-manager gc-job create gc-{{ item.name }} \
       --store {{ item.name }} \
       --schedule "{{ item.gc_schedule | default('daily') }}"
@@ -565,7 +584,7 @@
 
 # Prune jobs
 - name: Configure prune jobs
-  shell: |
+  ansible.builtin.shell: |
     proxmox-backup-manager prune-job create prune-{{ item.name }} \
       --store {{ item.name }} \
       --schedule "{{ item.prune_schedule | default('daily') }}" \
@@ -580,7 +599,7 @@
   changed_when: "'created' in prune_job_created.stdout or prune_job_created.rc == 0"
 
 - name: Display PBS configuration summary
-  debug:
+  ansible.builtin.debug:
     msg: |
       ============================================
       Proxmox Backup Server Configuration Complete

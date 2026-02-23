@@ -3,12 +3,13 @@
 # Plex Services Role Tasks
 # This role uses global variables from group_vars/all.yml
 - name: Install NFS client packages
-  apt:
+  ansible.builtin.apt:
     name:
       - nfs-common
       - nfs-kernel-server
     state: present
-    update_cache: yes
+    update_cache: true
+
   when: nfs_enabled | default(true)
   tags:
     - plex_services
@@ -16,7 +17,7 @@
     - nfs
 
 - name: Install Docker using geerlingguy.docker
-  import_role:
+  ansible.builtin.import_role:
     name: geerlingguy.docker
   tags:
     - plex_services
@@ -35,7 +36,7 @@
     - config
 
 - name: Parse existing Docker daemon configuration
-  set_fact:
+  ansible.builtin.set_fact:
     daemon_config: "{{ daemon_json_content.content | b64decode | from_json if daemon_json_content.content is defined else {} }}"
   tags:
     - plex_services
@@ -44,7 +45,7 @@
     - config
 
 - name: Merge logging configuration into Docker daemon config
-  set_fact:
+  ansible.builtin.set_fact:
     daemon_config: "{{ daemon_config | combine({'log-driver': 'syslog', 'log-opts': {'syslog-address': 'udp://' + openobserve_listen_host + ':5514', 'syslog-format': 'rfc5424', 'tag': ansible_hostname + '/{{.Name}}'}}) }}"
   tags:
     - plex_services
@@ -70,7 +71,7 @@
     - config
 
 - name: Create plex-services system group
-  group:
+  ansible.builtin.group:
     name: "{{ plex_services_group }}"
     gid: "{{ plex_services_pgid }}"
     state: present
@@ -79,7 +80,7 @@
     - users
 
 - name: Create individual system users for each service
-  user:
+  ansible.builtin.user:
     name: "{{ item.key }}"
     uid: "{{ item.value.PUID }}"
     group: "{{ plex_services_group }}"
@@ -96,7 +97,7 @@
     - users
 
 - name: Create plex services directories
-  file:
+  ansible.builtin.file:
     path: "{{ item }}"
     state: directory
     owner: root
@@ -110,7 +111,7 @@
     - config
 
 - name: Create empty config folders for each service
-  file:
+  ansible.builtin.file:
     path: "/docker/{{ item.key }}"
     state: directory
     owner: "{{ item.key }}"
@@ -125,21 +126,22 @@
     - config
 
 - name: Install PostgreSQL client packages
-  apt:
+  ansible.builtin.apt:
     name:
       - postgresql-client-common
       - postgresql-client
       - python3-psycopg2
       - smbclient
     state: present
-    update_cache: yes
+    update_cache: true
+
   tags:
     - plex_services
     - packages
     - postgres
 
 - name: Copy PostgreSQL PBS backup script
-  template:
+  ansible.builtin.template:
     src: postgres_pbs_backup.sh.j2
     dest: /usr/local/bin/postgres_pbs_backup.sh
     owner: root
@@ -153,7 +155,7 @@
     - postgres
 
 - name: Copy PostgreSQL legacy backup script (SMB)
-  template:
+  ansible.builtin.template:
     src: postgres_backup.sh.j2
     dest: /usr/local/bin/postgres_backup.sh
     owner: root
@@ -167,7 +169,7 @@
     - postgres
 
 - name: Copy PostgreSQL restore script
-  template:
+  ansible.builtin.template:
     src: postgres_restore.sh.j2
     dest: /usr/local/bin/postgres_restore.sh
     owner: root
@@ -179,7 +181,7 @@
     - postgres
 
 - name: Create PostgreSQL PBS backup cron job
-  cron:
+  ansible.builtin.cron:
     name: "PostgreSQL PBS backup"
     cron_file: postgres_pbs_backup
     minute: "0"
@@ -195,7 +197,7 @@
     - cron
 
 - name: Create PostgreSQL legacy backup cron job (SMB)
-  cron:
+  ansible.builtin.cron:
     name: "PostgreSQL backup"
     cron_file: postgres_backup
     minute: "0"
@@ -211,7 +213,7 @@
     - cron
 
 - name: Create plex services docker compose file
-  template:
+  ansible.builtin.template:
     src: docker-compose.yml.j2
     dest: /docker/docker-compose-plex-services.yml
     owner: root
@@ -225,10 +227,11 @@
     - compose
 
 - name: Ensure docker service is started and enabled
-  systemd:
+  ansible.builtin.systemd:
     name: docker
     state: started
-    enabled: yes
+    enabled: true
+
   tags:
     - plex_services
     - docker
@@ -260,7 +263,7 @@
     - deploy
 
 - name: Wait for PostgreSQL to be ready
-  wait_for:
+  ansible.builtin.wait_for:
     port: 5432
     host: localhost
     timeout: 300
@@ -290,7 +293,7 @@
     - database
 
 - name: Initialize plex_service_db_pairs
-  set_fact:
+  ansible.builtin.set_fact:
     plex_service_db_pairs: []
   tags:
     - plex_services
@@ -298,7 +301,7 @@
     - database
 
 - name: Add service/db pairs to plex_service_db_pairs
-  set_fact:
+  ansible.builtin.set_fact:
     plex_service_db_pairs: "{{ plex_service_db_pairs + [{'service': item.0.key, 'db_user': item.0.value.db_user, 'db_name': item.1}] }}"
   with_subelements:
     - "{{ plex_services | dict2items }}"
@@ -363,7 +366,7 @@
     - database
 
 - name: Attempt to restore databases from remote backup on first deployment
-  shell: |
+  ansible.builtin.shell: |
     # Check if remote backups exist and restore the latest ones
     if /usr/local/bin/postgres_restore.sh --list-remote | grep -q "\.sql\.gz$"; then
       echo "Remote backups found, attempting to restore..."
@@ -395,7 +398,7 @@
     - restore
 
 - name: Display PostgreSQL restore results
-  debug:
+  ansible.builtin.debug:
     msg: "{{ postgres_restore_result.stdout_lines }}"
   when: postgres_restore_result is defined and postgres_restore_result.stdout_lines is defined
   tags:
@@ -404,10 +407,11 @@
     - restore
 
 - name: Ensure lxml is installed for XML config management
-  apt:
+  ansible.builtin.apt:
     name: python3-lxml
     state: present
-    update_cache: yes
+    update_cache: true
+
   become: true
   tags:
     - plex_services
@@ -491,7 +495,7 @@
         label: "{{ item.key }}"
 
     - name: Set api_key fact for each service
-      set_fact:
+      ansible.builtin.set_fact:
         arr_api_keys: >-
           {{
             arr_api_keys | default({}) |
@@ -509,12 +513,13 @@
     - config
 
 - name: Correct permissions for plex services directories
-  file:
+  ansible.builtin.file:
     path: "/docker/{{ item.key }}"
     state: directory
     owner: "{{ item.key }}"
     group: "{{ plex_services_group }}"
-    recurse: yes
+    recurse: true
+
   loop: "{{ plex_services | dict2items }}"
   loop_control:
     label: "{{ item.key }} config"
@@ -536,7 +541,7 @@
     - service
 
 - name: Ensure pip is installed (Debian/Ubuntu)
-  apt:
+  ansible.builtin.apt:
     name: python3-pip
     state: present
   become: true
@@ -575,7 +580,7 @@
     - config
 
 - name: Generate configarr_secrets.yaml from template
-  template:
+  ansible.builtin.template:
     src: configarr_secrets.yml.j2
     dest: /configarr/secrets.yml
     owner: root

@@ -21,14 +21,14 @@
 
   post_tasks:
     - name: Wait for UniFi service to be ready
-      wait_for:
+      ansible.builtin.wait_for:
         port: 8443
         host: "{{ ansible_default_ipv4.address }}"
         timeout: 120
         delay: 10
 
     - name: Display UniFi Controller access information
-      debug:
+      ansible.builtin.debug:
         msg:
           - "=============================================="
           - "UniFi Controller installation complete!"

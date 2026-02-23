@@ -22,7 +22,8 @@
   ansible.builtin.lineinfile:
     path: /etc/rsyslog.d/99-openobserve.conf
     line: "*.* @{{ hostvars[groups['all'] | select('search', 'openobserve') | list | first]['ansible_host'] }}:5514"
-    create: yes
+    create: true
+
   tags:
     - rsyslog_client
     - logging

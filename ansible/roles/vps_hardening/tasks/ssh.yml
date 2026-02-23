@@ -13,8 +13,10 @@
     name: "{{ vps_service_user }}"
     shell: "{{ vps_service_user_shell }}"
     groups: wheel
-    append: yes
-    create_home: yes
+    append: true
+
+    create_home: true
+
   tags:
     - ssh
 
@@ -30,7 +32,8 @@
   ansible.builtin.lineinfile:
     path: /etc/sudoers.d/{{ vps_service_user }}
     line: "{{ vps_service_user }} ALL=(ALL) NOPASSWD: ALL"
-    create: yes
+    create: true
+
     mode: '0440'
     validate: 'visudo -cf %s'
   tags:

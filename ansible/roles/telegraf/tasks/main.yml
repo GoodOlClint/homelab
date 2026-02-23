@@ -9,7 +9,7 @@
   when: ansible_os_family == "Alpine"
 
 - name: Configure Telegraf to send metrics to OpenObserve
-  template:
+  ansible.builtin.template:
     src: telegraf-openobserve.conf.j2
     dest: /etc/telegraf/telegraf.d/openobserve.conf
     mode: '0644'
@@ -19,7 +19,7 @@
     - config
 
 - name: Validate Telegraf configuration syntax
-  command: telegraf --config /etc/telegraf/telegraf.conf --config-directory /etc/telegraf/telegraf.d config
+  ansible.builtin.command: telegraf --config /etc/telegraf/telegraf.conf --config-directory /etc/telegraf/telegraf.d config
   register: telegraf_test
   changed_when: false
   failed_when: telegraf_test.rc != 0
@@ -32,7 +32,8 @@
   ansible.builtin.service:
     name: telegraf
     state: started
-    enabled: yes
+    enabled: true
+
   tags:
     - telegraf
     - service

@@ -6,7 +6,8 @@
       - certbot
       - python3-certbot-dns-cloudflare
     state: present
-    update_cache: yes
+    update_cache: true
+
   tags:
     - plex
     - certificate
@@ -130,7 +131,8 @@
 - name: Ensure certbot renewal timer is enabled
   ansible.builtin.systemd:
     name: certbot.timer
-    enabled: yes
+    enabled: true
+
     state: started
   tags:
     - plex

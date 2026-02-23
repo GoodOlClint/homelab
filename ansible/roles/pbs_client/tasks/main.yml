@@ -2,7 +2,7 @@
 # Install and configure Proxmox Backup Client
 
 - name: Check if PBS GPG key exists
-  stat:
+  ansible.builtin.stat:
     path: /etc/apt/trusted.gpg.d/proxmox-release-bookworm.gpg
   register: pbs_gpg_key
   tags:
@@ -12,7 +12,7 @@
     - packages
 
 - name: Install Proxmox Backup Server repository key
-  shell: |
+  ansible.builtin.shell: |
     wget https://enterprise.proxmox.com/debian/proxmox-release-bookworm.gpg \
       -O /etc/apt/trusted.gpg.d/proxmox-release-bookworm.gpg
   when: not pbs_gpg_key.stat.exists
@@ -23,7 +23,7 @@
     - packages
 
 - name: Check if Proxmox repo is present
-  shell: grep -q "pbs-client" /etc/apt/sources.list.d/pbs-client.list
+  ansible.builtin.shell: grep -q "pbs-client" /etc/apt/sources.list.d/pbs-client.list
   register: pbs_repo_check
   failed_when: false
   changed_when: false
@@ -34,7 +34,7 @@
     - packages
 
 - name: Add Proxmox Backup Client repository
-  copy:
+  ansible.builtin.copy:
     content: |
       # Proxmox Backup Client repository
       deb http://download.proxmox.com/debian/pbs-client bookworm main
@@ -49,8 +49,9 @@
     - packages
 
 - name: Update apt cache if repo was added
-  apt:
-    update_cache: yes
+  ansible.builtin.apt:
+    update_cache: true
+
   when: pbs_repo_added is changed
   tags:
     - pbs_client
@@ -59,7 +60,7 @@
     - packages
 
 - name: Install proxmox-backup-client
-  apt:
+  ansible.builtin.apt:
     name: proxmox-backup-client
     state: present
   when: pbs_client_install | default(true)
@@ -70,7 +71,7 @@
     - packages
 
 - name: Ensure /etc/proxmox-backup directory exists
-  file:
+  ansible.builtin.file:
     path: /etc/proxmox-backup
     state: directory
     mode: '0755'
@@ -81,7 +82,7 @@
     - config
 
 - name: Create PBS environment file for authentication
-  template:
+  ansible.builtin.template:
     src: pbs_env.j2
     dest: /etc/proxmox-backup/pbs-client.env
     mode: '0600'
@@ -94,7 +95,7 @@
     - config
 
 - name: Verify PBS connection
-  shell: |
+  ansible.builtin.shell: |
     . /etc/proxmox-backup/pbs-client.env && proxmox-backup-client snapshot list | head -n 1 || true
   register: pbs_connection_test
   failed_when: false
@@ -106,7 +107,7 @@
     - validate
 
 - name: Display PBS connection status
-  debug:
+  ansible.builtin.debug:
     msg: "PBS Connection: {{ 'SUCCESS' if pbs_connection_test.rc == 0 else 'FAILED - ' + pbs_connection_test.stderr }}"
   when: pbs_connection_test is defined and pbs_connection_test.rc is defined
   tags:

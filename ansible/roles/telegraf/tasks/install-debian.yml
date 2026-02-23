@@ -2,7 +2,7 @@
 # Telegraf installation for Debian/Ubuntu (apt)
 
 - name: Check if InfluxData GPG key exists
-  stat:
+  ansible.builtin.stat:
     path: /usr/share/keyrings/influxdata.gpg
   register: influxdata_gpg_key
   tags:
@@ -58,10 +58,11 @@
     - packages
 
 - name: Ensure Telegraf is installed
-  apt:
+  ansible.builtin.apt:
     name: telegraf
     state: present
-    update_cache: yes
+    update_cache: true
+
   when: telegraf_installed.rc != 0
   tags:
     - telegraf

@@ -10,7 +10,7 @@
 
   post_tasks:
     - name: Display backup setup instructions
-      debug:
+      ansible.builtin.debug:
         msg: |
           ============================================
           Proxmox Backup Client Installed

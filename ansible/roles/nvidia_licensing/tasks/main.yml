@@ -8,7 +8,8 @@
       - python3-pip
       - git
     state: present
-    update_cache: yes
+    update_cache: true
+
   tags:
     - nvidia_licensing
     - nvidia
@@ -31,7 +32,8 @@
   ansible.builtin.git:
     repo: 'https://git.collinwebdesigns.de/oscar.krause/fastapi-dls.git'
     dest: /opt/fastapi-dls
-    update: yes
+    update: true
+
   tags:
     - nvidia_licensing
     - nvidia
@@ -123,7 +125,8 @@
     path: /opt/fastapi-dls
     owner: www-data
     group: www-data
-    recurse: yes
+    recurse: true
+
   tags:
     - nvidia_licensing
     - nvidia
@@ -146,9 +149,11 @@
 - name: Reload systemd and enable fastapi-dls
   ansible.builtin.systemd:
     name: fastapi-dls
-    enabled: yes
+    enabled: true
+
     state: started
-    daemon_reload: yes
+    daemon_reload: true
+
   tags:
     - nvidia_licensing
     - nvidia

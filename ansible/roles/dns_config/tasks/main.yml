@@ -3,7 +3,7 @@
   loop: "{{ dns_zones | dict2items }}"
   loop_control:
     loop_var: vlan
-  command: >
+  ansible.builtin.command: >
     resolvectl dns eth_{{ vlan.key }} {{ vlan.value.dns_ip }}
   become: true
   changed_when: false
@@ -17,7 +17,7 @@
   loop: "{{ dns_zones | dict2items }}"
   loop_control:
     loop_var: vlan
-  command: >
+  ansible.builtin.command: >
     resolvectl dns eth_{{ vlan.key }} {{ vlan.value.dns_ip }} {{ vlan.value.dns_ipv6 }}
   become: true
   changed_when: false
@@ -31,7 +31,7 @@
     - config
 
 - name: Wait for apt lock to be released
-  shell: while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 1; done
+  ansible.builtin.shell: while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 1; done
   changed_when: false
   timeout: 300
   tags:
@@ -39,11 +39,12 @@
     - packages
 
 - name: Ensure dnsutils is installed
-  apt:
+  ansible.builtin.apt:
     name:
       - dnsutils
     state: present
-    update_cache: yes
+    update_cache: true
+
   retries: 3
   delay: 10
   register: apt_result
@@ -57,7 +58,7 @@
   loop: "{{ dns_zones | dict2items }}"
   loop_control:
     loop_var: vlan
-  command: >
+  ansible.builtin.command: >
     resolvectl domain eth_{{ vlan.key }} {{ vlan.value.zone }}
   become: true
   changed_when: false

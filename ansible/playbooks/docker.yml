@@ -1,7 +1,8 @@
 ---
 - name: Manage Docker containers on the docker VM
   hosts: docker
-  become: yes
+  become: true
+
   vars_files:
     - ../group_vars/all.yml
   pre_tasks:

@@ -1,18 +1,19 @@
 ---
 - name: Install parted and cloud-guest-utils
-  apt:
+  ansible.builtin.apt:
     name:
       - parted
       - cloud-guest-utils
     state: present
-    update_cache: yes
+    update_cache: true
+
   tags:
     - expand_disk
     - storage
     - packages
 
 - name: Get current disk information
-  command: lsblk -ln -o NAME,SIZE,TYPE,MOUNTPOINT
+  ansible.builtin.command: lsblk -ln -o NAME,SIZE,TYPE,MOUNTPOINT
   register: disk_info
   changed_when: false
   tags:
@@ -21,7 +22,7 @@
     - validate
 
 - name: Display current disk layout
-  debug:
+  ansible.builtin.debug:
     msg: "{{ disk_info.stdout_lines }}"
   tags:
     - expand_disk
@@ -29,7 +30,7 @@
     - validate
 
 - name: Find root filesystem device
-  shell: df / | tail -1 | awk '{print $1}' | sed 's/[0-9]*$//'
+  ansible.builtin.shell: df / | tail -1 | awk '{print $1}' | sed 's/[0-9]*$//'
   register: root_device
   changed_when: false
   tags:
@@ -37,7 +38,7 @@
     - storage
 
 - name: Find root partition number
-  shell: df / | tail -1 | awk '{print $1}' | sed 's/.*[^0-9]//'
+  ansible.builtin.shell: df / | tail -1 | awk '{print $1}' | sed 's/.*[^0-9]//'
   register: root_partition
   changed_when: false
   tags:
@@ -45,14 +46,14 @@
     - storage
 
 - name: Display detected root device and partition
-  debug:
+  ansible.builtin.debug:
     msg: "Root device: {{ root_device.stdout }}, Root partition: {{ root_partition.stdout }}"
   tags:
     - expand_disk
     - storage
 
 - name: Resize partition to use all available space
-  command: growpart {{ root_device.stdout }} {{ root_partition.stdout }}
+  ansible.builtin.command: growpart {{ root_device.stdout }} {{ root_partition.stdout }}
   register: growpart_result
   failed_when: 
     - growpart_result.rc != 0
@@ -64,7 +65,7 @@
     - resize
 
 - name: Resize filesystem to use expanded partition
-  command: resize2fs {{ root_device.stdout }}{{ root_partition.stdout }}
+  ansible.builtin.command: resize2fs {{ root_device.stdout }}{{ root_partition.stdout }}
   when: growpart_result.changed
   register: resize_result
   tags:
@@ -73,7 +74,7 @@
     - resize
 
 - name: Display resize results
-  debug:
+  ansible.builtin.debug:
     msg: 
       - "Partition resize: {{ growpart_result.stdout if growpart_result.stdout is defined else 'No change needed' }}"
       - "Filesystem resize: {{ resize_result.stdout if resize_result.stdout is defined else 'Skipped' }}"
@@ -83,7 +84,7 @@
     - resize
 
 - name: Get updated disk information
-  command: lsblk -ln -o NAME,SIZE,TYPE,MOUNTPOINT
+  ansible.builtin.command: lsblk -ln -o NAME,SIZE,TYPE,MOUNTPOINT
   register: updated_disk_info
   changed_when: false
   tags:
@@ -92,7 +93,7 @@
     - validate
 
 - name: Display updated disk layout
-  debug:
+  ansible.builtin.debug:
     msg: "{{ updated_disk_info.stdout_lines }}"
   tags:
     - expand_disk

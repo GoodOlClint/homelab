@@ -2,7 +2,7 @@
 # UniFi Controller Backup Tasks
 
 - name: Create backup script
-  template:
+  ansible.builtin.template:
     src: backup-unifi.sh.j2
     dest: /usr/local/bin/backup-unifi
     owner: root
@@ -10,7 +10,7 @@
     mode: '0755'
 
 - name: Create restore script
-  template:
+  ansible.builtin.template:
     src: restore-unifi.sh.j2
     dest: /usr/local/bin/restore-unifi
     owner: root
@@ -18,7 +18,7 @@
     mode: '0755'
 
 - name: Create backup cron job
-  cron:
+  ansible.builtin.cron:
     name: "UniFi Controller automatic backup"
     minute: "{{ unifi_backup_schedule.split()[0] }}"
     hour: "{{ unifi_backup_schedule.split()[1] }}"
@@ -30,7 +30,7 @@
     state: present
 
 - name: Create backup cleanup cron job
-  cron:
+  ansible.builtin.cron:
     name: "UniFi Controller backup cleanup"
     minute: "30"
     hour: "3"

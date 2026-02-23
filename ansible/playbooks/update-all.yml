@@ -5,11 +5,14 @@
   become: true
   tasks:
     - name: Update apt cache and upgrade all packages
-      apt:
-        update_cache: yes
+      ansible.builtin.apt:
+        update_cache: true
+
         upgrade: dist
-        autoremove: yes
-        autoclean: yes
+        autoremove: true
+
+        autoclean: true
+
       register: upgrade_result
 
 - name: Update Homebridge plugins and Node.js
@@ -17,7 +20,7 @@
   become: true
   tasks:
     - name: Update Node.js and npm to latest
-      apt:
+      ansible.builtin.apt:
         name:
           - nodejs
           - npm
@@ -80,7 +83,7 @@
         - plex_pull_result.changed | default(false)
 
     - name: Prune unused Docker images
-      shell: docker image prune -af
+      ansible.builtin.shell: docker image prune -af
       changed_when: false
 
 - name: Final Reboot
@@ -90,12 +93,12 @@
   tasks:
 
   - name: Check if reboot is required
-    stat:
+    ansible.builtin.stat:
       path: /var/run/reboot-required
     register: reboot_required_file
 
   - name: Reboot server if required
-    reboot:
+    ansible.builtin.reboot:
       reboot_timeout: 300
       connect_timeout: 20
       test_command: uptime

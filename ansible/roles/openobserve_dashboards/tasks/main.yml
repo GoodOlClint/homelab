@@ -1,11 +1,12 @@
 ---
 - name: Check OpenObserve API connectivity
-  uri:
+  ansible.builtin.uri:
     url: "http://{{ openobserve_listen_host }}:{{ openobserve_listen_port }}/api/default/_search"
     method: GET
     user: "{{ openobserve_root_user_email }}"
     password: "{{ secrets.openobserve_root_user_pass }}"
-    force_basic_auth: yes
+    force_basic_auth: true
+
     status_code: [200, 401, 404]
   register: openobserve_api_check
   ignore_errors: true
@@ -16,7 +17,7 @@
     - validate
 
 - name: Display OpenObserve API status
-  debug:
+  ansible.builtin.debug:
     msg: "OpenObserve API is {{ 'accessible' if openobserve_api_check.status == 200 else 'not accessible' }}"
   tags:
     - openobserve_dashboards
@@ -25,7 +26,7 @@
     - validate
 
 - name: Create dashboards directory on OpenObserve host
-  file:
+  ansible.builtin.file:
     path: /opt/openobserve/dashboards
     state: directory
     mode: '0755'
@@ -36,7 +37,7 @@
     - dashboards
 
 - name: Copy PBS backup dashboard to OpenObserve host
-  copy:
+  ansible.builtin.copy:
     src: pbs_backup_dashboard.json
     dest: /opt/openobserve/dashboards/pbs_backup_dashboard.json
     mode: '0644'
@@ -47,7 +48,7 @@
     - dashboards
 
 - name: Copy PBS storage dashboard to OpenObserve host
-  copy:
+  ansible.builtin.copy:
     src: pbs_storage_dashboard.json
     dest: /opt/openobserve/dashboards/pbs_storage_dashboard.json
     mode: '0644'
@@ -58,7 +59,7 @@
     - dashboards
 
 - name: Display dashboard import instructions
-  debug:
+  ansible.builtin.debug:
     msg: |
       ============================================
       OpenObserve Dashboards Ready for Import

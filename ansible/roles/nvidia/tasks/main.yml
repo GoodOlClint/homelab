@@ -10,7 +10,7 @@
     - driver
 
 - name: Extract required NVIDIA driver version from URL
-  set_fact:
+  ansible.builtin.set_fact:
     required_nvidia_driver_version: "{{ (nvidia_grid_driver_url | regex_search('nvidia-linux-grid-[0-9]+_([0-9]+\\.[0-9]+\\.[0-9]+)_amd64\\.deb', '\\1'))[0] if (nvidia_grid_driver_url | regex_search('nvidia-linux-grid-[0-9]+_([0-9]+\\.[0-9]+\\.[0-9]+)_amd64\\.deb', '\\1')) is iterable else (nvidia_grid_driver_url | regex_search('nvidia-linux-grid-[0-9]+_([0-9]+\\.[0-9]+\\.[0-9]+)_amd64\\.deb', '\\1')) }}"
   tags:
     - nvidia

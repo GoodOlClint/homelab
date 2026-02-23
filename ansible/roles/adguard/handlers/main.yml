@@ -1,14 +1,15 @@
 ---
 - name: Reload systemd
-  systemd:
-    daemon_reload: yes
+  ansible.builtin.systemd:
+    daemon_reload: true
+
 
 - name: Restart systemd-resolved
-  systemd:
+  ansible.builtin.systemd:
     name: systemd-resolved
     state: restarted
 
 - name: Restart adguardhome
-  systemd:
+  ansible.builtin.systemd:
     name: adguardhome
     state: restarted

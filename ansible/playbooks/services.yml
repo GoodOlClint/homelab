@@ -1,7 +1,8 @@
 ---
 - name: Configure nvidia-licensing VM
   hosts: nvidia-licensing
-  become: yes
+  become: true
+
   vars_files:
     - ../group_vars/all.yml
   pre_tasks: &load_local_overrides
@@ -76,7 +77,8 @@
 
 - name: Configure homebridge VM
   hosts: homebridge
-  become: yes
+  become: true
+
   vars_files:
     - ../group_vars/all.yml
   pre_tasks: *load_local_overrides
@@ -88,7 +90,8 @@
 
 - name: Configure docker VM
   hosts: docker
-  become: yes
+  become: true
+
   vars_files:
     - ../group_vars/all.yml
   pre_tasks: *load_local_overrides
@@ -101,7 +104,8 @@
 
 - name: Configure plex VM
   hosts: plex
-  become: yes
+  become: true
+
   vars_files:
     - ../group_vars/all.yml
   pre_tasks: *load_local_overrides
@@ -115,7 +119,8 @@
 
 - name: Configure plex-services VM
   hosts: plex-services
-  become: yes
+  become: true
+
   vars_files:
     - ../group_vars/all.yml
   pre_tasks: *load_local_overrides
