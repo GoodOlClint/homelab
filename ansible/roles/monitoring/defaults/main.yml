@@ -1,2 +1,5 @@
 ---
 # Default variables for monitoring role
+
+# Default timezone for monitoring containers
+timezone: "America/Chicago"

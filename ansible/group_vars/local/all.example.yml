@@ -8,5 +8,8 @@ local_services:
   openobserve_listen_host: "REPLACE_WITH_HOST"
   openobserve_listen_port: 5080
 
+# Override default timezone for Docker containers (default: America/Chicago)
+# timezone: "America/New_York"
+
 # If not using sops immediately, keep temporary plain values only in this local file.
 # Prefer moving credentials into ansible/group_vars/secrets.sops.yml.
