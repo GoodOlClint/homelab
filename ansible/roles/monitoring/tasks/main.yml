@@ -79,7 +79,7 @@
   template:
     src: docker-compose.yml.j2
     dest: /opt/monitoring/docker-compose.yml
-    mode: '0644'
+    mode: '0600'
   tags:
     - monitoring
     - config
@@ -286,6 +286,7 @@
     minute: "*"
     state: "{{ 'present' if secrets.uptimerobot_heartbeat_url | default('') | length > 0 and secrets.uptimerobot_heartbeat_url != 'REPLACE_ME' else 'absent' }}"
   when: secrets.uptimerobot_heartbeat_url is defined and secrets.uptimerobot_heartbeat_url != 'REPLACE_ME'
+  no_log: true
   tags:
     - monitoring
     - cron
@@ -297,6 +298,6 @@
       - "Grafana is available at: http://{{ ansible_host }}:3000"
       - "Prometheus is available at: http://{{ ansible_host }}:9090"
       - "Uptime Kuma is available at: http://{{ ansible_host }}:3001"
-      - "Grafana default credentials: admin / {{ grafana_admin_password }}"
+      - "Grafana default credentials: admin / <see secrets.sops.yml>"
   tags:
     - monitoring

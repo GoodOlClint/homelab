@@ -474,11 +474,19 @@
       PBS API Token Generated (SAVE THIS!):
       User: backup@pbs
       Token: backup-token
-      Value: {{ pbs_token_output.stdout }}
       ============================================
-      Add to ansible vault:
-      secrets.pbs_backup_token: "{{ pbs_token_output.stdout }}"
+      Retrieve the token value from the Ansible output
+      with -v flag, or re-run the token generation task.
+      Add to secrets.sops.yml:
+        secrets.pbs_backup_token: "<token value>"
   when: pbs_token_output is changed and pbs_token_output.stdout is defined
+
+- name: Show PBS backup token value (verbose only)
+  debug:
+    msg: "PBS backup token value: {{ pbs_token_output.stdout }}"
+    verbosity: 1
+  when: pbs_token_output is changed and pbs_token_output.stdout is defined
+  no_log: "{{ not (ansible_verbosity >= 1) }}"
 
 # API Token Generation - Monitoring User
 - name: Check if API token exists for monitoring user
@@ -500,11 +508,19 @@
       PBS Monitoring API Token Generated (SAVE THIS!):
       User: monitoring@pbs
       Token: monitoring-token
-      Value: {{ pbs_monitoring_token_output.stdout }}
       ============================================
-      Add to ansible vault:
-        secrets.pbs_monitoring_token: "{{ pbs_monitoring_token_output.stdout }}"
+      Retrieve the token value from the Ansible output
+      with -v flag, or re-run the token generation task.
+      Add to secrets.sops.yml:
+        secrets.pbs_monitoring_token: "<token value>"
   when: pbs_monitoring_token_output is changed and pbs_monitoring_token_output.stdout is defined
+
+- name: Show PBS monitoring token value (verbose only)
+  debug:
+    msg: "PBS monitoring token value: {{ pbs_monitoring_token_output.stdout }}"
+    verbosity: 1
+  when: pbs_monitoring_token_output is changed and pbs_monitoring_token_output.stdout is defined
+  no_log: "{{ not (ansible_verbosity >= 1) }}"
 
 # Grant monitoring user Audit (read-only) permissions
 - name: Grant monitoring user Audit permissions on datastores

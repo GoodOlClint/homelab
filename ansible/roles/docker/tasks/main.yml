@@ -180,7 +180,7 @@
     dest: /opt/docker-compose.yml
     owner: root
     group: root
-    mode: '0644'
+    mode: '0600'
   vars:
     docker_nfs_server: "{{ docker_nfs_src.split(':')[0] }}"
     docker_nfs_path: "{{ docker_nfs_src.split(':')[1] }}"
@@ -273,6 +273,7 @@
   delay: 30
   register: compose_result
   until: compose_result is succeeded
+  no_log: true
   tags:
     - docker
     - compose
