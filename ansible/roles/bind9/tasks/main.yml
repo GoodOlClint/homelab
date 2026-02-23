@@ -216,9 +216,7 @@
         state: stopped
 
     - name: Remove all journal files
-      shell: rm -f /etc/bind/*.jnl
-      args:
-        warn: false
+      ansible.builtin.shell: rm -f /etc/bind/*.jnl
 
     - name: Start BIND service
       systemd:

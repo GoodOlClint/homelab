@@ -209,7 +209,7 @@ resource "vultr_instance" "vps" {
   reserved_ip_id    = vultr_reserved_ip.vps.id
   enable_ipv6       = true
   backups           = "disabled"
-  ddos_protection   = false
+  ddos_protection   = true
   activation_email  = false
 
   lifecycle {
