@@ -1,6 +1,25 @@
 ---
 # UniFi Controller Configuration Tasks
 
+- name: Create systemd override directory for UniFi
+  ansible.builtin.file:
+    path: /etc/systemd/system/unifi.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Override UniFi service type (vendor unit uses Type=notify but Java never sends READY)
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/unifi.service.d/override.conf
+    content: |
+      [Service]
+      Type=simple
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart UniFi
+
 - name: Configure UniFi system properties
   ansible.builtin.template:
     src: system.properties.j2
