@@ -51,9 +51,9 @@ log {
     source(s_network_udp);
     source(s_network_tcp);
 
-    # Parse syslog format
+    # Parse syslog format (RFC 3164 - default for rsyslog, most appliances)
     parser {
-        syslog-parser(flags(syslog-protocol));
+        syslog-parser();
     };
 
     # Add additional fields

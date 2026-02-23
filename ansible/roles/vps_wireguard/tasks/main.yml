@@ -171,6 +171,37 @@
     - vps_wireguard
     - validate
 
+# Store keys in Infisical (first deploy only — when new keys are generated)
+- name: Store VPS WireGuard private key in Infisical
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/infisical_write_secret.yml"
+  vars:
+    secret_name: "vps_wg_private_key"
+    secret_value: "{{ wg_private_key }}"
+    secret_path: "/vps"
+    secret_comment: "VPS WireGuard private key — auto-generated"
+  when:
+    - not wg_key_from_sops
+    - wg_private_key is defined
+    - infisical_login is defined
+  tags:
+    - vps_wireguard
+    - config
+
+- name: Store VPS WireGuard public key in Infisical
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/infisical_write_secret.yml"
+  vars:
+    secret_name: "vps_wg_public_key"
+    secret_value: "{{ wg_public_key }}"
+    secret_path: "/vps"
+    secret_comment: "VPS WireGuard public key — configure this as peer on pfSense"
+  when:
+    - not wg_key_from_sops
+    - wg_public_key is defined
+    - infisical_login is defined
+  tags:
+    - vps_wireguard
+    - config
+
 # Display key info — always show public key, show private key only on first deploy
 - name: Display VPS WireGuard public key
   ansible.builtin.debug:
@@ -179,11 +210,11 @@
     - vps_wireguard
     - validate
 
-- name: Display new keypair for saving (first deploy only)
+- name: Display new keypair for saving (first deploy only, when Infisical unavailable)
   ansible.builtin.debug:
     msg: |
       ╔══════════════════════════════════════════════════════════════╗
-      ║  NEW VPS KEYPAIR GENERATED — save these!                   ║
+      ║  NEW VPS KEYPAIR GENERATED                                 ║
       ╠══════════════════════════════════════════════════════════════╣
       ║  Public key  (for pfSense peer):                           ║
       ║  {{ wg_public_key }}
@@ -196,7 +227,9 @@
       ║  2. Save private key to secrets.sops.yml                   ║
       ║  3. Future rebuilds will reuse the SOPS key automatically  ║
       ╚══════════════════════════════════════════════════════════════╝
-  when: not wg_key_from_sops
+  when:
+    - not wg_key_from_sops
+    - infisical_login is not defined
   tags:
     - vps_wireguard
     - validate
