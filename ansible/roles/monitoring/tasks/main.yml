@@ -20,6 +20,9 @@
   ansible.builtin.set_fact:
     grafana_admin_password: "{{ secrets.grafana_admin_password }}"
     openobserve_root_user_pass: "{{ secrets.openobserve_root_user_pass }}"
+    proxmox_token_value: "{{ secrets.proxmox_token_value | default('') }}"
+    unifi_monitoring_password: "{{ secrets.unifi_monitoring_password | default('') }}"
+    pbs_api_token: "{{ secrets.pbs_api_token | default('') }}"
   tags: [monitoring, secrets]
 
 - name: Install required packages

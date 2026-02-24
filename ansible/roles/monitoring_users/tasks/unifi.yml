@@ -24,7 +24,7 @@
         method: POST
         body_format: json
         body:
-          username: "{{ unifi_admin_user | default(unifi_monitoring_user) }}"
+          username: "{{ unifi_admin_user | default('admin') }}"
           password: "{{ secrets.unifi_admin_password }}"
         validate_certs: false
         timeout: 10
