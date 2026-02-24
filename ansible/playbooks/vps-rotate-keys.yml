@@ -22,8 +22,9 @@
       run_once: true
 
     - name: Load secrets vars when present
-      ansible.builtin.include_vars:
+      community.sops.load_vars:
         file: "{{ playbook_dir }}/../group_vars/secrets.sops.yml"
+        expressions: evaluate-on-load
       when: secrets_vars_file.stat.exists
       run_once: true
 

@@ -37,8 +37,9 @@
   run_once: true
 
 - name: Load bootstrap credentials
-  ansible.builtin.include_vars:
+  community.sops.load_vars:
     file: "{{ playbook_dir }}/../group_vars/bootstrap.sops.yml"
+    expressions: evaluate-on-load
   run_once: true
 
 # Auto-generate Infisical deployment secrets if still REPLACE_ME

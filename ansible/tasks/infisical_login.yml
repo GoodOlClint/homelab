@@ -3,7 +3,7 @@
 # Bootstrap credentials come from SOPS Tier 1
 - name: Login to Infisical
   infisical.vault.login:
-    url: "{{ bootstrap.infisical_url }}"
+    url: "{{ bootstrap_config.infisical_url }}"
     auth_method: universal_auth
     universal_auth_client_id: "{{ bootstrap.infisical_client_id }}"
     universal_auth_client_secret: "{{ bootstrap.infisical_client_secret }}"
@@ -15,7 +15,7 @@
 - name: Read all runtime secrets from Infisical
   infisical.vault.read_secrets:
     login_data: "{{ infisical_login.login_data }}"
-    project_id: "{{ bootstrap.infisical_project_id }}"
+    project_id: "{{ bootstrap_config.infisical_project_id }}"
     env_slug: "prod"
     path: "/"
     as_dict: true

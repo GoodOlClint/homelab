@@ -11,14 +11,18 @@
 #   4. Fill in infisical_* values below
 #   5. Run: make infisical-seed (one-time migration from SOPS)
 
+# Non-sensitive Infisical connection config (NOT encrypted by SOPS)
+bootstrap_config:
+  infisical_url: "REPLACE_ME"          # http://<services_ip>:8080
+  infisical_project_id: "REPLACE_ME"   # Project UUID from Infisical UI
+
+# Sensitive credentials (encrypted by SOPS via encrypted_regex)
 bootstrap:
   # Terraform provider credentials
   # Proxmox uses root@pam + password auth (required for PCI mapping, GPU passthrough, etc.)
   proxmox_password: "REPLACE_ME"       # root@pam password
   vultr_api_key: "REPLACE_ME"          # Vultr API key
   cloudflare_api_token: "REPLACE_ME"   # Cloudflare API token (zone:read + DNS:edit)
-  unifi_admin_user: "REPLACE_ME"       # UniFi controller admin username
-  unifi_admin_password: "REPLACE_ME"  # UniFi controller admin password
 
   # Infisical deployment secrets (needed BEFORE Infisical exists)
   # Auto-generated on first `make bootstrap` if left as REPLACE_ME
@@ -27,8 +31,6 @@ bootstrap:
   infisical_encryption_key: "REPLACE_ME"     # openssl rand -hex 16
   infisical_auth_secret: "REPLACE_ME"        # openssl rand -base64 32
 
-  # Infisical connection (fill after first deployment)
-  infisical_url: "REPLACE_ME"          # http://<services_ip>:8080
+  # Infisical auth credentials (fill after first deployment)
   infisical_client_id: "REPLACE_ME"    # Machine Identity client ID
   infisical_client_secret: "REPLACE_ME" # Machine Identity client secret
-  infisical_project_id: "REPLACE_ME"   # Project UUID from Infisical UI

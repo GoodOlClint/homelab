@@ -37,7 +37,7 @@ BOOTSTRAP_FILE="ansible/group_vars/bootstrap.sops.yml"
 PROJECT_ID=$("$VENV_PYTHON" -c "
 import yaml
 data = yaml.safe_load(open('$BOOTSTRAP_FILE'))
-pid = data.get('bootstrap', {}).get('infisical_project_id', 'REPLACE_ME')
+pid = data.get('bootstrap_config', {}).get('infisical_project_id', 'REPLACE_ME')
 if pid == 'REPLACE_ME':
     print('')
 else:

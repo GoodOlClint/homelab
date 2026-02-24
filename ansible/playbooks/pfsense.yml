@@ -20,14 +20,15 @@
       run_once: true
 
     - name: Load bootstrap credentials (SOPS Tier 1)
-      ansible.builtin.include_vars:
+      community.sops.load_vars:
         file: "{{ playbook_dir }}/../group_vars/bootstrap.sops.yml"
+        expressions: evaluate-on-load
       when: bootstrap_vars_file.stat.exists
       run_once: true
 
     - name: Check if Infisical is reachable
       ansible.builtin.uri:
-        url: "{{ bootstrap.infisical_url }}/api/status"
+        url: "{{ bootstrap_config.infisical_url }}/api/status"
         method: GET
         status_code: 200
         timeout: 5
@@ -36,8 +37,8 @@
       delegate_to: localhost
       run_once: true
       when:
-        - bootstrap is defined
-        - bootstrap.infisical_url | default('REPLACE_ME') != 'REPLACE_ME'
+        - bootstrap_config is defined
+        - bootstrap_config.infisical_url | default('REPLACE_ME') != 'REPLACE_ME'
 
     - name: Load secrets from Infisical (Tier 2)
       ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/infisical_login.yml"
@@ -56,8 +57,9 @@
           become: false
 
         - name: Load SOPS secrets as fallback
-          ansible.builtin.include_vars:
+          community.sops.load_vars:
             file: "{{ playbook_dir }}/../group_vars/secrets.sops.yml"
+            expressions: evaluate-on-load
           when: secrets_vars_file.stat.exists
 
         - name: Warn about SOPS fallback
