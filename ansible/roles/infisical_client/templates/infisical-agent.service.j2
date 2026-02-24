@@ -1,0 +1,14 @@
+[Unit]
+Description=Infisical Agent ({{ infisical_identity_name }})
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/infisical agent --config {{ infisical_config_dir }}/agent.yaml
+Restart=on-failure
+RestartSec=10
+RuntimeDirectory=infisical
+
+[Install]
+WantedBy=multi-user.target

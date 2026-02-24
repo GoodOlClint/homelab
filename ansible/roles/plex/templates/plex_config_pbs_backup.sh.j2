@@ -11,7 +11,13 @@ DB_DIR="$PLEX_DIR/Plug-in Support/Databases"
 DB_MAIN="com.plexapp.plugins.library.db"
 DB_BLOBS="com.plexapp.plugins.library.blobs.db"
 PLEX_SQLITE="/usr/lib/plexmediaserver/Plex SQLite"
-PLEX_TOKEN="{{ plex_token }}"
+
+# Load runtime secrets from Infisical agent (with baked fallback)
+if [ -f /etc/infisical/secrets/plex.env ]; then
+    . /etc/infisical/secrets/plex.env
+fi
+
+PLEX_TOKEN="${PLEX_TOKEN:-{{ plex_token }}}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 LOG_FILE="/var/log/plex_config_pbs_backup.log"
 BACKUP_DIR="/tmp/plex_pbs_backup"

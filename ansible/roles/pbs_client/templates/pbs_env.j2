@@ -2,6 +2,12 @@
 # Source this file before running proxmox-backup-client commands
 # Example: . /etc/proxmox-backup/pbs-client.env && proxmox-backup-client snapshot list
 
-export PBS_REPOSITORY="{{ pbs_username }}!{{ pbs_token_name }}@{{ pbs_server_host }}:{{ pbs_datastore }}"
-export PBS_PASSWORD="{{ secrets.pbs_backup_token }}"
-export PBS_FINGERPRINT="{{ pbs_fingerprint }}"
+# Try Infisical agent-rendered secrets first (supports runtime rotation)
+if [ -f /etc/infisical/secrets/pbs.env ]; then
+    . /etc/infisical/secrets/pbs.env
+else
+    # Baked fallback (values from last Ansible deploy)
+    export PBS_REPOSITORY="{{ pbs_username }}!{{ pbs_token_name }}@{{ pbs_server_host }}:{{ pbs_datastore }}"
+    export PBS_PASSWORD="{{ secrets.pbs_backup_token }}"
+    export PBS_FINGERPRINT="{{ pbs_fingerprint }}"
+fi

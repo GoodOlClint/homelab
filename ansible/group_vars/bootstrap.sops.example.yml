@@ -15,6 +15,7 @@
 bootstrap_config:
   infisical_url: "REPLACE_ME"          # http://<services_ip>:8080
   infisical_project_id: "REPLACE_ME"   # Project UUID from Infisical UI
+  infisical_org_id: "REPLACE_ME"       # Organization UUID from Infisical UI → Settings → General
 
 # Sensitive credentials (encrypted by SOPS via encrypted_regex)
 bootstrap:

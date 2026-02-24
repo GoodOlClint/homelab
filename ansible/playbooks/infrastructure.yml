@@ -235,7 +235,14 @@
   vars_files:
     - ../group_vars/all.yml
   pre_tasks: *load_local_overrides
+  vars:
+    infisical_secret_paths: ["/shared", "/monitoring"]
+    infisical_agent_templates:
+      - name: monitoring
+        dest_path: /etc/infisical/secrets/monitoring.env
+        template_src: secrets/monitoring.env.tpl.j2
   roles:
+    - infisical_client
     - dns_config
     - monitoring
   tags:

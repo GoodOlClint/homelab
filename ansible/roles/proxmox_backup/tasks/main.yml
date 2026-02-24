@@ -114,6 +114,46 @@
     - backup
     - service
 
+# Retrieve PBS server certificate fingerprint
+- name: Get PBS server certificate fingerprint
+  ansible.builtin.shell: >
+    proxmox-backup-manager cert info 2>/dev/null |
+    grep -i fingerprint | awk '{print $2}'
+  register: pbs_cert_fingerprint
+  changed_when: false
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - config
+
+- name: Set pbs_fingerprint fact from server certificate
+  ansible.builtin.set_fact:
+    pbs_fingerprint: "{{ pbs_cert_fingerprint.stdout }}"
+  when: pbs_cert_fingerprint.stdout | length > 0
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - config
+
+- name: Store PBS fingerprint in Infisical
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/infisical_write_secret.yml"
+  vars:
+    secret_name: "PBS_FINGERPRINT"
+    secret_value: "{{ pbs_fingerprint }}"
+    secret_path: "/shared"
+    secret_comment: "PBS server TLS certificate fingerprint — auto-retrieved"
+  when:
+    - pbs_fingerprint is defined
+    - pbs_fingerprint | length > 0
+    - infisical_login is defined
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - config
+
 # Storage Configuration - iSCSI
 - name: Install iSCSI initiator packages
   ansible.builtin.package:
@@ -512,9 +552,9 @@
 - name: Store PBS backup token in Infisical
   ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/infisical_write_secret.yml"
   vars:
-    secret_name: "pbs_backup_token"
+    secret_name: "PBS_BACKUP_TOKEN"
     secret_value: "{{ pbs_token_output.stdout }}"
-    secret_path: "/infrastructure"
+    secret_path: "/shared"
     secret_comment: "PBS backup@pbs backup-token — auto-generated"
   when:
     - pbs_token_output is changed
@@ -547,7 +587,7 @@
 - name: Store PBS monitoring token in Infisical
   ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/infisical_write_secret.yml"
   vars:
-    secret_name: "pbs_monitoring_token"
+    secret_name: "PBS_MONITORING_TOKEN"
     secret_value: "{{ pbs_monitoring_token_output.stdout }}"
     secret_path: "/monitoring"
     secret_comment: "PBS monitoring@pbs monitoring-token — auto-generated"

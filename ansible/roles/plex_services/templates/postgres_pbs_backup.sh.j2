@@ -10,9 +10,14 @@ BACKUP_DIR="/tmp/postgres_pbs_backup"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 LOG_FILE="/var/log/postgres_pbs_backup.log"
 
+# Load runtime secrets from Infisical agent (with baked fallback)
+if [ -f /etc/infisical/secrets/plex-services.env ]; then
+    . /etc/infisical/secrets/plex-services.env
+fi
+
 # PostgreSQL connection details
 POSTGRES_USER="{{ postgres_user | default('qstick') }}"
-POSTGRES_PASSWORD="{{ secrets.postgres_password }}"
+POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-{{ secrets.postgres_password }}}"
 POSTGRES_HOST="localhost"
 POSTGRES_PORT="5432"
 

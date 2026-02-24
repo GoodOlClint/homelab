@@ -9,9 +9,14 @@ set -euo pipefail
 BACKUP_DIR="/docker/postgres_backups"
 LOG_FILE="/var/log/postgres_restore.log"
 
+# Load runtime secrets from Infisical agent (with baked fallback)
+if [ -f /etc/infisical/secrets/plex-services.env ]; then
+    . /etc/infisical/secrets/plex-services.env
+fi
+
 # PostgreSQL connection details
 POSTGRES_USER="{{ postgres_user | default('qstick') }}"
-POSTGRES_PASSWORD="{{ secrets.postgres_password }}"
+POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-{{ secrets.postgres_password }}}"
 POSTGRES_HOST="localhost"
 POSTGRES_PORT="5432"
 
@@ -20,7 +25,7 @@ POSTGRES_PORT="5432"
 SMB_SERVER="{{ plex_backup_smb_server }}"
 SMB_SHARE="{{ plex_backup_smb_share }}"
 SMB_USER="{{ plex_backup_smb_user }}"
-SMB_PASS="{{ plex_backup_smb_pass }}"
+SMB_PASS="${PLEX_SMB_PASS:-{{ plex_backup_smb_pass }}}"
 SMB_DOMAIN="{{ plex_backup_smb_domain | default('') }}"
 REMOTE_BACKUP_PATH="{{ postgres_backup_remote_path | default('plex_services/postgres_backups') }}"
 SMB_ENABLED=true

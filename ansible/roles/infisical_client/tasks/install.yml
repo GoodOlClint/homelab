@@ -1,0 +1,31 @@
+---
+# Install Infisical CLI on target VM
+
+- name: Check if infisical CLI is installed
+  ansible.builtin.command: infisical --version
+  register: infisical_version_check
+  changed_when: false
+  failed_when: false
+
+- name: Install Infisical CLI
+  when: infisical_version_check.rc != 0
+  block:
+    - name: Install prerequisites
+      ansible.builtin.apt:
+        name:
+          - curl
+          - bash
+        state: present
+        update_cache: true
+
+    - name: Add Infisical apt repository via setup script
+      ansible.builtin.shell: |
+        curl -1sLf 'https://artifacts-cli.infisical.com/setup.deb.sh' | bash
+      args:
+        creates: /etc/apt/sources.list.d/infisical-cli.list
+
+    - name: Install infisical package
+      ansible.builtin.apt:
+        name: infisical
+        state: present
+        update_cache: true

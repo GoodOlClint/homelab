@@ -94,7 +94,7 @@ vps-rotate-keys:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vps.yaml ansible/playbooks/vps-rotate-keys.yml -e "ansible_host=$(VPS_IP)"
 
 # === Secrets Management ===
-.PHONY: infisical-seed infisical-backup
+.PHONY: infisical-seed infisical-backup infisical-organize
 
 # One-time: migrate SOPS secrets to Infisical
 infisical-seed:
@@ -107,6 +107,10 @@ infisical-backup:
 		$(VENV_PYTHON) scripts/infisical_to_sops.py > ansible/group_vars/secrets.sops.yml.bak
 	@sops --encrypt --in-place ansible/group_vars/secrets.sops.yml.bak
 	@echo "Backup saved to ansible/group_vars/secrets.sops.yml.bak"
+
+# One-time: organize flat Infisical secrets into per-VM folders
+infisical-organize:
+	@bash scripts/organize_infisical_folders.sh
 
 # === Setup & Security ===
 .PHONY: setup-hooks bootstrap-local validate-public-policy security-check security-check-range

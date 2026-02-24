@@ -142,7 +142,14 @@
   vars_files:
     - ../group_vars/all.yml
   pre_tasks: *load_local_overrides
+  vars:
+    infisical_secret_paths: ["/shared", "/docker"]
+    infisical_agent_templates:
+      - name: pbs
+        dest_path: /etc/infisical/secrets/pbs.env
+        template_src: secrets/pbs.env.tpl.j2
   roles:
+    - infisical_client
     - dns_config
     - pbs_client
     - docker
@@ -156,7 +163,17 @@
   vars_files:
     - ../group_vars/all.yml
   pre_tasks: *load_local_overrides
+  vars:
+    infisical_secret_paths: ["/shared", "/plex"]
+    infisical_agent_templates:
+      - name: pbs
+        dest_path: /etc/infisical/secrets/pbs.env
+        template_src: secrets/pbs.env.tpl.j2
+      - name: plex
+        dest_path: /etc/infisical/secrets/plex.env
+        template_src: secrets/plex.env.tpl.j2
   roles:
+    - infisical_client
     - dns_config
     - pbs_client
     - plex
@@ -171,7 +188,17 @@
   vars_files:
     - ../group_vars/all.yml
   pre_tasks: *load_local_overrides
+  vars:
+    infisical_secret_paths: ["/shared", "/plex-services"]
+    infisical_agent_templates:
+      - name: pbs
+        dest_path: /etc/infisical/secrets/pbs.env
+        template_src: secrets/pbs.env.tpl.j2
+      - name: plex-services
+        dest_path: /etc/infisical/secrets/plex-services.env
+        template_src: secrets/plex-services.env.tpl.j2
   roles:
+    - infisical_client
     - dns_config
     - pbs_client
     - plex_services

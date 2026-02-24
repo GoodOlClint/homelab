@@ -1,0 +1,185 @@
+---
+# Provision a per-VM Machine Identity in Infisical via REST API
+# All API calls run on the control node (delegate_to: localhost, become: false)
+
+- name: Check for existing identity ID on VM
+  ansible.builtin.slurp:
+    src: "{{ infisical_config_dir }}/.identity-id"
+  register: existing_identity_file
+  failed_when: false
+  changed_when: false
+
+- name: Set existing identity ID fact
+  ansible.builtin.set_fact:
+    _vm_identity_id: "{{ existing_identity_file.content | default('') | b64decode | trim }}"
+
+# --- Authenticate as admin identity to make API calls ---
+
+- name: Get admin access token from Infisical
+  ansible.builtin.uri:
+    url: "{{ infisical_agent_url }}/api/v1/auth/universal-auth/login"
+    method: POST
+    body_format: form-urlencoded
+    body:
+      clientId: "{{ bootstrap.infisical_client_id }}"
+      clientSecret: "{{ bootstrap.infisical_client_secret }}"
+    status_code: 200
+  register: _admin_login
+  delegate_to: localhost
+  become: false
+  no_log: true
+
+- name: Set admin token fact
+  ansible.builtin.set_fact:
+    _admin_token: "{{ _admin_login.json.accessToken }}"
+  no_log: true
+
+# --- Organization ID from bootstrap config ---
+
+- name: Set organization ID fact
+  ansible.builtin.set_fact:
+    _org_id: "{{ bootstrap_config.infisical_org_id }}"
+
+# --- Check if identity already exists ---
+
+- name: Verify existing identity is still valid
+  ansible.builtin.uri:
+    url: "{{ infisical_agent_url }}/api/v1/identities/{{ _vm_identity_id }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ _admin_token }}"
+    status_code: [200, 404]
+  register: _identity_check
+  delegate_to: localhost
+  become: false
+  when: _vm_identity_id | length > 0
+
+- name: Set identity exists flag
+  ansible.builtin.set_fact:
+    _identity_exists: "{{ _identity_check is succeeded and _identity_check.status | default(404) == 200 }}"
+
+# --- Create identity if needed ---
+
+- name: Create Machine Identity for this VM
+  ansible.builtin.uri:
+    url: "{{ infisical_agent_url }}/api/v1/identities"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ _admin_token }}"
+      Content-Type: application/json
+    body_format: json
+    body:
+      name: "{{ infisical_identity_name }}"
+      organizationId: "{{ _org_id }}"
+      role: "member"
+    status_code: [200, 201]
+  register: _identity_create
+  delegate_to: localhost
+  become: false
+  when: not _identity_exists
+
+- name: Set identity ID from creation or existing
+  ansible.builtin.set_fact:
+    _vm_identity_id: "{{ _identity_create.json.identity.id if not _identity_exists else _vm_identity_id }}"
+
+- name: Save identity ID to VM
+  ansible.builtin.copy:
+    content: "{{ _vm_identity_id }}"
+    dest: "{{ infisical_config_dir }}/.identity-id"
+    owner: root
+    group: root
+    mode: '0600'
+  when: not _identity_exists
+
+# --- Add Universal Auth method (if identity was just created) ---
+
+- name: Add Universal Auth to identity
+  ansible.builtin.uri:
+    url: "{{ infisical_agent_url }}/api/v1/auth/universal-auth/identities/{{ _vm_identity_id }}"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ _admin_token }}"
+      Content-Type: application/json
+    body_format: json
+    body:
+      accessTokenTTL: 7200
+      accessTokenMaxTTL: 86400
+      accessTokenNumUsesLimit: 0
+      clientSecretTrustedIps:
+        - ipAddress: "0.0.0.0/0"
+      accessTokenTrustedIps:
+        - ipAddress: "0.0.0.0/0"
+    status_code: [200, 201, 400]
+  register: _auth_method
+  delegate_to: localhost
+  become: false
+  when: not _identity_exists
+
+# --- Create client secret ---
+
+- name: Check for existing client credentials on VM
+  ansible.builtin.stat:
+    path: "{{ infisical_config_dir }}/client-secret"
+  register: _existing_creds
+
+- name: Create client secret for identity
+  ansible.builtin.uri:
+    url: "{{ infisical_agent_url }}/api/v1/auth/universal-auth/identities/{{ _vm_identity_id }}/client-secrets"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ _admin_token }}"
+      Content-Type: application/json
+    body_format: json
+    body:
+      description: "{{ infisical_identity_name }} agent credentials"
+      ttl: 0
+      numUsesLimit: 0
+    status_code: [200, 201]
+  register: _client_secret
+  delegate_to: localhost
+  become: false
+  no_log: true
+  when: not _existing_creds.stat.exists
+
+- name: Write client-id file to VM
+  ansible.builtin.copy:
+    content: "{{ _auth_method.json.identityUniversalAuth.clientId }}"
+    dest: "{{ infisical_config_dir }}/client-id"
+    owner: root
+    group: root
+    mode: '0600'
+  when: not _existing_creds.stat.exists
+  no_log: true
+
+- name: Write client-secret file to VM
+  ansible.builtin.copy:
+    content: "{{ _client_secret.json.clientSecret }}"
+    dest: "{{ infisical_config_dir }}/client-secret"
+    owner: root
+    group: root
+    mode: '0600'
+  when: not _existing_creds.stat.exists
+  no_log: true
+
+# --- Grant project access ---
+
+- name: Add identity as project member
+  ansible.builtin.uri:
+    url: "{{ infisical_agent_url }}/api/v1/projects/{{ infisical_agent_project_id }}/memberships/identities/{{ _vm_identity_id }}"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ _admin_token }}"
+      Content-Type: application/json
+    body_format: json
+    body:
+      role: "member"
+    status_code: [200, 201, 400, 409]
+  delegate_to: localhost
+  become: false
+  when: not _identity_exists
+
+# --- Clean up admin token from facts ---
+
+- name: Clear admin token from facts
+  ansible.builtin.set_fact:
+    _admin_token: ""

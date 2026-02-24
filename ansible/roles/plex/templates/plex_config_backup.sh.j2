@@ -4,8 +4,14 @@ DB_DIR="$PLEX_DIR/Plug-in Support/Databases"
 DB_MAIN="com.plexapp.plugins.library.db"
 DB_BLOBS="com.plexapp.plugins.library.blobs.db"
 PLEX_SQLITE="/usr/lib/plexmediaserver/Plex SQLite"
-PLEX_TOKEN="{{ plex_token }}"
-PLEX_SMB_PASS="{{ secrets.plex_smb_pass }}"
+
+# Load runtime secrets from Infisical agent (with baked fallback)
+if [ -f /etc/infisical/secrets/plex.env ]; then
+    . /etc/infisical/secrets/plex.env
+fi
+
+PLEX_TOKEN="${PLEX_TOKEN:-{{ plex_token }}}"
+PLEX_SMB_PASS="${PLEX_SMB_PASS:-{{ secrets.plex_smb_pass }}}"
 PLEX_SMB_MOUNT="{{ plex_smb_mount }}"
 PLEX_SMB_SHARE="{{ plex_smb_share }}"
 PLEX_SMB_USER="{{ plex_smb_user }}"

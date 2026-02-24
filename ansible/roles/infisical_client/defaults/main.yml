@@ -1,0 +1,33 @@
+---
+# Infisical Client/Agent role defaults
+
+# Enable/disable the entire role
+infisical_client_enabled: true
+
+# Infisical server connection (from bootstrap config)
+infisical_agent_url: "{{ bootstrap_config.infisical_url }}"
+infisical_agent_project_id: "{{ bootstrap_config.infisical_project_id }}"
+infisical_agent_org_id: "{{ bootstrap_config.infisical_org_id }}"
+infisical_agent_env_slug: "prod"
+
+# Agent polling interval for secret refresh
+infisical_agent_refresh_interval: "60s"
+
+# Per-VM identity name (defaults to inventory hostname)
+infisical_identity_name: "{{ inventory_hostname }}-vm"
+
+# Paths this VM's identity can read (set per-host in playbook vars)
+# Example: ["/shared", "/monitoring"]
+infisical_secret_paths: []
+
+# Agent template definitions (set per-host in playbook vars)
+# Each item: { name, dest_path, template_src (optional, for Go template on VM) }
+# Example:
+#   - name: pbs
+#     dest_path: /etc/infisical/secrets/pbs.env
+infisical_agent_templates: []
+
+# Directories
+infisical_config_dir: /etc/infisical
+infisical_secrets_dir: /etc/infisical/secrets
+infisical_templates_dir: /etc/infisical/templates

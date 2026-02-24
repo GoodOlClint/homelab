@@ -1,0 +1,86 @@
+---
+# Infisical Client/Agent — install CLI, provision per-VM identity, run agent
+
+- name: Skip infisical_client when disabled
+  ansible.builtin.meta: end_role
+  when: not infisical_client_enabled
+
+- name: Install Infisical CLI
+  ansible.builtin.include_tasks: install.yml
+
+- name: Create Infisical config directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+  loop:
+    - "{{ infisical_config_dir }}"
+    - "{{ infisical_secrets_dir }}"
+    - "{{ infisical_templates_dir }}"
+    - /var/run/infisical
+
+- name: Provision per-VM Machine Identity
+  ansible.builtin.include_tasks: provision_identity.yml
+
+- name: Deploy agent config
+  ansible.builtin.template:
+    src: agent.yaml.j2
+    dest: "{{ infisical_config_dir }}/agent.yaml"
+    owner: root
+    group: root
+    mode: '0600'
+  notify: restart infisical-agent
+
+- name: Deploy Go templates for secret rendering
+  ansible.builtin.template:
+    src: "{{ item.template_src }}"
+    dest: "{{ infisical_templates_dir }}/{{ item.name }}.tpl"
+    owner: root
+    group: root
+    mode: '0600'
+  loop: "{{ infisical_agent_templates }}"
+  when: item.template_src is defined
+  notify: restart infisical-agent
+
+- name: Deploy systemd service unit
+  ansible.builtin.template:
+    src: infisical-agent.service.j2
+    dest: /etc/systemd/system/infisical-agent.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify:
+    - reload systemd
+    - restart infisical-agent
+
+- name: Flush handlers to restart agent before waiting
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start infisical-agent
+  ansible.builtin.systemd:
+    name: infisical-agent
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Wait for agent to render secrets
+  ansible.builtin.wait_for:
+    path: "{{ item.dest_path }}"
+    timeout: 30
+  loop: "{{ infisical_agent_templates }}"
+  when: infisical_agent_templates | length > 0
+  ignore_errors: true
+  register: _agent_render_wait
+
+- name: Warn if agent failed to render secrets
+  ansible.builtin.debug:
+    msg: >-
+      WARNING: Infisical agent has not rendered {{ item.item.dest_path }} yet.
+      Check agent logs: journalctl -u infisical-agent
+      Ensure all referenced secrets exist in Infisical.
+  loop: "{{ _agent_render_wait.results | default([]) }}"
+  when:
+    - item.failed is defined
+    - item.failed
