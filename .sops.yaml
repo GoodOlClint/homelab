@@ -2,14 +2,14 @@ creation_rules:
   - path_regex: ansible/group_vars/bootstrap\.sops\.ya?ml$
     encrypted_regex: '^(bootstrap)$'
     age: >-
-      REPLACE_WITH_AGE_PUBLIC_KEY
+      age1fykqszu2655hwpafemrz8txglh85980chrt05hldl5r99em69fhqux93j9
 
   - path_regex: ansible/group_vars/secrets\.sops\.ya?ml$
     encrypted_regex: '^(data|stringData|secrets|passwords|tokens|keys)$'
     age: >-
-      REPLACE_WITH_AGE_PUBLIC_KEY
+      age1fykqszu2655hwpafemrz8txglh85980chrt05hldl5r99em69fhqux93j9
 
   - path_regex: network-data/local/.*\.sops\.ya?ml$
     encrypted_regex: '^(.*)$'
     age: >-
-      REPLACE_WITH_AGE_PUBLIC_KEY
+      age1fykqszu2655hwpafemrz8txglh85980chrt05hldl5r99em69fhqux93j9
