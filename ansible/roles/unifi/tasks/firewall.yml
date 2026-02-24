@@ -1,56 +1,27 @@
 ---
-# UniFi Controller Firewall Configuration
+# UniFi OS Server Firewall Configuration
 
-- name: Allow UniFi Controller web interface (HTTPS)
+- name: Allow UniFi OS Server ports
   community.general.ufw:
     rule: allow
-    port: "{{ unifi_https_port }}"
-    proto: tcp
-    comment: "UniFi Controller HTTPS"
-
-- name: Allow UniFi Controller web interface (HTTP redirect)
-  community.general.ufw:
-    rule: allow
-    port: "{{ unifi_http_port }}"
-    proto: tcp
-    comment: "UniFi Controller HTTP"
-
-- name: Allow UniFi Guest Portal (HTTPS)
-  community.general.ufw:
-    rule: allow
-    port: "{{ unifi_portal_https_port }}"
-    proto: tcp
-    comment: "UniFi Guest Portal HTTPS"
-
-- name: Allow UniFi Guest Portal (HTTP redirect)
-  community.general.ufw:
-    rule: allow
-    port: "{{ unifi_portal_http_port }}"
-    proto: tcp
-    comment: "UniFi Guest Portal HTTP"
-
-- name: Allow UniFi STUN
-  community.general.ufw:
-    rule: allow
-    port: "3478"
-    proto: udp
-    comment: "UniFi STUN"
-
-- name: Allow UniFi device discovery
-  community.general.ufw:
-    rule: allow
-    port: "10001"
-    proto: udp
-    comment: "UniFi AP Discovery"
-
-- name: Allow UniFi device communication
-  community.general.ufw:
-    rule: allow
-    port: "8080"
-    proto: tcp
-    comment: "UniFi Device Communication"
-    from_ip: "{{ item }}"
-  loop: "{{ unifi_firewall_allowed_ips }}"
+    port: "{{ item.port }}"
+    proto: "{{ item.proto }}"
+    comment: "{{ item.comment }}"
+  loop:
+    - { port: "11443", proto: "tcp", comment: "UniFi OS Web UI (HTTPS)" }
+    - { port: "8443", proto: "tcp", comment: "UniFi Network HTTPS" }
+    - { port: "8080", proto: "tcp", comment: "UniFi Device Inform" }
+    - { port: "8880", proto: "tcp", comment: "UniFi Guest Portal HTTP" }
+    - { port: "8881", proto: "tcp", comment: "UniFi Portal Redirector" }
+    - { port: "8882", proto: "tcp", comment: "UniFi Portal Redirector (wired)" }
+    - { port: "8444", proto: "tcp", comment: "UniFi Cloud Access" }
+    - { port: "6789", proto: "tcp", comment: "UniFi Throughput Test" }
+    - { port: "5005", proto: "tcp", comment: "UniFi TURN" }
+    - { port: "5514", proto: "udp", comment: "UniFi Remote Syslog" }
+    - { port: "9543", proto: "tcp", comment: "UniFi OS API" }
+    - { port: "11084", proto: "tcp", comment: "UniFi OS Internal" }
+    - { port: "3478", proto: "udp", comment: "UniFi STUN" }
+    - { port: "10003", proto: "udp", comment: "UniFi Discovery (L3)" }
 
 - name: Reload UFW
   community.general.ufw:

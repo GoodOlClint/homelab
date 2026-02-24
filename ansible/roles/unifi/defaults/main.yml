@@ -1,40 +1,15 @@
 ---
-# UniFi Controller Role Default Variables
+# UniFi OS Server Role Default Variables
 
-# UniFi version (leave empty for latest)
-unifi_version: ""
-
-# MongoDB version (UniFi 8.x requires MongoDB 4.4)
-mongodb_version: "4.4"
-
-# UniFi system user
-unifi_user: "unifi"
-unifi_group: "unifi"
-
-# Installation paths
-unifi_base_dir: "/usr/lib/unifi"
-unifi_data_dir: "/usr/lib/unifi/data"
-unifi_log_dir: "/var/log/unifi"
-
-# Backup configuration
-unifi_backup_enabled: true
-unifi_backup_dir: "/var/backups/unifi"
-unifi_backup_retention_days: 30
-unifi_backup_schedule: "0 2 * * *"  # Daily at 2 AM
-
-# Network configuration
-unifi_http_port: 8080
-unifi_https_port: 8443
-unifi_portal_http_port: 8880
-unifi_portal_https_port: 8843
-
-# Java memory settings (in MB)
-unifi_xms: 1024  # Initial heap size
-unifi_xmx: 2048  # Maximum heap size
+# Installer URL — required for fresh installs only
+# Get from: https://community.ui.com/releases/r/uosserver
+# or: https://ui.com/download/releases/network-server
+# Leave empty to skip installation (already installed)
+unifi_uos_installer_url: ""
 
 # Firewall configuration
 unifi_configure_firewall: true
 unifi_firewall_allowed_ips:
-  - "{{ internal_network_cidr | default('172.16.0.0/12') }}"  # Internal networks
+  - "{{ internal_network_cidr | default('172.16.0.0/12') }}"
   - "10.0.0.0/8"
   - "192.168.0.0/16"

@@ -1,13 +1,7 @@
 ---
-# UniFi Controller Handlers
+# UniFi OS Server Handlers
 
-- name: Restart UniFi
+- name: Restart UniFi OS Server
   ansible.builtin.systemd:
-    name: unifi
-    state: restarted
-    daemon_reload: true
-
-- name: Restart MongoDB
-  ansible.builtin.systemd:
-    name: mongod
+    name: uosserver
     state: restarted

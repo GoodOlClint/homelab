@@ -1,7 +1,7 @@
 ---
-# UniFi Controller Deployment Playbook
+# UniFi OS Server Deployment Playbook
 
-- name: Deploy UniFi Network Controller
+- name: Deploy UniFi OS Server
   hosts: unifi
   become: true
   vars_files:
@@ -20,37 +20,23 @@
     - telegraf
 
   post_tasks:
-    - name: Wait for UniFi service to be ready
+    - name: Wait for UniFi OS Server web interface
       ansible.builtin.wait_for:
-        port: 8443
+        port: 11443
         host: "{{ ansible_facts['default_ipv4']['address'] }}"
-        timeout: 120
+        timeout: 180
         delay: 10
 
-    - name: Display UniFi Controller access information
+    - name: Display UniFi OS Server access information
       ansible.builtin.debug:
         msg:
-          - "=============================================="
-          - "UniFi Controller installation complete!"
-          - "=============================================="
+          - "UniFi OS Server deployment complete!"
           - ""
-          - "Access URL: https://{{ ansible_facts['hostname'] }}.{{ domain_suffix | default('lab.internal') }}:8443"
-          - "Alternative: https://{{ ansible_facts['default_ipv4']['address'] }}:8443"
-          - ""
-          - "First-time setup:"
-          - "  1. Accept the EULA"
-          - "  2. Create admin account"
-          - "  3. Configure controller name"
-          - "  4. Skip UniFi account (optional)"
-          - "  5. Configure network settings"
-          - ""
-          - "Backup/Restore commands:"
-          - "  Backup:  sudo /usr/local/bin/backup-unifi"
-          - "  Restore: sudo /usr/local/bin/restore-unifi <backup-file>"
-          - "  Location: /var/backups/unifi/"
+          - "Access URL: https://{{ ansible_facts['hostname'] }}.{{ domain_suffix | default('lab.internal') }}:11443"
+          - "Alternative: https://{{ ansible_facts['default_ipv4']['address'] }}:11443"
           - ""
           - "Service management:"
-          - "  Status:  sudo systemctl status unifi"
-          - "  Restart: sudo systemctl restart unifi"
-          - "  Logs:    sudo journalctl -u unifi -f"
-          - "=============================================="
+          - "  Status:  uosserver status"
+          - "  Restart: sudo systemctl restart uosserver"
+          - "  Shell:   uosserver shell"
+          - "  Logs:    sudo journalctl -u uosserver -f"

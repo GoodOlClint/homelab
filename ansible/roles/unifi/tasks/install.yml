@@ -1,34 +1,49 @@
 ---
-# UniFi Controller Installation via Glenn R.'s community script
-# https://community.ui.com/questions/UniFi-OS-Server-Installation-Scripts/ccbc7530-dd61-40a7-82ec-22b17f027776
+# UniFi OS Server Installation
+# Installs Podman dependencies and runs the official UOS installer binary.
+# Skips entirely if uosserver is already present.
 
-- name: Check if UniFi is already installed
+- name: Check if UniFi OS Server is already installed
   ansible.builtin.stat:
-    path: /usr/lib/unifi
-  register: unifi_installed
+    path: /usr/local/bin/uosserver
+  register: uos_installed
 
-- name: Download UniFi installation script
+- name: Install Podman and dependencies
+  ansible.builtin.apt:
+    name:
+      - podman
+      - slirp4netns
+      - uidmap
+    state: present
+    update_cache: true
+  when: not uos_installed.stat.exists
+
+- name: Fail if installer URL not provided for fresh install
+  ansible.builtin.fail:
+    msg: >-
+      UniFi OS Server is not installed and unifi_uos_installer_url is empty.
+      Set unifi_uos_installer_url to the installer binary URL from
+      https://community.ui.com/releases/r/uosserver
+  when:
+    - not uos_installed.stat.exists
+    - unifi_uos_installer_url | length == 0
+
+- name: Download UniFi OS Server installer
   ansible.builtin.get_url:
-    url: https://get.glennr.nl/unifi/install/install_latest/unifi-latest.sh
-    dest: /tmp/unifi-install.sh
+    url: "{{ unifi_uos_installer_url }}"
+    dest: /tmp/uos-installer
     mode: '0755'
-  when: not unifi_installed.stat.exists
+  when:
+    - not uos_installed.stat.exists
+    - unifi_uos_installer_url | length > 0
 
-- name: Run UniFi installation script
+- name: Run UniFi OS Server installer
   ansible.builtin.command:
-    cmd: bash /tmp/unifi-install.sh --skip --add-signing-keys
-  when: not unifi_installed.stat.exists
-  notify: Restart UniFi
+    cmd: /tmp/uos-installer install
+  when: not uos_installed.stat.exists
+  notify: Restart UniFi OS Server
 
-- name: Clean up installation script
+- name: Clean up installer
   ansible.builtin.file:
-    path: /tmp/unifi-install.sh
+    path: /tmp/uos-installer
     state: absent
-
-- name: Create backup directory
-  ansible.builtin.file:
-    path: "{{ unifi_backup_dir }}"
-    state: directory
-    owner: "{{ unifi_user }}"
-    group: "{{ unifi_group }}"
-    mode: '0755'
