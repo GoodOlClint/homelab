@@ -22,7 +22,7 @@
     name: telegraf
     groups: docker
     append: true
-  when: getent_group.docker is defined
+  when: getent_group.docker is not none
   notify: Restart Telegraf
   tags:
     - telegraf
