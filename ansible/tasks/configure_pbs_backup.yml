@@ -1,0 +1,49 @@
+---
+# Shared task: Set up a PBS backup cron job with optional SMB fallback
+#
+# Required variables:
+#   backup_name:       Human-readable name (e.g., "Plex config", "Docker volumes")
+#   backup_script_src: Template path for the backup script
+#   backup_script_dest: Destination path on the target
+#   backup_cron_hour:  Cron hour (default: "2")
+#   backup_cron_minute: Cron minute (default: "0")
+#
+# Optional variables:
+#   smb_backup_script_src:  Template path for SMB fallback script (omit to skip)
+#   smb_backup_script_dest: Destination path for SMB fallback script
+#   smb_backup_cron_hour:   Cron hour for SMB fallback
+#   smb_backup_cron_minute: Cron minute for SMB fallback
+
+- name: "Deploy {{ backup_name }} backup script"
+  ansible.builtin.template:
+    src: "{{ backup_script_src }}"
+    dest: "{{ backup_script_dest }}"
+    mode: '0750'
+    owner: root
+    group: root
+
+- name: "Create {{ backup_name }} backup cron job"
+  ansible.builtin.cron:
+    name: "Nightly {{ backup_name }} PBS backup"
+    job: "{{ backup_script_dest }}"
+    hour: "{{ backup_cron_hour | default('2') }}"
+    minute: "{{ backup_cron_minute | default('0') }}"
+    user: root
+
+- name: "Deploy {{ backup_name }} SMB fallback script"
+  ansible.builtin.template:
+    src: "{{ smb_backup_script_src }}"
+    dest: "{{ smb_backup_script_dest }}"
+    mode: '0750'
+    owner: root
+    group: root
+  when: smb_backup_script_src is defined
+
+- name: "Create {{ backup_name }} SMB fallback cron job"
+  ansible.builtin.cron:
+    name: "Nightly {{ backup_name }} SMB backup"
+    job: "{{ smb_backup_script_dest }}"
+    hour: "{{ smb_backup_cron_hour | default('3') }}"
+    minute: "{{ smb_backup_cron_minute | default('0') }}"
+    user: root
+  when: smb_backup_script_src is defined

@@ -122,18 +122,16 @@
     - plex
     - packages
 
-- name: Create PBS backup script for Plex config
-  ansible.builtin.template:
-    dest: /usr/local/bin/plex_config_pbs_backup.sh
-    mode: '0755'
-    owner: root
-    group: root
-    src: plex_config_pbs_backup.sh.j2
+- name: Configure Plex config PBS backup
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/configure_pbs_backup.yml"
+  vars:
+    backup_name: "Plex config"
+    backup_script_src: plex_config_pbs_backup.sh.j2
+    backup_script_dest: /usr/local/bin/plex_config_pbs_backup.sh
+    backup_cron_hour: "2"
+    backup_cron_minute: "0"
   when: pbs_backup_enabled | default(true)
-  tags:
-    - plex
-    - backup
-    - pbs
+  tags: [plex, backup, pbs, cron]
 
 - name: Create PBS restore script for Plex config
   ansible.builtin.template:
@@ -173,21 +171,6 @@
     - plex
     - backup
     - smb
-
-- name: Ensure cron job for nightly Plex config PBS backup
-  ansible.builtin.cron:
-    name: "Nightly Plex config PBS backup"
-    user: root
-    job: "/usr/local/bin/plex_config_pbs_backup.sh"
-    minute: 0
-    hour: 2
-    state: present
-  when: pbs_backup_enabled | default(true)
-  tags:
-    - plex
-    - backup
-    - pbs
-    - cron
 
 - name: Remove old SMB backup cron job when PBS is enabled
   ansible.builtin.cron:
