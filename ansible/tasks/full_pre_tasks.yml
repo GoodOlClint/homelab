@@ -1,0 +1,80 @@
+---
+# Full pre_tasks for all main playbooks.
+# Loads: local overrides, bootstrap SOPS, secrets (Infisical or SOPS), VLANs, prefixes.
+#
+# Optional variables:
+#   skip_vlan_computation: true  — skip VLAN prefix computation (e.g., for VPS playbook)
+#   load_private_bindings: true  — also load network-data/private_bindings.yaml (for pfSense)
+
+- name: Check for local override vars file
+  ansible.builtin.stat:
+    path: "{{ playbook_dir }}/../group_vars/local/all.yml"
+  register: local_override_vars_file
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: Load local override vars when present
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/../group_vars/local/all.yml"
+  when: local_override_vars_file.stat.exists
+  run_once: true
+
+- name: Load bootstrap credentials (SOPS Tier 1)
+  community.sops.load_vars:
+    file: "{{ playbook_dir }}/../group_vars/bootstrap.sops.yml"
+    expressions: evaluate-on-load
+  run_once: true
+
+- name: Load secrets from Infisical or SOPS
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/load_secrets.yml"
+
+- name: Load canonical VLAN definitions
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/../../network-data/vlans.yaml"
+    name: network_data
+  run_once: true
+
+- name: Compute VLAN prefixes for IP translation
+  ansible.builtin.set_fact:
+    mgmt_vlan_prefix: "{{ network_data.ipv4_prefix }}.{{ network_data.vlans[network_data.management_vlan].id }}."
+    services_vlan_prefix: "{{ network_data.ipv4_prefix }}.{{ network_data.vlans.services.id }}."
+    storage_vlan_prefix: "{{ network_data.ipv4_prefix }}.{{ network_data.vlans.storage.id }}."
+    core_vlan_prefix: "{{ network_data.ipv4_prefix }}.{{ network_data.vlans.core.id }}."
+    ipv4_prefix_reversed: "{{ network_data.ipv4_prefix.split('.') | reverse | join('.') }}"
+    internal_network_cidr: "{{ network_data.ipv4_prefix }}.0.0/12"
+    management_subnet: "{{ network_data.ipv4_prefix }}.{{ network_data.vlans[network_data.management_vlan].id }}.0/24"
+  run_once: true
+  when: not (skip_vlan_computation | default(false))
+
+- name: Build dns_zones from canonical VLAN data
+  ansible.builtin.set_fact:
+    dns_zones: >-
+      {{ dns_zones | default({}) | combine({
+        'vlan' ~ network_data.vlans[item].id: {
+          'zone': network_data.vlans[item].domain_prefix ~ '.' ~ network_data.domain_suffix,
+          'vlan_id': network_data.vlans[item].id,
+          'dns_ip': network_data.dns_server.dns_ipv4,
+          'dns_ipv6': network_data.dns_server.dns_ipv6,
+          'bind_ip': network_data.dns_server.bind_ipv4
+        }
+      }) }}
+  loop: "{{ network_data.dns_server.zone_vlans }}"
+  run_once: true
+  when: not (skip_vlan_computation | default(false))
+
+- name: Require dns_zones
+  ansible.builtin.assert:
+    that:
+      - dns_zones is mapping
+      - dns_zones | length > 0
+    fail_msg: "Failed to build dns_zones from network-data/vlans.yaml"
+  run_once: true
+  when: not (skip_vlan_computation | default(false))
+
+- name: Load private bindings (pfSense only)
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/../../network-data/local/private_bindings.yaml"
+    name: private_bindings
+  run_once: true
+  when: load_private_bindings | default(false)

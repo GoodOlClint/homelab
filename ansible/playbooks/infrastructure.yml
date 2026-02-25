@@ -20,138 +20,9 @@
   gather_facts: false
   vars_files:
     - ../group_vars/all.yml
-  pre_tasks: &load_local_overrides
-    - name: Check for local override vars file
-      ansible.builtin.stat:
-        path: "{{ playbook_dir }}/../group_vars/local/all.yml"
-      register: local_override_vars_file
-      delegate_to: localhost
-      become: false
-      run_once: true
-
-    - name: Load local override vars when present
-      ansible.builtin.include_vars:
-        file: "{{ playbook_dir }}/../group_vars/local/all.yml"
-      when: local_override_vars_file.stat.exists
-      run_once: true
-
-    - name: Check for bootstrap credentials file
-      ansible.builtin.stat:
-        path: "{{ playbook_dir }}/../group_vars/bootstrap.sops.yml"
-      register: bootstrap_vars_file
-      delegate_to: localhost
-      become: false
-      run_once: true
-
-    - name: Load bootstrap credentials (SOPS Tier 1)
-      community.sops.load_vars:
-        file: "{{ playbook_dir }}/../group_vars/bootstrap.sops.yml"
-        expressions: evaluate-on-load
-      when: bootstrap_vars_file.stat.exists
-      run_once: true
-
-    - name: Check if Infisical is reachable
-      ansible.builtin.uri:
-        url: "{{ bootstrap_config.infisical_url }}/api/status"
-        method: GET
-        status_code: 200
-        timeout: 5
-      register: infisical_health
-      ignore_errors: true
-      delegate_to: localhost
-      become: false
-      run_once: true
-      when:
-        - bootstrap_config is defined
-        - bootstrap_config.infisical_url | default('REPLACE_ME') != 'REPLACE_ME'
-
-    - name: Load secrets from Infisical (Tier 2)
-      block:
-        - name: Attempt Infisical login and read secrets
-          ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/infisical_login.yml"
-      rescue:
-        - name: Record Infisical login failure
-          ansible.builtin.set_fact:
-            infisical_login_failed: true
-
-        - name: Warn about Infisical login failure
-          ansible.builtin.debug:
-            msg: "WARNING: Infisical login failed — will fall back to SOPS secrets."
-      when:
-        - infisical_health is defined
-        - infisical_health is not skipped
-        - infisical_health is succeeded
-      run_once: true
-
-    - name: Fallback to SOPS secrets when Infisical unavailable
-      block:
-        - name: Check for legacy SOPS secrets file
-          ansible.builtin.stat:
-            path: "{{ playbook_dir }}/../group_vars/secrets.sops.yml"
-          register: secrets_vars_file
-          delegate_to: localhost
-          become: false
-
-        - name: Load SOPS secrets as fallback
-          community.sops.load_vars:
-            file: "{{ playbook_dir }}/../group_vars/secrets.sops.yml"
-            expressions: evaluate-on-load
-          when: secrets_vars_file.stat.exists
-
-        - name: Warn about SOPS fallback
-          ansible.builtin.debug:
-            msg: "WARNING: Infisical unreachable or login failed — using SOPS fallback. Secrets may be stale."
-      when: >-
-        infisical_health is not defined
-        or infisical_health is skipped
-        or infisical_health is failed
-        or infisical_login_failed | default(false)
-        or secrets is not defined
-      run_once: true
-
-    - name: Load canonical VLAN definitions
-      ansible.builtin.include_vars:
-        file: "{{ playbook_dir }}/../../network-data/vlans.yaml"
-        name: network_data
-      run_once: true
-
-    - name: Set management subnet fact
-      ansible.builtin.set_fact:
-        management_subnet: "{{ network_data.ipv4_prefix }}.{{ network_data.vlans[network_data.management_vlan].id }}.0/24"
-      run_once: true
-
-    - name: Compute VLAN prefixes for IP translation
-      ansible.builtin.set_fact:
-        mgmt_vlan_prefix: "{{ network_data.ipv4_prefix }}.{{ network_data.vlans[network_data.management_vlan].id }}."
-        services_vlan_prefix: "{{ network_data.ipv4_prefix }}.{{ network_data.vlans.services.id }}."
-        storage_vlan_prefix: "{{ network_data.ipv4_prefix }}.{{ network_data.vlans.storage.id }}."
-        core_vlan_prefix: "{{ network_data.ipv4_prefix }}.{{ network_data.vlans.core.id }}."
-        ipv4_prefix_reversed: "{{ network_data.ipv4_prefix.split('.') | reverse | join('.') }}"
-        internal_network_cidr: "{{ network_data.ipv4_prefix }}.0.0/12"
-      run_once: true
-
-    - name: Build dns_zones from canonical VLAN data
-      ansible.builtin.set_fact:
-        dns_zones: >-
-          {{ dns_zones | default({}) | combine({
-            'vlan' ~ network_data.vlans[item].id: {
-              'zone': network_data.vlans[item].domain_prefix ~ '.' ~ network_data.domain_suffix,
-              'vlan_id': network_data.vlans[item].id,
-              'dns_ip': network_data.dns_server.dns_ipv4,
-              'dns_ipv6': network_data.dns_server.dns_ipv6,
-              'bind_ip': network_data.dns_server.bind_ipv4
-            }
-          }) }}
-      loop: "{{ network_data.dns_server.zone_vlans }}"
-      run_once: true
-
-    - name: Require dns_zones
-      ansible.builtin.assert:
-        that:
-          - dns_zones is mapping
-          - dns_zones | length > 0
-        fail_msg: "Failed to build dns_zones from network-data/vlans.yaml"
-      run_once: true
+  pre_tasks:
+    - name: Load all configuration and secrets
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/full_pre_tasks.yml"
 
     - name: Check for rendered policy artifact when enabled
       ansible.builtin.stat:
@@ -195,7 +66,9 @@
   become: true
   vars_files:
     - ../group_vars/all.yml
-  pre_tasks: *load_local_overrides
+  pre_tasks: &load_all_config
+    - name: Load all configuration and secrets
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/full_pre_tasks.yml"
   roles:
     - bind9
   tags:
@@ -207,7 +80,7 @@
   become: true
   vars_files:
     - ../group_vars/all.yml
-  pre_tasks: *load_local_overrides
+  pre_tasks: *load_all_config
   roles:
     - adguard
   tags:
@@ -219,7 +92,7 @@
   become: true
   vars_files:
     - ../group_vars/all.yml
-  pre_tasks: *load_local_overrides
+  pre_tasks: *load_all_config
   roles:
     - dns_config
     - geerlingguy.docker
@@ -234,7 +107,7 @@
   become: true
   vars_files:
     - ../group_vars/all.yml
-  pre_tasks: *load_local_overrides
+  pre_tasks: *load_all_config
   vars:
     infisical_secret_paths: ["/shared", "/monitoring"]
     infisical_agent_templates:
@@ -260,7 +133,7 @@
   become: true
   vars_files:
     - ../group_vars/all.yml
-  pre_tasks: *load_local_overrides
+  pre_tasks: *load_all_config
   roles:
     - dns_config
     - proxmox_backup
@@ -273,7 +146,7 @@
   become: true
   vars_files:
     - ../group_vars/all.yml
-  pre_tasks: *load_local_overrides
+  pre_tasks: *load_all_config
   roles:
     - dns_config
     - unifi
@@ -290,7 +163,7 @@
   become: true
   vars_files:
     - ../group_vars/all.yml
-  pre_tasks: *load_local_overrides
+  pre_tasks: *load_all_config
   roles:
     - rsyslog_client
     - telegraf
@@ -308,7 +181,7 @@
   gather_facts: false
   vars_files:
     - ../group_vars/all.yml
-  pre_tasks: *load_local_overrides
+  pre_tasks: *load_all_config
   roles:
     - role: monitoring_users
       tags:
