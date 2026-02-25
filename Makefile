@@ -1,12 +1,17 @@
 # Makefile for Homelab Automation
 
+# === Virtual Environment ===
+# Prepend .venv/bin to PATH so all targets (especially Ansible on localhost)
+# use the venv's python3 which has infisicalsdk and other dependencies.
+VENV_PYTHON := $(CURDIR)/.venv/bin/python3
+export PATH := $(CURDIR)/.venv/bin:$(PATH)
+
 # === Bootstrap Secrets ===
 # Read bootstrap secrets and export as TF_VAR_ environment variables.
 # Supports both SOPS-encrypted and plaintext YAML (for pre-SOPS setup).
 # Top-level exports ensure env vars propagate to ALL child processes.
 SOPS_BOOTSTRAP := ansible/group_vars/bootstrap.sops.yml
 # Helper: try sops decrypt first, fall back to plaintext YAML read
-VENV_PYTHON := $(CURDIR)/.venv/bin/python3
 _read_secret = $(shell sops -d --extract '["bootstrap"]["$(1)"]' $(SOPS_BOOTSTRAP) 2>/dev/null || $(VENV_PYTHON) -c "import yaml; print(yaml.safe_load(open('$(SOPS_BOOTSTRAP)'))['bootstrap']['$(1)'])" 2>/dev/null)
 
 export TF_VAR_virtual_environment_password := $(call _read_secret,proxmox_password)
@@ -144,7 +149,7 @@ clean-terraform:
 	@cd terraform && terraform destroy -no-color -auto-approve
 
 clean-ssh:
-	@. .venv/bin/activate && python3 -c "\
+	@python3 -c "\
 	import yaml, os, glob;\
 	ips = set();\
 	[ips.update(h.get('ansible_host','') for h in yaml.safe_load(open(f)).get('all',{}).get('hosts',{}).values()) for f in glob.glob('ansible/inventory/*.yaml')];\
