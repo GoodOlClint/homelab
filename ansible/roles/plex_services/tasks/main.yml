@@ -411,15 +411,6 @@
     - postgres
     - restore
 
-- name: Display PostgreSQL restore results
-  ansible.builtin.debug:
-    msg: "{{ postgres_restore_result.stdout_lines }}"
-  when: postgres_restore_result is defined and postgres_restore_result.stdout_lines is defined
-  tags:
-    - plex_services
-    - postgres
-    - restore
-
 - name: Ensure lxml is installed for XML config management
   ansible.builtin.apt:
     name: python3-lxml

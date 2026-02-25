@@ -61,16 +61,10 @@
     ansible_connection: ssh
     ansible_user: root
 
-- name: Verify monitoring user permissions
-  ansible.builtin.command:
-    cmd: "/usr/sbin/pveum user permissions {{ proxmox_monitoring_user }}"
-  register: user_permissions
-  changed_when: false
-  delegate_to: "{{ proxmox_host }}"
-  vars:
-    ansible_connection: ssh
-    ansible_user: root
-
-- name: Display Proxmox user permissions
-  ansible.builtin.debug:
-    msg: "Proxmox monitoring user permissions: {{ user_permissions.stdout_lines }}"
+- name: Verify monitoring user has PVEAuditor role
+  ansible.builtin.assert:
+    that:
+      - proxmox_monitoring_role in current_acl.stdout
+      - proxmox_monitoring_user in current_acl.stdout
+    fail_msg: "{{ proxmox_monitoring_user }} does not have {{ proxmox_monitoring_role }} role assigned"
+    success_msg: "{{ proxmox_monitoring_user }} has {{ proxmox_monitoring_role }} role"

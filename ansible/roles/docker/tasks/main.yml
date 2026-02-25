@@ -308,24 +308,6 @@
     - compose
     - deploy
 
-- name: Display final container status
-  ansible.builtin.shell: |
-    docker ps --format "table {% raw %}{{.Names}}\t{{.Status}}\t{{.Ports}}{% endraw %}"
-  register: container_status
-  changed_when: false
-  ignore_errors: true
-  tags:
-    - docker
-    - validate
-
-- name: Show running containers
-  ansible.builtin.debug:
-    msg: "{{ container_status.stdout_lines }}"
-  when: container_status.stdout_lines is defined
-  tags:
-    - docker
-    - validate
-
 - name: Create PBS backup script for Docker containers
   ansible.builtin.template:
     dest: /usr/local/bin/docker_pbs_backup.sh

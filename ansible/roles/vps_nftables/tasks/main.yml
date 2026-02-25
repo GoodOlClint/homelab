@@ -118,13 +118,6 @@
     - vps_nftables
     - validate
 
-- name: Debug nftables loaded ruleset
-  ansible.builtin.debug:
-    msg: "{{ nft_rules.stdout_lines }}"
-  tags:
-    - vps_nftables
-    - validate
-
 - name: Assert nftables has forward chain
   ansible.builtin.assert:
     that:

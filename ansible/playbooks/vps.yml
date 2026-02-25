@@ -151,12 +151,3 @@
       retries: 12
       delay: 5
       when: wg_key_from_sops | default(false)
-
-    - name: Check listening ports
-      ansible.builtin.command: ss -tlnup
-      register: ss_output
-      changed_when: false
-
-    - name: Display listening services
-      ansible.builtin.debug:
-        msg: "{{ ss_output.stdout_lines }}"
