@@ -530,23 +530,52 @@
 #    PBS_FINGERPRINT: "{{ pbs_fingerprint }}"
 
 # ACL Configuration
+- name: Read current ACL list
+  ansible.builtin.command: proxmox-backup-manager acl list --output-format json
+  register: _pbs_acl_list
+  changed_when: false
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - acl
+
+- name: Parse current ACLs
+  ansible.builtin.set_fact:
+    _pbs_acls: "{{ _pbs_acl_list.stdout | from_json }}"
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - acl
+
 - name: Grant backup user DatastoreAdmin permissions (needed for namespace creation)
   ansible.builtin.shell: |
     proxmox-backup-manager acl update /datastore/{{ item.name }} DatastoreAdmin \
       --auth-id backup@pbs
   loop: "{{ pbs_datastores }}"
-  register: acl_admin_updated
-  failed_when: false
-  changed_when: acl_admin_updated.rc == 0
+  when: _pbs_acls | selectattr('path', 'eq', '/datastore/' ~ item.name)
+        | selectattr('roleid', 'eq', 'DatastoreAdmin')
+        | selectattr('ugid', 'eq', 'backup@pbs') | list | length == 0
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - acl
 
 - name: Grant API token DatastoreAdmin permissions (needed for namespace creation)
   ansible.builtin.shell: |
     proxmox-backup-manager acl update /datastore/{{ item.name }} DatastoreAdmin \
       --auth-id 'backup@pbs!backup-token'
   loop: "{{ pbs_datastores }}"
-  register: acl_token_admin_updated
-  failed_when: false
-  changed_when: acl_token_admin_updated.rc == 0
+  when: _pbs_acls | selectattr('path', 'eq', '/datastore/' ~ item.name)
+        | selectattr('roleid', 'eq', 'DatastoreAdmin')
+        | selectattr('ugid', 'eq', 'backup@pbs!backup-token') | list | length == 0
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - acl
 
 # API Token Generation
 - name: Check if API token exists for backup user
@@ -624,34 +653,54 @@
     proxmox-backup-manager acl update /datastore/{{ item.name }} Audit \
       --auth-id monitoring@pbs
   loop: "{{ pbs_datastores }}"
-  register: acl_monitoring_updated
-  failed_when: false
-  changed_when: acl_monitoring_updated.rc == 0
+  when: _pbs_acls | selectattr('path', 'eq', '/datastore/' ~ item.name)
+        | selectattr('roleid', 'eq', 'Audit')
+        | selectattr('ugid', 'eq', 'monitoring@pbs') | list | length == 0
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - acl
 
 - name: Grant monitoring token Audit permissions on datastores
   ansible.builtin.shell: |
     proxmox-backup-manager acl update /datastore/{{ item.name }} Audit \
       --auth-id 'monitoring@pbs!monitoring-token'
   loop: "{{ pbs_datastores }}"
-  register: acl_monitoring_token_updated
-  failed_when: false
-  changed_when: acl_monitoring_token_updated.rc == 0
+  when: _pbs_acls | selectattr('path', 'eq', '/datastore/' ~ item.name)
+        | selectattr('roleid', 'eq', 'Audit')
+        | selectattr('ugid', 'eq', 'monitoring@pbs!monitoring-token') | list | length == 0
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - acl
 
 - name: Grant monitoring user Audit permissions on system
   ansible.builtin.shell: |
     proxmox-backup-manager acl update / Audit \
       --auth-id monitoring@pbs
-  register: acl_monitoring_system_updated
-  failed_when: false
-  changed_when: acl_monitoring_system_updated.rc == 0
+  when: _pbs_acls | selectattr('path', 'eq', '/')
+        | selectattr('roleid', 'eq', 'Audit')
+        | selectattr('ugid', 'eq', 'monitoring@pbs') | list | length == 0
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - acl
 
 - name: Grant monitoring token Audit permissions on system
   ansible.builtin.shell: |
     proxmox-backup-manager acl update / Audit \
       --auth-id 'monitoring@pbs!monitoring-token'
-  register: acl_monitoring_token_system_updated
-  failed_when: false
-  changed_when: acl_monitoring_token_system_updated.rc == 0
+  when: _pbs_acls | selectattr('path', 'eq', '/')
+        | selectattr('roleid', 'eq', 'Audit')
+        | selectattr('ugid', 'eq', 'monitoring@pbs!monitoring-token') | list | length == 0
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - acl
 
 # Verification jobs
 - name: Configure verification jobs
