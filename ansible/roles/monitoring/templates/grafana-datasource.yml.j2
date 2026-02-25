@@ -20,7 +20,7 @@ datasources:
     basicAuth: true
     basicAuthUser: {{ openobserve_root_user_email }}
     secureJsonData:
-      basicAuthPassword: {{ openobserve_root_user_pass }}
+      basicAuthPassword: $OPENOBSERVE_ROOT_USER_PASS
     isDefault: false
     editable: true
     jsonData:

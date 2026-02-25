@@ -10,6 +10,7 @@ services:
       - "{{ openobserve_listen_port }}:5080"
     env_file:
       - openobserve/.env
+      - /etc/infisical/secrets/openobserve.env
     environment:
       - TZ={{ timezone }}
     volumes:
@@ -72,6 +73,7 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - /opt/monitoring/prometheus:/etc/prometheus
+      - /etc/infisical/secrets:/etc/prometheus/secrets:ro
       - prometheus-data:/prometheus
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
@@ -188,6 +190,8 @@ services:
       - "5514:5514/udp"  # Syslog UDP
       - "5514:5514/tcp"  # Syslog TCP
       - "6514:6514/tcp"  # Syslog TLS
+    env_file:
+      - /etc/infisical/secrets/monitoring.env
     environment:
       - TZ={{ timezone }}
     volumes:
