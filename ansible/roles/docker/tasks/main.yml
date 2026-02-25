@@ -127,44 +127,9 @@
     - nvidia
     - service
 
-- name: Read existing Docker daemon.json
-  ansible.builtin.slurp:
-    src: /etc/docker/daemon.json
-  register: daemon_json_content
-  ignore_errors: true
-  tags:
-    - docker
-    - logging
-    - config
-
-- name: Parse existing Docker daemon configuration
-  ansible.builtin.set_fact:
-    daemon_config: "{{ daemon_json_content.content | b64decode | from_json if daemon_json_content.content is defined else {} }}"
-  tags:
-    - docker
-    - logging
-    - config
-
-- name: Merge logging configuration into Docker daemon config
-  ansible.builtin.set_fact:
-    daemon_config: "{{ daemon_config | combine({'log-driver': 'syslog', 'log-opts': {'syslog-address': 'udp://' + openobserve_listen_host + ':5514', 'syslog-format': 'rfc5424', 'tag': ansible_facts['hostname'] + '/{{.Name}}'}}) }}"
-  tags:
-    - docker
-    - logging
-    - config
-
-- name: Write updated Docker daemon.json
-  ansible.builtin.copy:
-    dest: /etc/docker/daemon.json
-    content: "{{ daemon_config | to_nice_json }}"
-    mode: '0644'
-    owner: root
-    group: root
-  notify: restart docker
-  tags:
-    - docker
-    - logging
-    - config
+- name: Configure Docker syslog logging
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/configure_docker_logging.yml"
+  tags: [docker, logging, config]
 
 - name: Verify CUDA container works
   community.docker.docker_container:
@@ -308,30 +273,13 @@
     - compose
     - deploy
 
-- name: Create PBS backup script for Docker containers
-  ansible.builtin.template:
-    dest: /usr/local/bin/docker_pbs_backup.sh
-    mode: '0755'
-    owner: root
-    group: root
-    src: docker_pbs_backup.sh.j2
+- name: Configure Docker PBS backup
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/configure_pbs_backup.yml"
+  vars:
+    backup_name: "Docker containers"
+    backup_script_src: docker_pbs_backup.sh.j2
+    backup_script_dest: /usr/local/bin/docker_pbs_backup.sh
+    backup_cron_hour: "2"
+    backup_cron_minute: "30"
   when: pbs_backup_enabled | default(true)
-  tags:
-    - docker
-    - backup
-    - pbs
-
-- name: Ensure cron job for nightly Docker PBS backup
-  ansible.builtin.cron:
-    name: "Nightly Docker PBS backup"
-    user: root
-    job: "/usr/local/bin/docker_pbs_backup.sh"
-    minute: 30
-    hour: 2
-    state: present
-  when: pbs_backup_enabled | default(true)
-  tags:
-    - docker
-    - backup
-    - pbs
-    - cron
+  tags: [docker, backup, pbs, cron]
