@@ -13,20 +13,10 @@
   vars_files:
     - ../group_vars/all.yml
   pre_tasks:
-    - name: Check for secrets vars file
-      ansible.builtin.stat:
-        path: "{{ playbook_dir }}/../group_vars/secrets.sops.yml"
-      register: secrets_vars_file
-      delegate_to: localhost
-      become: false
-      run_once: true
-
-    - name: Load secrets vars when present
-      community.sops.load_vars:
-        file: "{{ playbook_dir }}/../group_vars/secrets.sops.yml"
-        expressions: evaluate-on-load
-      when: secrets_vars_file.stat.exists
-      run_once: true
+    - name: Load all configuration and secrets
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/full_pre_tasks.yml"
+      vars:
+        skip_vlan_computation: true
 
   tasks:
     - name: Generate new WireGuard private key

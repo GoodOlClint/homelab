@@ -5,6 +5,9 @@
   become: true
   vars_files:
     - ../group_vars/all.yml
+  pre_tasks:
+    - name: Load all configuration and secrets
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/full_pre_tasks.yml"
   roles:
     - pbs_client
 
