@@ -22,7 +22,4 @@
     - { port: "11084", proto: "tcp", comment: "UniFi OS Internal" }
     - { port: "3478", proto: "udp", comment: "UniFi STUN" }
     - { port: "10003", proto: "udp", comment: "UniFi Discovery (L3)" }
-
-- name: Reload UFW
-  community.general.ufw:
-    state: reloaded
+  notify: Reload UFW
