@@ -8,6 +8,26 @@
   ansible.builtin.include_tasks: install-alpine.yml
   when: ansible_facts['os_family'] == "Alpine"
 
+- name: Check if docker group exists
+  ansible.builtin.getent:
+    database: group
+    key: docker
+    fail_key: false
+  tags:
+    - telegraf
+    - config
+
+- name: Add telegraf user to docker group for container monitoring
+  ansible.builtin.user:
+    name: telegraf
+    groups: docker
+    append: true
+  when: getent_group.docker is defined
+  notify: Restart Telegraf
+  tags:
+    - telegraf
+    - config
+
 - name: Configure Telegraf to send metrics to OpenObserve
   ansible.builtin.template:
     src: telegraf-openobserve.conf.j2
