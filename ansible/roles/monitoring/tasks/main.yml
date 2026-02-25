@@ -59,6 +59,14 @@
     - monitoring
     - docker
 
+- name: Check if Docker Compose plugin exists
+  ansible.builtin.stat:
+    path: /usr/libexec/docker/cli-plugins/docker-compose
+  register: _docker_compose_plugin
+  tags:
+    - monitoring
+    - docker
+
 - name: Download Docker Compose plugin
   ansible.builtin.get_url:
     url: https://github.com/docker/compose/releases/download/v2.40.3/docker-compose-linux-x86_64
@@ -66,6 +74,7 @@
     mode: '0755'
     owner: root
     group: root
+  when: not _docker_compose_plugin.stat.exists
   tags:
     - monitoring
     - docker
