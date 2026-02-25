@@ -44,6 +44,16 @@
   when: item.template_src is defined
   notify: restart infisical-agent
 
+- name: Create placeholder files for agent-rendered secrets
+  ansible.builtin.copy:
+    content: "# Placeholder — will be overwritten by Infisical Agent\n"
+    dest: "{{ item.dest_path }}"
+    owner: root
+    group: root
+    mode: '0600'
+    force: false
+  loop: "{{ infisical_agent_templates }}"
+
 - name: Deploy systemd service unit
   ansible.builtin.template:
     src: infisical-agent.service.j2
@@ -68,6 +78,7 @@
 - name: Wait for agent to render secrets
   ansible.builtin.wait_for:
     path: "{{ item.dest_path }}"
+    search_regex: "^(?!# Placeholder)"
     timeout: 30
   loop: "{{ infisical_agent_templates }}"
   when: infisical_agent_templates | length > 0
