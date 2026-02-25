@@ -118,9 +118,22 @@
 - name: Get PBS server certificate fingerprint
   ansible.builtin.shell: >
     proxmox-backup-manager cert info 2>/dev/null |
-    grep -i fingerprint | awk '{print $2}'
+    grep -i fingerprint | sed 's/.*: //'
   register: pbs_cert_fingerprint
   changed_when: false
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - config
+
+- name: Validate PBS fingerprint format
+  ansible.builtin.assert:
+    that:
+      - pbs_cert_fingerprint.stdout | length > 20
+      - "':' in pbs_cert_fingerprint.stdout"
+    fail_msg: "PBS fingerprint extraction failed: '{{ pbs_cert_fingerprint.stdout }}'"
+    quiet: true
   tags:
     - proxmox_backup
     - pbs
@@ -130,7 +143,6 @@
 - name: Set pbs_fingerprint fact from server certificate
   ansible.builtin.set_fact:
     pbs_fingerprint: "{{ pbs_cert_fingerprint.stdout }}"
-  when: pbs_cert_fingerprint.stdout | length > 0
   tags:
     - proxmox_backup
     - pbs
