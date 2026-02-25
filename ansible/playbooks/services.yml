@@ -40,6 +40,9 @@
       - name: pbs
         dest_path: /etc/infisical/secrets/pbs.env
         template_src: secrets/pbs.env.tpl.j2
+      - name: docker
+        dest_path: /etc/infisical/secrets/docker.env
+        template_src: secrets/docker.env.tpl.j2
   roles:
     - infisical_client
     - dns_config
@@ -89,6 +92,9 @@
       - name: plex-services
         dest_path: /etc/infisical/secrets/plex-services.env
         template_src: secrets/plex-services.env.tpl.j2
+      - name: cloudflared
+        dest_path: /etc/infisical/secrets/cloudflared.env
+        template_src: secrets/cloudflared.env.tpl.j2
   roles:
     - infisical_client
     - dns_config

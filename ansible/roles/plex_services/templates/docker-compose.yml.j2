@@ -281,8 +281,8 @@ services:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
     command: tunnel run
-    environment:
-      - TUNNEL_TOKEN={{ secrets.cloudflared_tunnel_token }}
+    env_file:
+      - /etc/infisical/secrets/cloudflared.env
     healthcheck:
       test: ["CMD", "cloudflared", "--version"]
       interval: 30s
