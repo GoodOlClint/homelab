@@ -25,59 +25,16 @@
     pbs_api_token: "{{ secrets.pbs_api_token | default('') }}"
   tags: [monitoring, secrets]
 
-- name: Install required packages
+- name: Install Docker using geerlingguy.docker
+  ansible.builtin.import_role:
+    name: geerlingguy.docker
+  tags: [monitoring, docker, packages]
+
+- name: Install Python Docker library
   ansible.builtin.apt:
-    name:
-      - docker.io
-      - python3-pip
-      - python3-docker
+    name: python3-docker
     state: present
-    update_cache: true
-
-  tags:
-    - monitoring
-    - docker
-
-- name: Ensure Docker is started and enabled
-  ansible.builtin.systemd:
-    name: docker
-    state: started
-    enabled: true
-
-  tags:
-    - monitoring
-    - docker
-
-- name: Create Docker CLI plugins directory
-  ansible.builtin.file:
-    path: /usr/libexec/docker/cli-plugins
-    state: directory
-    mode: '0755'
-    owner: root
-    group: root
-  tags:
-    - monitoring
-    - docker
-
-- name: Check if Docker Compose plugin exists
-  ansible.builtin.stat:
-    path: /usr/libexec/docker/cli-plugins/docker-compose
-  register: _docker_compose_plugin
-  tags:
-    - monitoring
-    - docker
-
-- name: Download Docker Compose plugin
-  ansible.builtin.get_url:
-    url: https://github.com/docker/compose/releases/download/v2.40.3/docker-compose-linux-x86_64
-    dest: /usr/libexec/docker/cli-plugins/docker-compose
-    mode: '0755'
-    owner: root
-    group: root
-  when: not _docker_compose_plugin.stat.exists
-  tags:
-    - monitoring
-    - docker
+  tags: [monitoring, docker, packages]
 
 - name: Create monitoring directories
   ansible.builtin.file:

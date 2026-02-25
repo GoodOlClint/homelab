@@ -1,0 +1,10 @@
+---
+dependencies: []
+
+galaxy_info:
+  role_name: monitoring
+  description: "Monitoring stack: OpenObserve, Grafana, Prometheus, exporters, AxoSyslog"
+
+collections:
+  - community.docker
+  - community.general

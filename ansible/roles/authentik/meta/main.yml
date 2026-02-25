@@ -1,0 +1,10 @@
+---
+dependencies: []
+
+galaxy_info:
+  role_name: authentik
+  description: "Authentik SSO/OIDC identity provider"
+
+# Docker must be installed by a preceding role (docker role in docker.yml playbook)
+collections:
+  - community.docker
