@@ -1,0 +1,183 @@
+---
+# Infisical Identity Refresh & Cleanup
+#
+# Refreshes per-VM Machine Identities and optionally cleans up orphaned identities
+# from the Infisical vault that no longer match any inventory host.
+#
+# Usage:
+#   make refresh-identity                              # check all hosts, only refresh unhealthy
+#   make refresh-identity LIMIT=openobserve            # check one host
+#   make refresh-identity FORCE=true                   # force refresh all regardless of health
+#   make refresh-identity LIMIT=openobserve FORCE=true # force refresh one host
+#   make refresh-identity TAGS=cleanup                 # only clean up orphaned identities
+#   make refresh-identity TAGS="cleanup,refresh"       # cleanup + check/refresh all
+
+# ============================================================
+# Play 1: Clean up orphaned identities (runs on localhost)
+# Only runs when explicitly requested via --tags cleanup
+# ============================================================
+- name: "Cleanup: Remove orphaned Machine Identities from vault"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - ../group_vars/all.yml
+  pre_tasks:
+    - name: Load all configuration and secrets
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/full_pre_tasks.yml"
+      vars:
+        skip_vlan_computation: true
+  tags:
+    - cleanup
+    - never
+  tasks:
+    # --- Authenticate as admin ---
+    - name: Get admin access token from Infisical
+      ansible.builtin.uri:
+        url: "{{ bootstrap_config.infisical_url }}/api/v1/auth/universal-auth/login"
+        method: POST
+        body_format: form-urlencoded
+        body:
+          clientId: "{{ bootstrap.infisical_client_id }}"
+          clientSecret: "{{ bootstrap.infisical_client_secret }}"
+        status_code: 200
+      register: _admin_login
+      no_log: true
+
+    - name: Set admin token fact
+      ansible.builtin.set_fact:
+        _admin_token: "{{ _admin_login.json.accessToken }}"
+      no_log: true
+
+    # --- List all org identities ---
+    - name: List all organization identities
+      ansible.builtin.uri:
+        url: "{{ bootstrap_config.infisical_url }}/api/v1/identities?orgId={{ bootstrap_config.infisical_org_id }}&limit=100&offset=0"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ _admin_token }}"
+        status_code: 200
+      register: _org_identities
+
+    # --- Build list of expected identity names from inventory ---
+    - name: Build expected identity names from all inventory hosts
+      ansible.builtin.set_fact:
+        _expected_names: "{{ groups['all'] | map('regex_replace', '$', '-vm') | list }}"
+
+    # --- Identify orphaned *-vm identities ---
+    - name: Identify orphaned VM identities
+      ansible.builtin.set_fact:
+        _orphaned: >-
+          {{ _org_identities.json.identities
+             | selectattr('identity.name', 'match', '.*-vm$')
+             | rejectattr('identity.name', 'in', _expected_names)
+             | list }}
+
+    - name: Report orphaned identities found
+      ansible.builtin.debug:
+        msg: >-
+          Found {{ _orphaned | length }} orphaned
+          identit{{ 'y' if _orphaned | length == 1 else 'ies' }}:
+          {{ _orphaned | map(attribute='identity.name') | list | join(', ') if _orphaned | length > 0 else '(none)' }}
+
+    # --- Delete each orphaned identity ---
+    - name: Delete orphaned identity from vault
+      ansible.builtin.uri:
+        url: "{{ bootstrap_config.infisical_url }}/api/v1/identities/{{ item.identity.id }}"
+        method: DELETE
+        headers:
+          Authorization: "Bearer {{ _admin_token }}"
+        status_code: [200, 404]
+      loop: "{{ _orphaned }}"
+      loop_control:
+        label: "{{ item.identity.name }} ({{ item.identity.id }})"
+      when: _orphaned | length > 0
+
+    - name: Report cleanup complete
+      ansible.builtin.debug:
+        msg: "Cleanup complete. Deleted {{ _orphaned | length }} orphaned identit{{ 'y' if _orphaned | length == 1 else 'ies' }}."
+
+    # --- Clean up ---
+    - name: Clear admin token from facts
+      ansible.builtin.set_fact:
+        _admin_token: ""
+
+# ============================================================
+# Play 2: Refresh identities on target hosts
+# Checks agent health first — skips healthy hosts unless force=true
+# ============================================================
+- name: "Refresh: Re-provision Machine Identities on target VMs"
+  hosts: openobserve,docker,plex,plex-services
+  become: true
+  serial: 1
+  gather_facts: false
+  vars_files:
+    - ../group_vars/all.yml
+  pre_tasks:
+    - name: Load all configuration and secrets
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/full_pre_tasks.yml"
+      vars:
+        skip_vlan_computation: true
+  tags:
+    - refresh
+  tasks:
+    # --- Health check: skip healthy hosts unless forced ---
+    - name: Check if infisical-agent service is active
+      ansible.builtin.command: systemctl is-active infisical-agent
+      register: _agent_active
+      changed_when: false
+      failed_when: false
+
+    - name: Check for access token file
+      ansible.builtin.stat:
+        path: /var/run/infisical/access-token
+      register: _token_file
+
+    - name: Set refresh needed flag
+      ansible.builtin.set_fact:
+        _needs_refresh: "{{ (force | default(false) | bool) or _agent_active.rc != 0 or not (_token_file.stat.exists | default(false)) }}"
+
+    - name: Report healthy identity (skipping)
+      ansible.builtin.debug:
+        msg: "Identity healthy on {{ inventory_hostname }}, skipping (use -e force=true to override)."
+      when: not (_needs_refresh | bool)
+
+    # --- Step 1: Stop the agent ---
+    - name: Stop infisical-agent
+      ansible.builtin.systemd:
+        name: infisical-agent
+        state: stopped
+      when: (_needs_refresh | bool) and _agent_active.rc == 0
+
+    # --- Step 2: Delete identity (vault + local files) ---
+    - name: Delete existing identity
+      ansible.builtin.include_role:
+        name: infisical_client
+        tasks_from: delete_identity
+      when: _needs_refresh | bool
+
+    # --- Step 3: Re-provision fresh identity ---
+    - name: Provision new identity
+      ansible.builtin.include_role:
+        name: infisical_client
+        tasks_from: provision_identity
+      when: _needs_refresh | bool
+
+    # --- Step 4: Restart the agent ---
+    - name: Start infisical-agent
+      ansible.builtin.systemd:
+        name: infisical-agent
+        state: started
+      when: (_needs_refresh | bool) and _agent_active.rc == 0
+
+    # --- Step 5: Verify agent can authenticate ---
+    - name: Wait for agent to obtain access token
+      ansible.builtin.wait_for:
+        path: /var/run/infisical/access-token
+        timeout: 30
+      when: _needs_refresh | bool
+
+    - name: Report refresh complete
+      ansible.builtin.debug:
+        msg: "Identity refreshed for {{ inventory_hostname }}."
+      when: _needs_refresh | bool

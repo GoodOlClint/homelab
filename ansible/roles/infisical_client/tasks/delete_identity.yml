@@ -1,0 +1,84 @@
+---
+# Delete a per-VM Machine Identity from Infisical and remove local credentials
+# All API calls run on the control node (delegate_to: localhost, become: false)
+# Gracefully handles: identity already deleted (404), credential files already missing
+
+# --- Read existing identity ID from VM ---
+
+- name: Check for existing identity ID on VM
+  ansible.builtin.slurp:
+    src: "{{ infisical_config_dir }}/.identity-id"
+  register: _existing_identity_file
+  failed_when: false
+  changed_when: false
+
+- name: Set existing identity ID fact
+  ansible.builtin.set_fact:
+    _vm_identity_id: "{{ _existing_identity_file.content | default('') | b64decode | trim }}"
+
+- name: Skip deletion when no identity ID found
+  ansible.builtin.debug:
+    msg: "No .identity-id file found on {{ inventory_hostname }} — nothing to delete from vault."
+  when: _vm_identity_id | length == 0
+
+# --- Authenticate as admin identity to make API calls ---
+
+- name: Get admin access token from Infisical
+  ansible.builtin.uri:
+    url: "{{ infisical_agent_url }}/api/v1/auth/universal-auth/login"
+    method: POST
+    body_format: form-urlencoded
+    body:
+      clientId: "{{ bootstrap.infisical_client_id }}"
+      clientSecret: "{{ bootstrap.infisical_client_secret }}"
+    status_code: 200
+  register: _admin_login
+  delegate_to: localhost
+  become: false
+  no_log: true
+  when: _vm_identity_id | length > 0
+
+- name: Set admin token fact
+  ansible.builtin.set_fact:
+    _admin_token: "{{ _admin_login.json.accessToken }}"
+  no_log: true
+  when: _vm_identity_id | length > 0
+
+# --- Delete identity from Infisical vault ---
+
+- name: Delete Machine Identity from Infisical
+  ansible.builtin.uri:
+    url: "{{ infisical_agent_url }}/api/v1/identities/{{ _vm_identity_id }}"
+    method: DELETE
+    headers:
+      Authorization: "Bearer {{ _admin_token }}"
+    status_code: [200, 404]
+  register: _identity_delete
+  delegate_to: localhost
+  become: false
+  when: _vm_identity_id | length > 0
+
+- name: Report deletion result
+  ansible.builtin.debug:
+    msg: >-
+      {{ 'Deleted identity ' ~ _vm_identity_id ~ ' from vault.'
+         if _identity_delete.status | default(404) == 200
+         else 'Identity ' ~ _vm_identity_id ~ ' already gone from vault (404).' }}
+  when: _vm_identity_id | length > 0
+
+# --- Remove local credential files ---
+
+- name: Remove credential files from VM
+  ansible.builtin.file:
+    path: "{{ infisical_config_dir }}/{{ item }}"
+    state: absent
+  loop:
+    - .identity-id
+    - client-id
+    - client-secret
+
+# --- Clean up admin token from facts ---
+
+- name: Clear admin token from facts
+  ansible.builtin.set_fact:
+    _admin_token: ""

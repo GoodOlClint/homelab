@@ -94,7 +94,7 @@ vps-rotate-keys:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vps.yaml ansible/playbooks/vps-rotate-keys.yml -e "ansible_host=$(VPS_IP)"
 
 # === Secrets Management ===
-.PHONY: infisical-seed infisical-backup infisical-organize
+.PHONY: infisical-seed infisical-backup infisical-organize refresh-identity
 
 # One-time: migrate SOPS secrets to Infisical
 infisical-seed:
@@ -111,6 +111,11 @@ infisical-backup:
 # One-time: organize flat Infisical secrets into per-VM folders
 infisical-organize:
 	@bash scripts/organize_infisical_folders.sh
+
+# Refresh Infisical Machine Identities (delete + re-provision)
+# Optional: LIMIT=hostname to target specific VMs, TAGS=cleanup to remove orphans, FORCE=true to override health check
+refresh-identity:
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/refresh-identity.yml $(if $(LIMIT),--limit $(LIMIT)) $(if $(TAGS),--tags $(TAGS)) $(if $(FORCE),-e force=true)
 
 # === Setup & Security ===
 .PHONY: setup-hooks bootstrap-local validate-public-policy security-check security-check-range
