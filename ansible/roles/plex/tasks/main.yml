@@ -55,9 +55,20 @@
     - plex
     - storage
 
-- name: Check if Plex GPG key exists
+- name: Remove old Plex GPG key and repo files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /usr/share/keyrings/plex.gpg
+    - /etc/apt/sources.list.d/plexmediaserver.list
+  tags:
+    - plex
+    - packages
+
+- name: Check if Plex v2 GPG key exists
   ansible.builtin.stat:
-    path: /usr/share/keyrings/plex.gpg
+    path: /usr/share/keyrings/plexmediaserver.v2.gpg
   register: plex_gpg_key
   tags:
     - plex
@@ -65,7 +76,7 @@
 
 - name: Download Plex APT GPG key to temp file
   ansible.builtin.get_url:
-    url: https://downloads.plex.tv/plex-keys/PlexSign.key
+    url: https://downloads.plex.tv/plex-keys/PlexSign.v2.key
     dest: /tmp/plex.gpg.key
     mode: '0644'
   when: not plex_gpg_key.stat.exists
@@ -75,29 +86,19 @@
 
 - name: Convert Plex GPG key to dearmored format
   ansible.builtin.command:
-    cmd: gpg --batch --dearmor -o /usr/share/keyrings/plex.gpg /tmp/plex.gpg.key
+    cmd: gpg --batch --dearmor -o /usr/share/keyrings/plexmediaserver.v2.gpg /tmp/plex.gpg.key
   args:
-    creates: /usr/share/keyrings/plex.gpg
+    creates: /usr/share/keyrings/plexmediaserver.v2.gpg
   when: not plex_gpg_key.stat.exists
-  tags:
-    - plex
-    - packages
-
-- name: Check if Plex APT repo is present
-  ansible.builtin.shell: grep -q '^deb .*/plex' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null
-  register: plex_repo_present
-  changed_when: false
-  failed_when: false
   tags:
     - plex
     - packages
 
 - name: Add Plex official APT repository
   ansible.builtin.apt_repository:
-    repo: "deb [signed-by=/usr/share/keyrings/plex.gpg] https://downloads.plex.tv/repo/deb public main"
+    repo: "deb [signed-by=/usr/share/keyrings/plexmediaserver.v2.gpg] https://repo.plex.tv/deb/ public main"
     state: present
-    filename: plexmediaserver
-  when: plex_repo_present.rc != 0
+    filename: plex
   tags:
     - plex
     - packages
