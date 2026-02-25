@@ -5,3 +5,7 @@
   ansible.builtin.systemd:
     name: uosserver
     state: restarted
+
+- name: Reload UFW
+  community.general.ufw:
+    state: reloaded
