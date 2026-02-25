@@ -98,13 +98,12 @@
     - dns
     - config
 
-- name: Create AdGuard Home work directory
+- name: Ensure AdGuard Home work directory has correct ownership
   ansible.builtin.file:
     path: /var/lib/adguardhome
     state: directory
     owner: adguardhome
     group: adguardhome
-    mode: '0755'
   tags:
     - adguard
     - dns
@@ -119,13 +118,23 @@
     - dns
     - config
 
-- name: Deploy AdGuard Home configuration
+- name: Check if AdGuard Home config exists
+  ansible.builtin.stat:
+    path: /etc/adguardhome/AdGuardHome.yaml
+  register: _adguard_config
+  tags:
+    - adguard
+    - dns
+    - config
+
+- name: Deploy AdGuard Home configuration (initial only)
   ansible.builtin.template:
     src: adguardhome.yaml.j2
     dest: /etc/adguardhome/AdGuardHome.yaml
     owner: adguardhome
     group: adguardhome
     mode: '0644'
+  when: not _adguard_config.stat.exists
   notify: Restart adguardhome
   tags:
     - adguard
