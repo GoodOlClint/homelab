@@ -93,6 +93,7 @@
     src: axosyslog.conf.j2
     dest: /opt/monitoring/axosyslog/syslog-ng.conf
     mode: '0644'
+  notify: restart axosyslog
   tags:
     - monitoring
     - config

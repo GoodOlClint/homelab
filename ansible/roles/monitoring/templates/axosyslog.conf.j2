@@ -1,7 +1,39 @@
 @version: 4.8
 @include "scl.conf"
 
+# AxoSyslog — Multi-Source Log Pipeline
+#
+# Architecture:
+#   Sources (flags(no-parse)) → per-path parser → filter by PROGRAM/message → OpenObserve stream
+#
+#   Sources use flags(no-parse) because we receive MIXED syslog formats on the same port:
+#     - pfSense/VMs/Docker send RFC 5424 → parsed by syslog-parser(flags(syslog-protocol))
+#   A junction with channel blocks isolates parser state between routes.
+#   flags(final) on each channel implements first-match routing.
+#
+# Sources:
+#   - VM rsyslog clients: TCP 5514, RFC 5424 via RSYSLOG_SyslogProtocol23Format
+#   - pfSense firewall:   UDP 5514, RFC 5424 (Status → System Logs → Settings → Log Message Format → syslog)
+#   - Docker syslog:      TCP 5514, RFC 5424 via Docker syslog driver
+#
+# OpenObserve Streams:
+#   - firewall: pfSense filterlog with parsed CSV fields (action, IPs, ports, protocol)
+#   - syslog:   Everything else (VM system logs, Docker containers)
+#
+# External Device Configuration (manual — not managed by Ansible):
+#
+#   pfSense (already sending logs):
+#     1. Status → System Logs → Settings
+#     2. Enable Remote Logging
+#     3. Remote log servers: <openobserve_management_ip>:5514
+#     4. Protocol: UDP
+#     5. Log Message Format: syslog (RFC 5424)
+#     6. Check: Firewall Events (filterlog), optionally System/DNS/DHCP Events
+
+# =============================================================================
 # Options
+# =============================================================================
+
 options {
     chain_hostnames(off);
     flush_lines(0);
@@ -17,11 +49,17 @@ options {
     create_dirs(yes);
 };
 
-# Sources - Listen for syslog messages
+# =============================================================================
+# Sources — Listen for syslog messages
+# =============================================================================
+
+# flags(no-parse) leaves the raw message (including PRI header) in ${MESSAGE}.
+# Each log path applies its own parser (RFC 5424 or RFC 3164) to handle mixed formats.
 source s_network_udp {
     network(
         transport("udp")
         port(5514)
+        flags(no-parse)
     );
 };
 
@@ -29,11 +67,63 @@ source s_network_tcp {
     network(
         transport("tcp")
         port(5514)
+        flags(no-parse)
     );
 };
 
-# Destination - OpenObserve using native driver
-destination d_openobserve {
+# =============================================================================
+# Parsers
+# =============================================================================
+
+# RFC 5424 parser — for pfSense, VMs, Docker (standards-compliant sources)
+# Messages that don't conform to RFC 5424 are dropped from the log path.
+parser p_rfc5424 {
+    syslog-parser(flags(syslog-protocol));
+};
+
+# pfSense filterlog CSV parser — IPv4 TCP/UDP (covers ~90% of firewall logs)
+# Field positions: common(0-8) + IPv4(9-16) + proto-specific(17-21)
+# Non-TCP/UDP or IPv6 traffic may have empty fields for trailing columns
+parser p_pfsense_full {
+    csv-parser(
+        columns("rule_number", "sub_rule", "anchor", "tracker",
+                "interface", "reason", "action", "direction",
+                "ip_version", "tos", "ecn", "ttl", "id",
+                "offset", "flags", "proto_id", "proto_name",
+                "length", "src_ip", "dst_ip", "src_port", "dst_port")
+        delimiters(",")
+        prefix(".pf.")
+        template("${MESSAGE}")
+    );
+};
+
+# =============================================================================
+# Filters — Identify log sources after parsing
+# =============================================================================
+
+filter f_pfsense {
+    program("filterlog");
+};
+
+# =============================================================================
+# Destinations — Separate OpenObserve streams per source type
+# =============================================================================
+
+# Firewall logs → "firewall" stream
+destination d_openobserve_firewall {
+    openobserve-log(
+        url("http://openobserve")
+        port(5080)
+        organization("default")
+        stream("firewall")
+        user("{{ openobserve_root_user_email }}")
+        password("`OPENOBSERVE_ROOT_USER_PASS`")
+        record("--scope rfc5424 --exclude DATE --pair @timestamp=${ISODATE} --pair pf.action=${.pf.action} --pair pf.interface=${.pf.interface} --pair pf.direction=${.pf.direction} --pair pf.src_ip=${.pf.src_ip} --pair pf.dst_ip=${.pf.dst_ip} --pair pf.src_port=${.pf.src_port} --pair pf.dst_port=${.pf.dst_port} --pair pf.proto_name=${.pf.proto_name} --pair pf.rule_number=${.pf.rule_number} --pair pf.tracker=${.pf.tracker} --pair pf.ip_version=${.pf.ip_version}")
+    );
+};
+
+# All other syslog → "syslog" stream (VMs, Docker containers)
+destination d_openobserve_syslog {
     openobserve-log(
         url("http://openobserve")
         port(5080)
@@ -41,25 +131,42 @@ destination d_openobserve {
         stream("syslog")
         user("{{ openobserve_root_user_email }}")
         password("`OPENOBSERVE_ROOT_USER_PASS`")
+        record("--scope rfc5424 --exclude DATE --pair @timestamp=${ISODATE}")
     );
 };
 
-# Log path - Connect source to destination
+# =============================================================================
+# Log Routing — junction with channels for isolated parsing per source
+#
+# A junction snapshots the message before each channel and restores it on
+# failure. This prevents parser modifications in one channel from leaking
+# into subsequent channels (separate log{} blocks share message state).
+# flags(final) on each channel implements first-match routing.
+#
+# Channel order:
+#   1. pfSense:  p_rfc5424 → f_pfsense → csv-parser → firewall stream
+#   2. Catch-all: p_rfc5424 → syslog stream (VMs, Docker)
+# =============================================================================
+
 log {
     source(s_network_udp);
     source(s_network_tcp);
 
-    # Parse syslog format (RFC 3164 - default for rsyslog, most appliances)
-    parser {
-        syslog-parser();
+    junction {
+        channel {
+            parser(p_rfc5424);
+            filter(f_pfsense);
+            parser(p_pfsense_full);
+            destination(d_openobserve_firewall);
+            flags(final);
+        };
+
+        channel {
+            parser(p_rfc5424);
+            destination(d_openobserve_syslog);
+            flags(final);
+        };
     };
 
-    # Add additional fields
-    rewrite {
-        set("syslog", value("stream_name"));
-    };
-
-    # Send to OpenObserve
-    destination(d_openobserve);
     flags(flow-control);
 };

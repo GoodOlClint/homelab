@@ -1,0 +1,6 @@
+---
+- name: restart axosyslog
+  community.docker.docker_container:
+    name: axosyslog
+    state: started
+    restart: true
