@@ -1,0 +1,8 @@
+# Forward all logs to AxoSyslog on monitoring VM (services VLAN)
+# @@  = TCP (reliable delivery), single @ = UDP
+# RSYSLOG_SyslogProtocol23Format = RFC 5424 format
+{% if mgmt_vlan_prefix is defined and services_vlan_prefix is defined %}
+*.* @@{{ openobserve_listen_host | replace(mgmt_vlan_prefix, services_vlan_prefix) }}:5514;RSYSLOG_SyslogProtocol23Format
+{% else %}
+*.* @@{{ openobserve_listen_host }}:5514;RSYSLOG_SyslogProtocol23Format
+{% endif %}
