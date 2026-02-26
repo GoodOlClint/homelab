@@ -38,8 +38,8 @@
     - unifi_uos_installer_url | length > 0
 
 - name: Run UniFi OS Server installer
-  ansible.builtin.command:
-    cmd: /tmp/uos-installer install
+  ansible.builtin.shell:
+    cmd: echo "y" | /tmp/uos-installer
   when: not uos_installed.stat.exists
   notify: Restart UniFi OS Server
 

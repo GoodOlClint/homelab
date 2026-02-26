@@ -235,7 +235,7 @@ filtering:
     - domain: proxmox-backup.{{ dns_zones.vlan100.zone }}
       answer: {{ hostvars['proxmox_backup']['ansible_host'] }}
 {% endif %}
-{% for vm_name in ['docker', 'homebridge', 'multicast-relay', 'nvidia-licensing', 'plex', 'plex-services'] %}
+{% for vm_name in ['docker', 'nvidia-licensing', 'plex', 'plex-services'] %}
 {% if hostvars[vm_name] is defined and hostvars[vm_name]['ansible_host'] is defined %}
     # {{ vm_name | title }} VM
     - domain: {{ vm_name }}.{{ dns_zones.vlan100.zone }}
@@ -246,11 +246,6 @@ filtering:
     # Service aliases - Plex media server
     - domain: media.{{ dns_zones.vlan100.zone }}
       answer: {{ hostvars['plex']['ansible_host'] }}
-{% endif %}
-{% if hostvars['homebridge'] is defined %}
-    # Service aliases - HomeKit bridge
-    - domain: homekit.{{ dns_zones.vlan100.zone }}
-      answer: {{ hostvars['homebridge']['ansible_host'] }}
 {% endif %}
 {% if hostvars['nvidia-licensing'] is defined %}
     # Service aliases - NVIDIA DLS server

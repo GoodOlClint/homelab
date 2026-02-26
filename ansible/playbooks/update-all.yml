@@ -15,29 +15,6 @@
 
       register: upgrade_result
 
-- name: Update Homebridge plugins and Node.js
-  hosts: homebridge
-  become: true
-  tasks:
-    - name: Update Node.js and npm to latest
-      ansible.builtin.apt:
-        name:
-          - nodejs
-          - npm
-        state: latest
-
-    - name: Update all globally installed npm packages (including Homebridge plugins)
-      ansible.builtin.shell: |
-        npm update -g 2>&1 | tee /tmp/npm-update.log
-      register: plugin_update
-      changed_when: "'up to date' not in plugin_update.stdout"
-
-    - name: Restart Homebridge service after updates
-      ansible.builtin.systemd:
-        name: homebridge
-        state: restarted
-      when: plugin_update.changed
-
 - name: Update all Docker containers (pull latest and recreate)
   hosts: docker,plex-services
   become: true
@@ -54,9 +31,7 @@
 
     - name: Pull latest images for plex services
       community.docker.docker_compose_v2:
-        project_src: /docker
-        files:
-          - docker-compose-plex-services.yml
+        project_src: /opt/plex-services
         pull: always
       register: plex_pull_result
       when: inventory_hostname == 'plex-services'
@@ -74,9 +49,7 @@
 
     - name: Restart plex services with latest images
       community.docker.docker_compose_v2:
-        project_src: /docker
-        files:
-          - docker-compose-plex-services.yml
+        project_src: /opt/plex-services
         state: present
       when:
         - inventory_hostname == 'plex-services'

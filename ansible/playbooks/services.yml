@@ -8,22 +8,10 @@
   pre_tasks: &load_all_config
     - name: Load all configuration and secrets
       ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/full_pre_tasks.yml"
+      tags: [always]
   roles:
     - dns_config
     - nvidia_licensing
-    - rsyslog_client
-    - telegraf
-
-- name: Configure homebridge VM
-  hosts: homebridge
-  become: true
-
-  vars_files:
-    - ../group_vars/all.yml
-  pre_tasks: *load_all_config
-  roles:
-    - dns_config
-    - homebridge
     - rsyslog_client
     - telegraf
 

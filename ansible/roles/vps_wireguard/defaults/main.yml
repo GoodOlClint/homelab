@@ -3,6 +3,7 @@
 
 wg_interface: wg0
 wg_listen_port: 51821
+wg_mtu: 1400
 wg_tunnel_address: "{{ secrets.wg_tunnel_address | default('') }}"
 wg_tunnel_address_v6: "{{ secrets.wg_tunnel_address_v6 | default('') }}"
 
