@@ -107,7 +107,7 @@ mkdir -p "$BACKUP_DIR/compose"
 
 # Backup specific docker-compose files
 for compose_file in /opt/docker-compose.yml /opt/docker-compose.yaml /opt/.env \
-                    /docker/docker-compose*.yml /docker/docker-compose*.yaml \
+                    /opt/plex-services/docker-compose.yml /opt/plex-services/docker-compose.yaml \
                     /root/docker-compose.yml /root/docker-compose.yaml; do
     if [ -f "$compose_file" ]; then
         log "Backing up compose file: $compose_file"

@@ -6,7 +6,7 @@
 set -euo pipefail
 
 # Configuration
-BACKUP_DIR="/docker/postgres_backups"
+BACKUP_DIR="/opt/plex-services/postgres_backups"
 RETENTION_DAYS="{{ postgres_backup_retention_days | default('30') }}"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 LOG_FILE="/var/log/postgres_backup.log"

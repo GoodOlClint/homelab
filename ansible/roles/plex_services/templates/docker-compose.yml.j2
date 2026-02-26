@@ -55,7 +55,7 @@ services:
       - TZ={{ timezone }}
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      - /docker/sonarr:/config:rw
+      - /opt/plex-services/sonarr:/config:rw
       - plex_data:/data:rw
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8989/ping"]
@@ -81,7 +81,7 @@ services:
       - TZ={{ timezone }}
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      - /docker/radarr:/config:rw
+      - /opt/plex-services/radarr:/config:rw
       - plex_data:/data:rw
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:7878/ping"]
@@ -104,7 +104,7 @@ services:
       - TZ={{ timezone }}
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      - /docker/tautulli:/config:rw
+      - /opt/plex-services/tautulli:/config:rw
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8181/status"]
       interval: 30s
@@ -132,10 +132,10 @@ services:
       - DB_PORT=5432
       - DB_NAME=jellyseerr
       - DB_USER={{ plex_services['jellyseerr'].db_user }}
-      - DB_PASS={{ plex_services['jellyseerr'].db_password }}
+      - DB_PASS={{ secrets.jellyseerr_db_password }}
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      - /docker/jellyseerr:/app/config:rw
+      - /opt/plex-services/jellyseerr:/app/config:rw
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5055/api/v1/status"]
       interval: 30s
@@ -160,7 +160,7 @@ services:
       - TZ={{ timezone }}
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      - /docker/prowlarr:/config:rw
+      - /opt/plex-services/prowlarr:/config:rw
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9696/ping"]
       interval: 30s
@@ -188,10 +188,10 @@ services:
       - POSTGRES_PORT=5432
       - POSTGRES_DATABASE=bazarr
       - POSTGRES_USERNAME={{ plex_services['bazarr'].db_user }}
-      - POSTGRES_PASSWORD={{ plex_services['bazarr'].db_password }}
+      - POSTGRES_PASSWORD={{ secrets.bazarr_db_password }}
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      - /docker/bazarr:/config:rw
+      - /opt/plex-services/bazarr:/config:rw
       - plex_data:/data:rw
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:6767/ping"]
@@ -217,36 +217,10 @@ services:
       - TZ={{ timezone }}
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      - /docker/lidarr:/config:rw
+      - /opt/plex-services/lidarr:/config:rw
       - plex_data:/data:rw
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8686/ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-  # Readarr - Ebook management
-  readarr:
-    container_name: readarr
-    image: ghcr.io/hotio/readarr:latest
-    restart: unless-stopped
-    ports:
-      - 8787:8787
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      - PUID={{ plex_services['readarr'].PUID }}
-      - PGID={{ plex_services['readarr'].PGID }}
-      - UMASK=002
-      - TZ={{ timezone }}
-    volumes:
-      - /etc/localtime:/etc/localtime:ro
-      - /docker/readarr:/config:rw
-      - plex_data:/data:rw
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8787/ping"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -266,7 +240,7 @@ services:
       - TZ={{ timezone }}
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      - /docker/sabnzbd:/config:rw
+      - /opt/plex-services/sabnzbd:/config:rw
       - plex_data:/data:rw
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api?mode=version"]
@@ -276,6 +250,10 @@ services:
       start_period: 60s
 
   # Cloudflared - Cloudflare Tunnel
+  # Dashboard routing (configured in Cloudflare Zero Trust dashboard):
+  #   tautulli.clintflix.tv  -> http://tautulli:8181
+  #   requests.clintflix.tv  -> http://jellyseerr:5055
+  # To update routes: Cloudflare dashboard > Zero Trust > Networks > Tunnels > Configure
   cloudflared:
     container_name: cloudflared
     image: cloudflare/cloudflared:latest
@@ -296,12 +274,12 @@ services:
     image: ghcr.io/recyclarr/recyclarr:latest
     restart: unless-stopped
     environment:
-      - PUID={{ plex_services['recyclarr'].PUID | default(1000) }}
-      - PGID={{ plex_services['recyclarr'].PGID | default(1000) }}
+      - PUID={{ plex_services['recyclarr'].PUID }}
+      - PGID={{ plex_services['recyclarr'].PGID }}
       - TZ={{ timezone }}
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      - /docker/recyclarr:/config:rw
+      - /opt/plex-services/recyclarr:/config:rw
     depends_on:
       - sonarr
       - radarr

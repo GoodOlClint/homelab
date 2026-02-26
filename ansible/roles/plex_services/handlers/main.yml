@@ -8,8 +8,6 @@
 
 - name: restart plex services docker compose
   community.docker.docker_compose_v2:
-    project_src: /docker
-    files:
-      - docker-compose-plex-services.yml
+    project_src: /opt/plex-services
     state: restarted
   listen: "restart plex services docker compose"
