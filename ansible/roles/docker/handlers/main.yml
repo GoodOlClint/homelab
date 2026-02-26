@@ -4,7 +4,6 @@
     name: docker
     state: restarted
     daemon_reload: true
-  listen: restart docker
 
 
 - name: restart docker services

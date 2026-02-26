@@ -108,7 +108,11 @@ VPS_TF_TARGETS := \
 	-target=vultr_firewall_rule.mobile_wg_v6 \
 	-target=vultr_firewall_rule.icmpv6 \
 	-target=vultr_firewall_rule.ssh_provisioning_v6 \
-	-target=vultr_instance.vps
+	-target=vultr_instance.vps \
+	-target=cloudflare_dns_record.vps \
+	-target=cloudflare_dns_record.plex \
+	-target=cloudflare_dns_record.vps_ipv6 \
+	-target=cloudflare_dns_record.plex_ipv6
 
 vps-deploy:
 	@echo "Phase 1: Provisioning VPS with SSH access..."

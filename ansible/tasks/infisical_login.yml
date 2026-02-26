@@ -1,6 +1,13 @@
 ---
 # Authenticate to Infisical using Machine Identity (Universal Auth)
 # Bootstrap credentials come from SOPS Tier 1
+#
+# Reads secrets from all known paths and builds a `secrets` fact that matches
+# the secrets.sops.yml structure:
+#   /          → flat keys (secrets.key_name)
+#   /shared    → flat keys merged into root (secrets.key_name)
+#   /monitoring, /plex, etc. → nested dicts (secrets.monitoring.key_name)
+
 - name: Login to Infisical
   infisical.vault.login:
     url: "{{ bootstrap_config.infisical_url }}"
@@ -12,19 +19,65 @@
   become: false
   run_once: true
 
-- name: Read all runtime secrets from Infisical
+# Read root-level secrets (/)
+- name: Read root secrets from Infisical
   infisical.vault.read_secrets:
     login_data: "{{ infisical_login.login_data }}"
     project_id: "{{ bootstrap_config.infisical_project_id }}"
     env_slug: "prod"
     path: "/"
     as_dict: true
-  register: _infisical_secrets
+  register: _infisical_root
   delegate_to: localhost
   become: false
   run_once: true
 
-- name: Set secrets fact for backward compatibility
+# Read shared secrets (/shared) — merged flat into root
+- name: Read shared secrets from Infisical
+  infisical.vault.read_secrets:
+    login_data: "{{ infisical_login.login_data }}"
+    project_id: "{{ bootstrap_config.infisical_project_id }}"
+    env_slug: "prod"
+    path: "/shared"
+    as_dict: true
+  register: _infisical_shared
+  delegate_to: localhost
+  become: false
+  run_once: true
+  failed_when: false
+
+# Read nested path secrets — each becomes a nested dict in secrets fact
+- name: Read nested path secrets from Infisical
+  infisical.vault.read_secrets:
+    login_data: "{{ infisical_login.login_data }}"
+    project_id: "{{ bootstrap_config.infisical_project_id }}"
+    env_slug: "prod"
+    path: "/{{ item }}"
+    as_dict: true
+  loop:
+    - monitoring
+    - plex
+    - plex-services
+    - vps
+    - pfsense
+  register: _infisical_nested
+  delegate_to: localhost
+  become: false
+  run_once: true
+  failed_when: false
+
+# Build the secrets fact matching secrets.sops.yml structure
+- name: Set secrets fact from Infisical
   ansible.builtin.set_fact:
-    secrets: "{{ dict(_infisical_secrets.secrets | dict2items | map(attribute='key') | map('lower') | zip(_infisical_secrets.secrets | dict2items | map(attribute='value'))) }}"
+    secrets: >-
+      {{ _flat | combine(_nested_dicts) }}
+  vars:
+    # Root + shared → flat, lowercased keys
+    _root_items: "{{ (_infisical_root.secrets | default({})) | dict2items }}"
+    _shared_items: "{{ (_infisical_shared.secrets | default({})) | dict2items }}"
+    _flat: "{{ dict((_root_items + _shared_items) | map(attribute='key') | map('lower') | list | zip((_root_items + _shared_items) | map(attribute='value') | list)) }}"
+    # Nested paths → dict keyed by folder name (hyphens→underscores), secrets as-is
+    # Filter to results that have a secrets dict (skip paths that don't exist yet)
+    _ok_results: "{{ _infisical_nested.results | default([]) | selectattr('secrets', 'defined') | list }}"
+    _nested_dicts: "{{ dict(_ok_results | map(attribute='item') | map('replace', '-', '_') | list | zip(_ok_results | map(attribute='secrets') | list)) }}"
   run_once: true

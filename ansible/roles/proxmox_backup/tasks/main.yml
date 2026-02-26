@@ -575,7 +575,7 @@
 
 - name: Generate API token for backup user
   ansible.builtin.shell: |
-    proxmox-backup-manager user generate-token backup@pbs backup-token --output-format json
+    proxmox-backup-manager user generate-token backup@pbs backup-token
   register: pbs_token_output
   when: ((pbs_token_list.stdout | default('', true)) or '[]') | from_json | length == 0
 
@@ -583,7 +583,7 @@
   ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/infisical_write_secret.yml"
   vars:
     secret_name: "PBS_BACKUP_TOKEN"
-    secret_value: "{{ (pbs_token_output.stdout | from_json).value }}"
+    secret_value: "{{ pbs_token_output.stdout | regex_search('\"value\": \"([^\"]+)\"', '\\1') | first }}"
     secret_path: "/shared"
     secret_comment: "PBS backup@pbs backup-token — auto-generated"
   when:
@@ -593,7 +593,7 @@
 
 - name: Display PBS backup token (when Infisical unavailable)
   ansible.builtin.debug:
-    msg: "PBS backup token generated. Save to secrets.sops.yml: {{ (pbs_token_output.stdout | from_json).value }}"
+    msg: "PBS backup token generated. Save to secrets.sops.yml: {{ pbs_token_output.stdout | regex_search('\"value\": \"([^\"]+)\"', '\\1') | first }}"
     verbosity: 1
   when:
     - pbs_token_output is changed
@@ -610,7 +610,7 @@
 
 - name: Generate API token for monitoring user
   ansible.builtin.shell: |
-    proxmox-backup-manager user generate-token monitoring@pbs monitoring-token --output-format json
+    proxmox-backup-manager user generate-token monitoring@pbs monitoring-token
   register: pbs_monitoring_token_output
   when: ((pbs_monitoring_token_list.stdout | default('', true)) or '[]') | from_json | length == 0
 
@@ -618,7 +618,7 @@
   ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/infisical_write_secret.yml"
   vars:
     secret_name: "PBS_MONITORING_TOKEN"
-    secret_value: "{{ (pbs_monitoring_token_output.stdout | from_json).value }}"
+    secret_value: "{{ pbs_monitoring_token_output.stdout | regex_search('\"value\": \"([^\"]+)\"', '\\1') | first }}"
     secret_path: "/monitoring"
     secret_comment: "PBS monitoring@pbs monitoring-token — auto-generated"
   when:
@@ -628,7 +628,7 @@
 
 - name: Display PBS monitoring token (when Infisical unavailable)
   ansible.builtin.debug:
-    msg: "PBS monitoring token generated. Save to secrets.sops.yml: {{ (pbs_monitoring_token_output.stdout | from_json).value }}"
+    msg: "PBS monitoring token generated. Save to secrets.sops.yml: {{ pbs_monitoring_token_output.stdout | regex_search('\"value\": \"([^\"]+)\"', '\\1') | first }}"
     verbosity: 1
   when:
     - pbs_monitoring_token_output is changed
