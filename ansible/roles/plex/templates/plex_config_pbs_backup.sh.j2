@@ -17,7 +17,7 @@ if [ -f /etc/infisical/secrets/plex.env ]; then
     . /etc/infisical/secrets/plex.env
 fi
 
-PLEX_TOKEN="${PLEX_TOKEN:-{{ plex_token }}}"
+PLEX_TOKEN="${PLEX_TOKEN:-{{ (secrets.plex | default({})).plex_token | default('') }}}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 LOG_FILE="/var/log/plex_config_pbs_backup.log"
 BACKUP_DIR="/tmp/plex_pbs_backup"
@@ -134,12 +134,21 @@ mkdir -p "$BACKUP_DIR"
 log "Stopping plexmediaserver..."
 systemctl stop plexmediaserver || error_exit "Failed to stop plexmediaserver"
 
-log "Copying DB, Plug-ins, and Preferences.xml..."
+log "Copying DB, Plug-ins, Preferences.xml, and SSL certificate..."
 # Copy files with error checking
 cp "$DB_DIR/$DB_MAIN" "$BACKUP_DIR/${DB_MAIN}" || error_exit "Failed to copy main database"
 cp "$DB_DIR/$DB_BLOBS" "$BACKUP_DIR/${DB_BLOBS}" || error_exit "Failed to copy blobs database"
 cp -a "$PLEX_DIR/Plug-ins" "$BACKUP_DIR/Plug-ins" || error_exit "Failed to copy Plug-ins"
 cp "$PLEX_DIR/Preferences.xml" "$BACKUP_DIR/Preferences.xml" || error_exit "Failed to copy Preferences.xml"
+
+# Copy SSL certificate PFX if it exists
+PFX_PATH="{{ plex_pfx_path | default('/var/lib/plexmediaserver/plex_certificate.pfx') }}"
+if [ -f "$PFX_PATH" ]; then
+    cp "$PFX_PATH" "$BACKUP_DIR/plex_certificate.pfx" || error_exit "Failed to copy PFX certificate"
+    log "PFX certificate copied."
+else
+    log "WARNING: PFX certificate not found at $PFX_PATH, skipping."
+fi
 
 log "Starting plexmediaserver..."
 systemctl start plexmediaserver || error_exit "Failed to start plexmediaserver"

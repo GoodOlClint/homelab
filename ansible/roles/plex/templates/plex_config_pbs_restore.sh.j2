@@ -11,7 +11,7 @@ DB_DIR="$PLEX_DIR/Plug-in Support/Databases"
 PLEX_SQLITE="/usr/lib/plexmediaserver/Plex SQLite"
 LOG_FILE="/var/log/plex_config_pbs_restore.log"
 RESTORE_DIR="/tmp/plex_pbs_restore"
-PLEX_TOKEN="{{ plex_token }}"
+PLEX_TOKEN="{{ (secrets.plex | default({})).plex_token | default('') }}"
 
 # PBS Configuration
 PBS_ENV_FILE="/etc/proxmox-backup/pbs-client.env"
@@ -172,6 +172,18 @@ else
     log "WARNING: Preferences.xml not found in backup"
 fi
 
+# Restore SSL certificate PFX
+PFX_PATH="{{ plex_pfx_path | default('/var/lib/plexmediaserver/plex_certificate.pfx') }}"
+log "Restoring PFX certificate..."
+if [ -f "$RESTORE_DIR/plex_certificate.pfx" ]; then
+    cp -af "$RESTORE_DIR/plex_certificate.pfx" "$PFX_PATH" || error_exit "Failed to restore PFX certificate"
+    chown plex:plex "$PFX_PATH"
+    chmod 0600 "$PFX_PATH"
+    log "PFX certificate restored."
+else
+    log "WARNING: PFX certificate not found in backup (certbot will regenerate on next renewal)"
+fi
+
 # Start Plex
 log "Starting plexmediaserver..."
 systemctl start plexmediaserver || error_exit "Failed to start plexmediaserver"
@@ -203,5 +215,10 @@ for section in $sections; do
     log "Refreshing library section $section..."
     curl -s -H "X-Plex-Token: $PLEX_TOKEN" "$PLEX_API/library/sections/$section/refresh?force=1" || true
 done
+
+# Signal that poster reset is needed (thumbnails are blank after restore)
+touch /var/lib/plexmediaserver/.poster-reset-needed
+log "Poster reset flagged — plex-reset-posters.service will run"
+systemctl start plex-reset-posters.service --no-block 2>/dev/null || true
 
 log "Plex config PBS restore complete."

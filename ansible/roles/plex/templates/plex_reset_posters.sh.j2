@@ -1,0 +1,81 @@
+#!/bin/bash
+#
+# Plex Poster Reset Wrapper
+# Runs reset-posters-plex.py from Media-Scripts and removes the flag file on success.
+# Designed to be called by plex-reset-posters.service (systemd oneshot).
+#
+set -euo pipefail
+
+FLAG_FILE="/var/lib/plexmediaserver/.poster-reset-needed"
+SCRIPT_DIR="/opt/media-scripts/Plex"
+VENV_DIR="$SCRIPT_DIR/.venv"
+LOG_FILE="/var/log/plex_reset_posters.log"
+
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG_FILE"
+}
+
+# Verify flag file exists (belt-and-suspenders — systemd ConditionPathExists should catch this)
+if [ ! -f "$FLAG_FILE" ]; then
+    log "No poster reset needed (flag file missing). Exiting."
+    exit 0
+fi
+
+# Load Plex token from Infisical agent env
+if [ -f /etc/infisical/secrets/plex.env ]; then
+    . /etc/infisical/secrets/plex.env
+fi
+
+# Fallback: bake token from Ansible secrets
+export PLEX_TOKEN="${PLEX_TOKEN:-{{ (secrets.plex | default({})).plex_token | default('') }}}"
+
+if [ -z "$PLEX_TOKEN" ]; then
+    log "ERROR: No PLEX_TOKEN available. Cannot reset posters."
+    exit 1
+fi
+
+# Wait for Plex API to be available
+log "Waiting for Plex API..."
+for i in $(seq 1 60); do
+    if curl -sf -H "X-Plex-Token: $PLEX_TOKEN" http://127.0.0.1:{{ plex_port | default(32400) }}/identity >/dev/null 2>&1; then
+        log "Plex API is available."
+        break
+    fi
+    if [ "$i" -eq 60 ]; then
+        log "ERROR: Plex API not available after 5 minutes. Aborting."
+        exit 1
+    fi
+    sleep 5
+done
+
+cd "$SCRIPT_DIR"
+
+# Activate venv
+if [ -f "$VENV_DIR/bin/activate" ]; then
+    . "$VENV_DIR/bin/activate"
+else
+    log "ERROR: Python venv not found at $VENV_DIR"
+    exit 1
+fi
+
+log "Starting Plex poster reset..."
+
+# Run the reset script
+# PLEX_TOKEN is exported; the .env file references ${PLEX_TOKEN} for the API token
+# Redirect all output to the log file (script uses print() and alive-progress)
+set +e
+python3 reset-posters-plex.py >> "$LOG_FILE" 2>&1
+EXIT_CODE=$?
+set -e
+
+if [ $EXIT_CODE -eq 0 ]; then
+    log "Poster reset completed successfully."
+    # Remove flag file so service doesn't run again on next boot
+    rm -f "$FLAG_FILE"
+    # Clean up status tracking files (UUID.txt files)
+    rm -f "$SCRIPT_DIR"/*.txt
+    log "Flag file and status files removed."
+else
+    log "ERROR: Poster reset failed with exit code $EXIT_CODE. Flag file retained for retry."
+    exit $EXIT_CODE
+fi

@@ -1,0 +1,14 @@
+[Unit]
+Description=Reset Plex posters to defaults after restore
+After=plexmediaserver.service network-online.target
+Requires=plexmediaserver.service
+ConditionPathExists=/var/lib/plexmediaserver/.poster-reset-needed
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/plex_reset_posters.sh
+WorkingDirectory=/opt/media-scripts/Plex
+TimeoutSec=infinity
+
+[Install]
+WantedBy=multi-user.target

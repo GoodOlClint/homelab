@@ -10,7 +10,7 @@ if [ -f /etc/infisical/secrets/plex.env ]; then
     . /etc/infisical/secrets/plex.env
 fi
 
-PLEX_TOKEN="${PLEX_TOKEN:-{{ plex_token }}}"
+PLEX_TOKEN="${PLEX_TOKEN:-{{ (secrets.plex | default({})).plex_token | default('') }}}"
 PLEX_SMB_PASS="${PLEX_SMB_PASS:-{{ secrets.plex_smb_pass }}}"
 PLEX_SMB_MOUNT="{{ plex_smb_mount }}"
 PLEX_SMB_SHARE="{{ plex_smb_share }}"

@@ -13,6 +13,100 @@
     plex_smb_pass: "{{ secrets.plex_smb_pass }}"
   tags: [plex, secrets]
 
+# --- Retrieve Plex token from plex.tv if not already set ---
+- name: Check if plex_token needs retrieval
+  ansible.builtin.set_fact:
+    _plex_token_needs_gen: >-
+      {{ (secrets.plex | default({})).plex_token | default('REPLACE_ME') in ['REPLACE_ME', ''] }}
+  tags: [plex, secrets]
+
+- name: Retrieve Plex token from plex.tv
+  ansible.builtin.uri:
+    url: https://plex.tv/users/sign_in.json
+    method: POST
+    headers:
+      X-Plex-Client-Identifier: "homelab-ansible"
+      X-Plex-Product: "Homelab Ansible"
+      X-Plex-Version: "1.0"
+    body_format: form-urlencoded
+    body:
+      user[login]: "{{ bootstrap.plex_username }}"
+      user[password]: "{{ bootstrap.plex_password }}"
+    status_code: [200, 201]
+  delegate_to: localhost
+  become: false
+  register: _plex_signin
+  no_log: true
+  when:
+    - _plex_token_needs_gen | bool
+    - bootstrap.plex_username | default('REPLACE_ME') != 'REPLACE_ME'
+    - bootstrap.plex_password | default('REPLACE_ME') != 'REPLACE_ME'
+  tags: [plex, secrets]
+
+- name: Update secrets fact with plex_token
+  ansible.builtin.set_fact:
+    secrets: "{{ secrets | combine({'plex': (secrets.plex | default({})) | combine({'plex_token': _plex_signin.json.user.authToken})}) }}"
+  when:
+    - _plex_token_needs_gen | bool
+    - _plex_signin is not skipped
+    - _plex_signin.json is defined
+  no_log: true
+  tags: [plex, secrets]
+
+- name: Resolve comment for plex_token
+  ansible.builtin.set_fact:
+    _secret_comment: "Plex auth token — retrieved from plex.tv by Ansible"
+  when:
+    - _plex_token_needs_gen | bool
+    - _plex_signin is not skipped
+    - _plex_signin.json is defined
+    - infisical_login is defined
+  tags: [plex, secrets]
+
+- name: Store plex_token in Infisical
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/infisical_write_secret.yml"
+  vars:
+    secret_name: "plex_token"
+    secret_value: "{{ secrets.plex.plex_token }}"
+    secret_path: "/plex"
+    secret_comment: "{{ _secret_comment }}"
+  when:
+    - _plex_token_needs_gen | bool
+    - _plex_signin is not skipped
+    - _plex_signin.json is defined
+    - infisical_login is defined
+  tags: [plex, secrets]
+
+- name: Display plex_token retrieval result (Infisical unavailable)
+  ansible.builtin.debug:
+    msg: >-
+      Plex token retrieved from plex.tv. Infisical is not available.
+      Store manually in Infisical at /plex/plex_token or in secrets.sops.yml under plex.plex_token
+    verbosity: 1
+  when:
+    - _plex_token_needs_gen | bool
+    - _plex_signin is not skipped
+    - _plex_signin.json is defined
+    - infisical_login is not defined
+  no_log: "{{ not (ansible_verbosity >= 1) }}"
+  tags: [plex, secrets]
+
+- name: Refresh plex_token bare variable alias from secrets
+  ansible.builtin.set_fact:
+    plex_token: "{{ (secrets.plex | default({})).plex_token | default('') }}"
+  tags: [plex, secrets]
+
+- name: Warn if plex.tv credentials not configured
+  ansible.builtin.debug:
+    msg: >-
+      WARNING: plex_token is empty and plex.tv credentials are not configured in bootstrap.sops.yml.
+      Backup scripts will not be able to check for active sessions.
+      Set bootstrap.plex_username and bootstrap.plex_password, then re-run.
+  when:
+    - _plex_token_needs_gen | bool
+    - (bootstrap.plex_username | default('REPLACE_ME') == 'REPLACE_ME') or (bootstrap.plex_password | default('REPLACE_ME') == 'REPLACE_ME')
+  tags: [plex, secrets]
+
 - name: Install NVIDIA GRID driver
   ansible.builtin.import_role:
     name: nvidia
@@ -222,3 +316,88 @@
     - backup
     - smb
     - restore
+
+# --- Poster Reset Setup (fixes blank thumbnails after restore) ---
+- name: Install packages for Media-Scripts
+  ansible.builtin.package:
+    name:
+      - git
+      - python3-venv
+    state: present
+  tags:
+    - plex
+    - poster-reset
+
+- name: Clone Media-Scripts repository
+  ansible.builtin.git:
+    repo: https://github.com/chazlarson/Media-Scripts.git
+    dest: /opt/media-scripts
+    version: main
+    update: true
+  tags:
+    - plex
+    - poster-reset
+
+- name: Create Python venv for Media-Scripts
+  ansible.builtin.command:
+    cmd: python3 -m venv /opt/media-scripts/Plex/.venv
+    creates: /opt/media-scripts/Plex/.venv/bin/activate
+  tags:
+    - plex
+    - poster-reset
+
+- name: Install poster reset pip dependencies
+  ansible.builtin.pip:
+    name:
+      - plexapi
+      - alive-progress
+      - python-dotenv
+      - pathvalidate
+      - Pillow
+      - requests
+    virtualenv: /opt/media-scripts/Plex/.venv
+  tags:
+    - plex
+    - poster-reset
+
+- name: Deploy poster reset .env configuration
+  ansible.builtin.template:
+    src: plex_reset_posters.env.j2
+    dest: /opt/media-scripts/Plex/.env
+    owner: root
+    group: root
+    mode: '0600'
+  tags:
+    - plex
+    - poster-reset
+
+- name: Deploy poster reset wrapper script
+  ansible.builtin.template:
+    src: plex_reset_posters.sh.j2
+    dest: /usr/local/bin/plex_reset_posters.sh
+    owner: root
+    group: root
+    mode: '0755'
+  tags:
+    - plex
+    - poster-reset
+
+- name: Deploy poster reset systemd service
+  ansible.builtin.template:
+    src: plex-reset-posters.service.j2
+    dest: /etc/systemd/system/plex-reset-posters.service
+    owner: root
+    group: root
+    mode: '0644'
+  tags:
+    - plex
+    - poster-reset
+
+- name: Enable poster reset service (runs on boot when flag exists)
+  ansible.builtin.systemd:
+    name: plex-reset-posters.service
+    enabled: true
+    daemon_reload: true
+  tags:
+    - plex
+    - poster-reset
