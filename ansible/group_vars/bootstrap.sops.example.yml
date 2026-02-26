@@ -4,18 +4,22 @@
 # Copy to bootstrap.sops.yml and encrypt:
 #   sops --encrypt --in-place ansible/group_vars/bootstrap.sops.yml
 #
-# After first Infisical deployment:
-#   1. Create admin account at http://<infisical-ip>:8080
-#   2. Create project "homelab" with environment "prod"
-#   3. Create Machine Identity with Universal Auth
-#   4. Fill in infisical_* values below
-#   5. Run: make infisical-seed (one-time migration from SOPS)
+# BEFORE running `make bootstrap`:
+#   1. Fill in provider credentials (proxmox, vultr, cloudflare)
+#   2. Set infisical_admin_email
+#   3. Set infisical_url (http://<services_vlan_ip>:8080)
+#   4. Run: make bootstrap
+#
+# After bootstrap completes, run: make apply
+# All Infisical config (project, identity, credentials) is auto-populated.
 
 # Non-sensitive Infisical connection config (NOT encrypted by SOPS)
 bootstrap_config:
-  infisical_url: "REPLACE_ME"          # http://<services_ip>:8080
-  infisical_project_id: "REPLACE_ME"   # Project UUID from Infisical UI
-  infisical_org_id: "REPLACE_ME"       # Organization UUID from Infisical UI → Settings → General
+  infisical_url: "REPLACE_ME"              # http://<services_ip>:8080
+  infisical_project_id: "REPLACE_ME"       # Auto-populated by bootstrap
+  infisical_org_id: "REPLACE_ME"           # Auto-populated by bootstrap
+  infisical_admin_email: "REPLACE_ME"      # Your email address (required)
+  infisical_org_name: "homelab"            # Organization name
 
 # Sensitive credentials (encrypted by SOPS via encrypted_regex)
 bootstrap:
@@ -25,13 +29,20 @@ bootstrap:
   vultr_api_key: "REPLACE_ME"          # Vultr API key
   cloudflare_api_token: "REPLACE_ME"   # Cloudflare API token (zone:read + DNS:edit)
 
-  # Infisical deployment secrets (needed BEFORE Infisical exists)
-  # Auto-generated on first `make bootstrap` if left as REPLACE_ME
-  # IMPORTANT: Save generated values — cannot be changed after first deploy
-  infisical_postgres_password: "REPLACE_ME"  # openssl rand -hex 24 (hex only — no URL-unsafe chars)
+  # Infisical deployment secrets (auto-generated on first bootstrap if REPLACE_ME)
+  # IMPORTANT: Cannot be changed after first Infisical deploy
+  infisical_postgres_password: "REPLACE_ME"  # openssl rand -hex 24
   infisical_encryption_key: "REPLACE_ME"     # openssl rand -hex 16
   infisical_auth_secret: "REPLACE_ME"        # openssl rand -base64 32
 
-  # Infisical auth credentials (fill after first deployment)
-  infisical_client_id: "REPLACE_ME"    # Machine Identity client ID
-  infisical_client_secret: "REPLACE_ME" # Machine Identity client secret
+  # Infisical admin password (auto-generated on first bootstrap if REPLACE_ME)
+  infisical_admin_password: "REPLACE_ME"     # openssl rand -base64 32
+
+  # Infisical Machine Identity credentials (auto-populated by bootstrap)
+  infisical_client_id: "REPLACE_ME"
+  infisical_client_secret: "REPLACE_ME"
+
+  # Plex.tv account credentials (for automatic token retrieval)
+  # Token is stored in Infisical at /plex/plex_token after first deploy
+  plex_username: "REPLACE_ME"       # plex.tv account email
+  plex_password: "REPLACE_ME"       # plex.tv account password

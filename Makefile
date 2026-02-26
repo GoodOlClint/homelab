@@ -19,15 +19,26 @@ export TF_VAR_vultr_api_key := $(call _read_secret,vultr_api_key)
 export TF_VAR_cloudflare_api_token := $(call _read_secret,cloudflare_api_token)
 export TF_VAR_unifi_password := $(call _read_secret,unifi_admin_password)
 
+# === Bootstrap Terraform Targets ===
+# Only create the AdGuard and Infisical VMs (+ network dependencies)
+BOOTSTRAP_TF_TARGETS := \
+	-target=module.network \
+	-target=module.vms.proxmox_virtual_environment_vm.vms[\"adguard\"] \
+	-target=module.vms.proxmox_virtual_environment_file.user_data[\"adguard\"] \
+	-target=module.vms.proxmox_virtual_environment_file.network_data[\"adguard\"] \
+	-target=module.vms.proxmox_virtual_environment_vm.vms[\"infisical\"] \
+	-target=module.vms.proxmox_virtual_environment_file.user_data[\"infisical\"] \
+	-target=module.vms.proxmox_virtual_environment_file.network_data[\"infisical\"]
+
 # === Core Operations ===
-.PHONY: all apply plan init terraform-apply inventory bootstrap ansible-bootstrap
+.PHONY: all apply plan init terraform-apply terraform-bootstrap inventory bootstrap ansible-bootstrap
 
 all: apply
 
 apply: terraform-apply inventory ansible-all
 
-# First-time deployment: DNS + AdGuard + Infisical only (no Infisical dependency)
-bootstrap: terraform-apply inventory ansible-bootstrap
+# First-time deployment: AdGuard + Infisical only (no Infisical dependency)
+bootstrap: terraform-bootstrap inventory ansible-bootstrap
 
 ansible-bootstrap:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/bootstrap.yml
@@ -43,6 +54,9 @@ init:
 
 terraform-apply:
 	@cd terraform && terraform init && terraform apply -no-color -auto-approve
+
+terraform-bootstrap:
+	@cd terraform && terraform init && terraform apply -no-color -auto-approve $(BOOTSTRAP_TF_TARGETS)
 
 inventory: clean-ssh
 	@cd terraform && terraform output -no-color -raw ansible_inventory_yaml > ../ansible/inventory/vms.yaml
@@ -78,14 +92,32 @@ expand-disk:
 .PHONY: vps-deploy vps-destroy vps-rebuild vps-rotate-keys
 
 # Phase 1: terraform with SSH open -> ansible configures everything -> terraform closes SSH
+VPS_TF_TARGETS := \
+	-target=vultr_startup_script.vps_bootstrap \
+	-target=vultr_reserved_ip.vps \
+	-target=vultr_firewall_group.vps \
+	-target=vultr_firewall_rule.wg_tunnel \
+	-target=vultr_firewall_rule.plex \
+	-target=vultr_firewall_rule.valheim \
+	-target=vultr_firewall_rule.mobile_wg \
+	-target=vultr_firewall_rule.icmp \
+	-target=vultr_firewall_rule.ssh_provisioning \
+	-target=vultr_firewall_rule.wg_tunnel_v6 \
+	-target=vultr_firewall_rule.plex_v6 \
+	-target=vultr_firewall_rule.valheim_v6 \
+	-target=vultr_firewall_rule.mobile_wg_v6 \
+	-target=vultr_firewall_rule.icmpv6 \
+	-target=vultr_firewall_rule.ssh_provisioning_v6 \
+	-target=vultr_instance.vps
+
 vps-deploy:
 	@echo "Phase 1: Provisioning VPS with SSH access..."
-	@cd terraform && terraform init && terraform apply -no-color -auto-approve -var vps_provisioning=true
+	@cd terraform && terraform init && terraform apply -no-color -auto-approve -var vps_provisioning=true $(VPS_TF_TARGETS)
 	@echo "Phase 2: Configuring VPS via Ansible (IP from terraform output)..."
 	$(eval VPS_IP := $(shell cd terraform && terraform output -raw vps_reserved_ip))
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vps.yaml -i ansible/inventory/vms.yaml ansible/playbooks/vps.yml -e "ansible_host=$(VPS_IP) ansible_user=root"
 	@echo "Phase 3: Closing SSH in Vultr firewall..."
-	@cd terraform && terraform apply -no-color -auto-approve -var vps_provisioning=false
+	@cd terraform && terraform apply -no-color -auto-approve -var vps_provisioning=false $(VPS_TF_TARGETS)
 	@echo "VPS deployment complete. SSH now only accessible via WireGuard tunnel."
 
 vps-destroy:
@@ -99,7 +131,7 @@ vps-rotate-keys:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vps.yaml ansible/playbooks/vps-rotate-keys.yml -e "ansible_host=$(VPS_IP)"
 
 # === Secrets Management ===
-.PHONY: infisical-seed infisical-backup infisical-organize refresh-identity
+.PHONY: infisical-seed infisical-backup infisical-organize refresh-identity plex-token
 
 # One-time: migrate SOPS secrets to Infisical
 infisical-seed:
@@ -116,6 +148,11 @@ infisical-backup:
 # One-time: organize flat Infisical secrets into per-VM folders
 infisical-organize:
 	@bash scripts/organize_infisical_folders.sh
+
+# Retrieve Plex token from plex.tv and store in Infisical
+# Requires plex_username and plex_password in bootstrap.sops.yml
+plex-token:
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/services.yml --limit plex
 
 # Refresh Infisical Machine Identities (delete + re-provision)
 # Optional: LIMIT=hostname to target specific VMs, TAGS=cleanup to remove orphans, FORCE=true to override health check
@@ -141,12 +178,43 @@ security-check-range:
 	@bash scripts/security_guardrails.sh --range HEAD~1..HEAD
 
 # === Cleanup ===
-.PHONY: clean clean-terraform clean-ssh
+.PHONY: clean clean-ssh clean-infisical-sops
 
-clean: clean-terraform clean-ssh
-
-clean-terraform:
+# make clean       — destroy everything except protected VMs (Proxmox protection blocks deletion;
+#                    dependent resources like SDN networks are also preserved)
+# make clean FORCE=true — unprotect + destroy everything, reset Infisical SOPS fields
+clean:
+ifdef FORCE
+	@cd terraform && \
+	if terraform state show 'module.vms.proxmox_virtual_environment_vm.vms["infisical"]' >/dev/null 2>&1; then \
+		echo "Disabling VM protection for destroy..." && \
+		terraform apply -no-color -auto-approve -var unprotect=true \
+			-target='module.vms.proxmox_virtual_environment_vm.vms["infisical"]'; \
+	fi
 	@cd terraform && terraform destroy -no-color -auto-approve
+	@$(MAKE) clean-infisical-sops
+else
+	-@cd terraform && terraform destroy -no-color -auto-approve
+	@echo ""
+	@echo "Protected VMs preserved. Use 'make clean FORCE=true' to destroy everything."
+endif
+	@$(MAKE) clean-ssh
+
+clean-infisical-sops:
+	@SOPS_FILE=ansible/group_vars/bootstrap.sops.yml; \
+	if [ -f "$$SOPS_FILE" ]; then \
+		echo "Resetting Infisical fields in bootstrap.sops.yml..."; \
+		for key in infisical_url infisical_project_id infisical_org_id; do \
+			sops --set "[\"bootstrap_config\"][\"$$key\"] \"REPLACE_ME\"" "$$SOPS_FILE"; \
+		done; \
+		for key in infisical_postgres_password infisical_encryption_key infisical_auth_secret \
+		           infisical_admin_password infisical_client_id infisical_client_secret; do \
+			sops --set "[\"bootstrap\"][\"$$key\"] \"REPLACE_ME\"" "$$SOPS_FILE"; \
+		done; \
+		echo "Infisical fields reset to REPLACE_ME. Provider credentials preserved."; \
+	else \
+		echo "No bootstrap.sops.yml found — nothing to reset."; \
+	fi
 
 clean-ssh:
 	@python3 -c "\

@@ -42,6 +42,15 @@
     expressions: evaluate-on-load
   run_once: true
 
+- name: Require admin email for bootstrap
+  ansible.builtin.assert:
+    that:
+      - bootstrap_config.infisical_admin_email | default('REPLACE_ME') != 'REPLACE_ME'
+    fail_msg: >-
+      infisical_admin_email must be set in bootstrap_config section of bootstrap.sops.yml
+      before running bootstrap.
+  run_once: true
+
 # Auto-generate Infisical deployment secrets if still REPLACE_ME
 - name: Auto-generate Infisical postgres password if not set
   ansible.builtin.command: openssl rand -hex 24
@@ -70,36 +79,86 @@
   run_once: true
   when: bootstrap.infisical_auth_secret | default('REPLACE_ME') == 'REPLACE_ME'
 
+- name: Auto-generate Infisical admin password if not set
+  ansible.builtin.command: openssl rand -base64 32
+  register: _gen_admin_pass
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  run_once: true
+  when: bootstrap.infisical_admin_password | default('REPLACE_ME') == 'REPLACE_ME'
+
 - name: Override bootstrap with generated Infisical secrets
   ansible.builtin.set_fact:
     bootstrap: >-
       {{ bootstrap | combine({
         'infisical_postgres_password': _gen_pg_pass.stdout | default(bootstrap.infisical_postgres_password),
         'infisical_encryption_key': _gen_enc_key.stdout | default(bootstrap.infisical_encryption_key),
-        'infisical_auth_secret': _gen_auth_secret.stdout | default(bootstrap.infisical_auth_secret)
+        'infisical_auth_secret': _gen_auth_secret.stdout | default(bootstrap.infisical_auth_secret),
+        'infisical_admin_password': _gen_admin_pass.stdout | default(bootstrap.infisical_admin_password)
       }) }}
   run_once: true
   when: >-
     (_gen_pg_pass is not skipped)
     or (_gen_enc_key is not skipped)
     or (_gen_auth_secret is not skipped)
+    or (_gen_admin_pass is not skipped)
 
-- name: Display generated Infisical secrets (SAVE THESE)
-  ansible.builtin.debug:
-    msg: |
-      ============================================================
-      GENERATED INFISICAL SECRETS — save to bootstrap.sops.yml
-      (these cannot be changed after first Infisical deployment)
-
-        infisical_postgres_password: "{{ bootstrap.infisical_postgres_password }}"
-        infisical_encryption_key: "{{ bootstrap.infisical_encryption_key }}"
-        infisical_auth_secret: "{{ bootstrap.infisical_auth_secret }}"
-      ============================================================
+- name: Write generated secrets back to bootstrap.sops.yml
+  delegate_to: localhost
+  become: false
   run_once: true
   when: >-
     (_gen_pg_pass is not skipped)
     or (_gen_enc_key is not skipped)
     or (_gen_auth_secret is not skipped)
+    or (_gen_admin_pass is not skipped)
+  block:
+    - name: Update infisical_postgres_password in SOPS file
+      ansible.builtin.command:
+        cmd: >-
+          sops --set '["bootstrap"]["infisical_postgres_password"] "{{ bootstrap.infisical_postgres_password }}"'
+          {{ playbook_dir }}/../group_vars/bootstrap.sops.yml
+      when: _gen_pg_pass is not skipped
+
+    - name: Update infisical_encryption_key in SOPS file
+      ansible.builtin.command:
+        cmd: >-
+          sops --set '["bootstrap"]["infisical_encryption_key"] "{{ bootstrap.infisical_encryption_key }}"'
+          {{ playbook_dir }}/../group_vars/bootstrap.sops.yml
+      when: _gen_enc_key is not skipped
+
+    - name: Update infisical_auth_secret in SOPS file
+      ansible.builtin.command:
+        cmd: >-
+          sops --set '["bootstrap"]["infisical_auth_secret"] "{{ bootstrap.infisical_auth_secret }}"'
+          {{ playbook_dir }}/../group_vars/bootstrap.sops.yml
+      when: _gen_auth_secret is not skipped
+
+    - name: Update infisical_admin_password in SOPS file
+      ansible.builtin.command:
+        cmd: >-
+          sops --set '["bootstrap"]["infisical_admin_password"] "{{ bootstrap.infisical_admin_password }}"'
+          {{ playbook_dir }}/../group_vars/bootstrap.sops.yml
+      when: _gen_admin_pass is not skipped
+
+    - name: Display generated Infisical secrets
+      ansible.builtin.debug:
+        msg: |
+          ============================================================
+          GENERATED INFISICAL SECRETS — saved to bootstrap.sops.yml
+          (these cannot be changed after first Infisical deployment)
+
+            infisical_postgres_password: "{{ bootstrap.infisical_postgres_password }}"
+            infisical_encryption_key: "{{ bootstrap.infisical_encryption_key }}"
+            infisical_auth_secret: "{{ bootstrap.infisical_auth_secret }}"
+            infisical_admin_password: "{{ bootstrap.infisical_admin_password }}"
+          ============================================================
+
+- name: Set bootstrap mode flag
+  ansible.builtin.set_fact:
+    bootstrap_mode: true
+  run_once: true
 
 - name: Load canonical VLAN definitions
   ansible.builtin.include_vars:

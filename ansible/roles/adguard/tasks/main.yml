@@ -224,6 +224,7 @@
   changed_when: false
   retries: 5
   delay: 10
+  when: not (bootstrap_mode | default(false))
   tags:
     - adguard
     - dns

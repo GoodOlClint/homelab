@@ -1,0 +1,341 @@
+---
+# Automated Infisical configuration — replaces manual post-bootstrap steps
+# Runs on localhost after Phase 2 deploys the Infisical server.
+# Uses: infisical CLI (bootstrap command), Infisical REST API, sops CLI
+#
+# Creates: admin account, project, machine identity, client credentials
+# Saves: all IDs and credentials back to bootstrap.sops.yml
+# Seeds: runtime secrets from secrets.sops.yml into Infisical
+
+# --- Idempotency: skip if already fully configured ---
+
+- name: Check if Infisical is already fully configured
+  ansible.builtin.set_fact:
+    _infisical_already_configured: >-
+      {{ bootstrap.infisical_client_id | default('REPLACE_ME') != 'REPLACE_ME'
+         and bootstrap.infisical_client_secret | default('REPLACE_ME') != 'REPLACE_ME'
+         and bootstrap_config.infisical_project_id | default('REPLACE_ME') != 'REPLACE_ME'
+         and bootstrap_config.infisical_org_id | default('REPLACE_ME') != 'REPLACE_ME' }}
+
+- name: Skip configuration if already complete
+  ansible.builtin.debug:
+    msg: "Infisical already configured (client_id, project_id, org_id present). Skipping."
+  when: _infisical_already_configured | bool
+
+# --- Pre-flight checks ---
+
+- name: Compute Infisical services URL
+  ansible.builtin.set_fact:
+    _infisical_url: "http://{{ hostvars['infisical']['ansible_host'] | replace(mgmt_vlan_prefix, services_vlan_prefix) }}:8080"
+  when: not _infisical_already_configured | bool
+
+- name: Verify infisical CLI is installed
+  ansible.builtin.command: infisical --version
+  changed_when: false
+  failed_when: _cli_version.rc != 0
+  register: _cli_version
+  when: not _infisical_already_configured | bool
+
+- name: Wait for Infisical API to be reachable
+  ansible.builtin.uri:
+    url: "{{ _infisical_url }}/api/status"
+    method: GET
+    status_code: 200
+    timeout: 10
+  register: _infisical_reachable
+  until: _infisical_reachable.status == 200
+  retries: 12
+  delay: 10
+  when: not _infisical_already_configured | bool
+
+# --- CLI bootstrap: create admin account + org ---
+
+- name: Configure Infisical via API
+  when: not _infisical_already_configured | bool
+  block:
+    - name: Run infisical bootstrap CLI
+      ansible.builtin.command:
+        cmd: >-
+          infisical bootstrap
+          --domain={{ _infisical_url }}
+          --email={{ bootstrap_config.infisical_admin_email }}
+          --password='{{ bootstrap.infisical_admin_password }}'
+          --organization={{ bootstrap_config.infisical_org_name | default('homelab') }}
+      register: _cli_bootstrap
+      no_log: true
+      failed_when: false
+
+    - name: Check if bootstrap returned valid JSON
+      ansible.builtin.set_fact:
+        _bootstrap_fresh: "{{ _cli_bootstrap.stdout | trim | length > 0 and (_cli_bootstrap.stdout | trim)[0] == '{' }}"
+
+    # --- Fresh bootstrap: parse CLI JSON output ---
+    - name: Parse bootstrap CLI response
+      ansible.builtin.set_fact:
+        _bootstrap_result: "{{ _cli_bootstrap.stdout | from_json }}"
+      no_log: true
+      when: _bootstrap_fresh | bool
+
+    - name: Extract admin token and org ID from bootstrap
+      ansible.builtin.set_fact:
+        _admin_jwt: "{{ _bootstrap_result.identity.credentials.token }}"
+        _org_id: "{{ _bootstrap_result.organization.id }}"
+      no_log: true
+      when: _bootstrap_fresh | bool
+
+    # Save org_id to SOPS immediately so it's not lost on re-run
+    - name: Persist org_id to bootstrap.sops.yml
+      ansible.builtin.command:
+        cmd: >-
+          sops --set '["bootstrap_config"]["infisical_org_id"] "{{ _org_id }}"'
+          {{ playbook_dir }}/../group_vars/bootstrap.sops.yml
+      when: _bootstrap_fresh | bool
+
+    # --- Already bootstrapped: login via CLI to get JWT ---
+    - name: Login via infisical CLI (instance already bootstrapped)
+      ansible.builtin.command:
+        cmd: >-
+          infisical login
+          --method=user
+          --email={{ bootstrap_config.infisical_admin_email }}
+          --password='{{ bootstrap.infisical_admin_password }}'
+          --organization-id={{ bootstrap_config.infisical_org_id }}
+          --domain={{ _infisical_url }}
+          --plain --silent
+      register: _cli_login
+      no_log: true
+      when: not _bootstrap_fresh | bool
+
+    - name: Set admin JWT from CLI login
+      ansible.builtin.set_fact:
+        _admin_jwt: "{{ (_cli_login.stdout_lines | last) | trim }}"
+        _org_id: "{{ bootstrap_config.infisical_org_id }}"
+      no_log: true
+      when: not _bootstrap_fresh | bool
+
+    # --- Create project ---
+
+    - name: List existing projects
+      ansible.builtin.uri:
+        url: "{{ _infisical_url }}/api/v1/projects"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ _admin_jwt }}"
+        status_code: 200
+      register: _existing_projects
+
+    - name: Check if homelab project already exists
+      ansible.builtin.set_fact:
+        _existing_project: "{{ _existing_projects.json.projects | default([]) | selectattr('name', 'equalto', 'homelab') | list | first | default(none) }}"
+
+    - name: Create Infisical project
+      ansible.builtin.uri:
+        url: "{{ _infisical_url }}/api/v1/projects"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ _admin_jwt }}"
+          Content-Type: application/json
+        body_format: json
+        body:
+          projectName: "homelab"
+          shouldCreateDefaultEnvs: true
+        status_code: [200, 201]
+      register: _project_create
+      when: _existing_project is none
+
+    - name: Set project ID fact
+      ansible.builtin.set_fact:
+        _project_id: "{{ _project_create.json.project.id if _existing_project is none else _existing_project.id }}"
+
+    # --- Create Machine Identity for Ansible ---
+
+    - name: Create Ansible Machine Identity
+      ansible.builtin.uri:
+        url: "{{ _infisical_url }}/api/v1/identities"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ _admin_jwt }}"
+          Content-Type: application/json
+        body_format: json
+        body:
+          name: "ansible-admin"
+          organizationId: "{{ _org_id }}"
+          role: "admin"
+        status_code: [200, 201]
+      register: _identity_create
+
+    - name: Set identity ID fact
+      ansible.builtin.set_fact:
+        _identity_id: "{{ _identity_create.json.identity.id }}"
+
+    # --- Add Universal Auth ---
+
+    - name: Add Universal Auth to Ansible identity
+      ansible.builtin.uri:
+        url: "{{ _infisical_url }}/api/v1/auth/universal-auth/identities/{{ _identity_id }}"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ _admin_jwt }}"
+          Content-Type: application/json
+        body_format: json
+        body:
+          accessTokenTTL: 7200
+          accessTokenMaxTTL: 86400
+          accessTokenNumUsesLimit: 0
+          clientSecretTrustedIps:
+            - ipAddress: "0.0.0.0/0"
+          accessTokenTrustedIps:
+            - ipAddress: "0.0.0.0/0"
+        status_code: [200, 201, 400]
+      register: _auth_method
+      no_log: true
+
+    - name: Set client ID fact
+      ansible.builtin.set_fact:
+        _client_id: "{{ _auth_method.json.identityUniversalAuth.clientId }}"
+      no_log: true
+
+    # --- Create client secret ---
+
+    - name: Create client secret for Ansible identity
+      ansible.builtin.uri:
+        url: "{{ _infisical_url }}/api/v1/auth/universal-auth/identities/{{ _identity_id }}/client-secrets"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ _admin_jwt }}"
+          Content-Type: application/json
+        body_format: json
+        body:
+          description: "Ansible admin bootstrap credentials"
+          ttl: 0
+          numUsesLimit: 0
+        status_code: [200, 201]
+      register: _client_secret_result
+      no_log: true
+
+    - name: Set client secret fact
+      ansible.builtin.set_fact:
+        _client_secret: "{{ _client_secret_result.json.clientSecret }}"
+      no_log: true
+
+    # --- Grant project membership ---
+
+    - name: Add Ansible identity as project admin
+      ansible.builtin.uri:
+        url: "{{ _infisical_url }}/api/v1/projects/{{ _project_id }}/memberships/identities/{{ _identity_id }}"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ _admin_jwt }}"
+          Content-Type: application/json
+        body_format: json
+        body:
+          role: "admin"
+        status_code: [200, 201, 400, 409]
+
+    # --- Write all results back to SOPS ---
+
+    - name: Update infisical_url in bootstrap_config
+      ansible.builtin.command:
+        cmd: >-
+          sops --set '["bootstrap_config"]["infisical_url"] "{{ _infisical_url }}"'
+          {{ playbook_dir }}/../group_vars/bootstrap.sops.yml
+
+    - name: Update infisical_project_id in bootstrap_config
+      ansible.builtin.command:
+        cmd: >-
+          sops --set '["bootstrap_config"]["infisical_project_id"] "{{ _project_id }}"'
+          {{ playbook_dir }}/../group_vars/bootstrap.sops.yml
+
+    - name: Update infisical_org_id in bootstrap_config
+      ansible.builtin.command:
+        cmd: >-
+          sops --set '["bootstrap_config"]["infisical_org_id"] "{{ _org_id }}"'
+          {{ playbook_dir }}/../group_vars/bootstrap.sops.yml
+
+    - name: Update infisical_client_id in bootstrap
+      ansible.builtin.command:
+        cmd: >-
+          sops --set '["bootstrap"]["infisical_client_id"] "{{ _client_id }}"'
+          {{ playbook_dir }}/../group_vars/bootstrap.sops.yml
+      no_log: true
+
+    - name: Update infisical_client_secret in bootstrap
+      ansible.builtin.command:
+        cmd: >-
+          sops --set '["bootstrap"]["infisical_client_secret"] "{{ _client_secret }}"'
+          {{ playbook_dir }}/../group_vars/bootstrap.sops.yml
+      no_log: true
+
+    # --- Seed secrets from SOPS to Infisical ---
+
+    # --- Cleanup ---
+
+    - name: Clear admin JWT from facts
+      ansible.builtin.set_fact:
+        _admin_jwt: ""
+
+  rescue:
+    - name: Display error recovery instructions
+      ansible.builtin.debug:
+        msg: |
+          ============================================================
+          INFISICAL AUTOMATED SETUP FAILED
+          ============================================================
+          The Infisical server is running but automated configuration
+          failed. You can re-run: make bootstrap
+
+          Infisical URL: {{ _infisical_url | default('unknown') }}
+          ============================================================
+
+    - name: Fail the play
+      ansible.builtin.fail:
+        msg: "Infisical automated setup failed. See above for details."
+
+# --- Seed secrets (runs independently of setup — always seeds if secrets.sops.yml exists) ---
+
+- name: Compute Infisical services URL for seeding
+  ansible.builtin.set_fact:
+    _infisical_url: "http://{{ hostvars['infisical']['ansible_host'] | replace(mgmt_vlan_prefix, services_vlan_prefix) }}:8080"
+  when: _infisical_url is not defined
+
+- name: Check if secrets.sops.yml exists for seeding
+  ansible.builtin.stat:
+    path: "{{ playbook_dir }}/../group_vars/secrets.sops.yml"
+  register: _secrets_sops_file
+
+- name: Get Infisical token for seeding
+  ansible.builtin.uri:
+    url: "{{ _infisical_url }}/api/v1/auth/universal-auth/login"
+    method: POST
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body:
+      clientId: "{{ _client_id | default(bootstrap.infisical_client_id) }}"
+      clientSecret: "{{ _client_secret | default(bootstrap.infisical_client_secret) }}"
+    status_code: [200]
+  register: _seed_login
+  no_log: true
+  when: _secrets_sops_file.stat.exists | default(false)
+
+- name: Seed Infisical with SOPS secrets
+  ansible.builtin.command:
+    cmd: bash {{ playbook_dir }}/../../scripts/seed_infisical.sh
+    chdir: "{{ playbook_dir }}/../.."
+  environment:
+    INFISICAL_TOKEN: "{{ _seed_login.json.accessToken }}"
+    INFISICAL_API_URL: "{{ _infisical_url }}"
+  register: _seed_result
+  when: _secrets_sops_file.stat.exists | default(false)
+
+- name: Show seeding results
+  ansible.builtin.debug:
+    var: _seed_result.stdout_lines
+  when: _seed_result is not skipped
+
+- name: Note about missing secrets.sops.yml
+  ansible.builtin.debug:
+    msg: >-
+      No secrets.sops.yml found — skipping Infisical seeding.
+      You can seed later with: make infisical-seed
+  when: not (_secrets_sops_file.stat.exists | default(false))
