@@ -95,7 +95,7 @@ locals {
     for vm_config in var.vm_configurations : vm_config.name =>
       cidrhost(
         local.merged_vlans[var.management_vlan].subnet,
-        coalesce(vm_config.mgmt_ip_offset, vm_config.vm_id, proxmox_virtual_environment_vm.vms[vm_config.name].vm_id)
+        coalesce(vm_config.mgmt_ip_offset, vm_config.vm_id, try(proxmox_virtual_environment_vm.vms[vm_config.name].vm_id, 0))
       )
   }
 }
@@ -160,9 +160,10 @@ resource "proxmox_virtual_environment_file" "network_data" {
 resource "proxmox_virtual_environment_vm" "vms" {
   for_each = { for vm in var.vm_configurations : vm.name => vm }
 
-  name      = each.value.name
-  vm_id     = each.value.vm_id # null = auto-assign by Proxmox
-  node_name = var.virtual_environment_node
+  name       = each.value.name
+  vm_id      = each.value.vm_id # null = auto-assign by Proxmox
+  node_name  = var.virtual_environment_node
+  protection = var.unprotect ? false : each.value.protected
 
   # Dependencies are inferred from resource references in initialization block
 

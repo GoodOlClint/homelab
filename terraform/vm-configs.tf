@@ -68,6 +68,7 @@ locals {
       cpu_cores    = 4
       memory_mb    = 4096 # PostgreSQL + Redis + Infisical server
       disk_size_gb = 30   # Database growth, audit logs
+      protected    = true # Secrets store — protect from accidental deletion
     },
   ]
 

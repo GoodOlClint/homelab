@@ -72,6 +72,12 @@ variable "gpu_mapping" {
   }
 }
 
+variable "unprotect" {
+  type        = bool
+  description = "Override all VM protection flags to false (used by make clean FORCE=true)"
+  default     = false
+}
+
 variable "primary_disk_storage" {
   type        = string
   description = "The storage backend for primary VM disks (e.g., iscsi-ssd-lvm)"

@@ -3,6 +3,7 @@ hostname: ${hostname}
 %{ if fqdn != "" }
 fqdn: ${fqdn}
 %{ endif }
+manage_etc_hosts: true
 users:
   - name: ${username}
     sudo: ALL=(ALL) NOPASSWD:ALL

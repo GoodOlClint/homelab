@@ -17,6 +17,7 @@ module "vms" {
 
   # VM configurations
   vm_configurations = local.vm_configurations
+  unprotect         = var.unprotect
 
   # Cloud-init settings
   virtual_machine_username      = var.virtual_machine_username

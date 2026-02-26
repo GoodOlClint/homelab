@@ -63,9 +63,16 @@ variable "vm_configurations" {
     hostname     = optional(string, null)        # Custom hostname (uses name if null)
     fqdn         = optional(string, null)        # Custom FQDN (uses name.domain_suffix if null)
     needs_gpu    = optional(bool, false)         # Enable GPU passthrough (requires gpu_mapping configuration)
+    protected    = optional(bool, false)         # Proxmox VM protection — prevents accidental deletion
     # Additional cloud-init or VM configuration options
     extra_config = optional(map(string), {})
   }))
+}
+
+variable "unprotect" {
+  type        = bool
+  description = "Override all VM protection flags to false (for teardown)"
+  default     = false
 }
 
 variable "gpu_mapping" {
