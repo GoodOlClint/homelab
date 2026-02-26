@@ -24,7 +24,7 @@
     Content-Type = "application/x-protobuf"
     Content-Encoding = "snappy"
     X-Prometheus-Remote-Write-Version = "0.1.0"
-    Authorization = "Basic {{ (openobserve_root_user_email + ':' + secrets.openobserve_root_user_pass) | b64encode }}"
+    Authorization = "Basic {{ (openobserve_root_user_email + ':' + secrets.monitoring.openobserve_root_user_pass) | b64encode }}"
 {% endif %}
 #}
 

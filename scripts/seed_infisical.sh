@@ -61,7 +61,9 @@ else
     DECRYPT_CMD="cat $SOPS_FILE"
 fi
 
-# Iterate each key under 'secrets:'
+# Walk the secrets structure:
+#   - Flat string keys → seed to Infisical path /
+#   - Nested dicts (keys starting with /) → seed each sub-key to that Infisical path
 $DECRYPT_CMD | "$VENV_PYTHON" -c "
 import yaml, sys, subprocess
 
@@ -75,23 +77,75 @@ if not secrets:
 migrated = 0
 skipped = 0
 
-for key, value in secrets.items():
+import json, urllib.request, os
+
+api_url = os.environ.get('INFISICAL_API_URL', 'http://localhost:8080')
+api_token = os.environ.get('INFISICAL_TOKEN', '')
+created_folders = set()
+
+def ensure_folder(folder_name):
+    if folder_name in created_folders:
+        return
+    print(f'  Creating folder: /{folder_name}')
+    body = json.dumps({
+        'projectId': '$PROJECT_ID',
+        'environment': '$INFISICAL_ENV',
+        'name': folder_name,
+        'path': '/'
+    }).encode()
+    req = urllib.request.Request(
+        f'{api_url}/api/v2/folders',
+        data=body,
+        headers={
+            'Authorization': f'Bearer {api_token}',
+            'Content-Type': 'application/json'
+        },
+        method='POST'
+    )
+    try:
+        urllib.request.urlopen(req)
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode()
+        if 'already exists' not in err_body.lower() and e.code != 409:
+            print(f'    WARNING: Failed to create folder /{folder_name}: {err_body}')
+    created_folders.add(folder_name)
+
+def seed(name, value, path):
+    global migrated, skipped
     if value and str(value) != 'REPLACE_ME':
-        print(f'  Seeding: {key}')
+        print(f'  Seeding: {name} → {path}')
         result = subprocess.run([
             'infisical', 'secrets', 'set',
-            f'{key.upper()}={value}',
+            f'{name}={value}',
             '--env', '$INFISICAL_ENV',
-            '--path', '/',
+            '--path', path,
             '--projectId', '$PROJECT_ID'
         ], capture_output=True, text=True)
         if result.returncode == 0:
             migrated += 1
         else:
-            print(f'    WARNING: Failed to set {key}: {result.stderr.strip()}')
+            print(f'    WARNING: Failed to set {name}: {result.stderr.strip()}')
     else:
         skipped += 1
-        print(f'  Skipping: {key} (empty or REPLACE_ME)')
+        print(f'  Skipping: {name} (empty or REPLACE_ME)')
+
+# Flat keys → path /
+print('=== Root secrets (/) ===')
+for key, value in secrets.items():
+    if isinstance(value, dict):
+        continue  # handled below
+    seed(key.upper(), value, '/')
+
+# Nested dicts → Infisical path (underscores become hyphens, prefixed with /)
+for key, nested in secrets.items():
+    if not isinstance(nested, dict):
+        continue
+    folder_name = key.replace('_', '-')
+    infisical_path = '/' + folder_name
+    print(f'\n=== Path: {infisical_path} ===')
+    ensure_folder(folder_name)
+    for sub_key, sub_value in nested.items():
+        seed(sub_key, sub_value, infisical_path)
 
 print(f'\nDone! Migrated: {migrated}, Skipped: {skipped}')
 "

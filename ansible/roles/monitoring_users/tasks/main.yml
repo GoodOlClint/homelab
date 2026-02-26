@@ -28,8 +28,9 @@
     - monitoring-users
     - unifi-user
 
-- name: Include Synology SNMP tasks
-  ansible.builtin.include_tasks: synology.yml
-  tags:
-    - monitoring-users
-    - synology-snmp
+# TODO: Synology SNMP tasks disabled — needs rework
+# - name: Include Synology SNMP tasks
+#   ansible.builtin.include_tasks: synology.yml
+#   tags:
+#     - monitoring-users
+#     - synology-snmp
