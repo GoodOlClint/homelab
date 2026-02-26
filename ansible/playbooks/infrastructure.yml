@@ -69,6 +69,7 @@
   pre_tasks: &load_all_config
     - name: Load all configuration and secrets
       ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/full_pre_tasks.yml"
+      tags: [always]
   roles:
     - bind9
   tags:
@@ -135,8 +136,8 @@
     - ../group_vars/all.yml
   pre_tasks: *load_all_config
   roles:
-    - dns_config
     - proxmox_backup
+    - dns_config
   tags:
     - phase1
     - proxmox-backup

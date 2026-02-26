@@ -8,6 +8,6 @@ if [ -f /etc/infisical/secrets/pbs.env ]; then
 else
     # Baked fallback (values from last Ansible deploy)
     export PBS_REPOSITORY="{{ pbs_username }}!{{ pbs_token_name }}@{{ pbs_server_host }}:{{ pbs_datastore }}"
-    export PBS_PASSWORD="{{ secrets.pbs_backup_token }}"
+    export PBS_PASSWORD="{{ secrets.pbs_backup_token | default('') }}"
     export PBS_FINGERPRINT="{{ pbs_fingerprint }}"
 fi

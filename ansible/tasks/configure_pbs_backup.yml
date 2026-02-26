@@ -18,7 +18,7 @@
   ansible.builtin.template:
     src: "{{ backup_script_src }}"
     dest: "{{ backup_script_dest }}"
-    mode: '0750'
+    mode: '0755'
     owner: root
     group: root
 
@@ -34,7 +34,7 @@
   ansible.builtin.template:
     src: "{{ smb_backup_script_src }}"
     dest: "{{ smb_backup_script_dest }}"
-    mode: '0750'
+    mode: '0755'
     owner: root
     group: root
   when: smb_backup_script_src is defined

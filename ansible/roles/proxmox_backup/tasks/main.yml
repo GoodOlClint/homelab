@@ -22,6 +22,29 @@
     pbs_backup_user_password: "{{ secrets.pbs_backup_user_password }}"
   tags: [proxmox_backup, pbs, secrets]
 
+- name: Remove Proxmox enterprise repo if present
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/pbs-enterprise.list
+    state: absent
+  register: proxmox_enterprise_repo_removed
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - packages
+
+- name: Remove Proxmox enterprise repo from /etc/apt/sources.list if present
+  ansible.builtin.lineinfile:
+    path: /etc/apt/sources.list
+    regexp: '^deb .*enterprise.proxmox.com/debian/pbs'
+    state: absent
+  register: proxmox_enterprise_repo_line_removed
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - packages
+
 - name: Check if Proxmox Backup Server GPG key exists
   ansible.builtin.stat:
     path: /etc/apt/trusted.gpg.d/proxmox-release-bookworm.gpg
@@ -213,12 +236,27 @@
     - storage
     - iscsi
 
+- name: Show iSCSI discovery results
+  ansible.builtin.debug:
+    var: iscsi_discovery.stdout_lines
+  when:
+    - pbs_storage_backend == 'iscsi'
+    - iscsi_discovery is not skipped
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - storage
+    - iscsi
+
 - name: Login to iSCSI target
   ansible.builtin.shell: |
     iscsiadm --mode node --targetname {{ pbs_iscsi_target }} --portal {{ pbs_iscsi_portal }} --login
   register: iscsi_login
-  failed_when: false
-  changed_when: "'successful' in iscsi_login.stdout"
+  failed_when:
+    - iscsi_login.rc != 0
+    - "'already present' not in (iscsi_login.stderr | default(''))"
+  changed_when: "'successful' in (iscsi_login.stdout | default(''))"
   when: pbs_storage_backend == 'iscsi'
   tags:
     - proxmox_backup
@@ -373,39 +411,6 @@
     - storage
     - nfs
 
-- name: Remove Proxmox enterprise repo if present
-  ansible.builtin.file:
-    path: /etc/apt/sources.list.d/pbs-enterprise.list
-    state: absent
-  register: proxmox_enterprise_repo_removed
-  tags:
-    - proxmox_backup
-    - pbs
-    - backup
-    - config
-
-- name: Remove Proxmox enterprise repo from /etc/apt/sources.list if present
-  ansible.builtin.lineinfile:
-    path: /etc/apt/sources.list
-    regexp: '^deb .*enterprise.proxmox.com/debian/pbs'
-    state: absent
-  register: proxmox_enterprise_repo_line_removed
-  tags:
-    - proxmox_backup
-    - pbs
-    - backup
-    - config
-
-- name: Update apt cache if repo was removed
-  ansible.builtin.apt:
-    update_cache: true
-
-  when: proxmox_enterprise_repo_removed.changed or proxmox_enterprise_repo_line_removed.changed
-  tags:
-    - proxmox_backup
-    - pbs
-    - backup
-    - packages
 
 # Datastore Configuration
 - name: Ensure datastore directories exist
@@ -440,7 +445,7 @@
   loop: "{{ pbs_datastores }}"
   when:
     - pbs_datastore_list.stdout is defined
-    - (pbs_datastore_list.stdout | default('[]') | from_json | selectattr('name', 'equalto', item.name) | list | length == 0)
+    - ((pbs_datastore_list.stdout | default('', true)) or '[]') | from_json | selectattr('name', 'equalto', item.name) | list | length == 0
   register: datastore_created
   failed_when: false
   tags:
@@ -451,23 +456,21 @@
     - config
 
 # If CLI fails with "path not empty", register existing datastore via config file
+# Note: PBS config parser does not tolerate comment markers, so use copy instead of blockinfile
 - name: Register existing datastores via config (path not empty)
-  ansible.builtin.blockinfile:
-    path: /etc/proxmox-backup/datastore.cfg
-    marker: "# {mark} ANSIBLE MANAGED - {{ item.item.name }}"
-    block: |2
+  ansible.builtin.copy:
+    dest: /etc/proxmox-backup/datastore.cfg
+    content: |
+      {% for item in datastore_created.results | default([]) if item.rc is defined and item.rc != 0 %}
       datastore: {{ item.item.name }}
       	path {{ item.item.path }}
       	comment {{ item.item.comment | default('Managed by Ansible') }}
-    create: true
 
+      {% endfor %}
     owner: root
-    group: www-data
+    group: backup
     mode: '0640'
-  loop: "{{ datastore_created.results | default([]) }}"
-  when:
-    - item.rc is defined
-    - item.rc != 0
+  when: datastore_created.results | default([]) | selectattr('rc', 'defined') | selectattr('rc', 'ne', 0) | list | length > 0
   notify: Restart proxmox-backup-proxy
   tags:
     - proxmox_backup
@@ -494,7 +497,7 @@
       {% if item.comment is defined %}--comment "{{ item.comment }}"{% endif %} \
       {% if secrets.pbs_backup_user_password is defined %}--password "{{ secrets.pbs_backup_user_password }}"{% endif %}
   loop: "{{ pbs_users }}"
-  when: pbs_user_list.stdout is defined and (pbs_user_list.stdout | from_json | selectattr('userid', 'equalto', item.username + '@' + item.realm) | list | length == 0)
+  when: ((pbs_user_list.stdout | default('', true)) or '[]') | from_json | selectattr('userid', 'equalto', item.username + '@' + item.realm) | list | length == 0
   no_log: true
   tags:
     - proxmox_backup
@@ -542,7 +545,7 @@
 
 - name: Parse current ACLs
   ansible.builtin.set_fact:
-    _pbs_acls: "{{ _pbs_acl_list.stdout | from_json }}"
+    _pbs_acls: "{{ ((_pbs_acl_list.stdout | default('', true)) or '[]') | from_json }}"
   tags:
     - proxmox_backup
     - pbs
@@ -563,21 +566,7 @@
     - backup
     - acl
 
-- name: Grant API token DatastoreAdmin permissions (needed for namespace creation)
-  ansible.builtin.shell: |
-    proxmox-backup-manager acl update /datastore/{{ item.name }} DatastoreAdmin \
-      --auth-id 'backup@pbs!backup-token'
-  loop: "{{ pbs_datastores }}"
-  when: _pbs_acls | selectattr('path', 'eq', '/datastore/' ~ item.name)
-        | selectattr('roleid', 'eq', 'DatastoreAdmin')
-        | selectattr('ugid', 'eq', 'backup@pbs!backup-token') | list | length == 0
-  tags:
-    - proxmox_backup
-    - pbs
-    - backup
-    - acl
-
-# API Token Generation
+# API Token Generation (must happen before ACL grants that reference tokens)
 - name: Check if API token exists for backup user
   ansible.builtin.shell: proxmox-backup-manager user list-tokens backup@pbs --output-format json
   register: pbs_token_list
@@ -586,15 +575,15 @@
 
 - name: Generate API token for backup user
   ansible.builtin.shell: |
-    proxmox-backup-manager user generate-token backup@pbs backup-token
+    proxmox-backup-manager user generate-token backup@pbs backup-token --output-format json
   register: pbs_token_output
-  when: pbs_token_list.stdout is defined and (pbs_token_list.stdout | from_json | length == 0)
+  when: ((pbs_token_list.stdout | default('', true)) or '[]') | from_json | length == 0
 
 - name: Store PBS backup token in Infisical
   ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/infisical_write_secret.yml"
   vars:
     secret_name: "PBS_BACKUP_TOKEN"
-    secret_value: "{{ pbs_token_output.stdout }}"
+    secret_value: "{{ (pbs_token_output.stdout | from_json).value }}"
     secret_path: "/shared"
     secret_comment: "PBS backup@pbs backup-token — auto-generated"
   when:
@@ -604,7 +593,7 @@
 
 - name: Display PBS backup token (when Infisical unavailable)
   ansible.builtin.debug:
-    msg: "PBS backup token generated. Save to secrets.sops.yml: {{ pbs_token_output.stdout }}"
+    msg: "PBS backup token generated. Save to secrets.sops.yml: {{ (pbs_token_output.stdout | from_json).value }}"
     verbosity: 1
   when:
     - pbs_token_output is changed
@@ -621,15 +610,15 @@
 
 - name: Generate API token for monitoring user
   ansible.builtin.shell: |
-    proxmox-backup-manager user generate-token monitoring@pbs monitoring-token
+    proxmox-backup-manager user generate-token monitoring@pbs monitoring-token --output-format json
   register: pbs_monitoring_token_output
-  when: pbs_monitoring_token_list.stdout is defined and (pbs_monitoring_token_list.stdout | from_json | length == 0)
+  when: ((pbs_monitoring_token_list.stdout | default('', true)) or '[]') | from_json | length == 0
 
 - name: Store PBS monitoring token in Infisical
   ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/infisical_write_secret.yml"
   vars:
     secret_name: "PBS_MONITORING_TOKEN"
-    secret_value: "{{ pbs_monitoring_token_output.stdout }}"
+    secret_value: "{{ (pbs_monitoring_token_output.stdout | from_json).value }}"
     secret_path: "/monitoring"
     secret_comment: "PBS monitoring@pbs monitoring-token — auto-generated"
   when:
@@ -639,13 +628,28 @@
 
 - name: Display PBS monitoring token (when Infisical unavailable)
   ansible.builtin.debug:
-    msg: "PBS monitoring token generated. Save to secrets.sops.yml: {{ pbs_monitoring_token_output.stdout }}"
+    msg: "PBS monitoring token generated. Save to secrets.sops.yml: {{ (pbs_monitoring_token_output.stdout | from_json).value }}"
     verbosity: 1
   when:
     - pbs_monitoring_token_output is changed
     - pbs_monitoring_token_output.stdout is defined
     - infisical_login is not defined
   no_log: "{{ not (ansible_verbosity >= 1) }}"
+
+# ACL Grants — tokens now exist, safe to reference them
+- name: Grant API token DatastoreAdmin permissions (needed for namespace creation)
+  ansible.builtin.shell: |
+    proxmox-backup-manager acl update /datastore/{{ item.name }} DatastoreAdmin \
+      --auth-id 'backup@pbs!backup-token'
+  loop: "{{ pbs_datastores }}"
+  when: _pbs_acls | selectattr('path', 'eq', '/datastore/' ~ item.name)
+        | selectattr('roleid', 'eq', 'DatastoreAdmin')
+        | selectattr('ugid', 'eq', 'backup@pbs!backup-token') | list | length == 0
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - acl
 
 # Grant monitoring user Audit (read-only) permissions
 - name: Grant monitoring user Audit permissions on datastores
