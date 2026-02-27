@@ -14,7 +14,7 @@ nft_forward_rules:
   - { proto: udp, port: 51820, comment: "Mobile WireGuard" }
 
 # Rate limiting on Plex (new connections per minute per source IP)
-nft_rate_limit_tcp_32400: "10/minute"
+nft_rate_limit_tcp_32400: "60/minute"
 
 # GeoIP filtering
 nft_geoip_enabled: false

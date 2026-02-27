@@ -55,6 +55,10 @@ resource "vultr_reserved_ip" "vps" {
 # Firewall Group + Rules
 # ──────────────────────────────────────────────
 
+# NOTE: Vultr's cloud firewall runs its own stateful conntrack layer in front
+# of the instance. UDP timeout behavior is uncontrollable and may independently
+# drop long-lived WireGuard flows. Ensure pfSense WireGuard peer has
+# PersistentKeepalive = 25 to keep both Vultr and host conntrack entries alive.
 resource "vultr_firewall_group" "vps" {
   description = "WireGuard relay firewall — strict inbound"
 }

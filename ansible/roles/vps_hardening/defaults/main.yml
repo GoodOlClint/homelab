@@ -26,8 +26,11 @@ vps_lbu_enabled: false
 
 # Sysctl hardening
 vps_sysctl_settings:
-  net.ipv4.conf.all.rp_filter: 1
-  net.ipv4.conf.default.rp_filter: 1
+  # Loose RPF (2) required for WireGuard — strict (1) drops return-path packets
+  # on wg0 because Linux takes max(all, per-iface). WireGuard's cryptokey
+  # routing provides its own source validation.
+  net.ipv4.conf.all.rp_filter: 2
+  net.ipv4.conf.default.rp_filter: 2
   net.ipv4.conf.all.accept_source_route: 0
   net.ipv4.conf.default.accept_source_route: 0
   net.ipv4.conf.all.accept_redirects: 0
@@ -44,3 +47,8 @@ vps_sysctl_settings:
   net.ipv6.conf.default.accept_redirects: 0
   net.ipv6.conf.all.accept_ra: 2
   net.ipv6.conf.default.accept_ra: 2
+  # Conntrack tuning for WireGuard relay — default UDP unreplied timeout (30s)
+  # is tight against WireGuard's 25s keepalive; explicit max for 1GB VPS
+  net.netfilter.nf_conntrack_udp_timeout: 120
+  net.netfilter.nf_conntrack_udp_timeout_stream: 180
+  net.netfilter.nf_conntrack_max: 65536

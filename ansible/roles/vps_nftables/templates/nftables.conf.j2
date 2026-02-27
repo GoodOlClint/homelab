@@ -11,6 +11,9 @@ table inet filter {
         # Allow established/related connections
         ct state established,related accept
 
+        # Drop invalid-state packets early (distinct from policy drops for debugging)
+        ct state invalid log prefix "nft-input-invalid: " counter drop
+
         # Allow loopback
         iif lo accept
 
@@ -37,19 +40,22 @@ table inet filter {
         # Allow established/related
         ct state established,related accept
 
+        # Drop invalid-state packets early (distinct from policy drops for debugging)
+        ct state invalid log prefix "nft-forward-invalid: " counter drop
+
 {% for rule in nft_forward_rules %}
 {% if '-' in rule.port | string %}
 {% set port_range = rule.port | replace('-', '-') %}
         # {{ rule.comment }}
 {% if rule.proto == 'tcp' and rule.port | string == '32400' %}
-        iif {{ nft_public_interface }} oif {{ nft_wg_interface }} {{ rule.proto }} dport {{ port_range }} ct state new limit rate {{ nft_rate_limit_tcp_32400 }} log prefix "nft-fwd-new-{{ rule.comment | lower | replace(' ', '-') }}: " accept
+        iif {{ nft_public_interface }} oif {{ nft_wg_interface }} {{ rule.proto }} dport {{ port_range }} ct state new meter plex_ratelimit { ip saddr limit rate {{ nft_rate_limit_tcp_32400 }} } log prefix "nft-fwd-new-{{ rule.comment | lower | replace(' ', '-') }}: " accept
 {% else %}
         iif {{ nft_public_interface }} oif {{ nft_wg_interface }} {{ rule.proto }} dport {{ port_range }} ct state new log prefix "nft-fwd-new-{{ rule.comment | lower | replace(' ', '-') }}: " accept
 {% endif %}
 {% else %}
         # {{ rule.comment }}
 {% if rule.proto == 'tcp' and rule.port | string == '32400' %}
-        iif {{ nft_public_interface }} oif {{ nft_wg_interface }} {{ rule.proto }} dport {{ rule.port }} ct state new limit rate {{ nft_rate_limit_tcp_32400 }} log prefix "nft-fwd-new-{{ rule.comment | lower | replace(' ', '-') }}: " accept
+        iif {{ nft_public_interface }} oif {{ nft_wg_interface }} {{ rule.proto }} dport {{ rule.port }} ct state new meter plex_ratelimit { ip saddr limit rate {{ nft_rate_limit_tcp_32400 }} } log prefix "nft-fwd-new-{{ rule.comment | lower | replace(' ', '-') }}: " accept
 {% else %}
         iif {{ nft_public_interface }} oif {{ nft_wg_interface }} {{ rule.proto }} dport {{ rule.port }} ct state new log prefix "nft-fwd-new-{{ rule.comment | lower | replace(' ', '-') }}: " accept
 {% endif %}

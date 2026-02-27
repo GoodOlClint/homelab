@@ -28,6 +28,14 @@
     - vps_hardening
     - lbu
 
+- name: Ensure conntrack module is loaded
+  community.general.modprobe:
+    name: nf_conntrack
+    state: present
+  tags:
+    - vps_hardening
+    - sysctl
+
 - name: Apply sysctl hardening
   ansible.posix.sysctl:
     name: "{{ item.key }}"

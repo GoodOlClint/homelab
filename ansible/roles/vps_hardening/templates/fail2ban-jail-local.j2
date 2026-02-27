@@ -6,7 +6,7 @@ bantime = {{ vps_fail2ban_bantime }}
 findtime = {{ vps_fail2ban_findtime }}
 maxretry = {{ vps_fail2ban_maxretry }}
 backend = auto
-banaction = nftables[type=allports]
+banaction = nftables[type=multiport]
 
 [sshd]
 enabled = true
