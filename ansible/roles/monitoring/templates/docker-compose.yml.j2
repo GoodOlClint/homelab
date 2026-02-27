@@ -125,6 +125,33 @@ services:
     networks:
       - monitoring
 
+  # Smokeping Prober - Network Latency Distribution
+  smokeping-prober:
+    image: quay.io/superq/smokeping-prober:latest
+    container_name: smokeping-prober
+    restart: unless-stopped
+    ports:
+      - "9374:9374"
+    command:
+      - '--privileged'
+      - '8.8.8.8'
+      - '1.1.1.1'
+      - '9.9.9.9'
+    cap_add:
+      - NET_RAW
+    environment:
+      - TZ={{ timezone }}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9374/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - monitoring
+
   # Node Exporter - System Metrics for OpenObserve Host
   node-exporter:
     image: prom/node-exporter:latest

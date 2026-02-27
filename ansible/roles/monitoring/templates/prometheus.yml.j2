@@ -114,6 +114,13 @@ scrape_configs:
     static_configs:
       - targets: ['speedtest:9798']
 
+  # Smokeping Prober - Latency Distribution
+  - job_name: 'smokeping'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+    static_configs:
+      - targets: ['smokeping-prober:9374']
+
   # Telegraf metrics from all hosts
   - job_name: 'telegraf'
     honor_labels: true
