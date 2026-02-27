@@ -128,7 +128,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "increase(modem_t3_timeouts_total[5m])",
+          "expr": "increase(modem_t3_timeouts_total[5m]) or vector(0)",
           "refId": "A",
           "legendFormat": "T3 Timeouts"
         },
@@ -137,7 +137,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "increase(modem_t4_timeouts_total[5m])",
+          "expr": "increase(modem_t4_timeouts_total[5m]) or vector(0)",
           "refId": "B",
           "legendFormat": "T4 Timeouts"
         }
