@@ -67,4 +67,42 @@ groups:
           severity: critical
         annotations:
           summary: "DNS resolution failing for {{ $labels.zone }}"
+
+  - name: isp
+    rules:
+      - alert: ModemT3Timeouts
+        expr: increase(modem_t3_timeouts_total[15m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Cox modem T3 timeouts detected"
+          description: "{{ $value }} T3 timeouts in the last 15 minutes"
+
+      - alert: ModemT4Timeouts
+        expr: increase(modem_t4_timeouts_total[15m]) > 3
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Cox modem T4 timeouts detected"
+          description: "{{ $value }} T4 timeouts in the last 15 minutes — possible service disruption"
+
+      - alert: HighPacketLoss
+        expr: ping_percent_packet_loss{url=~"8.8.8.8|1.1.1.1"} > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High packet loss to {{ $labels.url }}"
+          description: "{{ $value }}% packet loss over 5 minutes"
+
+      - alert: HighLatency
+        expr: probe_icmp_duration_seconds{job="blackbox-ping",instance=~"8.8.8.8|1.1.1.1",phase="rtt"} > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High latency to {{ $labels.instance }}"
+          description: "RTT {{ $value }}s (>100ms) over 5 minutes"
 {% endraw %}
