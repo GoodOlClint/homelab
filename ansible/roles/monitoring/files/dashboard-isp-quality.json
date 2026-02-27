@@ -551,7 +551,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "probe_success{job=\"blackbox-http\",instance=~\".*32400/identity\"}",
+          "expr": "probe_success{job=\"blackbox-plex\",instance=~\".*32400/identity\"}",
           "refId": "A",
           "legendFormat": "Plex Available"
         },
@@ -560,7 +560,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "probe_duration_seconds{job=\"blackbox-http\",instance=~\".*32400/identity\"}",
+          "expr": "probe_duration_seconds{job=\"blackbox-plex\",instance=~\".*32400/identity\"}",
           "refId": "B",
           "legendFormat": "Response Time"
         }

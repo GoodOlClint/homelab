@@ -70,10 +70,6 @@ scrape_configs:
           - http://{{ hostvars['adguard'].ansible_host }}:3000  # AdGuard
           - http://{{ ansible_host }}:{{ openobserve_listen_port }}  # OpenObserve
           - http://{{ ansible_host }}:3000  # Grafana
-{% if hostvars['plex'] is defined %}
-          - http://{{ hostvars['plex'].ansible_host }}:32400/web  # Plex
-          - http://{{ hostvars['plex'].ansible_host }}:32400/identity  # Plex Identity
-{% endif %}
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
@@ -81,6 +77,24 @@ scrape_configs:
         target_label: instance
       - target_label: __address__
         replacement: blackbox:9115
+
+{% if hostvars['plex'] is defined %}
+  # Plex HTTPS Monitoring (self-signed cert, skip TLS verify)
+  - job_name: 'blackbox-plex'
+    metrics_path: /probe
+    params:
+      module: [http_2xx_insecure]
+    static_configs:
+      - targets:
+          - https://{{ hostvars['plex'].ansible_host }}:32400/identity  # Plex Identity
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox:9115
+{% endif %}
 
   # ICMP Ping Monitoring - Check host availability
   - job_name: 'blackbox-ping'
