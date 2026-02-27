@@ -163,7 +163,7 @@
             "uid": "prometheus"
           },
 {% raw %}
-          "expr": "sum(rate(smokeping_response_duration_seconds_bucket{ip=\"{% endraw %}{{ target.ip }}{% raw %}\"}[$__rate_interval])) by (le)",
+          "expr": "sum(rate(smokeping_response_duration_seconds_bucket{host=\"{% endraw %}{{ target.ip }}{% raw %}\"}[$__rate_interval])) by (le)",
           "format": "heatmap",
           "legendFormat": "{{le}}",
 {% endraw %}
