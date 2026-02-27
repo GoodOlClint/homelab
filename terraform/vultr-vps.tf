@@ -14,6 +14,15 @@ data "vultr_os" "alpine" {
 }
 
 # ──────────────────────────────────────────────
+# SSH Key (injected by Vultr before boot)
+# ──────────────────────────────────────────────
+
+resource "vultr_ssh_key" "deploy" {
+  name    = "homelab-deploy"
+  ssh_key = trimspace(file(pathexpand(var.ssh_public_key_path)))
+}
+
+# ──────────────────────────────────────────────
 # Startup Script (runs on first boot only)
 # ──────────────────────────────────────────────
 
@@ -26,17 +35,10 @@ resource "vultr_startup_script" "vps_bootstrap" {
 
     # Install Python3 (required for Ansible)
     apk update
-    apk add python3 openssh-server
+    apk add python3
 
-    # Configure SSH authorized key
-    mkdir -p /root/.ssh
-    chmod 700 /root/.ssh
-    echo "${file(pathexpand(var.ssh_public_key_path))}" > /root/.ssh/authorized_keys
-    chmod 600 /root/.ssh/authorized_keys
-
-    # Enable and start SSH
-    rc-update add sshd default
-    rc-service sshd start
+    # Signal that bootstrap is complete
+    touch /tmp/.bootstrap_complete
   SCRIPT
   )
 }
@@ -211,6 +213,7 @@ resource "vultr_instance" "vps" {
   firewall_group_id = vultr_firewall_group.vps.id
   script_id         = vultr_startup_script.vps_bootstrap.id
   reserved_ip_id    = vultr_reserved_ip.vps.id
+  ssh_key_ids       = [vultr_ssh_key.deploy.id]
   enable_ipv6       = true
   backups           = "disabled"
   ddos_protection   = false # Set to true for ~$10/month Vultr DDoS mitigation (10 Gbps)

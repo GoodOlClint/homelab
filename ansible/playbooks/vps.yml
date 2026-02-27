@@ -21,20 +21,41 @@
       tags:
         - always
 
-    - name: Wait for VPS SSH to accept connections
+    - name: Wait for SSH to accept key-based authentication
       ansible.builtin.raw: /bin/true
       register: ssh_ready
       until: ssh_ready is succeeded
       retries: 30
       delay: 10
+      ignore_unreachable: true
       tags:
         - always
 
-    - name: Gather facts (retry while startup script installs Python)
+    - name: Fail if SSH never became reachable
+      ansible.builtin.fail:
+        msg: >
+          SSH to {{ ansible_host }} failed after 30 retries.
+          Check: (1) Vultr firewall has SSH rule (vps_provisioning=true),
+          (2) SSH key matches (~/.ssh/id_ed25519.pub),
+          (3) Instance startup completed (check Vultr console).
+      when: ssh_ready is not succeeded
+      tags:
+        - always
+
+    - name: Wait for startup script to install Python3
+      ansible.builtin.raw: test -f /tmp/.bootstrap_complete
+      register: bootstrap_check
+      until: bootstrap_check is succeeded
+      retries: 30
+      delay: 10
+      tags:
+        - always
+
+    - name: Gather facts
       ansible.builtin.setup:
       register: gather_result
       until: gather_result is succeeded
-      retries: 12
+      retries: 6
       delay: 10
       tags:
         - always

@@ -93,6 +93,7 @@ expand-disk:
 
 # Phase 1: terraform with SSH open -> ansible configures everything -> terraform closes SSH
 VPS_TF_TARGETS := \
+	-target=vultr_ssh_key.deploy \
 	-target=vultr_startup_script.vps_bootstrap \
 	-target=vultr_reserved_ip.vps \
 	-target=vultr_firewall_group.vps \
