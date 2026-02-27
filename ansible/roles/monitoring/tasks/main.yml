@@ -222,6 +222,7 @@
     src: prometheus.yml.j2
     dest: /opt/monitoring/prometheus/prometheus.yml
     mode: '0644'
+  notify: reload prometheus
   tags:
     - monitoring
     - prometheus
@@ -232,6 +233,7 @@
     src: alert.rules.yml.j2
     dest: /opt/monitoring/prometheus/alert.rules.yml
     mode: '0644'
+  notify: reload prometheus
   tags:
     - monitoring
     - prometheus
