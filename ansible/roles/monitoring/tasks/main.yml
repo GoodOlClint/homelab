@@ -256,6 +256,41 @@
     - snmp
     - config
 
+- name: Install Python requests for modem scraper
+  ansible.builtin.apt:
+    name: python3-requests
+    state: present
+  when: isp_monitor_enabled | default(false)
+  tags:
+    - monitoring
+    - isp
+    - packages
+
+- name: Deploy modem scraper script
+  ansible.builtin.template:
+    src: modem_scraper.py.j2
+    dest: /opt/monitoring/scripts/modem_scraper.py
+    mode: '0755'
+  when: isp_monitor_enabled | default(false)
+  tags:
+    - monitoring
+    - isp
+    - config
+
+- name: Configure modem scraper cron job
+  ansible.builtin.cron:
+    name: "ISP modem event log scraper"
+    cron_file: modem_scraper
+    user: root
+    minute: "*/5"
+    job: ". /etc/infisical/secrets/monitoring.env && /opt/monitoring/scripts/modem_scraper.py >> /var/log/modem_scraper.log 2>&1"
+    state: "{{ 'present' if (isp_monitor_enabled | default(false)) else 'absent' }}"
+  when: isp_monitor_enabled | default(false)
+  tags:
+    - monitoring
+    - isp
+    - cron
+
 - name: Start monitoring stack
   community.docker.docker_compose_v2:
     project_src: /opt/monitoring

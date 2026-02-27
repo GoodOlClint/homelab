@@ -1,0 +1,316 @@
+#!/usr/bin/env python3
+"""
+Cox modem event log scraper — Prometheus textfile exporter.
+
+Scrapes the cable modem event log at {{ isp_modem_host }}, parses T3/T4
+timeout events, and writes Prometheus-format metrics to a textfile for
+node-exporter to pick up.
+
+Auth method is pluggable via AUTH_METHOD env var. The parsing logic is a
+stub that needs to be adjusted for the specific modem model.
+
+Metrics written to: /opt/monitoring/textfile/modem.prom
+"""
+
+import os
+import re
+import sys
+import time
+import logging
+from pathlib import Path
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+)
+log = logging.getLogger("modem_scraper")
+
+# --- Configuration from environment / Ansible template ---
+MODEM_HOST = os.environ.get("MODEM_HOST", "{{ isp_modem_host }}")
+MODEM_PROTO = os.environ.get("MODEM_PROTO", "{{ isp_modem_proto }}")
+MODEM_USERNAME = os.environ.get("modem_username", "")
+MODEM_PASSWORD = os.environ.get("modem_password", "")
+AUTH_METHOD = os.environ.get("AUTH_METHOD", "basic")  # basic, form, digest, none
+TEXTFILE_DIR = os.environ.get("TEXTFILE_DIR", "/opt/monitoring/textfile")
+STATE_FILE = os.environ.get("STATE_FILE", "/opt/monitoring/scripts/.modem_state")
+
+# Persistent counters — we read the last-known totals from a state file so
+# counters survive across cron invocations (Prometheus counters must be
+# monotonically increasing).
+_state = {}
+
+
+def load_state():
+    """Load persisted counter state from disk."""
+    global _state
+    try:
+        path = Path(STATE_FILE)
+        if path.exists():
+            for line in path.read_text().splitlines():
+                if "=" in line:
+                    k, v = line.split("=", 1)
+                    _state[k.strip()] = float(v.strip())
+    except Exception as e:
+        log.warning("Could not load state file: %s", e)
+
+
+def save_state():
+    """Persist counter state to disk."""
+    try:
+        Path(STATE_FILE).write_text(
+            "\n".join(f"{k}={v}" for k, v in _state.items()) + "\n"
+        )
+    except Exception as e:
+        log.warning("Could not save state file: %s", e)
+
+
+def get_counter(name: str) -> float:
+    """Get a persistent counter value."""
+    return _state.get(name, 0.0)
+
+
+def inc_counter(name: str, amount: float = 1.0):
+    """Increment a persistent counter."""
+    _state[name] = _state.get(name, 0.0) + amount
+
+
+# ============================================================
+# Auth methods — swap or extend as needed for your modem model
+# ============================================================
+
+def create_session():
+    """Create an authenticated HTTP session to the modem.
+
+    Returns a requests.Session or None if auth fails.
+    Swap the implementation when the modem model is confirmed.
+    """
+    import requests
+
+    session = requests.Session()
+    session.timeout = 10
+    base = f"{MODEM_PROTO}://{MODEM_HOST}"
+
+    if AUTH_METHOD == "none":
+        return session
+
+    elif AUTH_METHOD == "basic":
+        session.auth = (MODEM_USERNAME, MODEM_PASSWORD)
+        return session
+
+    elif AUTH_METHOD == "digest":
+        from requests.auth import HTTPDigestAuth
+        session.auth = HTTPDigestAuth(MODEM_USERNAME, MODEM_PASSWORD)
+        return session
+
+    elif AUTH_METHOD == "form":
+        # --- Cox Panoramic Gateway / Technicolor style ---
+        # TODO: Adjust URL, form fields, and CSRF handling for your model.
+        #
+        # Typical flow:
+        #   1. GET the login page to obtain a CSRF token
+        #   2. POST credentials + token to the login endpoint
+        #   3. Session cookies are set on success
+        #
+        # Example (adjust for your modem):
+        # login_url = f"{base}/check.jst"
+        # resp = session.post(login_url, data={
+        #     "username": MODEM_USERNAME,
+        #     "password": MODEM_PASSWORD,
+        # })
+        # if resp.status_code != 200:
+        #     log.error("Form login failed: HTTP %s", resp.status_code)
+        #     return None
+        log.warning("Form auth is a stub — implement for your modem model")
+        return session
+
+    else:
+        log.error("Unknown AUTH_METHOD: %s", AUTH_METHOD)
+        return None
+
+
+# ============================================================
+# Modem event log scraping and parsing
+# ============================================================
+
+def fetch_event_log(session) -> str:
+    """Fetch the modem event log page.
+
+    Returns the raw HTML/text of the event log page, or empty string on failure.
+
+    TODO: Adjust the URL for your modem model. Common paths:
+      - Arris/Motorola: /cgi-bin/status_cgi
+      - Technicolor:     /1.0.1/gui/#/login (SPA — may need API calls)
+      - Netgear:         /DocsisStatus.htm
+      - Cox Panoramic:   /at_a_glance.jst or /event_log.jst
+    """
+    import requests
+
+    base = f"{MODEM_PROTO}://{MODEM_HOST}"
+
+    # --- Try common DOCSIS modem event log URLs ---
+    urls_to_try = [
+        f"{base}/cgi-bin/status_cgi",      # Arris / Motorola SB series
+        f"{base}/cmEventLog.htm",           # Some Netgear models
+        f"{base}/event_log.jst",            # Technicolor / Cox Panoramic
+        f"{base}/",                         # Fallback — main status page
+    ]
+
+    for url in urls_to_try:
+        try:
+            resp = session.get(url)
+            if resp.status_code == 200 and len(resp.text) > 100:
+                log.info("Fetched event log from %s (%d bytes)", url, len(resp.text))
+                return resp.text
+        except requests.RequestException:
+            continue
+
+    log.info("No event log URL responded successfully")
+    return ""
+
+
+def parse_events(html: str) -> dict:
+    """Parse the modem event log HTML for T3/T4 timeout entries.
+
+    Returns a dict with counts of new events found:
+      {"t3": <int>, "t4": <int>, "critical": <int>, "warning": <int>, "notice": <int>}
+
+    TODO: This is a generic parser that searches for T3/T4 keywords.
+    Adjust the regex patterns for the exact HTML structure of your modem.
+    Most DOCSIS modems display event logs as HTML tables with columns:
+      Date/Time | Priority | Code | Description
+
+    Common T3/T4 event descriptions:
+      - "T3 time-out"
+      - "T4 time-out"
+      - "SYNC Timing Synchronization failure"
+      - "No Ranging Response received"
+    """
+    if not html:
+        return {"t3": 0, "t4": 0, "critical": 0, "warning": 0, "notice": 0}
+
+    counts = {"t3": 0, "t4": 0, "critical": 0, "warning": 0, "notice": 0}
+
+    # Case-insensitive search for T3/T4 patterns
+    counts["t3"] = len(re.findall(r"T3\s+time-?out", html, re.IGNORECASE))
+    counts["t4"] = len(re.findall(r"T4\s+time-?out", html, re.IGNORECASE))
+
+    # Count by severity (common DOCSIS event log format)
+    counts["critical"] = len(re.findall(r"\bcritical\b", html, re.IGNORECASE))
+    counts["warning"] = len(re.findall(r"\bwarning\b", html, re.IGNORECASE))
+    counts["notice"] = len(re.findall(r"\bnotice\b", html, re.IGNORECASE))
+
+    return counts
+
+
+# ============================================================
+# Prometheus textfile output
+# ============================================================
+
+def write_metrics(reachable: bool, scrape_ok: bool, duration: float, events: dict):
+    """Write Prometheus-format metrics to the textfile directory.
+
+    Uses atomic write (write to .tmp, then rename) to avoid partial reads.
+    """
+    t3_total = get_counter("t3_total")
+    t4_total = get_counter("t4_total")
+
+    if events["t3"] > 0:
+        inc_counter("t3_total", events["t3"])
+        t3_total = get_counter("t3_total")
+
+    if events["t4"] > 0:
+        inc_counter("t4_total", events["t4"])
+        t4_total = get_counter("t4_total")
+
+    lines = [
+        "# HELP modem_t3_timeouts_total Cumulative count of T3 timeout events from cable modem.",
+        "# TYPE modem_t3_timeouts_total counter",
+        f'modem_t3_timeouts_total{{modem="{MODEM_HOST}"}} {t3_total}',
+        "",
+        "# HELP modem_t4_timeouts_total Cumulative count of T4 timeout events from cable modem.",
+        "# TYPE modem_t4_timeouts_total counter",
+        f'modem_t4_timeouts_total{{modem="{MODEM_HOST}"}} {t4_total}',
+        "",
+        "# HELP modem_events_total Cumulative count of modem events by severity.",
+        "# TYPE modem_events_total counter",
+        f'modem_events_total{{modem="{MODEM_HOST}",severity="critical"}} {get_counter("critical_total")}',
+        f'modem_events_total{{modem="{MODEM_HOST}",severity="warning"}} {get_counter("warning_total")}',
+        f'modem_events_total{{modem="{MODEM_HOST}",severity="notice"}} {get_counter("notice_total")}',
+        "",
+        "# HELP modem_reachable Whether the modem status page is reachable (1=yes, 0=no).",
+        "# TYPE modem_reachable gauge",
+        f'modem_reachable{{modem="{MODEM_HOST}"}} {1 if reachable else 0}',
+        "",
+        "# HELP modem_scrape_success Whether the last scrape completed without errors.",
+        "# TYPE modem_scrape_success gauge",
+        f"modem_scrape_success {1 if scrape_ok else 0}",
+        "",
+        "# HELP modem_scrape_duration_seconds Duration of the last modem scrape in seconds.",
+        "# TYPE modem_scrape_duration_seconds gauge",
+        f"modem_scrape_duration_seconds {duration:.3f}",
+        "",
+    ]
+
+    prom_file = Path(TEXTFILE_DIR) / "modem.prom"
+    tmp_file = prom_file.with_suffix(".tmp")
+    try:
+        tmp_file.write_text("\n".join(lines) + "\n")
+        tmp_file.rename(prom_file)
+    except Exception as e:
+        log.error("Failed to write metrics: %s", e)
+
+
+# ============================================================
+# Main
+# ============================================================
+
+def main():
+    load_state()
+    start = time.monotonic()
+    reachable = False
+    scrape_ok = False
+    events = {"t3": 0, "t4": 0, "critical": 0, "warning": 0, "notice": 0}
+
+    try:
+        import requests
+
+        # Quick reachability check (TCP connect with short timeout)
+        try:
+            requests.head(
+                f"{MODEM_PROTO}://{MODEM_HOST}",
+                timeout=5,
+                allow_redirects=True,
+            )
+            reachable = True
+        except requests.RequestException:
+            log.info("Modem at %s is not reachable (may be in stealth mode)", MODEM_HOST)
+            reachable = False
+
+        if reachable:
+            session = create_session()
+            if session:
+                html = fetch_event_log(session)
+                if html:
+                    events = parse_events(html)
+                    # Update severity counters
+                    for sev in ("critical", "warning", "notice"):
+                        if events[sev] > 0:
+                            inc_counter(f"{sev}_total", events[sev])
+                    scrape_ok = True
+                    log.info(
+                        "Scrape OK: T3=%d T4=%d crit=%d warn=%d notice=%d",
+                        events["t3"], events["t4"],
+                        events["critical"], events["warning"], events["notice"],
+                    )
+
+    except Exception as e:
+        log.error("Unexpected error: %s", e)
+
+    duration = time.monotonic() - start
+    write_metrics(reachable, scrape_ok, duration, events)
+    save_state()
+    log.info("Done (%.1fs, reachable=%s, ok=%s)", duration, reachable, scrape_ok)
+
+
+if __name__ == "__main__":
+    main()
