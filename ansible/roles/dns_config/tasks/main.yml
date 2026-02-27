@@ -30,30 +30,6 @@
     - dns
     - config
 
-- name: Wait for apt lock to be released
-  ansible.builtin.shell: while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 1; done
-  changed_when: false
-  timeout: 300
-  tags:
-    - dns_config
-    - packages
-
-- name: Ensure dnsutils is installed
-  ansible.builtin.apt:
-    name:
-      - dnsutils
-    state: present
-    update_cache: true
-
-  retries: 3
-  delay: 10
-  register: apt_result
-  until: apt_result is success
-  tags:
-    - dns_config
-    - dns
-    - packages
-
 - name: Set DNS search suffix for each interface by VLAN
   loop: "{{ dns_zones | dict2items }}"
   loop_control:
