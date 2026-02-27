@@ -28,6 +28,7 @@ log = logging.getLogger("modem_scraper")
 # --- Configuration from environment / Ansible template ---
 MODEM_HOST = os.environ.get("MODEM_HOST", "{{ isp_modem_host }}")
 MODEM_PROTO = os.environ.get("MODEM_PROTO", "{{ isp_modem_proto }}")
+{% raw %}
 MODEM_USERNAME = os.environ.get("modem_username", "")
 MODEM_PASSWORD = os.environ.get("modem_password", "")
 AUTH_METHOD = os.environ.get("AUTH_METHOD", "basic")  # basic, form, digest, none
@@ -314,3 +315,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+{% endraw %}
