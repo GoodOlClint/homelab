@@ -42,7 +42,7 @@ options {
     owner("root");
     group("adm");
     perm(0640);
-    stats_freq(0);
+    stats(freq(0));
     bad_hostname("^gconfd$");
     time_reopen(10);
     log_fifo_size(10000);
@@ -117,7 +117,7 @@ destination d_openobserve_firewall {
         organization("default")
         stream("firewall")
         user("{{ openobserve_root_user_email }}")
-        password("`OPENOBSERVE_ROOT_USER_PASS`")
+        password("`openobserve_root_user_pass`")
         record("--scope rfc5424 --exclude DATE --pair @timestamp=${ISODATE} --pair pf.action=${.pf.action} --pair pf.interface=${.pf.interface} --pair pf.direction=${.pf.direction} --pair pf.src_ip=${.pf.src_ip} --pair pf.dst_ip=${.pf.dst_ip} --pair pf.src_port=${.pf.src_port} --pair pf.dst_port=${.pf.dst_port} --pair pf.proto_name=${.pf.proto_name} --pair pf.rule_number=${.pf.rule_number} --pair pf.tracker=${.pf.tracker} --pair pf.ip_version=${.pf.ip_version}")
     );
 };
@@ -130,7 +130,7 @@ destination d_openobserve_syslog {
         organization("default")
         stream("syslog")
         user("{{ openobserve_root_user_email }}")
-        password("`OPENOBSERVE_ROOT_USER_PASS`")
+        password("`openobserve_root_user_pass`")
         record("--scope rfc5424 --exclude DATE --pair @timestamp=${ISODATE}")
     );
 };
