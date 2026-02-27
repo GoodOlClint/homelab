@@ -291,33 +291,8 @@
     - smb
     - cron
 
-- name: Restore Plex config from PBS if not already installed
-  ansible.builtin.shell: /usr/local/bin/plex_config_pbs_restore.sh
-  when:
-    - not plex_installed.stat.exists
-    - pbs_backup_enabled | default(true)
-  args:
-    executable: /bin/bash
-  tags:
-    - plex
-    - backup
-    - pbs
-    - restore
-
-- name: Restore Plex config from SMB if not already installed (fallback)
-  ansible.builtin.shell: /usr/local/bin/plex_config_restore.sh
-  when:
-    - not plex_installed.stat.exists
-    - not (pbs_backup_enabled | default(true))
-  args:
-    executable: /bin/bash
-  tags:
-    - plex
-    - backup
-    - smb
-    - restore
-
 # --- Poster Reset Setup (fixes blank thumbnails after restore) ---
+# Must be deployed BEFORE the restore tasks so the service exists when restore triggers it
 - name: Install packages for Media-Scripts
   ansible.builtin.package:
     name:
@@ -401,3 +376,30 @@
   tags:
     - plex
     - poster-reset
+
+# --- Restore from backup (fresh install only) ---
+- name: Restore Plex config from PBS if not already installed
+  ansible.builtin.shell: /usr/local/bin/plex_config_pbs_restore.sh
+  when:
+    - not plex_installed.stat.exists
+    - pbs_backup_enabled | default(true)
+  args:
+    executable: /bin/bash
+  tags:
+    - plex
+    - backup
+    - pbs
+    - restore
+
+- name: Restore Plex config from SMB if not already installed (fallback)
+  ansible.builtin.shell: /usr/local/bin/plex_config_restore.sh
+  when:
+    - not plex_installed.stat.exists
+    - not (pbs_backup_enabled | default(true))
+  args:
+    executable: /bin/bash
+  tags:
+    - plex
+    - backup
+    - smb
+    - restore
