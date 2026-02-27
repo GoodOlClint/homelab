@@ -244,6 +244,7 @@
     src: blackbox.yml.j2
     dest: /opt/monitoring/blackbox/blackbox.yml
     mode: '0644'
+  notify: restart blackbox
   tags:
     - monitoring
     - config

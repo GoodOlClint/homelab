@@ -86,7 +86,7 @@ scrape_configs:
       module: [http_2xx_insecure]
     static_configs:
       - targets:
-          - https://{{ hostvars['plex'].ansible_host }}:32400/identity  # Plex Identity
+          - https://{{ hostvars['plex'].ansible_host | replace(mgmt_vlan_prefix, services_vlan_prefix) }}:32400/identity  # Plex Identity
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
