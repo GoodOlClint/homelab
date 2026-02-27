@@ -55,6 +55,8 @@
     - /opt/monitoring/proxmox
     - /opt/monitoring/snmp
     - /opt/monitoring/axosyslog
+    - /opt/monitoring/textfile
+    - /opt/monitoring/scripts
     - /var/lib/openobserve
     - /var/lib/uptime-kuma
   tags:
