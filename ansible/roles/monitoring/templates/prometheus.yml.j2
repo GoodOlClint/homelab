@@ -72,6 +72,7 @@ scrape_configs:
           - http://{{ ansible_host }}:3000  # Grafana
 {% if hostvars['plex'] is defined %}
           - http://{{ hostvars['plex'].ansible_host }}:32400/web  # Plex
+          - http://{{ hostvars['plex'].ansible_host }}:32400/identity  # Plex Identity
 {% endif %}
     relabel_configs:
       - source_labels: [__address__]
