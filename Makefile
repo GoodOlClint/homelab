@@ -89,7 +89,7 @@ expand-disk:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/expand-disk.yml
 
 # === VPS Management ===
-.PHONY: vps-deploy vps-destroy vps-rebuild vps-rotate-keys
+.PHONY: vps-deploy vps-destroy vps-rebuild vps-rotate-keys clean-vps-ssh
 
 # Phase 1: terraform with SSH open -> ansible configures everything -> terraform closes SSH
 VPS_TF_TARGETS := \
@@ -128,7 +128,11 @@ vps-destroy:
 	@echo "Destroying VPS instance (keeping reserved IP)..."
 	@cd terraform && terraform init && terraform destroy -no-color -auto-approve -target=vultr_instance.vps
 
-vps-rebuild: vps-destroy vps-deploy
+clean-vps-ssh:
+	$(eval VPS_IP := $(shell cd terraform && terraform output -raw vps_reserved_ip))
+	@ssh-keygen -R $(VPS_IP) 2>/dev/null || true
+
+vps-rebuild: vps-destroy clean-vps-ssh vps-deploy
 
 vps-rotate-keys:
 	$(eval VPS_IP := $(shell cd terraform && terraform output -raw vps_reserved_ip))

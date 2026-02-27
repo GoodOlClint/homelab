@@ -10,15 +10,32 @@
     - ../group_vars/all.yml
   gather_facts: false
   pre_tasks:
-    - name: Wait for VPS SSH to become available
-      ansible.builtin.wait_for_connection:
+    - name: Wait for VPS SSH port to be open
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: 22
         delay: 10
         timeout: 300
+      delegate_to: localhost
+      become: false
       tags:
         - always
 
-    - name: Gather facts after connection is ready
+    - name: Wait for VPS SSH to accept connections
+      ansible.builtin.raw: /bin/true
+      register: ssh_ready
+      until: ssh_ready is succeeded
+      retries: 30
+      delay: 10
+      tags:
+        - always
+
+    - name: Gather facts (retry while startup script installs Python)
       ansible.builtin.setup:
+      register: gather_result
+      until: gather_result is succeeded
+      retries: 12
+      delay: 10
       tags:
         - always
 
