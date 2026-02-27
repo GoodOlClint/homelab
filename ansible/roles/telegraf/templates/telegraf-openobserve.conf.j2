@@ -96,7 +96,10 @@
     "{{ hostvars['adguard'].ansible_host }}",
 {% endif %}
     "8.8.8.8",
-    "1.1.1.1"
+    "1.1.1.1",
+{% if inventory_hostname == 'vps' %}
+    "172.16.91.1",
+{% endif %}
   ]
   count = 4
   ping_interval = 1.0
@@ -150,3 +153,9 @@
   data_format = "grok"
   grok_patterns = ["%{SYSLOGTIMESTAMP:timestamp} %{SYSLOGHOST:host} %{DATA:program}(?:\\[%{POSINT:pid}\\])?: %{GREEDYDATA:message}"]
   name_override = "syslog"
+
+{% if inventory_hostname == 'vps' %}
+# WireGuard tunnel metrics (peer handshakes, bytes transferred)
+[[inputs.wireguard]]
+  devices = ["wg0"]
+{% endif %}

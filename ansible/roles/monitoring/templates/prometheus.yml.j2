@@ -197,6 +197,12 @@ scrape_configs:
           instance: 'proxmox-backup'
           role: 'infrastructure'
 {% endif %}
+{% if hostvars['vps'] is defined %}
+      - targets: ['172.16.91.2:9273']
+        labels:
+          instance: 'vps'
+          role: 'infrastructure'
+{% endif %}
 
   # Proxmox VE Exporter - Hypervisor Metrics
   - job_name: 'proxmox'

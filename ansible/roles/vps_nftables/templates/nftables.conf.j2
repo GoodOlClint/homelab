@@ -30,6 +30,9 @@ table inet filter {
         # SSH only on WireGuard tunnel interface
         iif {{ nft_wg_interface }} tcp dport 22 accept
 
+        # Telegraf metrics (Prometheus scraping via tunnel)
+        iif {{ nft_wg_interface }} tcp dport 9273 accept
+
         # Log and drop everything else
         log prefix "nft-input-drop: " flags all counter drop
     }

@@ -8,6 +8,17 @@
   ansible.builtin.include_tasks: install-alpine.yml
   when: ansible_facts['os_family'] == "Alpine"
 
+- name: Grant Telegraf NET_ADMIN capability for WireGuard metrics
+  community.general.capabilities:
+    path: /usr/bin/telegraf
+    capability: cap_net_admin+epi
+    state: present
+  when: inventory_hostname == 'vps'
+  notify: Restart Telegraf
+  tags:
+    - telegraf
+    - config
+
 - name: Check if docker group exists
   ansible.builtin.getent:
     database: group
