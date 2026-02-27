@@ -8,6 +8,15 @@
   ansible.builtin.include_tasks: install-alpine.yml
   when: ansible_facts['os_family'] == "Alpine"
 
+- name: Install libcap for setcap/getcap (Alpine)
+  community.general.apk:
+    name: libcap
+    state: present
+  when: inventory_hostname == 'vps' and ansible_facts['os_family'] == 'Alpine'
+  tags:
+    - telegraf
+    - config
+
 - name: Grant Telegraf NET_ADMIN capability for WireGuard metrics
   community.general.capabilities:
     path: /usr/bin/telegraf
