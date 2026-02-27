@@ -136,8 +136,8 @@
     - ../group_vars/all.yml
   pre_tasks: *load_all_config
   roles:
-    - proxmox_backup
     - dns_config
+    - proxmox_backup
   tags:
     - phase1
     - proxmox-backup
