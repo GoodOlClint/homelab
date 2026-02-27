@@ -206,6 +206,17 @@
     - dashboards
     - proxmox
 
+- name: Create ISP Quality dashboard
+  ansible.builtin.copy:
+    src: dashboard-isp-quality.json
+    dest: /opt/monitoring/grafana/provisioning/dashboards/isp-quality.json
+    mode: '0644'
+  tags:
+    - monitoring
+    - grafana
+    - dashboards
+    - isp
+
 - name: Create Prometheus configuration
   ansible.builtin.template:
     src: prometheus.yml.j2
