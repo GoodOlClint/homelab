@@ -1,0 +1,198 @@
+{% raw %}
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": "-- Grafana --",
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 2,
+  "id": null,
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": false,
+      "keepTime": false,
+      "tags": [],
+      "targetBlank": true,
+      "title": "ISP Quality Dashboard",
+      "tooltip": "",
+      "type": "link",
+      "url": "/d/isp-quality/isp-quality"
+    }
+  ],
+  "liveNow": false,
+  "panels": [
+    {
+      "gridPos": { "h": 2, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "options": {
+        "code": { "language": "plaintext", "showLineNumbers": false, "showMiniMap": false },
+        "content": "# Smokeping — Network Latency Distribution\nEach row shows one probe target across three time windows. Color intensity = request density at that latency. Gaps = packet loss. Wide bands = jitter.",
+        "mode": "markdown"
+      },
+      "transparent": true,
+      "type": "text"
+    },
+    {
+      "gridPos": { "h": 1, "w": 8, "x": 0, "y": 2 },
+      "id": 2,
+      "options": {
+        "code": { "language": "plaintext", "showLineNumbers": false, "showMiniMap": false },
+        "content": "### Last 3 Hours",
+        "mode": "markdown"
+      },
+      "transparent": true,
+      "type": "text"
+    },
+    {
+      "gridPos": { "h": 1, "w": 8, "x": 8, "y": 2 },
+      "id": 3,
+      "options": {
+        "code": { "language": "plaintext", "showLineNumbers": false, "showMiniMap": false },
+        "content": "### Last 30 Hours",
+        "mode": "markdown"
+      },
+      "transparent": true,
+      "type": "text"
+    },
+    {
+      "gridPos": { "h": 1, "w": 8, "x": 16, "y": 2 },
+      "id": 4,
+      "options": {
+        "code": { "language": "plaintext", "showLineNumbers": false, "showMiniMap": false },
+        "content": "### Last 10 Days",
+        "mode": "markdown"
+      },
+      "transparent": true,
+      "type": "text"
+    }
+{% endraw %}
+{% set ns = namespace(panel_id=10, y=3) %}
+{% for target in smokeping_targets %}
+{% set row_id = ns.panel_id %}
+{% set ns.panel_id = ns.panel_id + 1 %}
+    ,{
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": {{ ns.y }} },
+      "id": {{ row_id }},
+      "panels": [],
+      "title": "{{ target.name }} ({{ target.ip }})",
+      "type": "row"
+    }
+{% set ns.y = ns.y + 1 %}
+{% for timerange in ["3h", "30h", "10d"] %}
+{% set heatmap_id = ns.panel_id %}
+{% set ns.panel_id = ns.panel_id + 1 %}
+{% set col_index = loop.index0 %}
+    ,{
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "scaleDistribution": {
+              "type": "log",
+              "log": 2
+            }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 6, "w": 8, "x": {{ col_index * 8 }}, "y": {{ ns.y }} },
+      "id": {{ heatmap_id }},
+      "options": {
+        "calculate": false,
+        "cellGap": 1,
+        "color": {
+          "exponent": 0.5,
+          "fill": "dark-orange",
+          "mode": "scheme",
+          "reverse": false,
+          "scale": "exponential",
+          "scheme": "Oranges",
+          "steps": 128
+        },
+        "exemplars": {
+          "color": "rgba(255,0,255,0.7)"
+        },
+        "filterValues": {
+          "le": 1e-9
+        },
+        "legend": {
+          "show": false
+        },
+        "rowsFrame": {
+          "layout": "auto"
+        },
+        "showValue": "never",
+        "tooltip": {
+          "mode": "single",
+          "yHistogram": true
+        },
+        "yAxis": {
+          "axisPlacement": "left",
+          "decimals": 1,
+          "min": 0,
+          "reverse": false,
+          "unit": "s"
+        }
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+{% raw %}
+          "expr": "sum(rate(smokeping_response_duration_seconds_bucket{ip=\"{% endraw %}{{ target.ip }}{% raw %}\"}[$__rate_interval])) by (le)",
+          "format": "heatmap",
+          "legendFormat": "{{le}}",
+{% endraw %}
+          "refId": "A"
+        }
+      ],
+      "timeFrom": "{{ timerange }}",
+      "title": "{{ target.name }} — {{ timerange }}",
+      "type": "heatmap"
+    }
+{% endfor %}
+{% set ns.y = ns.y + 6 %}
+{% endfor %}
+  ],
+  "refresh": "1m",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["smokeping", "isp", "monitoring"],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-3h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Smokeping",
+  "uid": "smokeping",
+  "version": 0,
+  "weekStart": ""
+}

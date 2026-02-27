@@ -134,9 +134,9 @@ services:
       - "9374:9374"
     command:
       - '--privileged'
-      - '8.8.8.8'
-      - '1.1.1.1'
-      - '9.9.9.9'
+{% for target in smokeping_targets %}
+      - '{{ target.ip }}'
+{% endfor %}
     cap_add:
       - NET_RAW
     environment:
