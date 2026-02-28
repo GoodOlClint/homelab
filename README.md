@@ -1,6 +1,6 @@
 # Homelab Infrastructure-as-Code
 
-This repository manages a Proxmox-based homelab, a Vultr VPS WireGuard relay, and network segmentation across 12 VLANs. The entire stack is automated with Terraform (infrastructure provisioning, DNS, VPS), Ansible (configuration management, 28 roles), SOPS/age (secrets encryption), pre-commit hooks (security scanning), and Make (operational interface).
+This repository manages a Proxmox-based homelab, a Vultr VPS WireGuard relay, and network segmentation across 12 VLANs. The entire stack is automated with Terraform (infrastructure provisioning, DNS, VPS), Ansible (configuration management, 30 roles), Infisical (self-hosted secret vault with per-VM machine identities, SOPS/age fallback for bootstrap secrets), pre-commit hooks (security scanning), and Make (operational interface).
 
 ## Architecture
 
@@ -19,7 +19,7 @@ graph TD
     PF --> STOR[Storage VLAN<br/>MTU 9000]
     PF --> MEDIA[Media VLAN]
 
-    MGMT --- M1[dns<br/>adguard<br/>unifi<br/>openobserve<br/>proxmox-backup]
+    MGMT --- M1[dns<br/>adguard<br/>unifi<br/>openobserve<br/>proxmox-backup<br/>infisical]
     SVC --- S1[docker<br/>plex<br/>plex-services<br/>nvidia-licensing]
     CORE --- C1[Clients<br/>Work / IoT<br/>Sonos / Guest / Vivint]
     STOR --- ST1[Synology NAS<br/>NFS / iSCSI<br/>jumbo frames]
@@ -42,6 +42,7 @@ Additional VLANs not shown: infrastructure, vpn, work, iot, sonos, vivint, guest
 - **Monitoring**: OpenObserve + Grafana + Prometheus + 8 exporters + Uptime Kuma
 - **Media**: Plex (GPU transcoding) + *arr stack + Synology NAS (NFS)
 - **Containers**: Valheim, Authentik SSO, Kiwix, BOINC, Portainer, Dogecoin
+- **Secrets**: Infisical (self-hosted vault) with per-VM machine identities, SOPS/age bootstrap fallback
 - **Backup**: Proxmox Backup Server with nightly cron jobs
 - **VPS Relay**: Encrypted WireGuard tunnel forwarding Plex, Valheim, mobile WireGuard
 
@@ -54,12 +55,14 @@ This repository separates **policy** (what the infrastructure should look like) 
 - `network-data/vlans.example.yaml` -- Schema template defining all 12 VLANs with `REPLACE` placeholders
 - `network-data/public_policy.yaml` -- Abstract zone-to-zone firewall rules (no IPs)
 - `ansible/group_vars/secrets.sops.example.yml` -- Secrets template with `REPLACE_ME` values
+- `ansible/group_vars/bootstrap.sops.example.yml` -- Bootstrap secrets template (Infisical deployment parameters)
 - All Terraform and Ansible code
 
 ### Bindings (gitignored)
 
 - `network-data/vlans.yaml` -- Concrete VLAN IDs, subnets, bridges, DHCP ranges
-- `ansible/group_vars/secrets.sops.yml` -- Encrypted credentials (SOPS/age)
+- `ansible/group_vars/bootstrap.sops.yml` -- Bootstrap secrets for Infisical + Terraform (SOPS/age)
+- `ansible/group_vars/secrets.sops.yml` -- SOPS fallback credentials (used when Infisical is unavailable)
 - `terraform/vars.auto.tfvars` -- Terraform variable overrides
 
 ### How vlans.yaml Flows Through the Stack
@@ -219,6 +222,7 @@ All VMs are defined in `terraform/vm-configs.tf` and provisioned with cloud-init
 | adguard | 102 | mgmt, services | 4 | 2 GB | 20 GB | -- | AdGuard Home (DNS filtering) |
 | openobserve | 103 | mgmt, services | 4 | 16 GB | 50 GB | -- | Monitoring stack (OpenObserve, Grafana, Prometheus) |
 | docker | 104 | mgmt, services, storage | 16 | 64 GB | 100 GB | NVIDIA | Container workloads (Valheim, Authentik, etc.) |
+| infisical | 105 | mgmt, services | 4 | 4 GB | 30 GB | -- | Self-hosted secret vault |
 | plex-services | 106 | mgmt, services, storage | 4 | 8 GB | 256 GB | -- | *arr stack, PostgreSQL, Jellyseerr |
 | nvidia-licensing | 107 | mgmt, services | 2 | 2 GB | 20 GB | -- | NVIDIA GRID license server (FastAPI DLS) |
 | plex | 108 | mgmt, services, storage | 8 | 32 GB | 100 GB | NVIDIA | Plex Media Server (hardware transcoding) |
@@ -312,6 +316,17 @@ Active containers on the docker VM:
 | Portainer | 9000 | Container management UI |
 | Dogecoin | 22555 | Dogecoin full node |
 
+### Infisical Secret Vault (infisical VM)
+
+Self-hosted secret management platform deployed via Docker Compose:
+
+- **Stack**: Infisical server (port 8080) + PostgreSQL 16 + Redis 7
+- **Machine identities**: Each service VM gets a unique identity (`{hostname}-vm`) with Universal Auth credentials stored in `/etc/infisical/`
+- **Infisical Agent**: Runs as a systemd service on each VM, authenticating with its machine identity and rendering secrets to environment files via Go templates
+- **Polling interval**: 60 seconds -- secret updates propagate within one minute
+- **SOPS fallback**: If Infisical is unreachable, Ansible falls back to `secrets.sops.yml` with a warning
+- **Protected**: Terraform `protected = true` prevents accidental deletion
+
 ### Other Services
 
 - **UniFi Controller** (unifi VM) -- Network management for UniFi switches and APs
@@ -320,7 +335,7 @@ Active containers on the docker VM:
 
 ## Ansible Roles
 
-28 roles in a single flat directory (`ansible/roles/`):
+30 roles in a single flat directory (`ansible/roles/`):
 
 ### Infrastructure
 
@@ -335,6 +350,7 @@ Active containers on the docker VM:
 | monitoring_users | Service account provisioning for monitoring |
 | proxmox_backup | Proxmox Backup Server configuration |
 | unifi | UniFi Controller deployment |
+| infisical | Self-hosted Infisical secret vault deployment |
 | pfsense | pfSense DHCP scopes and RFC 2136 DNS registration |
 
 ### Services
@@ -363,6 +379,7 @@ Active containers on the docker VM:
 | Role | Description |
 |------|-------------|
 | hardening | UFW firewall configuration for internal VMs |
+| infisical_client | Infisical agent, machine identity provisioning, secret templating |
 | pbs_client | Proxmox Backup Server client and scheduled backup |
 | rsyslog_client | Rsyslog forwarding to AxoSyslog/OpenObserve |
 | telegraf | Telegraf metrics agent (Prometheus output) |
@@ -374,12 +391,15 @@ Active containers on the docker VM:
 |------|-------------|
 | geerlingguy.docker | Docker CE installation |
 | juju4.openobserve | OpenObserve base installation |
+| infisical.vault | Infisical login and secret reading modules |
+| mitre.yedit | YAML/XML editing utilities |
 
 ## Playbooks
 
 | Playbook | Targets | Purpose |
 |----------|---------|---------|
 | site.yml | All | Full deployment (imports infrastructure + services) |
+| bootstrap.yml | AdGuard + Infisical | First-time deployment -- AdGuard DNS + Infisical vault + secret seeding |
 | infrastructure.yml | DNS, AdGuard, OpenObserve, PBS | Phase 1: core services, Phase 2: monitoring clients |
 | services.yml | All service VMs | Media, Docker, Plex, NVIDIA licensing |
 | pfsense.yml | pfSense | DHCP scopes + RFC 2136 DNS registration |
@@ -391,32 +411,62 @@ Active containers on the docker VM:
 | update-plex.yml | Plex VM | Plex Media Server updates |
 | backup-clients.yml | Multiple | PBS client configuration |
 | vps-rotate-keys.yml | VPS | WireGuard key rotation |
+| refresh-identity.yml | Service VMs | Refresh Infisical machine identity credentials |
 | expand-disk.yml | Service VMs | Root filesystem expansion |
 
 ## Secrets Management
 
-Secrets are encrypted with [SOPS](https://github.com/getsops/sops) using [age](https://github.com/FiloSottile/age) keys. Configuration is in `.sops.yaml`.
+Secrets use a two-tier architecture: Infisical as the primary runtime vault and SOPS/age as a bootstrap fallback.
 
-- `secrets.sops.yml` is decrypted at playbook runtime by the `community.sops` Ansible plugin
-- Secrets are accessed as `{{ secrets.variable_name }}`
-- `secrets.sops.example.yml` is the tracked template (all values = `REPLACE_ME`)
+### Tier 1: Bootstrap (SOPS)
+
+`bootstrap.sops.yml` is encrypted with [SOPS](https://github.com/getsops/sops) using [age](https://github.com/FiloSottile/age) keys (configured in `.sops.yaml`). It contains only the minimum secrets needed before Infisical exists:
+
+- Terraform provider credentials (Proxmox, Vultr, Cloudflare)
+- Infisical deployment parameters (PostgreSQL password, encryption key, auth secret)
+- Infisical admin machine identity credentials (written back by `make bootstrap`)
+
+Decrypted at playbook runtime by the `community.sops` Ansible plugin.
+
+### Tier 2: Runtime (Infisical)
+
+All operational secrets are stored in the self-hosted Infisical vault. Each VM gets a unique machine identity with Universal Auth credentials.
+
+Secrets are organized into per-VM paths:
+
+| Path | Consumers | Examples |
+|------|-----------|---------|
+| `/shared` | All service VMs | PBS backup token, PBS fingerprint |
+| `/monitoring` | openobserve | OpenObserve root password, Grafana admin, Proxmox/UniFi/PBS monitoring tokens |
+| `/plex` | plex | Plex token, TLS certificate password, SMB credentials, Cloudflare token |
+| `/plex-services` | plex-services | PostgreSQL password, Cloudflared tunnel token, Valheim password |
+| `/docker` | docker | Cloudflared tunnel token |
+| `/infrastructure` | dns, proxmox-backup | BIND TSIG key, PBS admin password, UniFi credentials |
+| `/vps` | VPS (via Ansible) | WireGuard keys, tunnel addresses |
+| `/pfsense` | pfSense (via Ansible) | WireGuard keys, DHCP/DNS configuration |
+
+The Infisical Agent runs on each service VM as a systemd service, rendering secrets to environment files via Go templates with a 60-second polling interval.
+
+### Fallback
+
+If Infisical is unreachable, Ansible falls back to reading `secrets.sops.yml` (the legacy all-in-one encrypted file) with a warning. This ensures playbooks still work during Infisical maintenance or initial bootstrap.
 
 **Secret categories:**
 
-| Category | Examples |
-|----------|---------|
-| Infrastructure auth | Proxmox API tokens, UniFi credentials, Synology password |
-| WireGuard tunnel | Private keys, tunnel addresses, peer allowed IPs |
-| Monitoring | OpenObserve root password, Grafana admin password |
-| Backup | PBS admin password, backup tokens, monitoring tokens |
-| Service passwords | PostgreSQL, Plex SMB, Valheim server password |
-| API tokens | Cloudflare DNS token, Cloudflared tunnel token |
-| SSO | Authentik secret key, Authentik PostgreSQL password |
-| TLS | Plex PKCS#12 certificate password |
-| DNS | BIND9 TSIG key for RFC 2136 dynamic updates |
-| GeoIP | MaxMind license key (optional) |
-| Monitoring | UptimeRobot heartbeat URL |
-| IPv6 tunnel | ULA tunnel addresses (optional, dual-stack) |
+| Category | Tier | Examples |
+|----------|------|---------|
+| Terraform credentials | Bootstrap | Proxmox API tokens, Vultr API key, Cloudflare token |
+| Infisical deployment | Bootstrap | PostgreSQL password, encryption key, auth secret |
+| Infrastructure auth | Runtime | UniFi credentials, Synology password |
+| WireGuard tunnel | Runtime | Private keys, tunnel addresses, peer allowed IPs |
+| Monitoring | Runtime | OpenObserve root password, Grafana admin password |
+| Backup | Runtime | PBS admin password, backup tokens, monitoring tokens |
+| Service passwords | Runtime | PostgreSQL, Plex SMB, Valheim server password |
+| API tokens | Runtime | Cloudflare DNS token, Cloudflared tunnel token |
+| SSO | Runtime | Authentik secret key, Authentik PostgreSQL password |
+| TLS | Runtime | Plex PKCS#12 certificate password |
+| DNS | Runtime | BIND9 TSIG key for RFC 2136 dynamic updates |
+| GeoIP | Runtime | MaxMind license key (optional) |
 
 ## Getting Started
 
@@ -442,45 +492,55 @@ Secrets are encrypted with [SOPS](https://github.com/getsops/sops) using [age](h
 
    Copies example files to their local (gitignored) counterparts:
    - `network-data/vlans.example.yaml` -> `network-data/vlans.yaml`
+   - `ansible/group_vars/bootstrap.sops.example.yml` -> `ansible/group_vars/bootstrap.sops.yml`
    - `ansible/group_vars/secrets.sops.example.yml` -> `ansible/group_vars/secrets.sops.yml`
    - Terraform variable files
 
-4. **Fill in site-specific values** in the three gitignored files:
+4. **Fill in site-specific values** in the gitignored files:
    - `network-data/vlans.yaml` -- VLAN IDs, subnets, bridges, DHCP ranges
-   - `ansible/group_vars/secrets.sops.yml` -- All credentials and keys
+   - `ansible/group_vars/bootstrap.sops.yml` -- Terraform credentials, Infisical deployment parameters
+   - `ansible/group_vars/secrets.sops.yml` -- All operational credentials and keys
    - `terraform/vars.auto.tfvars` -- Provider credentials, region preferences
 
-5. **Encrypt secrets**
+5. **Encrypt bootstrap secrets**
 
    ```bash
-   sops --encrypt --in-place ansible/group_vars/secrets.sops.yml
+   sops --encrypt --in-place ansible/group_vars/bootstrap.sops.yml
    ```
 
-6. **Review Terraform plan**
+6. **Bootstrap Infisical + AdGuard**
 
    ```bash
-   make plan
+   make bootstrap
    ```
 
-7. **Full deployment**
+   Deploys AdGuard (DNS) and Infisical VMs, configures the vault, creates the admin account and machine identity, and seeds secrets from SOPS into Infisical.
 
-   ```bash
-   make apply
-   ```
-
-   Runs Terraform apply, generates Ansible inventory from Terraform outputs, then runs the full Ansible site playbook.
-
-8. **Deploy VPS relay** (separate from homelab VMs)
+7. **Deploy VPS relay**
 
    ```bash
    make vps-deploy
    ```
 
-9. **Install pre-commit hooks**
+8. **Review Terraform plan**
 
    ```bash
-   make setup-hooks
+   make plan
    ```
+
+9. **Full deployment**
+
+   ```bash
+   make apply
+   ```
+
+   Runs Terraform apply, generates Ansible inventory from Terraform outputs, then runs the full Ansible site playbook. Each service VM receives an Infisical machine identity and agent.
+
+10. **Install pre-commit hooks**
+
+    ```bash
+    make setup-hooks
+    ```
 
 ## Makefile Reference
 
@@ -493,6 +553,8 @@ The Makefile is the primary operational interface.
 | `apply` | Full deployment: Terraform apply, inventory generation, Ansible site playbook |
 | `plan` | Terraform init + plan (review changes before applying) |
 | `init` | Create Python venv, install deps, init Terraform, pull Galaxy roles |
+| `bootstrap` | First-time deployment: AdGuard + Infisical VMs + secret seeding |
+| `terraform-bootstrap` | Terraform apply for bootstrap VMs only |
 | `terraform-apply` | Terraform init + apply (auto-approve) |
 | `inventory` | Generate Ansible inventory from Terraform outputs |
 
@@ -508,6 +570,16 @@ The Makefile is the primary operational interface.
 | `update` | OS patching on all VMs + VPS |
 | `update-dns` | Update DNS configuration |
 | `expand-disk` | Expand root filesystem on service VMs |
+
+### Secrets
+
+| Target | Description |
+|--------|-------------|
+| `infisical-seed` | Migrate secrets from SOPS to Infisical |
+| `infisical-backup` | Export Infisical secrets to SOPS format |
+| `infisical-organize` | Organize flat secrets into per-VM folders |
+| `refresh-identity` | Refresh Infisical machine identity credentials |
+| `plex-token` | Retrieve Plex authentication token |
 
 ### VPS Management
 
@@ -535,6 +607,7 @@ The Makefile is the primary operational interface.
 | `clean` | Destroy all Terraform resources + clean SSH known_hosts |
 | `clean-terraform` | Destroy all Terraform resources |
 | `clean-ssh` | Remove all inventory IPs from SSH known_hosts |
+| `clean-infisical-sops` | Reset Infisical fields in SOPS files |
 
 ## Security
 
@@ -550,7 +623,8 @@ Configured in `.pre-commit-config.yaml`:
 
 ### Defense in Depth
 
-- **SOPS encryption** for all secrets (age keys, no GPG)
+- **Infisical**: Per-VM machine identities with least-privilege RBAC, path-scoped secret access, automatic secret rotation via agent polling
+- **SOPS encryption** for bootstrap secrets (age keys, no GPG)
 - **SSH hardened**: key-only auth, tunnel-only listen address on VPS, fail2ban, MaxAuthTries 3
 - **nftables default-deny** on VPS (only explicitly allowed ports pass)
 - **UFW** on all internal VMs (hardening role)
@@ -569,7 +643,7 @@ homelab/
 ├── terraform/
 │   ├── main.tf, provider.tf        # Provider configuration
 │   ├── variables.tf, outputs.tf    # Variables and inventory output
-│   ├── vm-configs.tf               # All 9 VM definitions
+│   ├── vm-configs.tf               # All 10 VM definitions
 │   ├── vultr-vps.tf                # VPS instance, firewall, bootstrap
 │   ├── cloudflare-dns.tf           # DNS A/AAAA records
 │   ├── pci.tf                      # GPU passthrough configuration
@@ -581,14 +655,17 @@ homelab/
 │   ├── requirements.yml            # Galaxy role dependencies
 │   ├── group_vars/                 # all.yml, secrets.sops.yml
 │   ├── inventory/                  # vms.yaml (generated), static: pfsense, proxmox, vps
-│   ├── playbooks/                  # 13 playbooks
-│   └── roles/                      # 28 roles (flat directory)
+│   ├── playbooks/                  # 15 playbooks
+│   └── roles/                      # 30 roles (flat directory)
 ├── network-data/
 │   ├── vlans.example.yaml          # Schema template (tracked)
 │   ├── vlans.yaml                  # Site-specific bindings (gitignored)
 │   └── public_policy.yaml          # Zone-to-zone firewall intent (tracked)
 ├── scripts/
 │   ├── bootstrap_local_config.sh   # Copy example files to local config
+│   ├── seed_infisical.sh           # SOPS to Infisical secret migration
+│   ├── infisical_to_sops.py        # Infisical to SOPS backup export
+│   ├── organize_infisical_folders.sh  # Organize secrets into per-VM folders
 │   ├── security_guardrails.sh      # Pre-commit security checks
 │   └── validate_public_policy.py   # Policy YAML schema validator
 ├── docs/                           # Operational runbooks
