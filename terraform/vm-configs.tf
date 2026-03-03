@@ -113,5 +113,14 @@ locals {
       memory_mb    = 2048
       disk_size_gb = 20
     },
+    {
+      name         = "lancache"
+      vm_id        = 110
+      vlans        = ["vlan10", "vlan40", "vlan20"]
+      ip_offset    = 110
+      cpu_cores    = 4
+      memory_mb    = 8192
+      disk_size_gb = 20
+    },
   ]
 }

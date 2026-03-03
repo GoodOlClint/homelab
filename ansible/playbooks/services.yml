@@ -90,3 +90,17 @@
     - plex_services
     - rsyslog_client
     - telegraf
+
+- name: Configure lancache VM
+  hosts: lancache
+  become: true
+
+  vars_files:
+    - ../group_vars/all.yml
+  pre_tasks: *load_all_config
+  roles:
+    - dns_config
+    - geerlingguy.docker
+    - lancache
+    - rsyslog_client
+    - telegraf

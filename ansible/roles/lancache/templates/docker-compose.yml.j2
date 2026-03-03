@@ -1,0 +1,25 @@
+services:
+  monolithic:
+    image: lancachenet/monolithic:latest
+    container_name: lancache
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      UPSTREAM_DNS: "{{ lancache_upstream_dns }}"
+      CACHE_DISK_SIZE: "{{ lancache_cache_disk_size }}"
+    volumes:
+      - {{ lancache_nfs_mount }}/data:/data/cache
+      - {{ lancache_nfs_mount }}/logs:/data/logs
+
+  dns:
+    image: lancachenet/lancache-dns:latest
+    container_name: lancache-dns
+    restart: unless-stopped
+    ports:
+      - "53:53/udp"
+    environment:
+      USE_GENERIC_CACHE: "true"
+      LANCACHE_IP: "{{ lancache_service_ip }}"
+      UPSTREAM_DNS: "{{ lancache_upstream_dns }}"

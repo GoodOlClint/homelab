@@ -1,0 +1,4 @@
+---
+lancache_cache_disk_size: "500g"
+lancache_upstream_dns: "172.16.40.53"
+lancache_nfs_mount: "/mnt/lancache"
