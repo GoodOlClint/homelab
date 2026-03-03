@@ -30,8 +30,19 @@ BOOTSTRAP_TF_TARGETS := \
 	-target=module.vms.proxmox_virtual_environment_file.user_data[\"infisical\"] \
 	-target=module.vms.proxmox_virtual_environment_file.network_data[\"infisical\"]
 
+# === Per-VM Argument Capture ===
+# Enables: make plan <vm>, make build <vm>, make rebuild <vm>
+# Captures the VM name from the second word in MAKECMDGOALS and creates a no-op
+# target for it so Make doesn't error on the unknown target name.
+ifneq (,$(filter build rebuild plan,$(firstword $(MAKECMDGOALS))))
+  VM := $(wordlist 2,2,$(MAKECMDGOALS))
+  ifneq (,$(VM))
+    $(eval $(VM):;@:)
+  endif
+endif
+
 # === Core Operations ===
-.PHONY: all apply plan init terraform-apply terraform-bootstrap inventory bootstrap ansible-bootstrap
+.PHONY: all apply plan init terraform-apply terraform-bootstrap inventory bootstrap ansible-bootstrap build rebuild
 
 all: apply
 
@@ -44,7 +55,15 @@ ansible-bootstrap:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/bootstrap.yml
 
 plan:
+ifdef VM
+	@cd terraform && terraform init && terraform plan -no-color \
+		-target=module.network \
+		-target='module.vms.proxmox_virtual_environment_vm.vms["$(VM)"]' \
+		-target='module.vms.proxmox_virtual_environment_file.user_data["$(VM)"]' \
+		-target='module.vms.proxmox_virtual_environment_file.network_data["$(VM)"]'
+else
 	@cd terraform && terraform init && terraform plan -no-color
+endif
 
 init:
 	@python3 -m venv .venv
@@ -60,6 +79,34 @@ terraform-bootstrap:
 
 inventory: clean-ssh
 	@cd terraform && terraform output -no-color -raw ansible_inventory_yaml > ../ansible/inventory/vms.yaml
+
+# === Per-VM Build/Rebuild ===
+# make build <vm>   — terraform-apply + inventory + ansible for a single VM
+# make rebuild <vm>  — destroy VM, clean SSH key, then build
+build:
+ifndef VM
+	$(error Usage: make build <vm-name>)
+endif
+	@echo "Building VM: $(VM)"
+	@cd terraform && terraform init && terraform apply -no-color -auto-approve \
+		-target=module.network \
+		-target='module.vms.proxmox_virtual_environment_vm.vms["$(VM)"]' \
+		-target='module.vms.proxmox_virtual_environment_file.user_data["$(VM)"]' \
+		-target='module.vms.proxmox_virtual_environment_file.network_data["$(VM)"]'
+	@$(MAKE) inventory
+	@echo "Configuring VM: $(VM)"
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/site.yml --limit $(VM)
+
+rebuild:
+ifndef VM
+	$(error Usage: make rebuild <vm-name>)
+endif
+	@echo "Destroying VM: $(VM)"
+	@cd terraform && terraform init && terraform destroy -no-color -auto-approve \
+		-target='module.vms.proxmox_virtual_environment_vm.vms["$(VM)"]'
+	@VM_IP=$$(python3 -c "import yaml; print(yaml.safe_load(open('ansible/inventory/vms.yaml'))['all']['hosts']['$(VM)']['ansible_host'])"); \
+		ssh-keygen -R "$$VM_IP" 2>/dev/null || true
+	@$(MAKE) build $(VM)
 
 # === Ansible Playbooks ===
 .PHONY: ansible-all ansible-infra ansible-services ansible-pfsense docker-deploy update update-dns expand-disk
