@@ -38,6 +38,21 @@
     - logs
   tags: [lancache, nfs]
 
+- name: Disable systemd-resolved stub listener (frees port 53)
+  ansible.builtin.lineinfile:
+    path: /etc/systemd/resolved.conf
+    regexp: '^#?DNSStubListener='
+    line: 'DNSStubListener=no'
+  register: resolved_conf
+  tags: [lancache, config]
+
+- name: Restart systemd-resolved
+  ansible.builtin.systemd:
+    name: systemd-resolved
+    state: restarted
+  when: resolved_conf is changed
+  tags: [lancache, config]
+
 - name: Create lancache compose directory
   ansible.builtin.file:
     path: /opt/lancache

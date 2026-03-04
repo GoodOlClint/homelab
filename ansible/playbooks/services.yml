@@ -103,4 +103,3 @@
     - geerlingguy.docker
     - lancache
     - rsyslog_client
-    - telegraf

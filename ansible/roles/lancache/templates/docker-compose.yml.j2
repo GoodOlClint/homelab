@@ -10,8 +10,8 @@ services:
       UPSTREAM_DNS: "{{ lancache_upstream_dns }}"
       CACHE_DISK_SIZE: "{{ lancache_cache_disk_size }}"
     volumes:
-      - {{ lancache_nfs_mount }}/data:/data/cache
-      - {{ lancache_nfs_mount }}/logs:/data/logs
+      - "{{ lancache_nfs_mount }}/data:/data/cache"
+      - "{{ lancache_nfs_mount }}/logs:/data/logs"
 
   dns:
     image: lancachenet/lancache-dns:latest
@@ -19,6 +19,7 @@ services:
     restart: unless-stopped
     ports:
       - "53:53/udp"
+      - "53:53/tcp"
     environment:
       USE_GENERIC_CACHE: "true"
       LANCACHE_IP: "{{ lancache_service_ip }}"
