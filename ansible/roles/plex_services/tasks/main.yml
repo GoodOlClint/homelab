@@ -598,9 +598,8 @@
     - config
 
 - name: Create media directory structure on data volume
-  community.docker.docker_container:
-    name: create-media-dirs
-    image: alpine:latest
+  community.docker.docker_container_exec:
+    container: sabnzbd
     command: >
       sh -c "mkdir -p
       /data/usenet/complete/tv
@@ -610,12 +609,6 @@
       /data/tv
       /data/movies
       /data/music"
-    volumes:
-      - plex_data:/data
-    state: started
-    auto_remove: true
-    comparisons:
-      '*': ignore
   tags:
     - plex_services
     - config
@@ -690,12 +683,11 @@
       loop:
         - { service: sonarr, port: 8989, api: v3, path: /data/tv }
         - { service: radarr, port: 7878, api: v3, path: /data/movies }
-        - { service: lidarr, port: 8686, api: v1, path: /data/music }
       loop_control:
         label: "{{ item.service }}"
       when: arr_api_keys[item.service] is defined
 
-    - name: Add root folders to *arr services
+    - name: Add root folders to Sonarr and Radarr
       ansible.builtin.uri:
         url: "http://localhost:{{ item.item.port }}/api/{{ item.item.api }}/rootfolder"
         method: POST
@@ -711,6 +703,61 @@
       when:
         - item is not skipped
         - item.json | selectattr('path', 'eq', item.item.path) | list | length == 0
+
+- name: Configure Lidarr root folder
+  when:
+    - arr_api_keys is defined
+    - arr_api_keys.lidarr is defined
+  tags:
+    - plex_services
+    - config
+  block:
+    - name: Check existing Lidarr root folders
+      ansible.builtin.uri:
+        url: "http://localhost:8686/api/v1/rootfolder"
+        method: GET
+        headers:
+          X-Api-Key: "{{ arr_api_keys.lidarr }}"
+        return_content: true
+      register: lidarr_root_folders
+
+    - name: Get Lidarr quality profiles
+      ansible.builtin.uri:
+        url: "http://localhost:8686/api/v1/qualityprofile"
+        method: GET
+        headers:
+          X-Api-Key: "{{ arr_api_keys.lidarr }}"
+        return_content: true
+      register: lidarr_quality_profiles
+      when: lidarr_root_folders.json | selectattr('path', 'eq', '/data/music') | list | length == 0
+
+    - name: Get Lidarr metadata profiles
+      ansible.builtin.uri:
+        url: "http://localhost:8686/api/v1/metadataprofile"
+        method: GET
+        headers:
+          X-Api-Key: "{{ arr_api_keys.lidarr }}"
+        return_content: true
+      register: lidarr_metadata_profiles
+      when: lidarr_root_folders.json | selectattr('path', 'eq', '/data/music') | list | length == 0
+
+    - name: Add root folder to Lidarr
+      ansible.builtin.uri:
+        url: "http://localhost:8686/api/v1/rootfolder"
+        method: POST
+        headers:
+          X-Api-Key: "{{ arr_api_keys.lidarr }}"
+        body_format: json
+        body:
+          name: Music
+          path: /data/music
+          defaultQualityProfileId: "{{ lidarr_quality_profiles.json[0].id }}"
+          defaultMetadataProfileId: "{{ lidarr_metadata_profiles.json[0].id }}"
+        status_code: [200, 201]
+      when:
+        - lidarr_root_folders.json | selectattr('path', 'eq', '/data/music') | list | length == 0
+        - lidarr_quality_profiles is not skipped
+        - lidarr_metadata_profiles is not skipped
 
 - name: Configure SABnzbd as download client in *arr services
   when:
