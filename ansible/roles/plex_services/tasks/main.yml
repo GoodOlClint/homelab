@@ -592,7 +592,7 @@
             arr_api_keys | default({}) |
             combine({ 'sabnzbd': (sabnzbd_ini_raw.content | b64decode | regex_search('api_key\s*=\s*(\S+)', '\1'))[0] })
           }}
-      when: sabnzbd_ini_raw.content | b64decode | regex_search('api_key\s*=\s*(\S+)')
+      when: (sabnzbd_ini_raw.content | b64decode | regex_search('api_key\s*=\s*(\S+)')) is not none
   tags:
     - plex_services
     - config
