@@ -649,46 +649,21 @@
   block:
     - name: Set SABnzbd complete download directory
       ansible.builtin.uri:
-        url: "http://localhost:8080/api"
+        url: "http://localhost:8080/api?mode=set_config&section=misc&keyword=complete_dir&value=/data/usenet/complete&apikey={{ arr_api_keys.sabnzbd }}&output=json"
         method: GET
-        body_format: form-urlencoded
-        body:
-          mode: set_config
-          section: misc
-          keyword: complete_dir
-          value: /data/usenet/complete
-          apikey: "{{ arr_api_keys.sabnzbd }}"
-          output: json
         return_content: true
       register: sabnzbd_complete_dir
 
     - name: Set SABnzbd incomplete download directory
       ansible.builtin.uri:
-        url: "http://localhost:8080/api"
+        url: "http://localhost:8080/api?mode=set_config&section=misc&keyword=download_dir&value=/data/usenet/incomplete&apikey={{ arr_api_keys.sabnzbd }}&output=json"
         method: GET
-        body_format: form-urlencoded
-        body:
-          mode: set_config
-          section: misc
-          keyword: download_dir
-          value: /data/usenet/incomplete
-          apikey: "{{ arr_api_keys.sabnzbd }}"
-          output: json
         return_content: true
 
     - name: Configure SABnzbd categories
       ansible.builtin.uri:
-        url: "http://localhost:8080/api"
+        url: "http://localhost:8080/api?mode=set_config&section=categories&keyword={{ item.name }}&name={{ item.name }}&dir={{ item.dir }}&apikey={{ arr_api_keys.sabnzbd }}&output=json"
         method: GET
-        body_format: form-urlencoded
-        body:
-          mode: set_config
-          section: categories
-          keyword: "{{ item.name }}"
-          name: "{{ item.name }}"
-          dir: "{{ item.dir }}"
-          apikey: "{{ arr_api_keys.sabnzbd }}"
-          output: json
         return_content: true
       loop:
         - { name: tv, dir: tv }
