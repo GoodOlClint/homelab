@@ -1,24 +1,33 @@
-# Recyclarr configuration template for *arr stack
-# Copy this file to /opt/plex-services/recyclarr/config/recyclarr.yml and edit as needed
+# Recyclarr configuration — TRaSH Guide quality profiles
+# Deployed to /opt/plex-services/recyclarr/recyclarr.yml by Ansible
+# Syncs quality profiles to Sonarr and Radarr on CRON_SCHEDULE (@daily)
 
 sonarr:
-  - instance_name: Sonarr
-    url: http://sonarr:8989
-    api_key: "{{ sonarr_api_key | default('changeme') }}"
+  sonarr:
+    base_url: http://sonarr:8989
+    api_key: "{{ arr_api_keys.sonarr | default('changeme') }}"
+
+    include:
+      - template: sonarr-quality-definition-series
+      - template: sonarr-v4-quality-profile-web-1080p
+      - template: sonarr-v4-custom-formats-web-1080p
+
     quality_profiles:
-      - name: HD-1080p
-        # Add your preferred quality settings here
-    root_folders:
-      - /data/tv
+      - name: WEB-1080p
+        reset_unmatched_scores:
+          enabled: true
 
 radarr:
-  - instance_name: Radarr
-    url: http://radarr:7878
-    api_key: "{{ radarr_api_key | default('changeme') }}"
-    quality_profiles:
-      - name: HD-1080p
-        # Add your preferred quality settings here
-    root_folders:
-      - /data/movies
+  radarr:
+    base_url: http://radarr:7878
+    api_key: "{{ arr_api_keys.radarr | default('changeme') }}"
 
-# See https://recyclarr.dev/wiki/yaml-reference/ for more options
+    include:
+      - template: radarr-quality-definition-movie
+      - template: radarr-v4-quality-profile-hd-bluray-web
+      - template: radarr-v4-custom-formats-hd-bluray-web
+
+    quality_profiles:
+      - name: HD Bluray + WEB
+        reset_unmatched_scores:
+          enabled: true

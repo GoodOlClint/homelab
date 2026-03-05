@@ -277,6 +277,7 @@ services:
       - PUID={{ plex_services['recyclarr'].PUID }}
       - PGID={{ plex_services['recyclarr'].PGID }}
       - TZ={{ timezone }}
+      - CRON_SCHEDULE=@daily
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - /opt/plex-services/recyclarr:/config:rw

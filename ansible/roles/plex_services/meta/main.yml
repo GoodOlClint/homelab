@@ -5,6 +5,10 @@ collections:
   - community.docker
   - community.general
   - community.postgresql
+  - devopsarr.sonarr
+  - devopsarr.radarr
+  - devopsarr.lidarr
+  - devopsarr.prowlarr
 
 galaxy_info:
   author: homelab

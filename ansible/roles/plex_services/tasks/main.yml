@@ -456,6 +456,28 @@
     - plex_services
     - config
 
+- name: Wait for *arr service APIs to be ready
+  ansible.builtin.uri:
+    url: "http://localhost:{{ item.port }}/{{ item.path }}"
+    method: GET
+    headers: "{{ item.headers | default({}) }}"
+    status_code: [200, 401]
+  register: api_health
+  until: api_health is succeeded
+  retries: 30
+  delay: 5
+  loop:
+    - { name: sonarr, port: 8989, path: "api/v3/system/status", headers: {} }
+    - { name: radarr, port: 7878, path: "api/v3/system/status", headers: {} }
+    - { name: lidarr, port: 8686, path: "api/v1/system/status", headers: {} }
+    - { name: prowlarr, port: 9696, path: "api/v1/system/status", headers: {} }
+    - { name: sabnzbd, port: 8080, path: "api?mode=version&output=json", headers: {} }
+  loop_control:
+    label: "{{ item.name }} (:{{ item.port }})"
+  tags:
+    - plex_services
+    - validate
+
 - name: Update config files for all containers with a database
   block:
     - name: Update XML config files with Postgres settings
@@ -556,6 +578,297 @@
     - plex_services
     - config
 
+- name: Read SABnzbd API key from config
+  block:
+    - name: Read SABnzbd INI file
+      ansible.builtin.slurp:
+        src: /opt/plex-services/sabnzbd/sabnzbd.ini
+      register: sabnzbd_ini_raw
+
+    - name: Extract SABnzbd API key
+      ansible.builtin.set_fact:
+        arr_api_keys: >-
+          {{
+            arr_api_keys | default({}) |
+            combine({ 'sabnzbd': (sabnzbd_ini_raw.content | b64decode | regex_search('api_key\s*=\s*(\S+)', '\1'))[0] })
+          }}
+      when: sabnzbd_ini_raw.content | b64decode | regex_search('api_key\s*=\s*(\S+)')
+  tags:
+    - plex_services
+    - config
+
+- name: Create media directory structure on data volume
+  community.docker.docker_container:
+    name: create-media-dirs
+    image: alpine:latest
+    command: >
+      sh -c "mkdir -p
+      /data/usenet/complete/tv
+      /data/usenet/complete/movies
+      /data/usenet/complete/music
+      /data/usenet/incomplete
+      /data/tv
+      /data/movies
+      /data/music"
+    volumes:
+      - plex_data:/data
+    state: started
+    auto_remove: true
+    comparisons:
+      '*': ignore
+  tags:
+    - plex_services
+    - config
+    - media
+
+- name: Deploy recyclarr configuration
+  ansible.builtin.template:
+    src: recyclarr.yml.j2
+    dest: /opt/plex-services/recyclarr/recyclarr.yml
+    owner: recyclarr
+    group: "{{ plex_services_group }}"
+    mode: '0640'
+  when:
+    - arr_api_keys is defined
+    - arr_api_keys.sonarr is defined
+    - arr_api_keys.radarr is defined
+  notify: restart plex services docker compose
+  tags:
+    - plex_services
+    - config
+    - recyclarr
+
+- name: Configure SABnzbd download directories and categories
+  when:
+    - arr_api_keys is defined
+    - arr_api_keys.sabnzbd is defined
+  tags:
+    - plex_services
+    - config
+    - sabnzbd
+  block:
+    - name: Set SABnzbd complete download directory
+      ansible.builtin.uri:
+        url: "http://localhost:8080/api"
+        method: GET
+        body_format: form-urlencoded
+        body:
+          mode: set_config
+          section: misc
+          keyword: complete_dir
+          value: /data/usenet/complete
+          apikey: "{{ arr_api_keys.sabnzbd }}"
+          output: json
+        return_content: true
+      register: sabnzbd_complete_dir
+
+    - name: Set SABnzbd incomplete download directory
+      ansible.builtin.uri:
+        url: "http://localhost:8080/api"
+        method: GET
+        body_format: form-urlencoded
+        body:
+          mode: set_config
+          section: misc
+          keyword: download_dir
+          value: /data/usenet/incomplete
+          apikey: "{{ arr_api_keys.sabnzbd }}"
+          output: json
+        return_content: true
+
+    - name: Configure SABnzbd categories
+      ansible.builtin.uri:
+        url: "http://localhost:8080/api"
+        method: GET
+        body_format: form-urlencoded
+        body:
+          mode: set_config
+          section: categories
+          keyword: "{{ item.name }}"
+          name: "{{ item.name }}"
+          dir: "{{ item.dir }}"
+          apikey: "{{ arr_api_keys.sabnzbd }}"
+          output: json
+        return_content: true
+      loop:
+        - { name: tv, dir: tv }
+        - { name: movies, dir: movies }
+        - { name: music, dir: music }
+      loop_control:
+        label: "{{ item.name }}"
+
+- name: Configure *arr root folders
+  when:
+    - arr_api_keys is defined
+  tags:
+    - plex_services
+    - config
+  block:
+    - name: Check existing root folders
+      ansible.builtin.uri:
+        url: "http://localhost:{{ item.port }}/api/{{ item.api }}/rootfolder"
+        method: GET
+        headers:
+          X-Api-Key: "{{ arr_api_keys[item.service] }}"
+        return_content: true
+      register: existing_root_folders
+      loop:
+        - { service: sonarr, port: 8989, api: v3, path: /data/tv }
+        - { service: radarr, port: 7878, api: v3, path: /data/movies }
+        - { service: lidarr, port: 8686, api: v1, path: /data/music }
+      loop_control:
+        label: "{{ item.service }}"
+      when: arr_api_keys[item.service] is defined
+
+    - name: Add root folders to *arr services
+      ansible.builtin.uri:
+        url: "http://localhost:{{ item.item.port }}/api/{{ item.item.api }}/rootfolder"
+        method: POST
+        headers:
+          X-Api-Key: "{{ arr_api_keys[item.item.service] }}"
+        body_format: json
+        body:
+          path: "{{ item.item.path }}"
+        status_code: [200, 201]
+      loop: "{{ existing_root_folders.results }}"
+      loop_control:
+        label: "{{ item.item.service }}: {{ item.item.path }}"
+      when:
+        - item is not skipped
+        - item.json | selectattr('path', 'eq', item.item.path) | list | length == 0
+
+- name: Configure SABnzbd as download client in *arr services
+  when:
+    - arr_api_keys is defined
+    - arr_api_keys.sabnzbd is defined
+  tags:
+    - plex_services
+    - config
+  block:
+    - name: Check existing download clients
+      ansible.builtin.uri:
+        url: "http://localhost:{{ item.port }}/api/{{ item.api }}/downloadclient"
+        method: GET
+        headers:
+          X-Api-Key: "{{ arr_api_keys[item.service] }}"
+        return_content: true
+      register: existing_download_clients
+      loop:
+        - { service: sonarr, port: 8989, api: v3, category: tv }
+        - { service: radarr, port: 7878, api: v3, category: movies }
+        - { service: lidarr, port: 8686, api: v1, category: music }
+      loop_control:
+        label: "{{ item.service }}"
+      when: arr_api_keys[item.service] is defined
+
+    - name: Add SABnzbd download client to *arr services
+      ansible.builtin.uri:
+        url: "http://localhost:{{ item.item.port }}/api/{{ item.item.api }}/downloadclient"
+        method: POST
+        headers:
+          X-Api-Key: "{{ arr_api_keys[item.item.service] }}"
+        body_format: json
+        body:
+          name: SABnzbd
+          implementation: Sabnzbd
+          configContract: SabnzbdSettings
+          protocol: usenet
+          enable: true
+          priority: 1
+          fields:
+            - name: host
+              value: sabnzbd
+            - name: port
+              value: 8080
+            - name: useSsl
+              value: false
+            - name: apiKey
+              value: "{{ arr_api_keys.sabnzbd }}"
+            - name: category
+              value: "{{ item.item.category }}"
+        status_code: [200, 201]
+      loop: "{{ existing_download_clients.results }}"
+      loop_control:
+        label: "{{ item.item.service }}: SABnzbd ({{ item.item.category }})"
+      when:
+        - item is not skipped
+        - item.json | selectattr('name', 'equalto', 'SABnzbd') | list | length == 0
+
+- name: Register *arr applications in Prowlarr
+  when:
+    - arr_api_keys is defined
+    - arr_api_keys.prowlarr is defined
+  tags:
+    - plex_services
+    - config
+    - prowlarr
+  block:
+    - name: Check existing Prowlarr applications
+      ansible.builtin.uri:
+        url: "http://localhost:9696/api/v1/applications"
+        method: GET
+        headers:
+          X-Api-Key: "{{ arr_api_keys.prowlarr }}"
+        return_content: true
+      register: prowlarr_apps
+
+    - name: Add *arr applications to Prowlarr
+      ansible.builtin.uri:
+        url: "http://localhost:9696/api/v1/applications"
+        method: POST
+        headers:
+          X-Api-Key: "{{ arr_api_keys.prowlarr }}"
+        body_format: json
+        body:
+          syncLevel: fullSync
+          name: "{{ item.name }}"
+          implementation: "{{ item.implementation }}"
+          configContract: "{{ item.config_contract }}"
+          fields:
+            - name: prowlarrUrl
+              value: "http://prowlarr:9696"
+            - name: baseUrl
+              value: "http://{{ item.container }}:{{ item.port }}"
+            - name: apiKey
+              value: "{{ arr_api_keys[item.service] }}"
+            - name: syncCategories
+              value: "{{ item.categories }}"
+          tags: []
+        status_code: [200, 201]
+      loop:
+        - name: Sonarr
+          service: sonarr
+          container: sonarr
+          port: 8989
+          implementation: Sonarr
+          config_contract: SonarrSettings
+          categories: [5000, 5010, 5020, 5030, 5040, 5045, 5050]
+        - name: Radarr
+          service: radarr
+          container: radarr
+          port: 7878
+          implementation: Radarr
+          config_contract: RadarrSettings
+          categories: [2000, 2010, 2020, 2030, 2040, 2045, 2050]
+        - name: Lidarr
+          service: lidarr
+          container: lidarr
+          port: 8686
+          implementation: Lidarr
+          config_contract: LidarrSettings
+          categories: [3000, 3010, 3020, 3030, 3040]
+      loop_control:
+        label: "{{ item.name }}"
+      when:
+        - arr_api_keys[item.service] is defined
+        - prowlarr_apps.json | selectattr('name', 'equalto', item.name) | list | length == 0
+
+- name: Flush handlers to apply pending restarts
+  ansible.builtin.meta: flush_handlers
+  tags:
+    - plex_services
+    - config
+
 - name: Correct permissions for plex services directories
   ansible.builtin.file:
     path: "/opt/plex-services/{{ item.key }}"
@@ -581,3 +894,33 @@
     backup_cron_minute: "30"
   when: pbs_backup_enabled | default(true)
   tags: [plex_services, backup, pbs, cron]
+
+# === Manual Configuration Required After First Deployment ===
+#
+# 1. PROWLARR INDEXER (NZBPlanet):
+#    - Open http://<host>:9696 -> Indexers -> Add
+#    - Select NZBPlanet (Newznab preset)
+#    - Enter API key and URL from NZBPlanet account
+#    - Prowlarr will auto-sync the indexer to all registered *arr apps
+#
+# 2. SABNZBD NEWS SERVER:
+#    - Open http://<host>:8080 -> Config -> Servers
+#    - Add your Usenet provider details (host, port, SSL, credentials)
+#
+# 3. BAZARR:
+#    - Open http://<host>:6767 -> Settings -> Languages
+#    - Set subtitle languages, providers, and anti-captcha keys
+#    - Settings -> Sonarr/Radarr: Add connection (localhost ports, API keys auto-read from config)
+#
+# 4. TAUTULLI:
+#    - Open http://<host>:8181 -> Settings -> Plex Media Server
+#    - Add Plex server connection and authentication token
+#
+# 5. JELLYSEERR:
+#    - Open http://<host>:5055 -> first-run wizard
+#    - Connect to Plex, configure Sonarr/Radarr integrations
+#
+# 6. CLOUDFLARE TUNNEL:
+#    - Routes configured in Cloudflare Zero Trust dashboard:
+#      tautulli.clintflix.tv  -> http://tautulli:8181
+#      requests.clintflix.tv  -> http://jellyseerr:5055
