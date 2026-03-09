@@ -125,6 +125,34 @@
     - plex
     - packages
 
+- name: Create plex-services media group
+  ansible.builtin.group:
+    name: plex-services
+    gid: "{{ plex_services_media_gid }}"
+    state: present
+  tags:
+    - plex
+    - users
+
+- name: Add plex user to plex-services media group
+  ansible.builtin.user:
+    name: plex
+    groups: plex-services
+    append: true
+  register: plex_group_changed
+  tags:
+    - plex
+    - users
+
+- name: Restart Plex to pick up new group membership
+  ansible.builtin.systemd:
+    name: plexmediaserver
+    state: restarted
+  when: plex_group_changed is changed
+  tags:
+    - plex
+    - users
+
 - name: Ensure NFS fstab entry and mount.
   ansible.posix.mount:
     backup: true
