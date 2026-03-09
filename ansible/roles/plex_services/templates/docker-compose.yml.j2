@@ -112,10 +112,12 @@ services:
       retries: 3
       start_period: 60s
 
-  # Jellyseerr - Request management for Plex
-  jellyseerr:
-    container_name: jellyseerr
-    image: fallenbagel/jellyseerr:latest
+  # Seerr - Request management for Plex (successor to Jellyseerr/Overseerr)
+  seerr:
+    container_name: seerr
+    image: ghcr.io/seerr-team/seerr:latest
+    init: true
+    user: "{{ plex_services['seerr'].PUID }}:{{ plex_services['seerr'].PGID }}"
     restart: unless-stopped
     ports:
       - 5055:5055
@@ -123,19 +125,16 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      - PUID={{ plex_services['jellyseerr'].PUID }}
-      - PGID={{ plex_services['jellyseerr'].PGID }}
-      - UMASK=002
       - TZ={{ timezone }}
       - DB_TYPE=postgres
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_NAME=jellyseerr
-      - DB_USER={{ plex_services['jellyseerr'].db_user }}
-      - DB_PASS={{ secrets.jellyseerr_db_password }}
+      - DB_NAME=seerr
+      - DB_USER={{ plex_services['seerr'].db_user }}
+      - DB_PASS={{ secrets.seerr_db_password }}
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      - /opt/plex-services/jellyseerr:/app/config:rw
+      - /opt/plex-services/seerr:/app/config:rw
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5055/api/v1/status"]
       interval: 30s
@@ -242,6 +241,9 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /opt/plex-services/sabnzbd:/config:rw
       - plex_data:/data:rw
+{% if scratch_disk_mount is defined %}
+      - {{ scratch_disk_mount }}:/scratch:rw
+{% endif %}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api?mode=version"]
       interval: 30s
@@ -252,7 +254,7 @@ services:
   # Cloudflared - Cloudflare Tunnel
   # Dashboard routing (configured in Cloudflare Zero Trust dashboard):
   #   tautulli.clintflix.tv  -> http://tautulli:8181
-  #   requests.clintflix.tv  -> http://jellyseerr:5055
+  #   requests.clintflix.tv  -> http://seerr:5055
   # To update routes: Cloudflare dashboard > Zero Trust > Networks > Tunnels > Configure
   cloudflared:
     container_name: cloudflared
@@ -273,9 +275,8 @@ services:
     container_name: recyclarr
     image: ghcr.io/recyclarr/recyclarr:latest
     restart: unless-stopped
+    user: "{{ plex_services['recyclarr'].PUID }}:{{ plex_services['recyclarr'].PGID }}"
     environment:
-      - PUID={{ plex_services['recyclarr'].PUID }}
-      - PGID={{ plex_services['recyclarr'].PGID }}
       - TZ={{ timezone }}
       - CRON_SCHEDULE=@daily
     volumes:

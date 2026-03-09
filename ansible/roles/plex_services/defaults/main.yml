@@ -3,3 +3,37 @@
 
 # Default timezone for plex-services containers
 timezone: "America/Chicago"
+
+# *arr services authentication
+plex_services_arr_user: "admin"
+plex_services_arr_auth_method: "Forms"
+plex_services_arr_auth_required: "DisabledForLocalAddresses"
+
+# Usenet servers for SABnzbd
+# Each entry needs matching secrets in Infisical at /plex-services/
+# Example:
+#   plex_services_usenet_servers:
+#     - name: "Primary"
+#       host: "news.example.com"
+#       port: 563
+#       ssl: true
+#       connections: 50
+#       retention: 3600
+#       quota: ""              # e.g. "500G", "" for unlimited
+#       usage_at_start: 0     # bytes already consumed from block account when added
+#       priority: 0
+#       username_key: "usenet_primary_username"
+#       password_key: "usenet_primary_password"
+plex_services_usenet_servers: []
+
+# Indexers for Prowlarr (Newznab)
+# Each entry needs matching API key secret in Infisical at /plex-services/
+# Example:
+#   plex_services_indexers:
+#     - name: "NZBPlanet"
+#       url: "https://nzbplanet.net"
+#       api_path: "/api"
+#       api_key_key: "nzbplanet_api_key"
+#       implementation: "Newznab"
+#       config_contract: "NewznabSettings"
+plex_services_indexers: []

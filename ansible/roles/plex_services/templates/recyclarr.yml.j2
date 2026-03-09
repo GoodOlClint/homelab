@@ -1,33 +1,204 @@
-# Recyclarr configuration — TRaSH Guide quality profiles
+# Recyclarr v8 configuration — TRaSH Guide quality profiles
 # Deployed to /opt/plex-services/recyclarr/recyclarr.yml by Ansible
 # Syncs quality profiles to Sonarr and Radarr on CRON_SCHEDULE (@daily)
+# Configure profiles in inventory/host_vars/plex-services.yml
 
 sonarr:
   sonarr:
     base_url: http://sonarr:8989
-    api_key: "{{ arr_api_keys.sonarr | default('changeme') }}"
+    api_key: "{{ arr_api_keys.sonarr | default(secrets.sonarr_api_key | default('changeme')) }}"
+{% if recyclarr_sonarr is defined %}
+{% if recyclarr_sonarr.delete_old_custom_formats | default(false) %}
+    delete_old_custom_formats: true
+{% endif %}
+{% if recyclarr_sonarr.media_naming is defined %}
 
-    include:
-      - template: sonarr-quality-definition-series
-      - template: sonarr-v4-quality-profile-web-1080p
-      - template: sonarr-v4-custom-formats-web-1080p
+    media_naming:
+{% for key, value in recyclarr_sonarr.media_naming.items() %}
+{% if value is mapping %}
+      {{ key }}:
+{% for subkey, subvalue in value.items() %}
+{% if subvalue is sameas true %}
+        {{ subkey }}: true
+{% elif subvalue is sameas false %}
+        {{ subkey }}: false
+{% else %}
+        {{ subkey }}: {{ subvalue }}
+{% endif %}
+{% endfor %}
+{% else %}
+{% if value is sameas true %}
+      {{ key }}: true
+{% elif value is sameas false %}
+      {{ key }}: false
+{% else %}
+      {{ key }}: {{ value }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endif %}
+
+    quality_definition:
+      type: {{ recyclarr_sonarr.quality_definition }}
+{% if recyclarr_sonarr.quality_profiles is defined %}
 
     quality_profiles:
-      - name: WEB-1080p
+{% for profile in recyclarr_sonarr.quality_profiles %}
+      - trash_id: {{ profile.trash_id }}
+{% if profile.reset_unmatched_scores | default(false) %}
         reset_unmatched_scores:
           enabled: true
+{% endif %}
+{% if profile.min_format_score is defined %}
+        min_format_score: {{ profile.min_format_score }}
+{% endif %}
+{% if profile.qualities is defined %}
+        qualities:
+{% for q in profile.qualities %}
+          - name: {{ q.name }}
+{% if q.qualities is defined %}
+            qualities:
+{% for sub_q in q.qualities %}
+              - {{ sub_q }}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% if recyclarr_sonarr.custom_format_groups is defined %}
+
+    custom_format_groups:
+{% if recyclarr_sonarr.custom_format_groups.add is defined %}
+      add:
+{% for group in recyclarr_sonarr.custom_format_groups.add %}
+        - trash_id: {{ group.trash_id }}
+{% endfor %}
+{% endif %}
+{% if recyclarr_sonarr.custom_format_groups.skip is defined %}
+      skip:
+{% for group in recyclarr_sonarr.custom_format_groups.skip %}
+        - trash_id: {{ group.trash_id }}
+{% endfor %}
+{% endif %}
+{% endif %}
+{% if recyclarr_sonarr.custom_formats is defined %}
+
+    custom_formats:
+{% for cf in recyclarr_sonarr.custom_formats %}
+      - trash_ids:
+{% for id in cf.trash_ids %}
+          - {{ id }}
+{% endfor %}
+{% if cf.assign_scores_to is defined %}
+        assign_scores_to:
+{% for profile in cf.assign_scores_to %}
+          - name: {{ profile.name }}
+{% if profile.score is defined %}
+            score: {{ profile.score }}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endif %}
 
 radarr:
   radarr:
     base_url: http://radarr:7878
-    api_key: "{{ arr_api_keys.radarr | default('changeme') }}"
+    api_key: "{{ arr_api_keys.radarr | default(secrets.radarr_api_key | default('changeme')) }}"
+{% if recyclarr_radarr is defined %}
+{% if recyclarr_radarr.delete_old_custom_formats | default(false) %}
+    delete_old_custom_formats: true
+{% endif %}
+{% if recyclarr_radarr.media_naming is defined %}
 
-    include:
-      - template: radarr-quality-definition-movie
-      - template: radarr-v4-quality-profile-hd-bluray-web
-      - template: radarr-v4-custom-formats-hd-bluray-web
+    media_naming:
+{% for key, value in recyclarr_radarr.media_naming.items() %}
+{% if value is mapping %}
+      {{ key }}:
+{% for subkey, subvalue in value.items() %}
+{% if subvalue is sameas true %}
+        {{ subkey }}: true
+{% elif subvalue is sameas false %}
+        {{ subkey }}: false
+{% else %}
+        {{ subkey }}: {{ subvalue }}
+{% endif %}
+{% endfor %}
+{% else %}
+{% if value is sameas true %}
+      {{ key }}: true
+{% elif value is sameas false %}
+      {{ key }}: false
+{% else %}
+      {{ key }}: {{ value }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endif %}
+
+    quality_definition:
+      type: {{ recyclarr_radarr.quality_definition }}
+{% if recyclarr_radarr.quality_profiles is defined %}
 
     quality_profiles:
-      - name: HD Bluray + WEB
+{% for profile in recyclarr_radarr.quality_profiles %}
+      - trash_id: {{ profile.trash_id }}
+{% if profile.reset_unmatched_scores | default(false) %}
         reset_unmatched_scores:
           enabled: true
+{% endif %}
+{% if profile.min_format_score is defined %}
+        min_format_score: {{ profile.min_format_score }}
+{% endif %}
+{% if profile.qualities is defined %}
+        qualities:
+{% for q in profile.qualities %}
+          - name: {{ q.name }}
+{% if q.qualities is defined %}
+            qualities:
+{% for sub_q in q.qualities %}
+              - {{ sub_q }}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% if recyclarr_radarr.custom_format_groups is defined %}
+
+    custom_format_groups:
+{% if recyclarr_radarr.custom_format_groups.add is defined %}
+      add:
+{% for group in recyclarr_radarr.custom_format_groups.add %}
+        - trash_id: {{ group.trash_id }}
+{% endfor %}
+{% endif %}
+{% if recyclarr_radarr.custom_format_groups.skip is defined %}
+      skip:
+{% for group in recyclarr_radarr.custom_format_groups.skip %}
+        - trash_id: {{ group.trash_id }}
+{% endfor %}
+{% endif %}
+{% endif %}
+{% if recyclarr_radarr.custom_formats is defined %}
+
+    custom_formats:
+{% for cf in recyclarr_radarr.custom_formats %}
+      - trash_ids:
+{% for id in cf.trash_ids %}
+          - {{ id }}
+{% endfor %}
+{% if cf.assign_scores_to is defined %}
+        assign_scores_to:
+{% for profile in cf.assign_scores_to %}
+          - name: {{ profile.name }}
+{% if profile.score is defined %}
+            score: {{ profile.score }}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endif %}
