@@ -180,11 +180,11 @@
     docker_nfs_path: "{{ docker_nfs_src.split(':')[1] }}"
     plex_nfs_path: "/volume1/plex/data"
     radarr_user: 2001
-    radarr_group: 988
+    radarr_group: 2000
     radarr_umask: '002'
     radarr_timezone: "{{ timezone }}"
     sonarr_user: 2002
-    sonarr_group: 988
+    sonarr_group: 2000
     sonarr_umask: '002'
     sonarr_timezone: "{{ timezone }}"
     bazarr_user: 2004

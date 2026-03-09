@@ -1,39 +1,39 @@
 # This file should be renamed to docker-compose.yml.j2
 services:
-#  radarr:
-#    container_name: radarr
-#    image: hotio/radarr:latest
-#    restart: unless-stopped
-#    logging:
-#      driver: json-file
-#    ports:
-#      - 7878:7878
-#    environment:
-#      - PUID={{ radarr_user }}
-#      - PGID={{ radarr_group }}
-#      - UMASK={{ radarr_umask }}
-#      - TZ={{ radarr_timezone }}
-#    volumes:
-#      - /etc/localtime:/etc/localtime:ro
-#      - radarr_config:/config
-#      - plex_media:/data
-#  sonarr:
-#    container_name: sonarr
-#    image: hotio/sonarr:latest
-#    restart: unless-stopped
-#    logging:
-#      driver: json-file
-#    ports:
-#      - 8989:8989
-#    environment:
-#      - PUID={{ sonarr_user }}
-#      - PGID={{ sonarr_group }}
-#      - UMASK={{ sonarr_umask }}
-#      - TZ={{ sonarr_timezone }}
-#    volumes:
-#      - /etc/localtime:/etc/localtime:ro
-#      - sonarr_config:/config
-#      - plex_media:/data
+  radarr:
+    container_name: radarr
+    image: ghcr.io/hotio/radarr:latest
+    restart: unless-stopped
+    logging:
+      driver: json-file
+    ports:
+      - 7878:7878
+    environment:
+      - PUID={{ radarr_user }}
+      - PGID={{ radarr_group }}
+      - UMASK={{ radarr_umask }}
+      - TZ={{ radarr_timezone }}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - radarr_config:/config
+      - plex_media:/data
+  sonarr:
+    container_name: sonarr
+    image: ghcr.io/hotio/sonarr:latest
+    restart: unless-stopped
+    logging:
+      driver: json-file
+    ports:
+      - 8989:8989
+    environment:
+      - PUID={{ sonarr_user }}
+      - PGID={{ sonarr_group }}
+      - UMASK={{ sonarr_umask }}
+      - TZ={{ sonarr_timezone }}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - sonarr_config:/config
+      - plex_media:/data
 #  bazarr:
 #    container_name: bazarr
 #    image: hotio/bazarr:latest
@@ -255,18 +255,18 @@ services:
       - valheim_data:/opt/valheim
 
 volumes:
-#  radarr_config:
-#    driver: local
-#    driver_opts:
-#      type: nfs
-#      o: "addr={{ docker_nfs_server }},nfsvers=4,rsize=1048576,wsize=1048576,hard,intr,timeo=600"
-#      device: ":{{ docker_nfs_path }}/radarr"
-#  sonarr_config:
-#    driver: local
-#    driver_opts:
-#      type: nfs
-#      o: "addr={{ docker_nfs_server }},nfsvers=4,rsize=1048576,wsize=1048576,hard,intr,timeo=600"
-#      device: ":{{ docker_nfs_path }}/sonarr"
+  radarr_config:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: "addr={{ docker_nfs_server }},nfsvers=4,rsize=1048576,wsize=1048576,hard,intr,timeo=600"
+      device: ":{{ docker_nfs_path }}/radarr"
+  sonarr_config:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: "addr={{ docker_nfs_server }},nfsvers=4,rsize=1048576,wsize=1048576,hard,intr,timeo=600"
+      device: ":{{ docker_nfs_path }}/sonarr"
 #  bazarr_config:
 #    driver: local
 #    driver_opts:
@@ -351,9 +351,9 @@ volumes:
       type: nfs
       o: "addr={{ docker_nfs_server }},nfsvers=4,rsize=1048576,wsize=1048576,hard,intr,timeo=600"
       device: ":{{ docker_nfs_path }}/valheim/data"
-#  plex_media:
-#    driver: local
-#    driver_opts:
-#      type: nfs
-#      o: "addr={{ docker_nfs_server }},nfsvers=4,rsize=1048576,wsize=1048576,hard,intr,timeo=600"
-#      device: ":{{ plex_nfs_path }}"
+  plex_media:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: "addr={{ docker_nfs_server }},nfsvers=4,rsize=1048576,wsize=1048576,hard,intr,timeo=600"
+      device: ":{{ plex_nfs_path }}"
