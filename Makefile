@@ -34,7 +34,7 @@ BOOTSTRAP_TF_TARGETS := \
 # Enables: make plan <vm>, make build <vm>, make rebuild <vm>
 # Captures the VM name from the second word in MAKECMDGOALS and creates a no-op
 # target for it so Make doesn't error on the unknown target name.
-ifneq (,$(filter build rebuild plan,$(firstword $(MAKECMDGOALS))))
+ifneq (,$(filter build rebuild plan ansible docker-config,$(firstword $(MAKECMDGOALS))))
   VM := $(wordlist 2,2,$(MAKECMDGOALS))
   ifneq (,$(VM))
     $(eval $(VM):;@:)
@@ -108,8 +108,25 @@ endif
 		ssh-keygen -R "$$VM_IP" 2>/dev/null || true
 	@$(MAKE) build $(VM)
 
+# === Targeted Ansible Deploy ===
+# make ansible <vm>  — run site.yml limited to a single host
+ansible:
+ifndef VM
+	$(error Usage: make ansible <vm-name>)
+endif
+	@echo "Running Ansible for: $(VM)"
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/site.yml --limit $(VM)
+
+# make docker-config <vm> — deploy only docker-compose, config templates, and restart
+docker-config:
+ifndef VM
+	$(error Usage: make docker-config <vm-name>)
+endif
+	@echo "Deploying docker configs for: $(VM)"
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/docker-config.yml --limit $(VM)
+
 # === Ansible Playbooks ===
-.PHONY: ansible-all ansible-infra ansible-services ansible-pfsense docker-deploy update update-dns expand-disk
+.PHONY: ansible ansible-all ansible-infra ansible-services ansible-pfsense docker-deploy docker-config update update-dns expand-disk
 
 ansible-all:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/site.yml
