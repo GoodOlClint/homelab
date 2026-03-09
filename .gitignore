@@ -20,6 +20,8 @@ terraform.tfstate.backup
 group_vars/vault.yml
 group_vars/vault/
 host_vars/vault/
+ansible/inventory/host_vars/*.yml
+!ansible/inventory/host_vars/*.example.yml
 *.vault
 
 # Packer build artifacts and cache

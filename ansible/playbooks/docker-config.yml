@@ -1,0 +1,132 @@
+---
+# Deploy docker-compose and config templates, then restart containers.
+# Skips user/group creation, postgres setup, dns, packages, API config.
+# Usage: make docker-config <vm-name>
+
+- name: Deploy docker configs
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars_files:
+    - ../group_vars/all.yml
+
+  pre_tasks:
+    - name: Load all configuration and secrets
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/full_pre_tasks.yml"
+
+    # The full role's generate_secret.yml stores plex-services secrets flat
+    # (secrets.postgres_password), but infisical_login.yml nests them
+    # (secrets.plex_services.postgres_password). Flatten for template compat.
+    - name: Merge nested plex_services secrets into top level
+      ansible.builtin.set_fact:
+        secrets: "{{ secrets | combine(secrets.plex_services | default({})) }}"
+      when:
+        - secrets is defined
+        - secrets.plex_services is defined
+        - inventory_hostname == 'plex-services'
+
+    - name: Merge nested docker secrets into top level
+      ansible.builtin.set_fact:
+        secrets: "{{ secrets | combine(secrets.docker | default({})) }}"
+      when:
+        - secrets is defined
+        - secrets.docker is defined
+        - inventory_hostname == 'docker'
+
+  tasks:
+    # --- plex-services ---
+    - name: Deploy plex-services docker-compose
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/plex_services/templates/docker-compose.yml.j2"
+        dest: /opt/plex-services/docker-compose.yml
+        owner: root
+        group: root
+        mode: '0600'
+      register: plex_services_compose
+      when: inventory_hostname == 'plex-services'
+
+    - name: Deploy recyclarr configuration
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/plex_services/templates/recyclarr.yml.j2"
+        dest: /opt/plex-services/recyclarr/recyclarr.yml
+        owner: "{{ plex_services['recyclarr'].PUID }}"
+        group: "{{ plex_services_group }}"
+        mode: '0640'
+      register: plex_services_recyclarr
+      when: inventory_hostname == 'plex-services'
+
+    - name: Restart plex-services containers
+      community.docker.docker_compose_v2:
+        project_src: /opt/plex-services
+        state: restarted
+      when:
+        - inventory_hostname == 'plex-services'
+        - plex_services_compose is changed or plex_services_recyclarr is changed
+
+    # --- docker (legacy) ---
+    - name: Deploy docker VM docker-compose
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/docker/templates/docker-compose.yml.j2"
+        dest: /opt/docker-compose.yml
+        owner: root
+        group: root
+        mode: '0600'
+      vars:
+        docker_nfs_server: "{{ docker_nfs_src.split(':')[0] }}"
+        docker_nfs_path: "{{ docker_nfs_src.split(':')[1] }}"
+        plex_nfs_path: "/volume1/plex/data"
+        radarr_user: 2001
+        radarr_group: 2000
+        radarr_umask: '002'
+        radarr_timezone: "{{ timezone }}"
+        sonarr_user: 2002
+        sonarr_group: 2000
+        sonarr_umask: '002'
+        sonarr_timezone: "{{ timezone }}"
+        kiwix_timezone: "{{ timezone }}"
+        boinc_user: 1000
+        boinc_group: 1000
+        boinc_timezone: "{{ timezone }}"
+        doge_node_timezone: "{{ timezone }}"
+      register: docker_compose
+      when: inventory_hostname == 'docker'
+
+    - name: Deploy docker VM .env file
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/docker/templates/docker-env.j2"
+        dest: /opt/.env
+        mode: '0600'
+        owner: root
+        group: root
+      register: docker_env
+      when: inventory_hostname == 'docker'
+
+    - name: Restart docker VM containers
+      community.docker.docker_compose_v2:
+        project_src: /opt
+        files:
+          - docker-compose.yml
+        state: restarted
+      when:
+        - inventory_hostname == 'docker'
+        - docker_compose is changed or docker_env is changed
+
+    # --- lancache ---
+    - name: Deploy lancache docker-compose
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/lancache/templates/docker-compose.yml.j2"
+        dest: /opt/lancache/docker-compose.yml
+        owner: root
+        group: root
+        mode: '0600'
+      register: lancache_compose
+      when: inventory_hostname == 'lancache'
+
+    - name: Restart lancache containers
+      community.docker.docker_compose_v2:
+        project_src: /opt/lancache
+        state: restarted
+      when:
+        - inventory_hostname == 'lancache'
+        - lancache_compose is changed

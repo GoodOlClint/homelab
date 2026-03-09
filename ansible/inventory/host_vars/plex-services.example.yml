@@ -1,0 +1,271 @@
+---
+# Variables for the plex-services host
+# Copy to plex-services.yml and fill in site-specific values.
+# Loaded automatically by Ansible from inventory/host_vars/plex-services.yml
+
+# Plex Services Configuration
+timezone: "America/Chicago"
+
+# Scratch disk for SABnzbd par2 repair (local SSD, faster than NFS)
+# Omit scratch_disk_device to skip scratch disk setup entirely.
+scratch_disk_device: "/dev/vdb"
+scratch_disk_mount: "/mnt/scratch"
+scratch_disk_fstype: "ext4"
+
+# User/Group Configuration for Plex Services
+# UIDs and GID should match your NFS server ownership for shared media.
+plex_services_group: "plex-services"
+plex_services_pgid: 2000
+
+# Service definitions — each entry creates a system user, config directory,
+# and (if db_user/dbs defined) PostgreSQL user and databases.
+plex_services:
+  bazarr:
+    image: "ghcr.io/hotio/bazarr:latest"
+    PUID: 2004
+    PGID: "{{ plex_services_pgid }}"
+    Ports:
+      - 6767:6767
+    config: "config/config.yaml"
+    db_user: "bazarr"
+    dbs:
+      - "bazarr"
+  lidarr:
+    PUID: 2008
+    PGID: "{{ plex_services_pgid }}"
+    Ports:
+      - 8686:8686
+    image: "ghcr.io/hotio/lidarr:latest"
+    config: "config.xml"
+    db_user: "lidarr"
+    dbs:
+      - "lidarr-main"
+      - "lidarr-log"
+  prowlarr:
+    image: "ghcr.io/hotio/prowlarr:latest"
+    PUID: 2005
+    PGID: "{{ plex_services_pgid }}"
+    Ports:
+      - 9696:9696
+    config: "config.xml"
+    db_user: "prowlarr"
+    dbs:
+      - "prowlarr-main"
+      - "prowlarr-log"
+  radarr:
+    image: "ghcr.io/hotio/radarr:latest"
+    PUID: 2001
+    PGID: "{{ plex_services_pgid }}"
+    Ports:
+      - 7878:7878
+    config: "config.xml"
+    db_user: "radarr"
+    dbs:
+      - "radarr-main"
+      - "radarr-log"
+  sabnzbd:
+    image: "ghcr.io/hotio/sabnzbd:latest"
+    PUID: 2003
+    PGID: "{{ plex_services_pgid }}"
+    Ports:
+      - 8080:8080
+    config: "sabnzbd.ini"
+    dbs: []
+  sonarr:
+    image: "ghcr.io/hotio/sonarr:latest"
+    PUID: 2002
+    PGID: "{{ plex_services_pgid }}"
+    Ports:
+      - 8989:8989
+    config: "config.xml"
+    db_user: "sonarr"
+    dbs:
+      - "sonarr-main"
+      - "sonarr-log"
+  tautulli:
+    image: "ghcr.io/tautulli/tautulli:latest"
+    PUID: 2006
+    PGID: "{{ plex_services_pgid }}"
+    Ports:
+      - 8181:8181
+    config: "tautulli.ini"
+    dbs: []
+  seerr:
+    image: "ghcr.io/seerr-team/seerr:latest"
+    PUID: 2009
+    PGID: "{{ plex_services_pgid }}"
+    Ports:
+      - 5055:5055
+    config: "settings.json"
+    db_user: "seerr"
+    dbs:
+      - seerr
+  postgres:
+    image: "postgres:latest"
+    PUID: 2012
+    PGID: "{{ plex_services_pgid }}"
+    Ports:
+      - 5432:5432
+    config: "postgresql.conf"
+    dbs: []
+  recyclarr:
+    image: "ghcr.io/recyclarr/recyclarr:latest"
+    PUID: 2010
+    PGID: "{{ plex_services_pgid }}"
+    config: "recyclarr.yml"
+    dbs: []
+  cloudflared:
+    image: "cloudflare/cloudflared:latest"
+    PUID: 2011
+    PGID: "{{ plex_services_pgid }}"
+    dbs: []
+
+# Recyclarr v8 Configuration — TRaSH Guide quality profiles
+# Use `docker exec recyclarr recyclarr list quality-profiles sonarr` for available trash IDs
+# Use `docker exec recyclarr recyclarr list custom-format-groups sonarr` for available group IDs
+# Use `docker exec recyclarr recyclarr list custom-formats sonarr` to verify custom format IDs
+recyclarr_sonarr:
+  quality_definition: series
+  delete_old_custom_formats: true
+  media_naming:
+    series: plex-tvdb       # or plex-imdb, jellyfin, emby
+    season: default
+    episodes:
+      rename: true
+      standard: default
+      daily: default
+      anime: default
+  quality_profiles:
+    - trash_id: REPLACE_ME  # e.g. 9d142234e45d6143785ac55f5a9e8dc9 for WEB-1080p (Alternative)
+      reset_unmatched_scores: true
+      # Optional: override quality order within the profile
+      # qualities:
+      #   - name: WEB 1080p
+      #     qualities:
+      #       - WEBDL-1080p
+      #       - WEBRip-1080p
+      #   - name: Bluray-1080p
+      #   - name: SDTV
+  # Optional: add TRaSH custom format groups (e.g. Golden Rule)
+  # custom_format_groups:
+  #   add:
+  #     - trash_id: REPLACE_ME  # e.g. Golden Rule HD group
+  # Optional: manual custom format scoring
+  # custom_formats:
+  #   - trash_ids:
+  #       - REPLACE_ME  # e.g. BR-DISK
+  #     assign_scores_to:
+  #       - name: WEB-1080p
+  #         score: -10000
+
+recyclarr_radarr:
+  quality_definition: movie
+  delete_old_custom_formats: true
+  media_naming:
+    folder: plex-tmdb       # or plex-imdb, jellyfin, emby
+    movie:
+      rename: true
+      standard: plex-tmdb
+  quality_profiles:
+    - trash_id: REPLACE_ME  # e.g. d1d67249d3890e49bc12e275d989a7e9 for HD Bluray + WEB
+      reset_unmatched_scores: true
+    # - trash_id: REPLACE_ME  # e.g. UHD Bluray + WEB (add second profile if desired)
+    #   reset_unmatched_scores: true
+  # custom_format_groups:
+  #   add:
+  #     - trash_id: REPLACE_ME  # e.g. Golden Rule group
+  # custom_formats:
+  #   - trash_ids:
+  #       - REPLACE_ME  # e.g. BR-DISK
+  #     assign_scores_to:
+  #       - name: HD Bluray + WEB
+  #         score: -10000
+  #       - name: UHD Bluray + WEB
+  #         score: -10000
+
+# Media paths
+plex_media_path: "/opt/plex-services/plex"
+
+# PostgreSQL Configuration for Plex Services
+postgres_user: "qstick"
+postgres_default_db: "qstick"
+
+# Backup Configuration for Plex Services
+postgres_backup_enabled: true
+postgres_backup_schedule: "0 2 * * *"  # Daily at 2 AM
+postgres_backup_retention_days: 30
+postgres_backup_remote_path: "plex_services/postgres_backups"
+postgres_pbs_repository: "REPLACE_ME"   # e.g. backup@pbs!token@host:datastore
+postgres_pbs_namespace: "databases"
+
+# Service hosts (for Bazarr integration — usually localhost since all on same VM)
+sonarr_host: "127.0.0.1"
+sonarr_port: 8989
+radarr_host: "127.0.0.1"
+radarr_port: 7878
+
+# Bazarr Integration Settings
+bazarr_use_sonarr: true
+bazarr_use_radarr: true
+bazarr_use_plex: true
+
+# Bazarr Subtitle Providers
+# Credentials referenced by secret keys from Infisical /plex-services/
+# Provider names must be lowercase internal IDs (not display names).
+# Use `curl http://localhost:6767/api/system/providers` to list available IDs.
+# Settings are key-value pairs passed as settings-<provider>-<key>=<value>
+bazarr_providers:
+  - name: opensubtitlescom
+    username_key: "opensubtitlescom_username"    # Infisical secret key
+    password_key: "opensubtitlescom_password"    # Infisical secret key
+    settings:
+      use_hash: "true"
+      include_ai_translated: "false"
+      include_machine_translated: "false"
+  - name: gestdown           # Free, no auth required
+  - name: supersubtitles     # Free, no auth required
+  - name: tvsubtitles        # Free, no auth required
+
+# Seerr Configuration (request management, successor to Jellyseerr)
+# Plex server address from Seerr's container perspective (must be routable from Docker bridge)
+seerr_plex_hostname: "REPLACE_ME"       # e.g. 172.16.40.108 (Plex VM IP on services VLAN)
+seerr_plex_port: 32400
+seerr_plex_use_ssl: true
+seerr_plex_libraries:
+  - "Movies"
+  - "TV Shows"
+seerr_application_url: "REPLACE_ME"     # e.g. https://requests.example.com
+seerr_plex_web_app_url: "REPLACE_ME"    # e.g. https://plex.example.com:32400/web
+seerr_radarr_profile: "HD Bluray + WEB" # Must match a Radarr quality profile name
+seerr_sonarr_profile: "WEB-1080p"       # Must match a Sonarr quality profile name
+
+# Tautulli Configuration
+tautulli_base_url: "REPLACE_ME"         # e.g. https://tautulli.example.com
+
+# Prowlarr Configuration
+prowlarr_minimum_seeders: 1
+prowlarr_grab_limit: 26      # Per 24 hours
+prowlarr_query_limit: 256    # Per 24 hours
+
+# Usenet servers for SABnzbd
+# Secrets referenced by username_key/password_key from Infisical /plex-services/
+plex_services_usenet_servers:
+  - name: "REPLACE_ME"                  # Display name (e.g. "NewsHosting")
+    host: "REPLACE_ME"                  # e.g. news.newshosting.com
+    port: 563
+    ssl: true
+    connections: 50
+    retention: 3600                     # Days of retention
+    quota: ""                           # e.g. "500G" for block accounts, "" for unlimited
+    usage_at_start: 0                   # Bytes already consumed from block account when added
+    priority: 0                         # 0 = primary, 1 = backup
+    username_key: "REPLACE_ME"          # Infisical secret key for username
+    password_key: "REPLACE_ME"          # Infisical secret key for password
+
+# Indexers for Prowlarr (Newznab-compatible)
+# API keys referenced by api_key_key from Infisical /plex-services/
+plex_services_indexers:
+  - name: "REPLACE_ME"                  # Display name (e.g. "NZBGeek")
+    url: "REPLACE_ME"                   # e.g. https://api.nzbgeek.info
+    api_path: "/api"
+    api_key_key: "REPLACE_ME"           # Infisical secret key for API key
