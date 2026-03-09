@@ -103,6 +103,7 @@ locals {
       cpu_cores    = 4
       memory_mb    = 8192
       disk_size_gb = 256
+      extra_disks  = [{ size_gb = 100 }] # Scratch disk for SABnzbd par2 repair
     },
     {
       name         = "nvidia-licensing"

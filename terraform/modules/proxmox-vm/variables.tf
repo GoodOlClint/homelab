@@ -64,6 +64,11 @@ variable "vm_configurations" {
     fqdn         = optional(string, null)        # Custom FQDN (uses name.domain_suffix if null)
     needs_gpu    = optional(bool, false)         # Enable GPU passthrough (requires gpu_mapping configuration)
     protected    = optional(bool, false)         # Proxmox VM protection — prevents accidental deletion
+    # Additional disks (beyond the primary OS disk)
+    extra_disks = optional(list(object({
+      size_gb  = number                    # Disk size in GB
+      storage  = optional(string, null)    # Storage pool (uses primary_disk_storage if null)
+    })), [])
     # Additional cloud-init or VM configuration options
     extra_config = optional(map(string), {})
   }))

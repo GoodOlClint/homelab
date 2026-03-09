@@ -199,6 +199,19 @@ resource "proxmox_virtual_environment_vm" "vms" {
     size         = each.value.disk_size_gb
   }
 
+  dynamic "disk" {
+    for_each = each.value.extra_disks
+    content {
+      datastore_id = coalesce(disk.value.storage, var.primary_disk_storage)
+      interface    = "virtio${disk.key + 1}"
+      iothread     = true
+      discard      = "on"
+      cache        = "none"
+      size         = disk.value.size_gb
+      file_format  = "raw"
+    }
+  }
+
   # Conditional cloud-init initialization (only when not using Packer)
   dynamic "initialization" {
     for_each = var.use_packer_template ? [] : [1]
