@@ -1,6 +1,6 @@
 ---
 # Full pre_tasks for all main playbooks.
-# Loads: local overrides, bootstrap SOPS, secrets (Infisical or SOPS), VLANs, prefixes.
+# Loads: local overrides, bootstrap SOPS, secrets (Infisical), VLANs, prefixes.
 #
 # Optional variables:
 #   skip_vlan_computation: true  — skip VLAN prefix computation (e.g., for VPS playbook)

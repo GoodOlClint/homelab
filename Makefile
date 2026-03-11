@@ -42,7 +42,7 @@ ifneq (,$(filter build rebuild plan ansible docker-config,$(firstword $(MAKECMDG
 endif
 
 # === Core Operations ===
-.PHONY: all apply plan init terraform-apply terraform-bootstrap inventory bootstrap ansible-bootstrap build rebuild
+.PHONY: all apply plan init terraform-apply terraform-bootstrap inventory bootstrap ansible-bootstrap build rebuild rebuild-infisical
 
 all: apply
 
@@ -107,6 +107,26 @@ endif
 	@VM_IP=$$(python3 -c "import yaml; print(yaml.safe_load(open('ansible/inventory/vms.yaml'))['all']['hosts']['$(VM)']['ansible_host'])"); \
 		ssh-keygen -R "$$VM_IP" 2>/dev/null || true
 	@$(MAKE) build $(VM)
+
+# Rebuild Infisical VM — destroys, recreates, and re-bootstraps.
+# Stale credential detection in bootstrap_infisical_setup.yml handles
+# re-creating the admin account, project, identity, and folder structure.
+rebuild-infisical:
+	@echo "Destroying Infisical VM..."
+	@cd terraform && terraform init && terraform destroy -no-color -auto-approve \
+		-target='module.vms.proxmox_virtual_environment_vm.vms["infisical"]' \
+		-var 'unprotect=true'
+	@VM_IP=$$($(VENV_PYTHON) -c "import yaml; print(yaml.safe_load(open('ansible/inventory/vms.yaml'))['all']['hosts']['infisical']['ansible_host'])"); \
+		ssh-keygen -R "$$VM_IP" 2>/dev/null || true
+	@echo "Rebuilding Infisical VM..."
+	@cd terraform && terraform apply -no-color -auto-approve \
+		-target=module.network \
+		-target='module.vms.proxmox_virtual_environment_vm.vms["infisical"]' \
+		-target='module.vms.proxmox_virtual_environment_file.user_data["infisical"]' \
+		-target='module.vms.proxmox_virtual_environment_file.network_data["infisical"]'
+	@$(MAKE) inventory
+	@echo "Re-bootstrapping Infisical (skipping AdGuard)..."
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/bootstrap.yml --skip-tags adguard
 
 # === Targeted Ansible Deploy ===
 # make ansible <vm>  — run site.yml limited to a single host

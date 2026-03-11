@@ -192,6 +192,7 @@ Pre_tasks compute these facts from `network-data/vlans.yaml`:
 | `make update` | apt upgrade + docker pull on all hosts |
 | `make vps-deploy` | 3-phase: terraform (SSH open) → ansible → terraform (SSH closed) |
 | `make vps-rebuild` | Destroy + rebuild VPS |
+| `make rebuild-infisical` | Destroy + rebuild Infisical VM (handles stale credentials) |
 | `make infisical-seed` | Restore Infisical from backup (disaster recovery only) |
 | `make infisical-backup` | Export Infisical → SOPS backup |
 | `make refresh-identity` | Refresh Infisical machine identities (supports `LIMIT=`, `FORCE=true`) |

@@ -7,19 +7,53 @@
 # Saves: all IDs and credentials back to bootstrap.sops.yml
 # Seeds: runtime secrets from secrets.sops.yml into Infisical
 
-# --- Idempotency: skip if already fully configured ---
+# --- Idempotency: skip if already fully configured AND credentials are valid ---
 
-- name: Check if Infisical is already fully configured
+- name: Check if Infisical credentials are present in SOPS
   ansible.builtin.set_fact:
-    _infisical_already_configured: >-
+    _infisical_creds_present: >-
       {{ bootstrap.infisical_client_id | default('REPLACE_ME') != 'REPLACE_ME'
          and bootstrap.infisical_client_secret | default('REPLACE_ME') != 'REPLACE_ME'
          and bootstrap_config.infisical_project_id | default('REPLACE_ME') != 'REPLACE_ME'
          and bootstrap_config.infisical_org_id | default('REPLACE_ME') != 'REPLACE_ME' }}
 
+- name: Validate existing credentials against Infisical
+  ansible.builtin.uri:
+    url: "{{ bootstrap_config.infisical_url | default('') }}/api/v1/auth/universal-auth/login"
+    method: POST
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body:
+      clientId: "{{ bootstrap.infisical_client_id }}"
+      clientSecret: "{{ bootstrap.infisical_client_secret }}"
+    status_code: [200, 401, 403]
+    timeout: 5
+  register: _cred_check
+  delegate_to: localhost
+  become: false
+  when: _infisical_creds_present | bool and (bootstrap_config.infisical_url | default('')) != ''
+  failed_when: false
+  ignore_errors: true
+
+- name: Detect stale credentials after Infisical rebuild
+  ansible.builtin.set_fact:
+    _infisical_already_configured: >-
+      {{ _infisical_creds_present | bool
+         and (_cred_check is not skipped)
+         and (_cred_check is succeeded)
+         and ((_cred_check.status | default(0)) == 200) }}
+
+- name: Warn about stale credentials
+  ansible.builtin.debug:
+    msg: >-
+      Existing Infisical credentials in bootstrap.sops.yml are invalid (HTTP {{ _cred_check.status | default('N/A') }}).
+      This usually means Infisical was rebuilt. Re-running full bootstrap setup.
+  when: _infisical_creds_present | bool and not (_infisical_already_configured | bool)
+
 - name: Skip configuration if already complete
   ansible.builtin.debug:
-    msg: "Infisical already configured (client_id, project_id, org_id present). Skipping."
+    msg: "Infisical already configured (credentials validated). Skipping."
   when: _infisical_already_configured | bool
 
 # --- Pre-flight checks ---
