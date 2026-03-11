@@ -1,0 +1,243 @@
+---
+- Media:
+{% if hostvars['plex'] is defined %}
+    - Plex:
+        icon: plex.svg
+        href: https://plex.clintflix.tv:32400/web
+        description: Media Server
+        widget:
+          type: plex
+          url: https://{{ hostvars['plex']['service_ip'] }}:32400
+          key: {{ '{{HOMEPAGE_VAR_PLEX_TOKEN}}' }}
+{% endif %}
+{% if hostvars['plex-services'] is defined %}
+    - Tautulli:
+        icon: tautulli.svg
+        href: https://tautulli.clintflix.tv
+        description: Plex Statistics
+        widget:
+          type: tautulli
+          url: http://{{ hostvars['plex-services']['service_ip'] }}:8181
+          key: {{ '{{HOMEPAGE_VAR_TAUTULLI_KEY}}' }}
+    - Seerr:
+        icon: jellyseerr.svg
+        href: https://request.clintflix.tv
+        description: Media Requests
+        widget:
+          type: jellyseerr
+          url: http://{{ hostvars['plex-services']['service_ip'] }}:5055
+          key: {{ '{{HOMEPAGE_VAR_SEERR_KEY}}' }}
+{% endif %}
+
+- Downloads:
+{% if hostvars['plex-services'] is defined %}
+    - Sonarr:
+        icon: sonarr.svg
+        href: http://{{ hostvars['plex-services']['service_ip'] }}:8989
+        description: TV Series
+        widget:
+          type: sonarr
+          url: http://{{ hostvars['plex-services']['service_ip'] }}:8989
+          key: {{ '{{HOMEPAGE_VAR_SONARR_KEY}}' }}
+    - Radarr:
+        icon: radarr.svg
+        href: http://{{ hostvars['plex-services']['service_ip'] }}:7878
+        description: Movies
+        widget:
+          type: radarr
+          url: http://{{ hostvars['plex-services']['service_ip'] }}:7878
+          key: {{ '{{HOMEPAGE_VAR_RADARR_KEY}}' }}
+    - Lidarr:
+        icon: lidarr.svg
+        href: http://{{ hostvars['plex-services']['service_ip'] }}:8686
+        description: Music
+        widget:
+          type: lidarr
+          url: http://{{ hostvars['plex-services']['service_ip'] }}:8686
+          key: {{ '{{HOMEPAGE_VAR_LIDARR_KEY}}' }}
+    - Prowlarr:
+        icon: prowlarr.svg
+        href: http://{{ hostvars['plex-services']['service_ip'] }}:9696
+        description: Indexer Manager
+        widget:
+          type: prowlarr
+          url: http://{{ hostvars['plex-services']['service_ip'] }}:9696
+          key: {{ '{{HOMEPAGE_VAR_PROWLARR_KEY}}' }}
+    - Bazarr:
+        icon: bazarr.svg
+        href: http://{{ hostvars['plex-services']['service_ip'] }}:6767
+        description: Subtitles
+        widget:
+          type: bazarr
+          url: http://{{ hostvars['plex-services']['service_ip'] }}:6767
+          key: {{ '{{HOMEPAGE_VAR_BAZARR_KEY}}' }}
+    - SABnzbd:
+        icon: sabnzbd.svg
+        href: http://{{ hostvars['plex-services']['service_ip'] }}:8080
+        description: Usenet Downloads
+        widget:
+          type: sabnzbd
+          url: http://{{ hostvars['plex-services']['service_ip'] }}:8080
+          key: {{ '{{HOMEPAGE_VAR_SABNZBD_KEY}}' }}
+{% endif %}
+
+- Monitoring:
+{% if hostvars['openobserve'] is defined %}
+    - Grafana:
+        icon: grafana.svg
+        href: http://{{ hostvars['openobserve']['service_ip'] }}:3000
+        description: Dashboards
+        widget:
+          type: grafana
+          url: http://{{ hostvars['openobserve']['service_ip'] }}:3000
+          username: admin
+          password: {{ '{{HOMEPAGE_VAR_GRAFANA_PASSWORD}}' }}
+    - Prometheus:
+        icon: prometheus.svg
+        href: http://{{ hostvars['openobserve']['service_ip'] }}:9090
+        description: Metrics
+        widget:
+          type: prometheus
+          url: http://{{ hostvars['openobserve']['service_ip'] }}:9090
+    - OpenObserve:
+        icon: sh-openobserve.svg
+        href: http://{{ hostvars['openobserve']['service_ip'] }}:{{ openobserve_listen_port }}
+        description: Log Management
+    - Uptime Kuma:
+        icon: uptime-kuma.svg
+        href: http://{{ hostvars['openobserve']['service_ip'] }}:3001
+        description: Status Monitoring
+        # Widget requires a status page slug — create a status page in Uptime Kuma first,
+        # then set slug to the URL path after /status/ (e.g. slug: homelab)
+        # widget:
+        #   type: uptimekuma
+        #   url: http://{{ hostvars['openobserve']['service_ip'] }}:3001
+        #   slug: homelab
+{% endif %}
+
+- Infrastructure:
+    - Portainer:
+        icon: portainer.svg
+        href: https://portainer.{{ dns_zones.vlan100.zone }}
+        description: Container Management
+        # TODO: Complete Portainer setup before widget will work:
+        #   1. Restart portainer container (resets 5-min admin creation window)
+        #   2. Navigate to https://portainer.{{ dns_zones.vlan100.zone }} and create admin account
+        #   3. Create API key: User Settings → Access Tokens
+        #   4. Store key in Infisical: /homepage/PORTAINER_API_KEY
+        #   5. Run: make docker-config homepage
+        widget:
+          type: portainer
+          url: http://{{ hostvars['homepage']['service_ip'] }}:{{ portainer_port }}
+          env: 1
+          key: {{ '{{HOMEPAGE_VAR_PORTAINER_KEY}}' }}
+    - AdGuard Home:
+        icon: adguard-home.svg
+{% if hostvars['adguard'] is defined %}
+        href: http://{{ hostvars['adguard']['service_ip'] }}:3000
+        description: DNS Filtering
+        widget:
+          type: adguard
+          url: http://{{ hostvars['adguard']['service_ip'] }}:3000
+          username: {{ '{{HOMEPAGE_VAR_ADGUARD_USERNAME}}' }}
+          password: {{ '{{HOMEPAGE_VAR_ADGUARD_PASSWORD}}' }}
+{% endif %}
+    - Proxmox VE:
+        icon: proxmox.svg
+        href: https://{{ proxmox_host }}:8006
+        description: Hypervisor
+        widget:
+          type: proxmox
+          url: https://{{ proxmox_host }}:8006
+          username: {{ proxmox_api_token_id | default('monitoring@pve!monitoring') }}
+          password: {{ '{{HOMEPAGE_VAR_PROXMOX_TOKEN_SECRET}}' }}
+{% if hostvars['proxmox_backup'] is defined or hostvars['proxmox-backup'] is defined %}
+{% set pbs_host = hostvars['proxmox-backup']['service_ip'] | default(hostvars['proxmox_backup']['service_ip'] | default('')) %}
+{% if pbs_host | length > 0 %}
+    - Proxmox Backup:
+        icon: proxmox.svg
+        href: https://{{ pbs_host }}:8007
+        description: Backup Server
+        widget:
+          type: proxmoxbackupserver
+          url: https://{{ pbs_host }}:8007
+          username: {{ pbs_monitoring_user | default('monitoring@pbs!monitoring-token') }}
+          password: {{ '{{HOMEPAGE_VAR_PROXMOX_BACKUP_PASSWORD}}' }}
+{% endif %}
+{% endif %}
+{% if hostvars['unifi'] is defined %}
+    - UniFi:
+        icon: unifi.svg
+        href: https://{{ hostvars['unifi']['service_ip'] }}:11443
+        description: Network Controller
+        widget:
+          type: unifi
+          url: https://{{ hostvars['unifi']['service_ip'] }}:11443
+          username: {{ '{{HOMEPAGE_VAR_UNIFI_USERNAME}}' }}
+          password: {{ '{{HOMEPAGE_VAR_UNIFI_PASSWORD}}' }}
+{% endif %}
+{# Authentik — commented out until deployed on docker VM #}
+{# {% if hostvars['docker'] is defined %}
+    - Authentik:
+        icon: authentik.svg
+        href: https://{{ hostvars['docker']['service_ip'] }}:9443
+        description: Identity Provider
+        widget:
+          type: authentik
+          url: https://{{ hostvars['docker']['service_ip'] }}:9443
+          key: {{ '{{HOMEPAGE_VAR_AUTHENTIK_TOKEN}}' }}
+{% endif %} #}
+{% if hostvars['infisical'] is defined %}
+    - Infisical:
+        icon: infisical.svg
+        href: http://{{ hostvars['infisical']['service_ip'] }}:8080
+        description: Secrets Management
+{% endif %}
+    - pfSense:
+        icon: pfsense.svg
+        href: https://{{ pfsense_mgmt_ip | default('172.16.10.1') }}
+        description: Firewall / Gateway
+        # Widget requires pfsense-api package — install, then store creds in Infisical /homepage
+        # widget:
+        #   type: pfsense
+        #   url: https://{{ pfsense_mgmt_ip | default('172.16.10.1') }}
+        #   username: {{ '{{HOMEPAGE_VAR_PFSENSE_USERNAME}}' }}
+        #   password: {{ '{{HOMEPAGE_VAR_PFSENSE_PASSWORD}}' }}
+        #   wan: igb0
+    - Synology NAS:
+        icon: synology-dsm.svg
+        href: https://{{ synology_host }}:5001
+        description: Network Storage
+        # Widget requires admin-group account — store creds in Infisical /homepage
+        # widget:
+        #   type: diskstation
+        #   url: https://{{ synology_host }}:5001
+        #   username: {{ '{{HOMEPAGE_VAR_SYNOLOGY_USERNAME}}' }}
+        #   password: {{ '{{HOMEPAGE_VAR_SYNOLOGY_PASSWORD}}' }}
+        #   volume: volume_1
+{% if home_assistant_enabled | default(false) and home_assistant_host is defined %}
+    - Home Assistant:
+        icon: home-assistant.svg
+        href: http{{ 's' if home_assistant_ssl else '' }}://{{ home_assistant_host }}:{{ home_assistant_port }}
+        description: Home Automation
+        # widget:
+        #   type: homeassistant
+        #   url: http{{ 's' if home_assistant_ssl else '' }}://{{ home_assistant_host }}:{{ home_assistant_port }}
+        #   key: {{ '{{HOMEPAGE_VAR_HOMEASSISTANT_KEY}}' }}
+{% endif %}
+
+- Other:
+{% if hostvars['docker'] is defined %}
+    - Kiwix:
+        icon: kiwix.svg
+        href: http://{{ hostvars['docker']['service_ip'] }}:8090
+        description: Offline Wikipedia
+    - BOINC:
+        icon: mdi-atom
+        href: https://{{ hostvars['docker']['service_ip'] }}:7081
+        description: Distributed Computing
+    - Dogecoin Node:
+        icon: si-dogecoin
+        href: http://{{ hostvars['docker']['service_ip'] }}:3000
+        description: Crypto Full Node
+{% endif %}
