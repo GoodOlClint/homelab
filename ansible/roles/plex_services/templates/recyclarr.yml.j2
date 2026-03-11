@@ -6,7 +6,7 @@
 sonarr:
   sonarr:
     base_url: http://sonarr:8989
-    api_key: "{{ arr_api_keys.sonarr | default(secrets.sonarr_api_key | default('changeme')) }}"
+    api_key: !secret sonarr_api_key
 {% if recyclarr_sonarr is defined %}
 {% if recyclarr_sonarr.delete_old_custom_formats | default(false) %}
     delete_old_custom_formats: true
@@ -106,7 +106,7 @@ sonarr:
 radarr:
   radarr:
     base_url: http://radarr:7878
-    api_key: "{{ arr_api_keys.radarr | default(secrets.radarr_api_key | default('changeme')) }}"
+    api_key: !secret radarr_api_key
 {% if recyclarr_radarr is defined %}
 {% if recyclarr_radarr.delete_old_custom_formats | default(false) %}
     delete_old_custom_formats: true
