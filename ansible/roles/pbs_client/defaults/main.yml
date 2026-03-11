@@ -6,4 +6,4 @@ pbs_server_port: 8007
 pbs_datastore: "synology"
 pbs_username: "backup@pbs"
 pbs_token_name: "backup-token"
-# secrets.pbs_backup_token and pbs_fingerprint should be defined in vars
+# secrets.pbs_backup_token and secrets.pbs_fingerprint loaded from Infisical /shared
