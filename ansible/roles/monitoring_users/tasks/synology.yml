@@ -8,7 +8,7 @@
     body_format: form-urlencoded
     validate_certs: false
     url_username: "{{ synology_admin_user | default('admin') }}"
-    url_password: "{{ secrets.synology_admin_password }}"
+    url_password: "{{ secrets.infrastructure.synology_admin_password }}"
     force_basic_auth: true
   register: synology_login
   no_log: true

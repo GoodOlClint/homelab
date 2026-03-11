@@ -26,6 +26,8 @@
       | tr -d '";'
     secret_comment: "BIND9 TSIG key for pfSense DHCP dynamic DNS updates (hmac-sha256) — auto-generated"
     secret_run_on: "{{ inventory_hostname }}"
+    secret_infisical_path: "/infrastructure"
+    secret_dict_path: "infrastructure"
   tags: [bind9, dns, secrets]
 
 - name: Configure named.conf.options

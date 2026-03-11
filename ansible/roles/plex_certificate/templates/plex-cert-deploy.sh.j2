@@ -12,7 +12,7 @@ fi
 
 CERT_DIR="{{ plex_cert_dir }}"
 PFX_PATH="{{ plex_pfx_path }}"
-PFX_PASS="${PLEX_CERT_PFX_PASSWORD:-{{ secrets.plex_cert_pfx_password }}}"
+PFX_PASS="${PLEX_CERT_PFX_PASSWORD:-{{ secrets.plex.plex_cert_pfx_password }}}"
 
 # Convert PEM to PKCS#12
 openssl pkcs12 -export \

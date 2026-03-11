@@ -2,7 +2,7 @@
 // TSIG key for pfSense DHCP dynamic DNS updates (RFC 2136)
 key "dhcp-update-key" {
     algorithm hmac-sha256;
-    secret "{{ secrets.bind_tsig_key_secret }}";
+    secret "{{ secrets.infrastructure.bind_tsig_key_secret }}";
 };
 
 // Forward zones — one per VLAN served by BIND

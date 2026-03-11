@@ -10,4 +10,4 @@ pfsense_dhcp_dns_servers:
 # RFC 2136 dynamic DNS update settings
 pfsense_ddns_key_name: "dhcp-update-key"
 pfsense_ddns_algorithm: "hmac-sha256"
-pfsense_ddns_key_secret: "{{ secrets.bind_tsig_key_secret }}"
+pfsense_ddns_key_secret: "{{ secrets.infrastructure.bind_tsig_key_secret | default('') }}"

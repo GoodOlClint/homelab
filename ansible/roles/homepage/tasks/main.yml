@@ -1,0 +1,115 @@
+---
+# Phase 1: Install Docker
+- name: Install Docker
+  ansible.builtin.import_role:
+    name: geerlingguy.docker
+  tags: [homepage, docker]
+
+# Phase 2: Configure Docker syslog logging
+- name: Configure Docker syslog logging
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/configure_docker_logging.yml"
+  tags: [homepage, docker, logging]
+
+# Phase 3: Install avahi-daemon and dnsutils
+- name: Install avahi-daemon and dnsutils
+  ansible.builtin.apt:
+    name:
+      - avahi-daemon
+      - dnsutils
+    state: present
+    update_cache: true
+  tags: [homepage, mdns, dns]
+
+# Phase 4: Configure mDNS hostname
+- name: Set avahi hostname to homepage
+  ansible.builtin.lineinfile:
+    path: /etc/avahi/avahi-daemon.conf
+    regexp: '^host-name='
+    line: 'host-name=homepage'
+    insertafter: '^\[server\]'
+  notify: restart avahi
+  tags: [homepage, mdns]
+
+- name: Enable and start avahi-daemon
+  ansible.builtin.systemd:
+    name: avahi-daemon
+    state: started
+    enabled: true
+  tags: [homepage, mdns]
+
+# Phase 5: Create directories
+- name: Create homepage directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - "{{ homepage_base_dir }}"
+    - "{{ homepage_config_dir }}"
+  tags: [homepage, config]
+
+# Phase 6: Template docker-compose
+- name: Template docker-compose.yml
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ homepage_base_dir }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: '0600'
+  notify: restart homepage compose
+  tags: [homepage, compose]
+
+# Phase 7: Template Caddyfile
+- name: Template Caddyfile
+  ansible.builtin.template:
+    src: Caddyfile.j2
+    dest: "{{ homepage_base_dir }}/Caddyfile"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart homepage compose
+  tags: [homepage, caddy]
+
+# Phase 8: Template Homepage config files
+- name: Template Homepage config files
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "{{ homepage_config_dir }}/{{ item }}"
+    owner: root
+    group: root
+    mode: '0644'
+  loop:
+    - services.yaml
+    - settings.yaml
+    - widgets.yaml
+    - bookmarks.yaml
+    - docker.yaml
+  notify: restart homepage compose
+  tags: [homepage, config]
+
+# Phase 9: Ensure Docker is started and enabled
+- name: Ensure Docker is started and enabled
+  ansible.builtin.systemd:
+    name: docker
+    state: started
+    enabled: true
+  tags: [homepage, docker]
+
+# Phase 10: Deploy containers
+- name: Deploy homepage containers
+  community.docker.docker_compose_v2:
+    project_src: "{{ homepage_base_dir }}"
+    state: present
+  tags: [homepage, compose, deploy]
+
+# --- DNS records ---
+# TODO: Add authoritative BIND9 DNS records (home.* and portainer.*) via nsupdate
+# once dynamic DNS update issues are resolved. For now, homepage VM gets a
+# standard AdGuard rewrite like other VMs (see adguardhome.yaml.j2).
+
+# --- API key extraction and infrastructure widget blocks removed (v2.2) ---
+# API keys are now written to /plex-services by the plex_services role.
+# Homepage reads them directly from source folders via multi-folder agent template.
+# Non-secret config values (proxmox_token_id, etc.) are Ansible template vars.
