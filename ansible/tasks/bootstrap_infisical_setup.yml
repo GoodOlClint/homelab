@@ -377,35 +377,40 @@
   infisical.vault.login:
     url: "{{ _infisical_url }}"
     auth_method: universal_auth
-    universal_auth_client_id: "{{ _client_id | default(bootstrap_config.infisical_client_id) }}"
-    universal_auth_client_secret: "{{ _client_secret | default(bootstrap_config.infisical_client_secret) }}"
+    universal_auth_client_id: "{{ _client_id | default(bootstrap.infisical_client_id) }}"
+    universal_auth_client_secret: "{{ _client_secret | default(bootstrap.infisical_client_secret) }}"
   register: infisical_login
   delegate_to: localhost
   become: false
 
-- name: Build flat list of external secrets for seeding
+- name: Initialize external seeds list
   ansible.builtin.set_fact:
-    _external_seeds: >-
-      [{% for folder, folder_secrets in (bootstrap_config.external_secrets | default({})).items() %}
-       {% for key, value in folder_secrets.items() %}
-       {% if value != 'REPLACE_ME' %}
-       {"name": "{{ key }}", "value": "{{ value }}", "path": "/{{ folder | replace('_', '-') }}"},
-       {% endif %}
-       {% endfor %}
-       {% endfor %}]
+    _external_seeds: []
+
+- name: Build external seeds from each folder
+  ansible.builtin.set_fact:
+    _external_seeds: "{{ _external_seeds + _new_seeds }}"
+  vars:
+    _folder_path: "/{{ item.key | replace('_', '-') }}"
+    _valid_secrets: "{{ item.value | default({}, true) | dict2items | rejectattr('value', 'none') | rejectattr('value', 'equalto', 'REPLACE_ME') | list }}"
+    _new_seeds: "{{ _valid_secrets | map('combine', {'path': _folder_path}) | list }}"
+  loop: "{{ (external_secrets | default({}, true)) | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when: item.value is mapping
   delegate_to: localhost
   become: false
 
 - name: Seed external secrets to Infisical
   ansible.builtin.include_tasks: infisical_write_secret.yml
   vars:
-    secret_name: "{{ item.name }}"
+    secret_name: "{{ item.key }}"
     secret_value: "{{ item.value }}"
     secret_path: "{{ item.path }}"
     secret_comment: "External secret seeded from bootstrap.sops.yml"
   loop: "{{ _external_seeds }}"
   loop_control:
-    label: "{{ item.path }}/{{ item.name }}"
+    label: "{{ item.path }}/{{ item.key }}"
   when: _external_seeds | length > 0
 
 - name: Show external seeding results

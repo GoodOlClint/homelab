@@ -112,6 +112,9 @@ endif
 # Stale credential detection in bootstrap_infisical_setup.yml handles
 # re-creating the admin account, project, identity, and folder structure.
 rebuild-infisical:
+	@echo "Removing Infisical VM protection via Proxmox..."
+	@PROXMOX_HOST=$$($(VENV_PYTHON) -c "import yaml; print(yaml.safe_load(open('ansible/group_vars/all.yml'))['proxmox_host'])"); \
+		ssh "root@$$PROXMOX_HOST" "qm set \$$(qm list | awk '/infisical/{print \$$1}') --protection 0" 2>/dev/null || true
 	@echo "Destroying Infisical VM..."
 	@cd terraform && terraform init && terraform destroy -no-color -auto-approve \
 		-target='module.vms.proxmox_virtual_environment_vm.vms["infisical"]' \
