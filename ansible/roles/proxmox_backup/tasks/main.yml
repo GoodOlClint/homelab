@@ -179,7 +179,7 @@
 - name: Store PBS fingerprint in Infisical
   ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/infisical_write_secret.yml"
   vars:
-    secret_name: "PBS_FINGERPRINT"
+    secret_name: "pbs_fingerprint"
     secret_value: "{{ pbs_fingerprint }}"
     secret_path: "/shared"
     secret_comment: "PBS server TLS certificate fingerprint — auto-retrieved"
@@ -586,7 +586,7 @@
 - name: Store PBS backup token in Infisical
   ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/infisical_write_secret.yml"
   vars:
-    secret_name: "PBS_BACKUP_TOKEN"
+    secret_name: "pbs_backup_token"
     secret_value: "{{ pbs_token_output.stdout | regex_search('\"value\": \"([^\"]+)\"', '\\1') | first }}"
     secret_path: "/shared"
     secret_comment: "PBS backup@pbs backup-token — auto-generated"
@@ -621,10 +621,10 @@
 - name: Store PBS monitoring token in Infisical
   ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/infisical_write_secret.yml"
   vars:
-    secret_name: "PBS_MONITORING_TOKEN"
+    secret_name: "pbs_api_token"
     secret_value: "{{ pbs_monitoring_token_output.stdout | regex_search('\"value\": \"([^\"]+)\"', '\\1') | first }}"
     secret_path: "/monitoring"
-    secret_comment: "PBS monitoring@pbs monitoring-token — auto-generated"
+    secret_comment: "PBS monitoring@pbs API token — auto-generated"
   when:
     - pbs_monitoring_token_output is changed
     - pbs_monitoring_token_output.stdout is defined

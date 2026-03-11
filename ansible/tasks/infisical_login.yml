@@ -76,10 +76,10 @@
     secrets: >-
       {{ _flat | combine(_nested_dicts) }}
   vars:
-    # Root + shared → flat, lowercased keys
+    # Root + shared → flat keys (all secret names must already be lowercase)
     _root_items: "{{ (_infisical_root.secrets | default({})) | dict2items }}"
     _shared_items: "{{ (_infisical_shared.secrets | default({})) | dict2items }}"
-    _flat: "{{ dict((_root_items + _shared_items) | map(attribute='key') | map('lower') | list | zip((_root_items + _shared_items) | map(attribute='value') | list)) }}"
+    _flat: "{{ dict((_root_items + _shared_items) | map(attribute='key') | list | zip((_root_items + _shared_items) | map(attribute='value') | list)) }}"
     # Nested paths → dict keyed by folder name (hyphens→underscores), secrets as-is
     # Filter to results that have a secrets dict (skip paths that don't exist yet)
     _ok_results: "{{ _infisical_nested.results | default([]) | selectattr('secrets', 'defined') | list }}"
