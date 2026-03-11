@@ -58,7 +58,6 @@ external_secrets:
 
   # /monitoring — Monitoring stack external credentials
   monitoring:
-    proxmox_token_value: "REPLACE_ME"      # PVE API token value
     uptimerobot_heartbeat_url: "REPLACE_ME"
 
   # /plex — Plex VM external credentials

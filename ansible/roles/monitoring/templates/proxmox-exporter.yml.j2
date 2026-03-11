@@ -1,14 +1,8 @@
 # Proxmox VE Exporter Configuration
+# Token value is injected via PVE_TOKEN_VALUE env var (Infisical agent)
 default:
   user: {{ proxmox_user }}
-  password: {{ proxmox_password }}
+  token_name: {{ proxmox_token_name }}
   verify_ssl: {{ proxmox_verify_ssl }}
   timeout: 5
   module: [pve]
-
-pve:
-  - name: proxmox
-    url: https://{{ proxmox_host }}:8006
-    user: {{ proxmox_user }}
-    password: {{ proxmox_password }}
-    verify_ssl: {{ proxmox_verify_ssl }}

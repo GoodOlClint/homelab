@@ -68,3 +68,46 @@
       - proxmox_monitoring_user in current_acl.stdout
     fail_msg: "{{ proxmox_monitoring_user }} does not have {{ proxmox_monitoring_role }} role assigned"
     success_msg: "{{ proxmox_monitoring_user }} has {{ proxmox_monitoring_role }} role"
+
+# --- Auto-generate Proxmox monitoring API token ---
+
+- name: List existing tokens for monitoring user
+  ansible.builtin.command:
+    cmd: "/usr/sbin/pveum user token list {{ proxmox_monitoring_user }} --output-format json"
+  register: _pve_tokens_raw
+  changed_when: false
+  delegate_to: "{{ proxmox_host }}"
+  vars:
+    ansible_connection: ssh
+    ansible_user: root
+
+- name: Check if monitoring token exists
+  ansible.builtin.set_fact:
+    _pve_monitoring_token_exists: >-
+      {{ (_pve_tokens_raw.stdout | from_json) | selectattr('tokenid', 'equalto', 'monitoring') | list | length > 0 }}
+
+- name: Create Proxmox monitoring API token
+  ansible.builtin.command:
+    cmd: "/usr/sbin/pveum user token add {{ proxmox_monitoring_user }} monitoring --privsep 0 --output-format json"
+  register: _pve_token_create
+  delegate_to: "{{ proxmox_host }}"
+  when: not _pve_monitoring_token_exists | bool
+  no_log: true
+  vars:
+    ansible_connection: ssh
+    ansible_user: root
+
+- name: Store Proxmox token in Infisical
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/infisical_write_secret.yml"
+  vars:
+    secret_name: "proxmox_token_value"
+    secret_value: "{{ (_pve_token_create.stdout | from_json).value }}"
+    secret_path: "/monitoring"
+    secret_comment: "Proxmox VE monitoring API token (monitoring@pve!monitoring)"
+  when: _pve_token_create is not skipped and _pve_token_create is changed
+
+- name: Update secrets fact with new token
+  ansible.builtin.set_fact:
+    secrets: "{{ secrets | combine({'monitoring': (secrets.monitoring | default({})) | combine({'proxmox_token_value': (_pve_token_create.stdout | from_json).value})}) }}"
+  when: _pve_token_create is not skipped and _pve_token_create is changed
+  no_log: true

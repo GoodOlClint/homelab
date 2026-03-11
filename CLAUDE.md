@@ -82,7 +82,7 @@ Each Infisical folder is owned by the role that generates/provisions its secrets
 | Folder | Owner Role | Agent Readers | Auto-Generated | External (User-Provided) |
 |--------|-----------|---------------|----------------|-------------------------|
 | `/shared` | proxmox_backup | All VMs (via pbs_client) | pbs_fingerprint, pbs_backup_token | — |
-| `/monitoring` | monitoring, monitoring_users, proxmox_backup | openobserve, homepage | grafana_admin_password, openobserve_root_user_pass, unifi_monitoring_password, pbs_api_token | proxmox_token_value, uptimerobot_heartbeat_url |
+| `/monitoring` | monitoring, monitoring_users, proxmox_backup | openobserve, homepage | grafana_admin_password, openobserve_root_user_pass, unifi_monitoring_password, pbs_api_token, proxmox_token_value | uptimerobot_heartbeat_url |
 | `/plex` | plex, plex_certificate | plex, homepage | plex_token, plex_smb_pass, plex_cert_pfx_password | cloudflare_dns_api_token |
 | `/plex-services` | plex_services | plex-services, homepage | postgres_password, *_db_password (×6), arr_admin_password, *_api_key (×8) | cloudflared_tunnel_token, usenet_*, nzb*_api_key, opensubtitlescom_* |
 | `/docker` | docker, authentik | docker | valheim_server_password, authentik_secret_key, authentik_postgres_password | cloudflared_tunnel_token |

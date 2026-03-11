@@ -262,6 +262,16 @@
     - monitoring
     - config
 
+- name: Create Proxmox VE Exporter configuration
+  ansible.builtin.template:
+    src: proxmox-exporter.yml.j2
+    dest: /opt/monitoring/proxmox/pve.yml
+    mode: '0600'
+  tags:
+    - monitoring
+    - proxmox
+    - config
+
 - name: Create SNMP Exporter configuration for Synology
   ansible.builtin.template:
     src: snmp.yml.j2
