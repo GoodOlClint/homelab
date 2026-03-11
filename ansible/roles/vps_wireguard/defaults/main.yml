@@ -4,16 +4,14 @@
 wg_interface: wg0
 wg_listen_port: 51821
 wg_mtu: 1400
-wg_tunnel_address: "{{ secrets.wg_tunnel_address | default('') }}"
-wg_tunnel_address_v6: "{{ secrets.wg_tunnel_address_v6 | default('') }}"
 
-# pfSense peer — no endpoint (learned from incoming handshake)
-wg_peer_allowed_ips: "{{ secrets.wg_peer_allowed_ips | default('') }}"
+# Network config (from all.yml vps_wg_tunnel dict)
+wg_tunnel_address: "{{ vps_wg_tunnel.tunnel_address | default('') }}"
+wg_tunnel_address_v6: "{{ vps_wg_tunnel.tunnel_address_v6 | default('') }}"
+wg_peer_allowed_ips: "{{ vps_wg_tunnel.peer_allowed_ips | default('') }}"
+pfsense_wg_public_key: "{{ vps_wg_tunnel.pfsense_wg_public_key | default('') }}"
 
-# VPS private key: generated on first deploy, or injected from SOPS for rebuilds.
-# If secrets.vps_wg_private_key is set (and not "REPLACE_ME"), it will be used.
+# VPS private key: generated on first deploy, or reused from Infisical for rebuilds.
+# If secrets.vps.vps_wg_private_key is set (and not "REPLACE_ME"), it will be used.
 # Otherwise, a new keypair is generated and displayed for you to save.
 # wg_private_key is set dynamically in tasks/main.yml
-
-# pfSense public key: MUST be in SOPS secrets (you get this from pfSense WireGuard tunnel config)
-# wg_pfsense_public_key: "{{ secrets.pfsense_wg_public_key }}"

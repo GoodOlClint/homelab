@@ -10,5 +10,5 @@ PrivateKey = {{ wg_private_key }}
 
 [Peer]
 # pfSense — no Endpoint set (learned from incoming handshake via PersistentKeepalive)
-PublicKey = {{ secrets.pfsense_wg_public_key }}
+PublicKey = {{ pfsense_wg_public_key }}
 AllowedIPs = {{ wg_peer_allowed_ips }}

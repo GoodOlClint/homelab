@@ -2,7 +2,7 @@
 # VPS WireGuard Relay — tunnel to pfSense
 #
 # Key management:
-#   - If secrets.vps_wg_private_key is set → use it (rebuild scenario)
+#   - If secrets.vps.vps_wg_private_key is set → use it (rebuild scenario)
 #   - Otherwise → generate a new keypair on the VPS (first deploy)
 #   - In both cases, the public key is displayed so you can configure pfSense
 
@@ -11,11 +11,11 @@
     that:
       - wg_tunnel_address | default('') | length > 0
       - wg_peer_allowed_ips | default('') | length > 0
-      - secrets.pfsense_wg_public_key | default('REPLACE_ME') != 'REPLACE_ME'
+      - pfsense_wg_public_key | default('') | length > 0
     fail_msg: >-
-      Missing required WireGuard config. Set in secrets.sops.yml:
-      wg_tunnel_address (VPS tunnel IP with CIDR),
-      wg_peer_allowed_ips (CIDRs routed to pfSense),
+      Missing required WireGuard config. Set vps_wg_tunnel in all.yml:
+      tunnel_address (VPS tunnel IP with CIDR),
+      peer_allowed_ips (CIDRs routed to pfSense),
       pfsense_wg_public_key (pfSense tunnel public key)
   tags:
     - vps_wireguard
@@ -72,14 +72,14 @@
 # Key management — determine whether to generate or reuse
 - name: Check if SOPS private key is provided
   ansible.builtin.set_fact:
-    wg_key_from_sops: "{{ secrets.vps_wg_private_key | default('') is truthy and secrets.vps_wg_private_key | default('REPLACE_ME') != 'REPLACE_ME' }}"
+    wg_key_from_sops: "{{ (secrets.vps | default({})).vps_wg_private_key | default('') is truthy and (secrets.vps | default({})).vps_wg_private_key | default('REPLACE_ME') != 'REPLACE_ME' }}"
   tags:
     - vps_wireguard
     - config
 
 - name: Use SOPS private key (rebuild scenario)
   ansible.builtin.set_fact:
-    wg_private_key: "{{ secrets.vps_wg_private_key }}"
+    wg_private_key: "{{ secrets.vps.vps_wg_private_key }}"
   when: wg_key_from_sops
   no_log: true
   tags:

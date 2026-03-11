@@ -4,8 +4,9 @@
 nft_wg_interface: wg0
 nft_public_interface: eth0
 nft_wg_listen_port: 51821
-nft_tunnel_peer_ip: "{{ secrets.nft_tunnel_peer_ip | default('') }}"
-nft_tunnel_peer_ip_v6: "{{ secrets.nft_tunnel_peer_ip_v6 | default('') }}"
+# Network config (from all.yml vps_wg_tunnel dict)
+nft_tunnel_peer_ip: "{{ vps_wg_tunnel.peer_ip | default('') }}"
+nft_tunnel_peer_ip_v6: "{{ vps_wg_tunnel.peer_ip_v6 | default('') }}"
 
 # Port forwarding rules (public → pfSense via WireGuard tunnel)
 nft_forward_rules:
@@ -20,5 +21,6 @@ nft_rate_limit_tcp_32400: "60/minute"
 nft_geoip_enabled: false
 nft_geoip_allowed_countries:
   - "US"
-nft_maxmind_license_key: "{{ secrets.maxmind_license_key | default('') }}"
+# TRUE SECRET (from Infisical)
+nft_maxmind_license_key: "{{ secrets.vps.maxmind_license_key | default('') }}"
 nft_maxmind_db_path: "/var/lib/geoip"

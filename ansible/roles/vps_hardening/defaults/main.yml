@@ -3,8 +3,9 @@
 
 # SSH — standard port, tunnel-only access
 vps_ssh_port: 22
-vps_ssh_listen_address: "{{ secrets.vps_ssh_listen_address | default('') }}"
-vps_ssh_listen_address_v6: "{{ secrets.vps_ssh_listen_address_v6 | default('') }}"
+# Network config (from all.yml vps_wg_tunnel dict)
+vps_ssh_listen_address: "{{ vps_wg_tunnel.ssh_listen_address | default('') }}"
+vps_ssh_listen_address_v6: "{{ vps_wg_tunnel.ssh_listen_address_v6 | default('') }}"
 vps_ssh_authorized_key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/id_ed25519.pub') }}"
 
 # Service account (replaces root login after hardening)
