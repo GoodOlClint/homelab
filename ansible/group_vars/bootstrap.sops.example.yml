@@ -46,3 +46,56 @@ bootstrap:
   # Token is stored in Infisical at /plex/plex_token after first deploy
   plex_username: "REPLACE_ME"       # plex.tv account email
   plex_password: "REPLACE_ME"       # plex.tv account password
+
+# External secrets — fill these in before running `make apply`
+# Values left as REPLACE_ME are skipped during Infisical seeding.
+# Each key maps to an Infisical folder path.
+external_secrets:
+  # /infrastructure — Ansible-time infrastructure credentials
+  infrastructure:
+    unifi_admin_password: "REPLACE_ME"
+    synology_admin_password: "REPLACE_ME"
+
+  # /monitoring — Monitoring stack external credentials
+  monitoring:
+    proxmox_token_value: "REPLACE_ME"      # PVE API token value
+    uptimerobot_heartbeat_url: "REPLACE_ME"
+
+  # /plex — Plex VM external credentials
+  plex:
+    cloudflare_dns_api_token: "REPLACE_ME"
+
+  # /plex-services — Plex-services external credentials
+  plex_services:
+    cloudflared_tunnel_token: "REPLACE_ME"
+    usenet_newshosting_username: "REPLACE_ME"
+    usenet_newshosting_password: "REPLACE_ME"
+    usenet_express_username: "REPLACE_ME"
+    usenet_express_password: "REPLACE_ME"
+    nzbgeek_api_key: "REPLACE_ME"
+    nzbplanet_api_key: "REPLACE_ME"
+    opensubtitlescom_username: "REPLACE_ME"
+    opensubtitlescom_password: "REPLACE_ME"
+
+  # /docker — Docker VM external credentials
+  docker:
+    cloudflared_tunnel_token: "REPLACE_ME"
+
+  # /pfsense — pfSense reference credentials
+  pfsense:
+    cloudflare_dns_api_token: "REPLACE_ME"
+
+  # /vps — Only TRUE SECRETS (IPs/public keys moved to all.yml)
+  vps:
+    maxmind_license_key: "REPLACE_ME"
+
+  # /homepage — Homepage dashboard user-provided widget credentials ONLY
+  # API keys and infrastructure secrets are read from source folders
+  # (/plex-services, /plex, /monitoring) by the homepage agent template.
+  homepage:
+    adguard_username: "REPLACE_ME"
+    adguard_password: "REPLACE_ME"
+    unifi_username: "REPLACE_ME"
+    unifi_password: "REPLACE_ME"
+    authentik_token: "REPLACE_ME"          # Long-lived API token
+    portainer_api_key: "REPLACE_ME"        # Generated in Portainer UI
