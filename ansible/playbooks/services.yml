@@ -31,11 +31,19 @@
       - name: docker
         dest_path: /etc/infisical/secrets/docker.env
         template_src: secrets/docker.env.tpl.j2
+      - name: docker-authentik
+        dest_path: /etc/infisical/secrets/docker-authentik.env
+        template_src: secrets/docker-authentik.env.tpl.j2
+      - name: docker-valheim
+        dest_path: /etc/infisical/secrets/docker-valheim.env
+        template_src: secrets/docker-valheim.env.tpl.j2
   roles:
     - infisical_client
     - dns_config
     - pbs_client
     - docker
+    - portainer_agent
+    - authentik
     - rsyslog_client
     - telegraf
 
@@ -80,14 +88,56 @@
       - name: plex-services
         dest_path: /etc/infisical/secrets/plex-services.env
         template_src: secrets/plex-services.env.tpl.j2
+      - name: plex-services-postgres
+        dest_path: /etc/infisical/secrets/plex-services-postgres.env
+        template_src: secrets/plex-services-postgres.env.tpl.j2
+        post_command: "docker compose -f /opt/plex-services/docker-compose.yml restart postgres"
+      - name: plex-services-bazarr
+        dest_path: /etc/infisical/secrets/plex-services-bazarr.env
+        template_src: secrets/plex-services-bazarr.env.tpl.j2
+        post_command: "docker compose -f /opt/plex-services/docker-compose.yml restart bazarr"
+      - name: plex-services-seerr
+        dest_path: /etc/infisical/secrets/plex-services-seerr.env
+        template_src: secrets/plex-services-seerr.env.tpl.j2
+        post_command: "docker compose -f /opt/plex-services/docker-compose.yml restart seerr"
       - name: cloudflared
         dest_path: /etc/infisical/secrets/cloudflared.env
         template_src: secrets/cloudflared.env.tpl.j2
+        post_command: "docker compose -f /opt/plex-services/docker-compose.yml restart cloudflared"
+      - name: plex-services-recyclarr-secrets
+        dest_path: /opt/plex-services/recyclarr/secrets.yml
+        template_src: secrets/plex-services-recyclarr-secrets.tpl.j2
   roles:
     - infisical_client
     - dns_config
     - pbs_client
     - plex_services
+    - portainer_agent
+    - rsyslog_client
+    - telegraf
+
+- name: Configure homepage VM
+  hosts: homepage
+  become: true
+
+  vars_files:
+    - ../group_vars/all.yml
+  pre_tasks: *load_all_config
+  vars:
+    infisical_secret_paths: ["/shared", "/homepage", "/plex-services", "/plex", "/monitoring"]
+    infisical_agent_templates:
+      - name: pbs
+        dest_path: /etc/infisical/secrets/pbs.env
+        template_src: secrets/pbs.env.tpl.j2
+      - name: homepage
+        dest_path: /etc/infisical/secrets/homepage.env
+        template_src: secrets/homepage.env.tpl.j2
+        post_command: "docker compose -f /opt/homepage/docker-compose.yml restart homepage"
+  roles:
+    - infisical_client
+    - dns_config
+    - pbs_client
+    - homepage
     - rsyslog_client
     - telegraf
 

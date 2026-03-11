@@ -121,6 +121,18 @@
       - name: openobserve
         dest_path: /etc/infisical/secrets/openobserve.env
         template_src: secrets/openobserve.env.tpl.j2
+      - name: monitoring-grafana
+        dest_path: /etc/infisical/secrets/monitoring-grafana.env
+        template_src: secrets/monitoring-grafana.env.tpl.j2
+      - name: monitoring-proxmox-exporter
+        dest_path: /etc/infisical/secrets/monitoring-proxmox-exporter.env
+        template_src: secrets/monitoring-proxmox-exporter.env.tpl.j2
+      - name: monitoring-unifi-poller
+        dest_path: /etc/infisical/secrets/monitoring-unifi-poller.env
+        template_src: secrets/monitoring-unifi-poller.env.tpl.j2
+      - name: monitoring-pbs-exporter
+        dest_path: /etc/infisical/secrets/monitoring-pbs-exporter.env
+        template_src: secrets/monitoring-pbs-exporter.env.tpl.j2
   roles:
     - infisical_client
     - dns_config
