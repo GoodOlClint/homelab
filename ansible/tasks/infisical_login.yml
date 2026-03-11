@@ -58,8 +58,12 @@
     - monitoring
     - plex
     - plex-services
+    - docker
     - vps
     - pfsense
+    - pbs
+    - infrastructure
+    - homepage
   register: _infisical_nested
   delegate_to: localhost
   become: false
