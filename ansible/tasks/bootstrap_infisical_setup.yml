@@ -291,19 +291,14 @@
       ansible.builtin.fail:
         msg: "Infisical automated setup failed. See above for details."
 
-# --- Seed secrets (runs independently of setup — always seeds if secrets.sops.yml exists) ---
+# --- Create Infisical folders + seed external secrets ---
 
 - name: Compute Infisical services URL for seeding
   ansible.builtin.set_fact:
     _infisical_url: "http://{{ hostvars['infisical']['ansible_host'] | replace(mgmt_vlan_prefix, services_vlan_prefix) }}:8080"
   when: _infisical_url is not defined
 
-- name: Check if secrets.sops.yml exists for seeding
-  ansible.builtin.stat:
-    path: "{{ playbook_dir }}/../group_vars/secrets.sops.yml"
-  register: _secrets_sops_file
-
-- name: Get Infisical token for seeding
+- name: Get Infisical token for folder creation
   ansible.builtin.uri:
     url: "{{ _infisical_url }}/api/v1/auth/universal-auth/login"
     method: POST
@@ -316,26 +311,77 @@
     status_code: [200]
   register: _seed_login
   no_log: true
-  when: _secrets_sops_file.stat.exists | default(false)
 
-- name: Seed Infisical with SOPS secrets
-  ansible.builtin.command:
-    cmd: bash {{ playbook_dir }}/../../scripts/seed_infisical.sh
-    chdir: "{{ playbook_dir }}/../.."
-  environment:
-    INFISICAL_TOKEN: "{{ _seed_login.json.accessToken }}"
-    INFISICAL_API_URL: "{{ _infisical_url }}"
-  register: _seed_result
-  when: _secrets_sops_file.stat.exists | default(false)
+- name: Create Infisical folders
+  ansible.builtin.uri:
+    url: "{{ _infisical_url }}/api/v2/folders"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ _seed_login.json.accessToken }}"
+    body_format: json
+    body:
+      projectId: "{{ _project_id | default(bootstrap_config.infisical_project_id) }}"
+      environment: "prod"
+      name: "{{ item }}"
+      path: "/"
+    status_code: [200, 400]  # 400 = already exists
+  loop:
+    - monitoring
+    - plex
+    - plex-services
+    - docker
+    - vps
+    - pfsense
+    - pbs
+    - infrastructure
+    - shared
+    - homepage
+  delegate_to: localhost
+  become: false
 
-- name: Show seeding results
+- name: Authenticate to Infisical for external secret seeding
+  infisical.vault.login:
+    url: "{{ _infisical_url }}"
+    auth_method: universal_auth
+    universal_auth_client_id: "{{ _client_id | default(bootstrap_config.infisical_client_id) }}"
+    universal_auth_client_secret: "{{ _client_secret | default(bootstrap_config.infisical_client_secret) }}"
+  register: infisical_login
+  delegate_to: localhost
+  become: false
+
+- name: Build flat list of external secrets for seeding
+  ansible.builtin.set_fact:
+    _external_seeds: >-
+      [{% for folder, folder_secrets in (bootstrap_config.external_secrets | default({})).items() %}
+       {% for key, value in folder_secrets.items() %}
+       {% if value != 'REPLACE_ME' %}
+       {"name": "{{ key }}", "value": "{{ value }}", "path": "/{{ folder | replace('_', '-') }}"},
+       {% endif %}
+       {% endfor %}
+       {% endfor %}]
+  delegate_to: localhost
+  become: false
+
+- name: Seed external secrets to Infisical
+  ansible.builtin.include_tasks: infisical_write_secret.yml
+  vars:
+    secret_name: "{{ item.name }}"
+    secret_value: "{{ item.value }}"
+    secret_path: "{{ item.path }}"
+    secret_comment: "External secret seeded from bootstrap.sops.yml"
+  loop: "{{ _external_seeds }}"
+  loop_control:
+    label: "{{ item.path }}/{{ item.name }}"
+  when: _external_seeds | length > 0
+
+- name: Show external seeding results
   ansible.builtin.debug:
-    var: _seed_result.stdout_lines
-  when: _seed_result is not skipped
+    msg: "Seeded {{ _external_seeds | length }} external secrets to Infisical"
+  when: _external_seeds | length > 0
 
-- name: Note about missing secrets.sops.yml
+- name: Note about no external secrets
   ansible.builtin.debug:
     msg: >-
-      No secrets.sops.yml found — skipping Infisical seeding.
-      You can seed later with: make infisical-seed
-  when: not (_secrets_sops_file.stat.exists | default(false))
+      No external secrets to seed (all values are REPLACE_ME or external_secrets not defined).
+      Fill in external_secrets in bootstrap.sops.yml and re-run: make bootstrap
+  when: _external_seeds | length == 0

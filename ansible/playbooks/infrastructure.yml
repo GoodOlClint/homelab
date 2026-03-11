@@ -98,6 +98,7 @@
     - dns_config
     - geerlingguy.docker
     - infisical
+    - pbs_client
     - hardening
   tags:
     - phase1

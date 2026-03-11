@@ -206,15 +206,16 @@ vps-rotate-keys:
 # === Secrets Management ===
 .PHONY: infisical-seed infisical-backup infisical-organize refresh-identity plex-token
 
-# One-time: migrate SOPS secrets to Infisical
+# Restore Infisical from backup (disaster recovery)
 infisical-seed:
 	@bash scripts/seed_infisical.sh
 
-# Export Infisical secrets back to SOPS (backup/disaster recovery)
+# Export ALL Infisical secrets to SOPS backup (disaster recovery)
+# Run before major infrastructure changes and periodically (monthly) as DR insurance.
+# The .bak file is SOPS-encrypted and safe to commit to git as an offline backup.
 infisical-backup:
 	@echo "Backing up Infisical secrets to SOPS..."
-	@infisical secrets list --env prod --path / --format json | \
-		$(VENV_PYTHON) scripts/infisical_to_sops.py > ansible/group_vars/secrets.sops.yml.bak
+	@$(VENV_PYTHON) scripts/infisical_backup_all.py > ansible/group_vars/secrets.sops.yml.bak
 	@sops --encrypt --in-place ansible/group_vars/secrets.sops.yml.bak
 	@echo "Backup saved to ansible/group_vars/secrets.sops.yml.bak"
 

@@ -1,0 +1,135 @@
+#!/bin/bash
+#
+# Infisical PostgreSQL + Encryption Key Backup via Proxmox Backup Server
+# Backs up the Infisical vault database and critical encryption material to PBS
+#
+set -euo pipefail
+
+# Configuration
+BACKUP_DIR="/tmp/infisical_pbs_backup"
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+LOG_FILE="/var/log/infisical_pbs_backup.log"
+
+# PostgreSQL connection details (Infisical's internal Postgres)
+POSTGRES_CONTAINER="infisical-postgres"
+POSTGRES_USER="infisical"
+POSTGRES_DB="infisical"
+
+# PBS Configuration
+PBS_ENV_FILE="/etc/proxmox-backup/pbs-client.env"
+PBS_NAMESPACE="{{ infisical_pbs_namespace | default('databases') }}"
+
+# Logging function
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG_FILE"
+}
+
+# Error handling
+error_exit() {
+    log "ERROR: $1"
+    rm -rf "$BACKUP_DIR"
+    exit 1
+}
+
+# Cleanup function
+cleanup() {
+    log "Cleaning up temporary files..."
+    rm -rf "$BACKUP_DIR"
+}
+trap cleanup EXIT
+
+# Create temp backup directory
+mkdir -p "$BACKUP_DIR"
+
+log "Starting Infisical PBS backup process"
+
+# --- Back up encryption material FIRST (most critical) ---
+log "Extracting Infisical encryption material..."
+
+# Extract ENCRYPTION_KEY from the running infisical container
+ENCRYPTION_KEY=$(docker inspect infisical --format '{% raw %}{{range .Config.Env}}{{println .}}{{end}}{% endraw %}' | grep '^ENCRYPTION_KEY=' | cut -d= -f2-)
+AUTH_SECRET=$(docker inspect infisical --format '{% raw %}{{range .Config.Env}}{{println .}}{{end}}{% endraw %}' | grep '^AUTH_SECRET=' | cut -d= -f2-)
+
+if [ -z "$ENCRYPTION_KEY" ]; then
+    error_exit "Failed to extract ENCRYPTION_KEY from infisical container"
+fi
+
+if [ -z "$AUTH_SECRET" ]; then
+    error_exit "Failed to extract AUTH_SECRET from infisical container"
+fi
+
+# Write encryption material to backup (will be encrypted by PBS at rest)
+cat > "$BACKUP_DIR/encryption_material_${TIMESTAMP}.env" << ENVEOF
+# Infisical encryption material — required to restore the database
+# Without these values, the PostgreSQL backup is useless
+ENCRYPTION_KEY=${ENCRYPTION_KEY}
+AUTH_SECRET=${AUTH_SECRET}
+ENVEOF
+
+chmod 600 "$BACKUP_DIR/encryption_material_${TIMESTAMP}.env"
+log "Successfully backed up encryption material"
+
+# --- Back up PostgreSQL ---
+log "Backing up Infisical PostgreSQL database..."
+
+# Dump the infisical database in custom format
+BACKUP_FILE="$BACKUP_DIR/infisical_${TIMESTAMP}.dump"
+docker exec "$POSTGRES_CONTAINER" pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB" > "$BACKUP_FILE"
+
+if [ $? -ne 0 ]; then
+    error_exit "Failed to dump Infisical PostgreSQL database"
+fi
+
+log "Successfully created database backup: $BACKUP_FILE"
+
+# Also dump globals (roles, etc.)
+GLOBALS_FILE="$BACKUP_DIR/infisical_globals_${TIMESTAMP}.sql"
+docker exec "$POSTGRES_CONTAINER" pg_dumpall -U "$POSTGRES_USER" --globals-only > "$GLOBALS_FILE"
+gzip "$GLOBALS_FILE"
+log "Successfully created globals backup"
+
+# --- Upload to PBS ---
+if [ ! -f "$PBS_ENV_FILE" ]; then
+    error_exit "PBS environment file not found at $PBS_ENV_FILE"
+fi
+
+source "$PBS_ENV_FILE"
+
+if ! command -v proxmox-backup-client &> /dev/null; then
+    error_exit "proxmox-backup-client not found"
+fi
+
+log "Testing PBS connection..."
+set +e
+proxmox-backup-client snapshot list --ns "$PBS_NAMESPACE" &>/dev/null
+PBS_TEST_EXIT=$?
+set -e
+
+if [ $PBS_TEST_EXIT -ne 0 ] && [ $PBS_TEST_EXIT -ne 255 ]; then
+    error_exit "Cannot connect to PBS (exit code: $PBS_TEST_EXIT)"
+fi
+
+# Create namespace if it doesn't exist
+if [ $PBS_TEST_EXIT -eq 255 ]; then
+    log "Creating PBS namespace '$PBS_NAMESPACE'..."
+    proxmox-backup-client namespace create "$PBS_NAMESPACE" || \
+        error_exit "Failed to create PBS namespace"
+fi
+
+log "Uploading to PBS repository: $PBS_REPOSITORY"
+
+proxmox-backup-client backup \
+    "infisical-backup.pxar:$BACKUP_DIR" \
+    --ns "$PBS_NAMESPACE" \
+    --backup-id "infisical" \
+    --backup-time "$(date +%s)"
+
+if [ $? -eq 0 ]; then
+    log "Successfully uploaded Infisical backup to PBS"
+    log "Recent PBS backups:"
+    proxmox-backup-client snapshot list --ns "$PBS_NAMESPACE" | tail -n 5
+else
+    error_exit "Failed to upload backup to PBS"
+fi
+
+log "Infisical PBS backup process completed successfully"

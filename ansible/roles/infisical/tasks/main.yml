@@ -64,3 +64,30 @@
     msg: >-
       Infisical is running! Complete initial setup at:
       http://{{ ansible_host | replace(mgmt_vlan_prefix, services_vlan_prefix) }}:{{ infisical_port }}
+
+- name: Copy Infisical PBS backup script
+  ansible.builtin.template:
+    src: infisical_pbs_backup.sh.j2
+    dest: /usr/local/bin/infisical_pbs_backup.sh
+    owner: root
+    group: root
+    mode: '0755'
+  when: pbs_backup_enabled | default(true)
+  tags:
+    - infisical
+    - backup
+    - pbs
+
+- name: Create Infisical PBS backup cron job
+  ansible.builtin.cron:
+    name: "Infisical PBS backup"
+    cron_file: infisical_pbs_backup
+    minute: "30"
+    hour: "1"
+    job: "/usr/local/bin/infisical_pbs_backup.sh >> /var/log/infisical_pbs_backup.log 2>&1"
+    user: root
+  when: pbs_backup_enabled | default(true)
+  tags:
+    - infisical
+    - backup
+    - pbs

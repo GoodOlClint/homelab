@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# One-time migration: SOPS secrets → Infisical
-# Prerequisites: infisical CLI installed, logged in, project configured
+# Disaster recovery restore: SOPS backup → Infisical
+# Restores secrets from `make infisical-backup` output to Infisical.
+# NOT used during normal operation — only for DR scenarios.
 #
 # Usage: make infisical-seed
 
@@ -134,7 +135,7 @@ print('=== Root secrets (/) ===')
 for key, value in secrets.items():
     if isinstance(value, dict):
         continue  # handled below
-    seed(key.upper(), value, '/')
+    seed(key, value, '/')
 
 # Nested dicts → Infisical path (underscores become hyphens, prefixed with /)
 for key, nested in secrets.items():
