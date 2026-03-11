@@ -31,7 +31,7 @@ services:
     ports:
       - "3000:3000"
     env_file:
-      - /etc/infisical/secrets/monitoring.env
+      - /etc/infisical/secrets/monitoring-grafana.env
     environment:
       - TZ={{ timezone }}
       - GF_SECURITY_ADMIN_USER=admin
@@ -193,7 +193,7 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /opt/monitoring/proxmox:/etc/pve-exporter
     env_file:
-      - /etc/infisical/secrets/monitoring.env
+      - /etc/infisical/secrets/monitoring-proxmox-exporter.env
     environment:
       - TZ={{ timezone }}
       - PVE_USER={{ proxmox_user | default('monitoring@pve') }}
@@ -261,7 +261,7 @@ services:
     ports:
       - "9130:9130"
     env_file:
-      - /etc/infisical/secrets/monitoring.env
+      - /etc/infisical/secrets/monitoring-unifi-poller.env
     environment:
       - TZ={{ timezone }}
       - UP_UNIFI_DEFAULT_ROLE=unifi-poller
@@ -290,7 +290,7 @@ services:
     ports:
       - "10019:10019"
     env_file:
-      - /etc/infisical/secrets/monitoring.env
+      - /etc/infisical/secrets/monitoring-pbs-exporter.env
     environment:
       - TZ={{ timezone }}
       - PBS_ENDPOINT=https://{{ pbs_host }}:8007
@@ -312,7 +312,7 @@ services:
 
   # Uptime Kuma - Status Page and Uptime Monitoring
   uptime-kuma:
-    image: louislam/uptime-kuma:latest
+    image: louislam/uptime-kuma:2
     container_name: uptime-kuma
     restart: unless-stopped
     ports:

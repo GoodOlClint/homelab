@@ -6,8 +6,9 @@ services:
     restart: unless-stopped
     ports:
       - 127.0.0.1:5432:5432
+    env_file:
+      - /etc/infisical/secrets/plex-services-postgres.env
     environment:
-      - POSTGRES_PASSWORD={{ secrets.postgres_password }}
       - POSTGRES_USER={{ postgres_user | default('qstick') }}
       - POSTGRES_DB={{ postgres_default_db | default('qstick') }}
       - TZ={{ timezone }}
@@ -19,24 +20,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
-
-  # Portainer - Docker container management
-  portainer:
-    container_name: portainer
-    image: portainer/portainer-ce:alpine
-    restart: unless-stopped
-    ports:
-      - 9000:9000
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    environment:
-      - TZ={{ timezone }}
-    healthcheck:
-      test: ["CMD", "wget", "--no-check-certificate", "--no-verbose", "--tries=3", "--spider", "--header='Content-Type:application/json'", "http://localhost:9000/api/system/status"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
 
   # Sonarr - TV series management
   sonarr:
@@ -124,6 +107,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    env_file:
+      - /etc/infisical/secrets/plex-services-seerr.env
     environment:
       - TZ={{ timezone }}
       - DB_TYPE=postgres
@@ -131,7 +116,6 @@ services:
       - DB_PORT=5432
       - DB_NAME=seerr
       - DB_USER={{ plex_services['seerr'].db_user }}
-      - DB_PASS={{ secrets.seerr_db_password }}
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - /opt/plex-services/seerr:/app/config:rw
@@ -177,6 +161,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    env_file:
+      - /etc/infisical/secrets/plex-services-bazarr.env
     environment:
       - PUID={{ plex_services['bazarr'].PUID }}
       - PGID={{ plex_services['bazarr'].PGID }}
@@ -187,7 +173,6 @@ services:
       - POSTGRES_PORT=5432
       - POSTGRES_DATABASE=bazarr
       - POSTGRES_USERNAME={{ plex_services['bazarr'].db_user }}
-      - POSTGRES_PASSWORD={{ secrets.bazarr_db_password }}
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - /opt/plex-services/bazarr:/config:rw
@@ -300,4 +285,3 @@ volumes:
       o: "addr={{ plex_nfs_src.split(':')[0] }},{{ nfs_mount_options }}"
       device: "{{ plex_nfs_src }}/data"
   postgres:
-  portainer:
