@@ -34,9 +34,11 @@
       - name: docker-authentik
         dest_path: /etc/infisical/secrets/docker-authentik.env
         template_src: secrets/docker-authentik.env.tpl.j2
+        post_command: "docker compose -f /opt/authentik/docker-compose.yml restart authentik-server authentik-worker"
       - name: docker-valheim
         dest_path: /etc/infisical/secrets/docker-valheim.env
         template_src: secrets/docker-valheim.env.tpl.j2
+        post_command: "docker compose -f /opt/docker-compose.yml restart valheim"
   roles:
     - infisical_client
     - dns_config

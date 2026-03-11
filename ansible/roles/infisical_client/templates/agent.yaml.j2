@@ -24,5 +24,6 @@ templates:
 {% if tpl.post_command is defined %}
       execute:
         command: "{{ tpl.post_command }}"
+        timeout: {{ tpl.post_timeout | default(30) }}
 {% endif %}
 {% endfor %}
