@@ -299,7 +299,7 @@ make ansible-services TAGS=plex,homepage  # plex + homepage plays
 
 3. ~~`timezone` duplication~~ — moved to Resolved #5.
 
-4. **AdGuard DNS rewrites hardcode VM names.** The AdGuard template contains hardcoded references to specific VMs (docker, plex, nvidia-licensing, etc.) via `hostvars`. If a VM doesn't exist in the inventory, the template may fail.
+4. ~~AdGuard DNS rewrites hardcode VM names~~ — moved to Resolved #8.
 
 5. **PBS storage backend is hardcoded to iSCSI** in `proxmox_backup/defaults/main.yml` despite commented NFS support. The role has complex conditional logic but the default can't easily switch between backends.
 
@@ -320,3 +320,5 @@ make ansible-services TAGS=plex,homepage  # plex + homepage plays
 6. **Compose file base paths unified.** All services now use `/opt/<service>/docker-compose.yml` — the docker legacy VM moved from flat `/opt/docker-compose.yml` to `/opt/docker/docker-compose.yml`. Each role defines a `*_base_dir` default variable. A shared `tasks/deploy_compose.yml` task provides a reusable deploy+restart pattern. Requires `make rebuild docker` for existing docker VMs. (Resolved in architecture cleanup Phase E+F.)
 
 7. **NFS mount options unified.** All roles now use the centralized `{{ nfs_mount_options }}` variable from `group_vars/all.yml`. Docker VM volumes replaced hardcoded `nfsvers=4,...,timeo=600` with `{{ nfs_mount_options }}` (gains NFSv4.1, noatime, nconnect=4). Plex and PBS system-level mounts replaced `opts: "defaults"` with `{{ nfs_mount_options }}`. The plex_services volume auto-recreate logic remains unique to that role. The `*_nfs_src: "host:/path"` variable pattern and `.split(':')` calls were audited but intentionally left as-is — the source variables are centralized in `all.yml`, the split pattern works consistently (docker pre-splits in task vars, plex-services splits inline in template), and replacing it with separate `nfs_server` + `*_nfs_path` variables would double the NFS variable count for no functional gain. (Resolved in architecture cleanup Phase I.)
+
+8. **AdGuard DNS rewrites parameterized.** Hardcoded VM names replaced with three configurable variables in `adguard/defaults/main.yml`: `adguard_rewrite_vms` (list of inventory hostnames), `adguard_service_aliases` (domain→target mappings), `adguard_cross_vlan_rewrites` (hostname+zone+prefix translation). Adding a new VM only requires appending to the list — no template changes. Also fixed latent bug where `hostvars['proxmox_backup']` (underscores) silently skipped the PBS rewrite because the inventory hostname is `proxmox-backup` (hyphens). (Resolved in architecture cleanup Phase J.)

@@ -1,9 +1,37 @@
 ---
 # adguard role defaults
-#
-# No role-specific variables — all referenced variables come from
-# pre_tasks (dns_zones, ipv4_prefix_reversed, core_vlan_prefix,
-# storage_vlan_prefix) or Ansible facts (ansible_host).
-#
+
 # Bootstrap mode flag (skips local zone DNS test during bootstrap)
 bootstrap_mode: false
+
+# DNS zone key for standard VM rewrites (references dns_zones dict)
+adguard_rewrite_zone: vlan100
+
+# VMs to create DNS rewrites for (<hostname>.<zone> -> management IP)
+# Each entry must match an inventory hostname. VMs not in inventory are silently skipped.
+adguard_rewrite_vms:
+  - openobserve
+  - proxmox-backup
+  - docker
+  - nvidia-licensing
+  - plex
+  - plex-services
+  - homepage
+
+# Service aliases: alternative domain names pointing to existing VMs
+adguard_service_aliases:
+  - domain: media
+    target: plex
+  - domain: nvidia-dls
+    target: nvidia-licensing
+
+# Cross-VLAN DNS rewrites: hostname resolved on a different VLAN's zone
+adguard_cross_vlan_rewrites:
+  - hostname: plex
+    zone_key: vlan20
+    from_prefix: "{{ core_vlan_prefix }}"
+    to_prefix: "{{ storage_vlan_prefix }}"
+  - hostname: docker
+    zone_key: vlan20
+    from_prefix: "{{ core_vlan_prefix }}"
+    to_prefix: "{{ storage_vlan_prefix }}"
