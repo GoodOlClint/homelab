@@ -134,14 +134,6 @@
     - nfs
     - tuning
 
-- name: Install Docker using geerlingguy.docker
-  ansible.builtin.import_role:
-    name: geerlingguy.docker
-  tags:
-    - plex_services
-    - docker
-    - packages
-
 - name: Configure Docker syslog logging
   ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/configure_docker_logging.yml"
   tags: [plex_services, docker, logging, config]

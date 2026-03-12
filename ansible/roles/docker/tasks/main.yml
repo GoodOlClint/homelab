@@ -26,14 +26,6 @@
     - nvidia
     - driver
 
-- name: Install Docker using geerlingguy.docker
-  ansible.builtin.import_role:
-    name: geerlingguy.docker
-  register: docker_role_result
-  tags:
-    - docker
-    - packages
-
 - name: Check if NVIDIA container toolkit GPG key exists
   ansible.builtin.stat:
     path: /etc/apt/trusted.gpg.d/libnvidia-container.gpg

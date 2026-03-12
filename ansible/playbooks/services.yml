@@ -153,6 +153,5 @@
   pre_tasks: *load_all_config
   roles:
     - dns_config
-    - geerlingguy.docker
     - lancache
     - rsyslog_client

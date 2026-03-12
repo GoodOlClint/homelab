@@ -39,11 +39,6 @@
     pbs_api_token: "{{ secrets.monitoring.pbs_api_token | default('') }}"
   tags: [monitoring, secrets]
 
-- name: Install Docker using geerlingguy.docker
-  ansible.builtin.import_role:
-    name: geerlingguy.docker
-  tags: [monitoring, docker, packages]
-
 - name: Install Python Docker library
   ansible.builtin.apt:
     name: python3-docker

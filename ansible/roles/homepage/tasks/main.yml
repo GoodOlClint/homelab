@@ -6,13 +6,7 @@
     fail_msg: "Required facts not available. This role must run from a playbook that includes full_pre_tasks.yml."
     quiet: true
 
-# Phase 1: Install Docker
-- name: Install Docker
-  ansible.builtin.import_role:
-    name: geerlingguy.docker
-  tags: [homepage, docker]
-
-# Phase 2: Configure Docker syslog logging
+# Phase 1: Configure Docker syslog logging
 - name: Configure Docker syslog logging
   ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/configure_docker_logging.yml"
   tags: [homepage, docker, logging]
