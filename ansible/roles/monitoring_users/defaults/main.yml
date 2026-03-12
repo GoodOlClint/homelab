@@ -7,7 +7,7 @@ proxmox_monitoring_role: "PVEAuditor"
 proxmox_monitoring_comment: "Monitoring user for Prometheus PVE Exporter"
 
 # UniFi monitoring user configuration
-unifi_monitoring_user: "monitoring"
+# unifi_monitoring_user is defined in group_vars/all.yml (not here, to avoid shadowing)
 unifi_monitoring_role: "readonly"  # Options: admin, readonly
 unifi_monitoring_name: "Monitoring User"
 

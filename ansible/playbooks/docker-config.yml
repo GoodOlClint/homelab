@@ -22,49 +22,16 @@
     - name: Load all configuration and secrets
       ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/full_pre_tasks.yml"
 
-    # The full role's generate_secret.yml stores plex-services secrets flat
-    # (secrets.postgres_password), but infisical_login.yml nests them
-    # (secrets.plex_services.postgres_password). Flatten for template compat.
-    - name: Merge nested plex_services secrets into top level
-      ansible.builtin.set_fact:
-        secrets: "{{ secrets | combine(secrets.plex_services | default({})) }}"
-      when:
-        - secrets is defined
-        - secrets.plex_services is defined
-        - inventory_hostname == 'plex-services'
-
-    - name: Merge nested docker secrets into top level
-      ansible.builtin.set_fact:
-        secrets: "{{ secrets | combine(secrets.docker | default({})) }}"
-      when:
-        - secrets is defined
-        - secrets.docker is defined
-        - inventory_hostname == 'docker'
-
-    - name: Merge nested monitoring secrets into top level
-      ansible.builtin.set_fact:
-        secrets: "{{ secrets | combine(secrets.monitoring | default({})) }}"
-      when:
-        - secrets is defined
-        - secrets.monitoring is defined
-        - inventory_hostname == 'openobserve'
-
+    # Monitoring templates reference bare variables (openobserve_root_user_pass, etc.)
+    # rather than secrets.monitoring.* — set aliases from the nested secrets dict.
     - name: Set monitoring variable aliases from secrets
       ansible.builtin.set_fact:
-        grafana_admin_password: "{{ secrets.grafana_admin_password | default('') }}"
+        grafana_admin_password: "{{ secrets.grafana_admin_password | default(secrets.monitoring.grafana_admin_password | default('')) }}"
         openobserve_root_user_pass: "{{ secrets.openobserve_root_user_pass | default(secrets.monitoring.openobserve_root_user_pass | default('')) }}"
-        proxmox_token_value: "{{ secrets.proxmox_token_value | default('') }}"
-        unifi_monitoring_password: "{{ secrets.unifi_monitoring_password | default('') }}"
-        pbs_api_token: "{{ secrets.pbs_api_token | default('') }}"
+        proxmox_token_value: "{{ secrets.proxmox_token_value | default(secrets.monitoring.proxmox_token_value | default('')) }}"
+        unifi_monitoring_password: "{{ secrets.unifi_monitoring_password | default(secrets.monitoring.unifi_monitoring_password | default('')) }}"
+        pbs_api_token: "{{ secrets.pbs_api_token | default(secrets.monitoring.pbs_api_token | default('')) }}"
       when: inventory_hostname == 'openobserve'
-
-    - name: Merge nested homepage secrets into top level
-      ansible.builtin.set_fact:
-        secrets: "{{ secrets | combine(secrets.homepage | default({})) }}"
-      when:
-        - secrets is defined
-        - secrets.homepage is defined
-        - inventory_hostname == 'homepage'
 
     - name: Compute lancache service IP on services VLAN
       ansible.builtin.set_fact:

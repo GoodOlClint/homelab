@@ -6,7 +6,7 @@ This repo automates a Proxmox-based homelab with Terraform (VM provisioning, SDN
 
 **Key directories:**
 - `terraform/` — Single consolidated Terraform project with `modules/proxmox-vm/` and `modules/network/`
-- `ansible/roles/` — Single flat directory (~33 roles)
+- `ansible/roles/` — Single flat directory (~30 roles)
 - `ansible/playbooks/` — All playbooks (site.yml imports infrastructure.yml + services.yml)
 - `ansible/tasks/` — Shared task files (secrets loading, generation, pre_tasks)
 - `ansible/group_vars/` — Global vars (`all.yml`), bootstrap secrets (`bootstrap.sops.yml`)
@@ -285,11 +285,13 @@ Pre_tasks compute these facts from `network-data/vlans.yaml`:
 
 5. **PBS storage backend is hardcoded to iSCSI** in `proxmox_backup/defaults/main.yml` despite commented NFS support. The role has complex conditional logic but the default can't easily switch between backends.
 
+6. **Two Ansible-rendered .env files still bake secrets directly.** `docker/templates/docker-env.j2` references `{{ secrets.docker.cloudflared_tunnel_token }}` and `monitoring/templates/openobserve.env.j2` references `{{ openobserve_root_user_pass }}` (set via variable alias from `secrets.monitoring.*`). These are deliberate fallbacks, not oversights — the Infisical agent renders a second env_file that overrides these values at runtime. The "no baked secrets" rule in Secrets Handling applies to docker-compose templates only; these are separate .env config files.
+
 ### Resolved
 
 1. **Secret delivery is now unified.** All containers use Infisical agent `env_file` paths — no more `{{ secrets.xxx }}` baked into docker-compose templates. (Resolved by secrets refactor Phases 4-6.)
 
-2. **`docker-config.yml` no longer flattens nested secrets.** Compose templates use `env_file:` instead of `{{ secrets.xxx }}`, so the flatten pre_tasks are no longer needed. (Resolved by secrets refactor Phase 5.)
+2. **`docker-config.yml` no longer flattens nested secrets.** Compose templates use `env_file:` instead of `{{ secrets.xxx }}`, so the `combine()` flatten pre_tasks have been removed. A monitoring variable alias block remains in docker-config.yml (setting bare variables like `openobserve_root_user_pass` from `secrets.monitoring.*`) because `openobserve.env.j2` references those bare names — see Known Inconsistency #6. (Resolved by secrets refactor Phase 5; dead flatten blocks removed in architecture cleanup Phase A.)
 
 3. **Homepage role scope reduced.** API key extraction and Infisical secret seeding moved to plex-services role. Homepage now focuses on template deployment, Caddy, and Portainer. (Resolved by secrets refactor Phase 2.)
 

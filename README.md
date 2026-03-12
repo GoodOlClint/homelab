@@ -408,7 +408,6 @@ Self-hosted secret management platform deployed via Docker Compose:
 | unifi.yml | UniFi VM | UniFi Controller deployment |
 | update-all.yml | All + VPS | OS patching (apt/apk) |
 | update-dns.yml | DNS VMs | DNS configuration updates |
-| update-plex.yml | Plex VM | Plex Media Server updates |
 | backup-clients.yml | Multiple | PBS client configuration |
 | vps-rotate-keys.yml | VPS | WireGuard key rotation |
 | refresh-identity.yml | Service VMs | Refresh Infisical machine identity credentials |
