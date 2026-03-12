@@ -225,43 +225,27 @@ filtering:
     - domain: dns.{{ zone_data.zone }}
       answer: {{ zone_data.dns_ip }}
 {% endfor %}
-{% if hostvars['openobserve'] is defined and hostvars['openobserve']['ansible_host'] is defined %}
-    # OpenObserve
-    - domain: openobserve.{{ dns_zones.vlan100.zone }}
-      answer: {{ hostvars['openobserve']['ansible_host'] }}
-{% endif %}
-{% if hostvars['proxmox_backup'] is defined and hostvars['proxmox_backup']['ansible_host'] is defined %}
-    # Proxmox Backup Server
-    - domain: proxmox-backup.{{ dns_zones.vlan100.zone }}
-      answer: {{ hostvars['proxmox_backup']['ansible_host'] }}
-{% endif %}
-{% for vm_name in ['docker', 'nvidia-licensing', 'plex', 'plex-services', 'homepage'] %}
+{% for vm_name in adguard_rewrite_vms %}
 {% if hostvars[vm_name] is defined and hostvars[vm_name]['ansible_host'] is defined %}
-    # {{ vm_name | title }} VM
-    - domain: {{ vm_name }}.{{ dns_zones.vlan100.zone }}
+    # {{ vm_name }} VM
+    - domain: {{ vm_name }}.{{ dns_zones[adguard_rewrite_zone].zone }}
       answer: {{ hostvars[vm_name]['ansible_host'] }}
 {% endif %}
 {% endfor %}
-{% if hostvars['plex'] is defined %}
-    # Service aliases - Plex media server
-    - domain: media.{{ dns_zones.vlan100.zone }}
-      answer: {{ hostvars['plex']['ansible_host'] }}
+{% for alias in adguard_service_aliases %}
+{% if hostvars[alias.target] is defined and hostvars[alias.target]['ansible_host'] is defined %}
+    # Service alias: {{ alias.domain }} -> {{ alias.target }}
+    - domain: {{ alias.domain }}.{{ dns_zones[adguard_rewrite_zone].zone }}
+      answer: {{ hostvars[alias.target]['ansible_host'] }}
 {% endif %}
-{% if hostvars['nvidia-licensing'] is defined %}
-    # Service aliases - NVIDIA DLS server
-    - domain: nvidia-dls.{{ dns_zones.vlan100.zone }}
-      answer: {{ hostvars['nvidia-licensing']['ansible_host'] }}
+{% endfor %}
+{% for rewrite in adguard_cross_vlan_rewrites %}
+{% if hostvars[rewrite.hostname] is defined and hostvars[rewrite.hostname]['ansible_host'] is defined %}
+    # Cross-VLAN: {{ rewrite.hostname }} on {{ rewrite.zone_key }}
+    - domain: {{ rewrite.hostname }}.{{ dns_zones[rewrite.zone_key].zone }}
+      answer: {{ hostvars[rewrite.hostname]['ansible_host'] | replace(rewrite.from_prefix, rewrite.to_prefix) }}
 {% endif %}
-{% if hostvars['plex'] is defined and hostvars['plex']['ansible_host'] is defined %}
-    # Cross-VLAN access - Plex on storage network
-    - domain: plex.{{ dns_zones.vlan20.zone }}
-      answer: {{ hostvars['plex']['ansible_host'] | replace(core_vlan_prefix, storage_vlan_prefix) }}
-{% endif %}
-{% if hostvars['docker'] is defined and hostvars['docker']['ansible_host'] is defined %}
-    # Cross-VLAN access - Docker on storage network
-    - domain: docker.{{ dns_zones.vlan20.zone }}
-      answer: {{ hostvars['docker']['ansible_host'] | replace(core_vlan_prefix, storage_vlan_prefix) }}
-{% endif %}
+{% endfor %}
 
   safe_fs_patterns: []
   safebrowsing_cache_size: 1048576
