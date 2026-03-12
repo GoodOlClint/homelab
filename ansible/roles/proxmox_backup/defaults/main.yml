@@ -4,7 +4,7 @@
 # Storage backend: 'nfs' or 'iscsi'
 pbs_storage_backend: iscsi
 
-# NFS mount configuration (legacy, use if pbs_storage_backend: nfs)
+# NFS mount configuration (alternative to iSCSI, set pbs_storage_backend: nfs)
 pbs_nfs_mount_path: /mnt/backups
 pbs_nfs_source: "{{ proxmox_backup_nfs_src }}"
 
@@ -18,7 +18,7 @@ pbs_iscsi_filesystem: ext4  # ext4 or xfs
 pbs_datastores:
   - name: synology
     path: "{{ pbs_iscsi_mount_path if pbs_storage_backend == 'iscsi' else pbs_nfs_mount_path }}/pbs-datastore"
-    comment: "Backup datastore on Synology iSCSI LUN"
+    comment: "Backup datastore on Synology NAS"
     gc_schedule: "daily"
     prune_schedule: "daily"
     # Retention policy (GFS - Grandfather-Father-Son)

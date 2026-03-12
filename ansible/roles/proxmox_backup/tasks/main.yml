@@ -363,10 +363,10 @@
     - storage
     - iscsi
 
-# Storage Configuration - NFS (legacy)
-- name: Ensure /mnt/backups exists
+# Storage Configuration - NFS
+- name: Ensure NFS mount point exists
   ansible.builtin.file:
-    path: /mnt/backups
+    path: "{{ pbs_nfs_mount_path }}"
     state: directory
     owner: root
     group: root
@@ -398,8 +398,8 @@
     backup: true
 
     boot: "yes"
-    path: "/mnt/backups"
-    src: "{{ proxmox_backup_nfs_src }}"
+    path: "{{ pbs_nfs_mount_path }}"
+    src: "{{ pbs_nfs_source }}"
     fstype: nfs
     opts: "{{ nfs_mount_options }}"
     state: "mounted"
