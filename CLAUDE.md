@@ -135,6 +135,25 @@ Pre_tasks compute these facts from `network-data/vlans.yaml`:
 - `is succeeded` returns TRUE for skipped tasks — always add `is not skipped` when gating on a registered variable from a conditionally-skipped task
 - `docker_compose_v2`: `restarted` is a `state` value, not a separate parameter
 
+### Tags Strategy
+Both `infrastructure.yml` and `services.yml` have play-level tags for targeted deploys:
+
+**infrastructure.yml tags:** `phase1`, `phase2`, `phase3`, `dns`, `adguard`, `infisical`, `openobserve`, `proxmox-backup`, `unifi`, `monitoring`, `monitoring-users`, `users`
+
+**services.yml tags:** `nvidia-licensing`, `docker`, `plex`, `plex-services`, `homepage`, `lancache`
+
+**How tags work with pre_tasks:**
+- All `pre_tasks` blocks have `tags: [always]`, so secrets/VLANs/facts always load regardless of `--tags` filter.
+- The `infisical_client` role's "Enable and start infisical-agent" task is tagged `always` — even when filtering by tags within a play, the agent is guaranteed to be running.
+- Tags filter at the **play** level: `--tags docker` runs only the docker play (and its pre_tasks).
+
+**Usage via Makefile:** Pass `TAGS=` to any ansible target:
+```bash
+make ansible docker TAGS=docker          # only the docker play
+make ansible-infra TAGS=phase1           # infrastructure phase 1 only
+make ansible-services TAGS=plex,homepage  # plex + homepage plays
+```
+
 ### Variable Sourcing Priority
 1. `ansible/inventory/host_vars/<vm>.yml` — per-VM config (plex-services has extensive definitions)
 2. `ansible/group_vars/all.yml` — global vars (overrides role defaults!)
@@ -184,11 +203,11 @@ Pre_tasks compute these facts from `network-data/vlans.yaml`:
 | `make plan [vm]` | Terraform plan (optionally scoped to one VM) |
 | `make build <vm>` | Terraform + inventory + ansible for a single VM |
 | `make rebuild <vm>` | Destroy VM → clean SSH → build |
-| `make ansible <vm>` | Run site.yml limited to one host |
+| `make ansible <vm>` | Run site.yml limited to one host (supports `TAGS=`) |
 | `make docker-config <vm>` | Deploy compose+config only, skip user/group/package/API setup |
-| `make ansible-all` | Run full site.yml |
-| `make ansible-infra` | Run infrastructure.yml only |
-| `make ansible-services` | Run services.yml only |
+| `make ansible-all` | Run full site.yml (supports `TAGS=`) |
+| `make ansible-infra` | Run infrastructure.yml only (supports `TAGS=`) |
+| `make ansible-services` | Run services.yml only (supports `TAGS=`) |
 | `make update` | apt upgrade + docker pull on all hosts |
 | `make vps-deploy` | 3-phase: terraform (SSH open) → ansible → terraform (SSH closed) |
 | `make vps-rebuild` | Destroy + rebuild VPS |

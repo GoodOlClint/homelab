@@ -92,6 +92,7 @@
     enabled: true
     state: started
     daemon_reload: true
+  tags: [always]
 
 - name: Wait for agent to render secrets
   ansible.builtin.wait_for:

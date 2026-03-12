@@ -14,6 +14,8 @@
     - nvidia_licensing
     - rsyslog_client
     - telegraf
+  tags:
+    - nvidia-licensing
 
 - name: Configure docker VM
   hosts: docker
@@ -49,6 +51,8 @@
     # - authentik  # TODO: disabled — env template quoting bug
     - rsyslog_client
     - telegraf
+  tags:
+    - docker
 
 - name: Configure plex VM
   hosts: plex
@@ -74,6 +78,8 @@
     - plex_certificate
     - rsyslog_client
     - telegraf
+  tags:
+    - plex
 
 - name: Configure plex-services VM
   hosts: plex-services
@@ -118,6 +124,8 @@
     - portainer_agent
     - rsyslog_client
     - telegraf
+  tags:
+    - plex-services
 
 - name: Configure homepage VM
   hosts: homepage
@@ -143,6 +151,8 @@
     - homepage
     - rsyslog_client
     - telegraf
+  tags:
+    - homepage
 
 - name: Configure lancache VM
   hosts: lancache
@@ -155,3 +165,5 @@
     - dns_config
     - lancache
     - rsyslog_client
+  tags:
+    - lancache

@@ -138,7 +138,7 @@ ifndef VM
 	$(error Usage: make ansible <vm-name>)
 endif
 	@echo "Running Ansible for: $(VM)"
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/site.yml --limit $(VM)
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/site.yml --limit $(VM) $(if $(TAGS),--tags $(TAGS))
 
 # make docker-config <vm> — deploy only docker-compose, config templates, and restart
 docker-config:
@@ -152,13 +152,13 @@ endif
 .PHONY: ansible ansible-all ansible-infra ansible-services ansible-pfsense docker-deploy docker-config update update-dns expand-disk
 
 ansible-all:
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/site.yml
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/site.yml $(if $(TAGS),--tags $(TAGS))
 
 ansible-infra:
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/infrastructure.yml
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/infrastructure.yml $(if $(TAGS),--tags $(TAGS))
 
 ansible-services:
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/services.yml
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/services.yml $(if $(TAGS),--tags $(TAGS))
 
 ansible-pfsense:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/pfsense.yaml ansible/playbooks/pfsense.yml
