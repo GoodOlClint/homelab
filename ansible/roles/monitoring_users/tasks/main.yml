@@ -2,6 +2,15 @@
 # Main tasks for monitoring-users role
 # This role provisions monitoring users for Proxmox, UniFi, and Synology
 
+- name: Verify required pre_tasks facts
+  ansible.builtin.assert:
+    that:
+      - secrets is defined
+      - secrets is mapping
+      - bootstrap is defined
+    fail_msg: "Required facts not available. This role must run from a playbook that includes full_pre_tasks.yml."
+    quiet: true
+
 - name: Include Proxmox user tasks
   ansible.builtin.include_tasks: proxmox.yml
   tags:

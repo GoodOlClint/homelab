@@ -1,6 +1,14 @@
 ---
 # Install and configure Proxmox Backup Client
 
+- name: Verify required pre_tasks facts
+  ansible.builtin.assert:
+    that:
+      - secrets is defined
+      - secrets is mapping
+    fail_msg: "Required facts not available. This role must run from a playbook that includes full_pre_tasks.yml."
+    quiet: true
+
 - name: Check if PBS GPG key exists
   ansible.builtin.stat:
     path: /etc/apt/trusted.gpg.d/proxmox-release-bookworm.gpg

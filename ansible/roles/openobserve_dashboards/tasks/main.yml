@@ -1,4 +1,12 @@
 ---
+- name: Verify required pre_tasks facts
+  ansible.builtin.assert:
+    that:
+      - secrets is defined
+      - secrets is mapping
+    fail_msg: "Required facts not available. This role must run from a playbook that includes full_pre_tasks.yml."
+    quiet: true
+
 - name: Check OpenObserve API connectivity
   ansible.builtin.uri:
     url: "http://{{ openobserve_listen_host }}:{{ openobserve_listen_port }}/api/default/_search"

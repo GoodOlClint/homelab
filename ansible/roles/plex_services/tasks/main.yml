@@ -3,6 +3,14 @@
 # Plex Services Role Tasks
 # This role uses global variables from group_vars/all.yml
 
+- name: Verify required pre_tasks facts
+  ansible.builtin.assert:
+    that:
+      - secrets is defined
+      - secrets is mapping
+    fail_msg: "Required facts not available. This role must run from a playbook that includes full_pre_tasks.yml."
+    quiet: true
+
 # --- Auto-generate postgres password if not already set ---
 - name: Auto-generate postgres_password
   ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/generate_secret.yml"

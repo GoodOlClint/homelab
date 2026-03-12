@@ -1,6 +1,13 @@
 ---
 # Main tasks for UniFi OS Server
 
+- name: Verify required pre_tasks facts
+  ansible.builtin.assert:
+    that:
+      - mgmt_vlan_prefix is defined
+    fail_msg: "Required facts not available. This role must run from a playbook that includes full_pre_tasks.yml."
+    quiet: true
+
 - name: Include installation tasks
   ansible.builtin.include_tasks: install.yml
   tags: [unifi, install]

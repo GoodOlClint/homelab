@@ -1,4 +1,12 @@
 ---
+- name: Verify required pre_tasks facts
+  ansible.builtin.assert:
+    that:
+      - dns_zones is defined
+      - dns_zones is mapping
+    fail_msg: "Required facts not available. This role must run from a playbook that includes full_pre_tasks.yml."
+    quiet: true
+
 - name: Set IPv4 DNS server for each interface using resolvectl
   loop: "{{ dns_zones | dict2items }}"
   loop_control:

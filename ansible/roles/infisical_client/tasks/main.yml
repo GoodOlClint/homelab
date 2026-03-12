@@ -5,6 +5,13 @@
   ansible.builtin.meta: end_role
   when: not infisical_client_enabled
 
+- name: Verify required pre_tasks facts
+  ansible.builtin.assert:
+    that:
+      - bootstrap_config is defined
+    fail_msg: "Required facts not available. This role must run from a playbook that includes full_pre_tasks.yml."
+    quiet: true
+
 - name: Install Infisical CLI
   ansible.builtin.include_tasks: install.yml
 

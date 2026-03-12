@@ -1,4 +1,12 @@
 ---
+- name: Verify required pre_tasks facts
+  ansible.builtin.assert:
+    that:
+      - secrets is defined
+      - secrets is mapping
+    fail_msg: "Required secrets fact not available. This role must run from a playbook that includes full_pre_tasks.yml."
+    quiet: true
+
 # --- Auto-generate Valheim server password if not already set ---
 - name: Auto-generate valheim_server_password
   ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/generate_secret.yml"

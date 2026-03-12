@@ -1,4 +1,14 @@
 ---
+- name: Verify required pre_tasks facts
+  ansible.builtin.assert:
+    that:
+      - secrets is defined
+      - secrets is mapping
+      - mgmt_vlan_prefix is defined
+      - dns_zones is defined
+    fail_msg: "Required facts not available. This role must run from a playbook that includes full_pre_tasks.yml."
+    quiet: true
+
 # --- Auto-generate monitoring secrets if not already set ---
 - name: Auto-generate grafana_admin_password
   ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/generate_secret.yml"

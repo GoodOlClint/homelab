@@ -1,5 +1,12 @@
 ---
 # tasks file for nvidia_licensing
+- name: Verify required pre_tasks facts
+  ansible.builtin.assert:
+    that:
+      - mgmt_vlan_prefix is defined
+    fail_msg: "Required facts not available. This role must run from a playbook that includes full_pre_tasks.yml."
+    quiet: true
+
 - name: Ensure required system packages are installed
   ansible.builtin.apt:
     name:

@@ -1,6 +1,14 @@
 ---
 # Tasks for DNS VM (AdGuard Home)
 
+- name: Verify required pre_tasks facts
+  ansible.builtin.assert:
+    that:
+      - dns_zones is defined
+      - dns_zones is mapping
+    fail_msg: "Required facts not available. This role must run from a playbook that includes full_pre_tasks.yml."
+    quiet: true
+
 # Disable systemd-resolved stub listener so AdGuard can bind to port 53
 - name: Disable systemd-resolved stub listener
   ansible.builtin.lineinfile:
