@@ -112,6 +112,7 @@ Pre_tasks compute these facts from `network-data/vlans.yaml`:
 - `mgmt_vlan_prefix`, `services_vlan_prefix`, `storage_vlan_prefix`, `core_vlan_prefix`
 - Cross-VLAN IP translation: `{{ ansible_host | replace(mgmt_vlan_prefix, services_vlan_prefix) }}`
 - `internal_network_cidr`: the `/12` covering all VLANs
+- **SSH uses vlan10 (management) IPs by default.** `ansible_host` resolves to the management VLAN IP. When running ad-hoc SSH commands, use the vlan10 IP (i.e., `ansible_host` or the address from `vms.yaml`).
 
 ### Role Structure
 - `tasks/main.yml` — entry point, may include subtask files
