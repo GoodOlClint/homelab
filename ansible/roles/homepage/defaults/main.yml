@@ -1,5 +1,5 @@
 ---
-timezone: "America/Chicago"
+# timezone is defined in group_vars/all.yml
 homepage_base_dir: /opt/homepage
 homepage_config_dir: "{{ homepage_base_dir }}/config"
 homepage_port: 3000

@@ -1,6 +1,5 @@
 ---
-# Default timezone for all Docker containers
-timezone: "America/Chicago"
+# timezone is defined in group_vars/all.yml
 
 # Valheim Server Configuration
 valheim_server_name: "Homelab Valheim"

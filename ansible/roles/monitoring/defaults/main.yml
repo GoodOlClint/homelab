@@ -1,5 +1,3 @@
 ---
 # Default variables for monitoring role
-
-# Default timezone for monitoring containers
-timezone: "America/Chicago"
+# timezone is defined in group_vars/all.yml

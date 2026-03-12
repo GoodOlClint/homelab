@@ -279,7 +279,7 @@ Pre_tasks compute these facts from `network-data/vlans.yaml`:
 
 2. **NFS mount options are specified differently across roles.** `all.yml` defines `*_nfs_src` vars as `host:/path`, then some roles split them with `.split(':')`. Other roles use the NFS tuning params directly. The plex_services role auto-recreates volumes if options mismatch; others don't.
 
-3. **`timezone` is defined in multiple role defaults** (`docker`, `plex_services`, `homepage`, `monitoring` all have `timezone: "America/Chicago"` in their defaults). Should be defined once in `all.yml`.
+3. ~~`timezone` duplication~~ — moved to Resolved #5.
 
 4. **AdGuard DNS rewrites hardcode VM names.** The AdGuard template contains hardcoded references to specific VMs (docker, plex, nvidia-licensing, etc.) via `hostvars`. If a VM doesn't exist in the inventory, the template may fail.
 
@@ -296,3 +296,5 @@ Pre_tasks compute these facts from `network-data/vlans.yaml`:
 3. **Homepage role scope reduced.** API key extraction and Infisical secret seeding moved to plex-services role. Homepage now focuses on template deployment, Caddy, and Portainer. (Resolved by secrets refactor Phase 2.)
 
 4. **Monitoring role secret delivery unified.** Both OpenObserve and Grafana/exporters now use per-container Infisical agent env_files exclusively. (Resolved by secrets refactor Phases 5-6.)
+
+5. **`timezone` centralized in `group_vars/all.yml`.** Removed duplicate definitions from `docker`, `plex_services`, `homepage`, `monitoring` role defaults and `host_vars/plex-services.yml`. All roles reference the single `{{ timezone }}` variable. (Resolved in architecture cleanup Phase B.)

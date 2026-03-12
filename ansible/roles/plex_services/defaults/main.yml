@@ -1,8 +1,6 @@
 ---
 # Default variables for plex_services role
-
-# Default timezone for plex-services containers
-timezone: "America/Chicago"
+# timezone is defined in group_vars/all.yml
 
 # *arr services authentication
 plex_services_arr_user: "admin"
