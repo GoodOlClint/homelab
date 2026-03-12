@@ -401,7 +401,7 @@
     path: "/mnt/backups"
     src: "{{ proxmox_backup_nfs_src }}"
     fstype: nfs
-    opts: "defaults"
+    opts: "{{ nfs_mount_options }}"
     state: "mounted"
   when: pbs_storage_backend == 'nfs'
   tags:

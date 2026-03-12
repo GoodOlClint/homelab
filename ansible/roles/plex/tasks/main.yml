@@ -172,7 +172,7 @@
     path: "/mnt/plex"
     src: "{{ plex_nfs_src }}"
     fstype: nfs
-    opts: "defaults"
+    opts: "{{ nfs_mount_options }}"
     state: "mounted"
   tags:
     - plex

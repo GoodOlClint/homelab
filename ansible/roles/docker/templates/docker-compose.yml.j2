@@ -322,31 +322,31 @@ volumes:
     driver: local
     driver_opts:
       type: nfs
-      o: "addr={{ docker_nfs_server }},nfsvers=4,rsize=1048576,wsize=1048576,hard,intr,timeo=600"
+      o: "addr={{ docker_nfs_server }},{{ nfs_mount_options }}"
       device: ":{{ docker_nfs_path }}/kiwix"
   boinc_config:
     driver: local
     driver_opts:
       type: nfs
-      o: "addr={{ docker_nfs_server }},nfsvers=4,rsize=1048576,wsize=1048576,hard,intr,timeo=600"
+      o: "addr={{ docker_nfs_server }},{{ nfs_mount_options }}"
       device: ":{{ docker_nfs_path }}/boinc"
   doge-node_config:
     driver: local
     driver_opts:
       type: nfs
-      o: "addr={{ docker_nfs_server }},nfsvers=4,rsize=1048576,wsize=1048576,hard,intr,timeo=600"
+      o: "addr={{ docker_nfs_server }},{{ nfs_mount_options }}"
       device: ":{{ docker_nfs_path }}/dogecoin"
   valheim_config:
     driver: local
     driver_opts:
       type: nfs
-      o: "addr={{ docker_nfs_server }},nfsvers=4,rsize=1048576,wsize=1048576,hard,intr,timeo=600"
+      o: "addr={{ docker_nfs_server }},{{ nfs_mount_options }}"
       device: ":{{ docker_nfs_path }}/valheim/config"
   valheim_data:
     driver: local
     driver_opts:
       type: nfs
-      o: "addr={{ docker_nfs_server }},nfsvers=4,rsize=1048576,wsize=1048576,hard,intr,timeo=600"
+      o: "addr={{ docker_nfs_server }},{{ nfs_mount_options }}"
       device: ":{{ docker_nfs_path }}/valheim/data"
 {# plex_media — migrated to plex-services VM #}
 {#

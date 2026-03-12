@@ -295,7 +295,7 @@ make ansible-services TAGS=plex,homepage  # plex + homepage plays
 
 1. ~~Compose file base paths~~ — moved to Resolved #6.
 
-2. **NFS mount options are specified differently across roles.** `all.yml` defines `*_nfs_src` vars as `host:/path`, then some roles split them with `.split(':')`. Other roles use the NFS tuning params directly. The plex_services role auto-recreates volumes if options mismatch; others don't.
+2. ~~NFS mount options~~ — moved to Resolved #7.
 
 3. ~~`timezone` duplication~~ — moved to Resolved #5.
 
@@ -318,3 +318,5 @@ make ansible-services TAGS=plex,homepage  # plex + homepage plays
 5. **`timezone` centralized in `group_vars/all.yml`.** Removed duplicate definitions from `docker`, `plex_services`, `homepage`, `monitoring` role defaults and `host_vars/plex-services.yml`. All roles reference the single `{{ timezone }}` variable. (Resolved in architecture cleanup Phase B.)
 
 6. **Compose file base paths unified.** All services now use `/opt/<service>/docker-compose.yml` — the docker legacy VM moved from flat `/opt/docker-compose.yml` to `/opt/docker/docker-compose.yml`. Each role defines a `*_base_dir` default variable. A shared `tasks/deploy_compose.yml` task provides a reusable deploy+restart pattern. Requires `make rebuild docker` for existing docker VMs. (Resolved in architecture cleanup Phase E+F.)
+
+7. **NFS mount options unified.** All roles now use the centralized `{{ nfs_mount_options }}` variable from `group_vars/all.yml`. Docker VM volumes replaced hardcoded `nfsvers=4,...,timeo=600` with `{{ nfs_mount_options }}` (gains NFSv4.1, noatime, nconnect=4). Plex and PBS system-level mounts replaced `opts: "defaults"` with `{{ nfs_mount_options }}`. The plex_services volume auto-recreate logic remains unique to that role. The `*_nfs_src: "host:/path"` variable pattern and `.split(':')` calls were audited but intentionally left as-is — the source variables are centralized in `all.yml`, the split pattern works consistently (docker pre-splits in task vars, plex-services splits inline in template), and replacing it with separate `nfs_server` + `*_nfs_path` variables would double the NFS variable count for no functional gain. (Resolved in architecture cleanup Phase I.)
