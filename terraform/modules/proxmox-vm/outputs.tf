@@ -45,6 +45,11 @@ output "vm_management_ips" {
   value       = local.vm_management_ips
 }
 
+output "vm_service_ips" {
+  description = "Map of VM names to their service-facing IP (services VLAN if available, otherwise management IP)"
+  value       = local.vm_service_ips
+}
+
 output "merged_vlans" {
   description = "Map of static VLAN configurations"
   value       = local.merged_vlans

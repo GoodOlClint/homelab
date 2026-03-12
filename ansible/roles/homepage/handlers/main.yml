@@ -1,0 +1,17 @@
+---
+- name: restart docker
+  ansible.builtin.systemd:
+    name: docker
+    state: restarted
+
+- name: restart homepage compose
+  community.docker.docker_compose_v2:
+    project_src: /opt/homepage
+    state: present
+    recreate: always
+  listen: "restart homepage compose"
+
+- name: restart avahi
+  ansible.builtin.systemd:
+    name: avahi-daemon
+    state: restarted

@@ -1,0 +1,63 @@
+services:
+  caddy:
+    image: {{ caddy_image }}
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - {{ homepage_base_dir }}/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - homepage
+      - portainer
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  homepage:
+    image: {{ homepage_image }}
+    container_name: homepage
+    restart: unless-stopped
+    ports:
+      - "{{ homepage_port }}:3000"
+    environment:
+      - TZ={{ timezone }}
+      - HOMEPAGE_ALLOWED_HOSTS=homepage.local,{{ hostvars[inventory_hostname]['service_ip'] | default(ansible_host) }},home.{{ dns_zones.vlan100.zone }}
+    env_file:
+      - /etc/infisical/secrets/homepage.env
+    volumes:
+      - {{ homepage_config_dir }}:/app/config
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  portainer:
+    image: {{ portainer_image }}
+    container_name: portainer
+    restart: unless-stopped
+    ports:
+      - "{{ portainer_port }}:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "--no-check-certificate", "--no-verbose", "--tries=3", "--spider", "--header='Content-Type:application/json'", "http://localhost:9000/api/system/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  portainer_data:
+  caddy_data:
+  caddy_config:

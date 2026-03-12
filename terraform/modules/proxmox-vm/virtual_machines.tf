@@ -98,6 +98,15 @@ locals {
         coalesce(vm_config.mgmt_ip_offset, vm_config.vm_id, try(proxmox_virtual_environment_vm.vms[vm_config.name].vm_id, 0))
       )
   }
+
+  # Service-facing IP: services VLAN IP if VM has it, otherwise falls back to management IP.
+  # Used by Homepage dashboard and other templates that need user-accessible URLs.
+  vm_service_ips = {
+    for vm_config in var.vm_configurations : vm_config.name =>
+      contains(vm_config.vlans, var.services_vlan) && vm_config.ip_offset != null
+      ? cidrhost(local.merged_vlans[var.services_vlan].subnet, vm_config.ip_offset)
+      : local.vm_management_ips[vm_config.name]
+  }
 }
 # Generate cloud-init user data files for each VM (only when not using Packer)
 resource "proxmox_virtual_environment_file" "user_data" {

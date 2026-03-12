@@ -16,7 +16,7 @@
       register: upgrade_result
 
 - name: Update all Docker containers (pull latest and recreate)
-  hosts: docker,plex-services
+  hosts: docker,plex-services,openobserve,homepage,infisical,lancache
   become: true
   tasks:
     - name: Pull latest images for docker services
@@ -37,6 +37,38 @@
       when: inventory_hostname == 'plex-services'
       changed_when: "'Recreate' in plex_pull_result.stderr"
 
+    - name: Pull latest images for monitoring
+      community.docker.docker_compose_v2:
+        project_src: /opt/monitoring
+        pull: always
+      register: monitoring_pull_result
+      when: inventory_hostname == 'openobserve'
+      changed_when: "'Recreate' in monitoring_pull_result.stderr"
+
+    - name: Pull latest images for homepage
+      community.docker.docker_compose_v2:
+        project_src: /opt/homepage
+        pull: always
+      register: homepage_pull_result
+      when: inventory_hostname == 'homepage'
+      changed_when: "'Recreate' in homepage_pull_result.stderr"
+
+    - name: Pull latest images for infisical
+      community.docker.docker_compose_v2:
+        project_src: /opt/infisical
+        pull: always
+      register: infisical_pull_result
+      when: inventory_hostname == 'infisical'
+      changed_when: "'Recreate' in infisical_pull_result.stderr"
+
+    - name: Pull latest images for lancache
+      community.docker.docker_compose_v2:
+        project_src: /opt/lancache
+        pull: always
+      register: lancache_pull_result
+      when: inventory_hostname == 'lancache'
+      changed_when: "'Recreate' in lancache_pull_result.stderr"
+
     - name: Restart docker services with latest images
       community.docker.docker_compose_v2:
         project_src: /opt
@@ -54,6 +86,38 @@
       when:
         - inventory_hostname == 'plex-services'
         - plex_pull_result.changed | default(false)
+
+    - name: Restart monitoring with latest images
+      community.docker.docker_compose_v2:
+        project_src: /opt/monitoring
+        state: present
+      when:
+        - inventory_hostname == 'openobserve'
+        - monitoring_pull_result.changed | default(false)
+
+    - name: Restart homepage with latest images
+      community.docker.docker_compose_v2:
+        project_src: /opt/homepage
+        state: present
+      when:
+        - inventory_hostname == 'homepage'
+        - homepage_pull_result.changed | default(false)
+
+    - name: Restart infisical with latest images
+      community.docker.docker_compose_v2:
+        project_src: /opt/infisical
+        state: present
+      when:
+        - inventory_hostname == 'infisical'
+        - infisical_pull_result.changed | default(false)
+
+    - name: Restart lancache with latest images
+      community.docker.docker_compose_v2:
+        project_src: /opt/lancache
+        state: present
+      when:
+        - inventory_hostname == 'lancache'
+        - lancache_pull_result.changed | default(false)
 
     - name: Prune unused Docker images
       ansible.builtin.shell: docker image prune -af

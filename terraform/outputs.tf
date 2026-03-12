@@ -5,6 +5,7 @@ output "ansible_inventory_yaml" {
       hosts = {
         for vm_name, ip in module.vms.vm_management_ips : vm_name => {
           ansible_host = ip
+          service_ip   = module.vms.vm_service_ips[vm_name]
         }
       }
     }
@@ -26,6 +27,7 @@ output "vm_details" {
     vm_nodes          = module.vms.vm_nodes
     vm_mac_addresses  = module.vms.vm_mac_addresses
     vm_management_ips = module.vms.vm_management_ips
+    vm_service_ips    = module.vms.vm_service_ips
   }
 }
 

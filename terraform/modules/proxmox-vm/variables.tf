@@ -158,6 +158,12 @@ variable "management_vlan" {
   default     = "vlan10"
 }
 
+variable "services_vlan" {
+  type        = string
+  description = "VLAN key for services access (user-facing). Service IP is computed from ip_offset as cidrhost(services_subnet, ip_offset). Falls back to management IP when VM doesn't have this VLAN."
+  default     = "vlan40"
+}
+
 variable "dns_servers" {
   type        = list(string)
   description = "DNS servers applied to all VM interfaces via cloud-init (sourced from network-data/vlans.yaml)"

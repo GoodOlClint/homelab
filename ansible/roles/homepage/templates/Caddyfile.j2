@@ -1,0 +1,21 @@
+{
+  # Serve HTTP content instead of redirecting to HTTPS
+  auto_https disable_redirects
+}
+
+# Homepage dashboard — accessible via DNS name and mDNS
+home.{{ dns_zones.vlan100.zone }}, homepage.local {
+  tls internal
+  reverse_proxy homepage:3000
+}
+
+# Portainer — separate hostname (subpath routing is buggy in Portainer 2.27+)
+portainer.{{ dns_zones.vlan100.zone }} {
+  tls internal
+  reverse_proxy portainer:9000
+}
+
+# Fallback for direct IP access — serves Homepage
+:80 {
+  reverse_proxy homepage:3000
+}

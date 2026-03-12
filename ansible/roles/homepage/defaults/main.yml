@@ -1,0 +1,9 @@
+---
+timezone: "America/Chicago"
+homepage_base_dir: /opt/homepage
+homepage_config_dir: "{{ homepage_base_dir }}/config"
+homepage_port: 3000
+homepage_image: "ghcr.io/gethomepage/homepage:latest"
+caddy_image: "caddy:alpine"
+portainer_image: "portainer/portainer-ce:alpine"
+portainer_port: 9000

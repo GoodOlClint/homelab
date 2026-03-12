@@ -123,5 +123,14 @@ locals {
       memory_mb    = 8192
       disk_size_gb = 20
     },
+    {
+      name         = "homepage"
+      vm_id        = 111
+      vlans        = ["vlan10", "vlan40"]
+      ip_offset    = 111
+      cpu_cores    = 2
+      memory_mb    = 2048
+      disk_size_gb = 10
+    },
   ]
 }

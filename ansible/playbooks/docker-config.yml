@@ -10,6 +10,13 @@
 
   vars_files:
     - ../group_vars/all.yml
+    - ../roles/docker/defaults/main.yml
+    - ../roles/authentik/defaults/main.yml
+    - ../roles/infisical/defaults/main.yml
+    - ../roles/monitoring/defaults/main.yml
+    - ../roles/lancache/defaults/main.yml
+    - ../roles/homepage/defaults/main.yml
+    - ../roles/plex_services/defaults/main.yml
 
   pre_tasks:
     - name: Load all configuration and secrets
@@ -33,6 +40,36 @@
         - secrets is defined
         - secrets.docker is defined
         - inventory_hostname == 'docker'
+
+    - name: Merge nested monitoring secrets into top level
+      ansible.builtin.set_fact:
+        secrets: "{{ secrets | combine(secrets.monitoring | default({})) }}"
+      when:
+        - secrets is defined
+        - secrets.monitoring is defined
+        - inventory_hostname == 'openobserve'
+
+    - name: Set monitoring variable aliases from secrets
+      ansible.builtin.set_fact:
+        grafana_admin_password: "{{ secrets.grafana_admin_password | default('') }}"
+        openobserve_root_user_pass: "{{ secrets.openobserve_root_user_pass | default(secrets.monitoring.openobserve_root_user_pass | default('')) }}"
+        proxmox_token_value: "{{ secrets.proxmox_token_value | default('') }}"
+        unifi_monitoring_password: "{{ secrets.unifi_monitoring_password | default('') }}"
+        pbs_api_token: "{{ secrets.pbs_api_token | default('') }}"
+      when: inventory_hostname == 'openobserve'
+
+    - name: Merge nested homepage secrets into top level
+      ansible.builtin.set_fact:
+        secrets: "{{ secrets | combine(secrets.homepage | default({})) }}"
+      when:
+        - secrets is defined
+        - secrets.homepage is defined
+        - inventory_hostname == 'homepage'
+
+    - name: Compute lancache service IP on services VLAN
+      ansible.builtin.set_fact:
+        lancache_service_ip: "{{ ansible_host | replace(mgmt_vlan_prefix, services_vlan_prefix) }}"
+      when: inventory_hostname == 'lancache'
 
   tasks:
     # --- plex-services ---
@@ -75,18 +112,9 @@
       vars:
         docker_nfs_server: "{{ docker_nfs_src.split(':')[0] }}"
         docker_nfs_path: "{{ docker_nfs_src.split(':')[1] }}"
-        plex_nfs_path: "/volume1/plex/data"
-        radarr_user: 2001
-        radarr_group: 2000
-        radarr_umask: '002'
-        radarr_timezone: "{{ timezone }}"
-        sonarr_user: 2002
-        sonarr_group: 2000
-        sonarr_umask: '002'
-        sonarr_timezone: "{{ timezone }}"
         kiwix_timezone: "{{ timezone }}"
         boinc_user: 1000
-        boinc_group: 1000
+        boinc_group: 988
         boinc_timezone: "{{ timezone }}"
         doge_node_timezone: "{{ timezone }}"
       register: docker_compose
@@ -102,6 +130,24 @@
       register: docker_env
       when: inventory_hostname == 'docker'
 
+    - name: Check if authentik is deployed
+      ansible.builtin.stat:
+        path: /opt/authentik
+      register: authentik_dir
+      when: inventory_hostname == 'docker'
+
+    - name: Deploy authentik docker-compose
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/authentik/templates/docker-compose.yml.j2"
+        dest: /opt/authentik/docker-compose.yml
+        owner: root
+        group: root
+        mode: '0644'
+      register: authentik_compose
+      when:
+        - inventory_hostname == 'docker'
+        - authentik_dir.stat.exists | default(false)
+
     - name: Restart docker VM containers
       community.docker.docker_compose_v2:
         project_src: /opt
@@ -111,6 +157,15 @@
       when:
         - inventory_hostname == 'docker'
         - docker_compose is changed or docker_env is changed
+
+    - name: Restart authentik containers
+      community.docker.docker_compose_v2:
+        project_src: /opt/authentik
+        state: restarted
+      when:
+        - inventory_hostname == 'docker'
+        - authentik_dir.stat.exists | default(false)
+        - authentik_compose is changed
 
     # --- lancache ---
     - name: Deploy lancache docker-compose
@@ -130,3 +185,208 @@
       when:
         - inventory_hostname == 'lancache'
         - lancache_compose is changed
+
+    # --- homepage ---
+    - name: Deploy homepage docker-compose
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/homepage/templates/docker-compose.yml.j2"
+        dest: /opt/homepage/docker-compose.yml
+        owner: root
+        group: root
+        mode: '0600'
+      register: homepage_compose
+      when: inventory_hostname == 'homepage'
+
+    - name: Deploy Caddyfile
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/homepage/templates/Caddyfile.j2"
+        dest: /opt/homepage/Caddyfile
+        owner: root
+        group: root
+        mode: '0644'
+      register: homepage_caddyfile
+      when: inventory_hostname == 'homepage'
+
+    - name: Deploy homepage config files
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/homepage/templates/{{ item }}.j2"
+        dest: "/opt/homepage/config/{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop:
+        - services.yaml
+        - settings.yaml
+        - widgets.yaml
+        - bookmarks.yaml
+        - docker.yaml
+      register: homepage_config
+      when: inventory_hostname == 'homepage'
+
+    - name: Restart homepage containers
+      community.docker.docker_compose_v2:
+        project_src: /opt/homepage
+        state: present
+        recreate: always
+      when:
+        - inventory_hostname == 'homepage'
+        - homepage_compose is changed or homepage_caddyfile is changed or homepage_config is changed
+
+    # --- infisical ---
+    - name: Deploy infisical docker-compose
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/infisical/templates/docker-compose.yml.j2"
+        dest: /opt/infisical/docker-compose.yml
+        owner: root
+        group: root
+        mode: '0600'
+      register: infisical_compose
+      when: inventory_hostname == 'infisical'
+
+    - name: Restart infisical containers
+      community.docker.docker_compose_v2:
+        project_src: /opt/infisical
+        state: restarted
+      when:
+        - inventory_hostname == 'infisical'
+        - infisical_compose is changed
+
+    # --- openobserve (monitoring) ---
+    - name: Deploy monitoring docker-compose
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/monitoring/templates/docker-compose.yml.j2"
+        dest: /opt/monitoring/docker-compose.yml
+        owner: root
+        group: root
+        mode: '0600'
+      register: monitoring_compose
+      when: inventory_hostname == 'openobserve'
+
+    - name: Deploy OpenObserve configuration
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/monitoring/templates/openobserve.env.j2"
+        dest: /opt/monitoring/openobserve/.env
+        owner: root
+        group: root
+        mode: '0600'
+      register: monitoring_openobserve_env
+      when: inventory_hostname == 'openobserve'
+
+    - name: Deploy Prometheus configuration
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/monitoring/templates/prometheus.yml.j2"
+        dest: /opt/monitoring/prometheus/prometheus.yml
+        owner: root
+        group: root
+        mode: '0644'
+      register: monitoring_prometheus
+      when: inventory_hostname == 'openobserve'
+
+    - name: Deploy Prometheus alerting rules
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/monitoring/templates/alert.rules.yml.j2"
+        dest: /opt/monitoring/prometheus/alert.rules.yml
+        owner: root
+        group: root
+        mode: '0644'
+      register: monitoring_alerts
+      when: inventory_hostname == 'openobserve'
+
+    - name: Deploy AxoSyslog configuration
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/monitoring/templates/axosyslog.conf.j2"
+        dest: /opt/monitoring/axosyslog/syslog-ng.conf
+        owner: root
+        group: root
+        mode: '0644'
+      register: monitoring_axosyslog
+      when: inventory_hostname == 'openobserve'
+
+    - name: Deploy Grafana datasource configuration
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/monitoring/templates/grafana-datasource.yml.j2"
+        dest: /opt/monitoring/grafana/provisioning/datasources/openobserve.yml
+        owner: root
+        group: root
+        mode: '0644'
+      register: monitoring_grafana_ds
+      when: inventory_hostname == 'openobserve'
+
+    - name: Deploy Grafana dashboard provisioning
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/monitoring/templates/grafana-dashboards.yml.j2"
+        dest: /opt/monitoring/grafana/provisioning/dashboards/default.yml
+        owner: root
+        group: root
+        mode: '0644'
+      register: monitoring_grafana_dashboards
+      when: inventory_hostname == 'openobserve'
+
+    - name: Deploy Grafana dashboard JSON files
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../roles/monitoring/files/{{ item }}"
+        dest: "/opt/monitoring/grafana/provisioning/dashboards/{{ item | replace('dashboard-', '') }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop:
+        - dashboard-system-overview.json
+        - dashboard-docker.json
+        - dashboard-dns.json
+        - dashboard-pbs-overview.json
+        - dashboard-unifi-sites.json
+        - dashboard-unifi-clients.json
+        - dashboard-synology.json
+        - dashboard-proxmox.json
+        - dashboard-isp-quality.json
+      register: monitoring_dashboard_files
+      when: inventory_hostname == 'openobserve'
+
+    - name: Deploy Smokeping dashboard
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/monitoring/templates/dashboard-smokeping.json.j2"
+        dest: /opt/monitoring/grafana/provisioning/dashboards/smokeping.json
+        owner: root
+        group: root
+        mode: '0644'
+      register: monitoring_smokeping
+      when: inventory_hostname == 'openobserve'
+
+    - name: Deploy Blackbox Exporter configuration
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/monitoring/templates/blackbox.yml.j2"
+        dest: /opt/monitoring/blackbox/blackbox.yml
+        owner: root
+        group: root
+        mode: '0644'
+      register: monitoring_blackbox
+      when: inventory_hostname == 'openobserve'
+
+    - name: Deploy SNMP Exporter configuration
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/monitoring/templates/snmp.yml.j2"
+        dest: /opt/monitoring/snmp/snmp.yml
+        owner: root
+        group: root
+        mode: '0644'
+      register: monitoring_snmp
+      when: inventory_hostname == 'openobserve'
+
+    - name: Restart monitoring containers
+      community.docker.docker_compose_v2:
+        project_src: /opt/monitoring
+        state: restarted
+      when:
+        - inventory_hostname == 'openobserve'
+        - >-
+          monitoring_compose is changed or
+          monitoring_openobserve_env is changed or
+          monitoring_prometheus is changed or
+          monitoring_alerts is changed or
+          monitoring_axosyslog is changed or
+          monitoring_grafana_ds is changed or
+          monitoring_grafana_dashboards is changed or
+          monitoring_dashboard_files is changed or
+          monitoring_smokeping is changed or
+          monitoring_blackbox is changed or
+          monitoring_snmp is changed

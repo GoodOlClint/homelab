@@ -23,7 +23,7 @@ if ! command -v infisical &> /dev/null; then
     exit 1
 fi
 
-# Read project ID from bootstrap config
+# Read project ID and API URL from bootstrap config
 PROJECT_ID=$("$VENV_PYTHON" -c "
 import yaml
 data = yaml.safe_load(open('$BOOTSTRAP_FILE'))
@@ -31,13 +31,25 @@ pid = data.get('bootstrap_config', {}).get('infisical_project_id', 'REPLACE_ME')
 print('' if pid == 'REPLACE_ME' else pid)
 ")
 
+INFISICAL_URL=$("$VENV_PYTHON" -c "
+import yaml
+data = yaml.safe_load(open('$BOOTSTRAP_FILE'))
+url = data.get('bootstrap_config', {}).get('infisical_url', 'REPLACE_ME')
+print('' if url == 'REPLACE_ME' else url)
+")
+
 if [ -z "$PROJECT_ID" ]; then
     echo "ERROR: infisical_project_id not set in $BOOTSTRAP_FILE"
     exit 1
 fi
 
+if [ -z "$INFISICAL_URL" ]; then
+    echo "ERROR: infisical_url not set in $BOOTSTRAP_FILE"
+    exit 1
+fi
+
 # Common CLI flags
-CLI_FLAGS="--env $INFISICAL_ENV --projectId $PROJECT_ID"
+CLI_FLAGS="--env $INFISICAL_ENV --projectId $PROJECT_ID --domain $INFISICAL_URL/api"
 
 # Helper: create a folder if it doesn't exist
 create_folder() {
@@ -67,14 +79,14 @@ copy_secret() {
     # Try exact name first, then lowercase variant
     local value=""
     local found_name=""
-    value=$(infisical secrets get "$secret_name" --env "$INFISICAL_ENV" --path "/" \
-        --projectId "$PROJECT_ID" --plain 2>/dev/null) || true
+    value=$(infisical secrets get "$secret_name" --path "/" \
+        $CLI_FLAGS --plain 2>/dev/null) || true
 
     if [ -n "$value" ]; then
         found_name="$secret_name"
     elif [ "$lower_name" != "$secret_name" ]; then
-        value=$(infisical secrets get "$lower_name" --env "$INFISICAL_ENV" --path "/" \
-            --projectId "$PROJECT_ID" --plain 2>/dev/null) || true
+        value=$(infisical secrets get "$lower_name" --path "/" \
+            $CLI_FLAGS --plain 2>/dev/null) || true
         if [ -n "$value" ]; then
             found_name="$lower_name"
         fi
@@ -86,8 +98,8 @@ copy_secret() {
     fi
 
     # Set in destination folder with the uppercase name (for Go template consistency)
-    if infisical secrets set "${secret_name}=${value}" --env "$INFISICAL_ENV" \
-        --path "$dest_path" --projectId "$PROJECT_ID" > /dev/null 2>&1; then
+    if infisical secrets set "${secret_name}=${value}" \
+        --path "$dest_path" $CLI_FLAGS > /dev/null 2>&1; then
         if [ "$found_name" != "$secret_name" ]; then
             echo "  OK:   $secret_name → $dest_path (found as $found_name at /)"
         else
@@ -110,6 +122,7 @@ create_folder "plex"
 create_folder "plex-services"
 create_folder "infrastructure"
 create_folder "docker"
+create_folder "homepage"
 echo ""
 
 # /shared/ — cross-VM secrets (all agents read)
@@ -155,6 +168,9 @@ copy_secret "UNIFI_ADMIN_PASSWORD" "/infrastructure"
 echo ""
 echo "=== /docker/ ==="
 copy_secret "CLOUDFLARED_TUNNEL_TOKEN" "/docker"
+copy_secret "AUTHENTIK_POSTGRES_PASSWORD" "/docker"
+copy_secret "AUTHENTIK_SECRET_KEY" "/docker"
+copy_secret "VALHEIM_SERVER_PASSWORD" "/docker"
 
 echo ""
 echo "Done! Secrets organized into folders."
