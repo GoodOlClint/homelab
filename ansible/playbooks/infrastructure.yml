@@ -125,19 +125,19 @@
       - name: monitoring-grafana
         dest_path: /etc/infisical/secrets/monitoring-grafana.env
         template_src: secrets/monitoring-grafana.env.tpl.j2
-        post_command: "docker compose -f /opt/monitoring/docker-compose.yml restart grafana"
+        post_command: "docker compose -f /opt/monitoring/docker-compose.yml up -d --force-recreate grafana"
       - name: monitoring-proxmox-exporter
         dest_path: /etc/infisical/secrets/monitoring-proxmox-exporter.env
         template_src: secrets/monitoring-proxmox-exporter.env.tpl.j2
-        post_command: "docker compose -f /opt/monitoring/docker-compose.yml restart proxmox-exporter"
+        post_command: "docker compose -f /opt/monitoring/docker-compose.yml up -d --force-recreate proxmox-exporter"
       - name: monitoring-unifi-poller
         dest_path: /etc/infisical/secrets/monitoring-unifi-poller.env
         template_src: secrets/monitoring-unifi-poller.env.tpl.j2
-        post_command: "docker compose -f /opt/monitoring/docker-compose.yml restart unifi-poller"
+        post_command: "docker compose -f /opt/monitoring/docker-compose.yml up -d --force-recreate unifi-poller"
       - name: monitoring-pbs-exporter
         dest_path: /etc/infisical/secrets/monitoring-pbs-exporter.env
         template_src: secrets/monitoring-pbs-exporter.env.tpl.j2
-        post_command: "docker compose -f /opt/monitoring/docker-compose.yml restart pbs-exporter"
+        post_command: "docker compose -f /opt/monitoring/docker-compose.yml up -d --force-recreate pbs-exporter"
   roles:
     - infisical_client
     - dns_config

@@ -26,29 +26,6 @@
     pbs_backup_user_password: "{{ secrets.pbs.pbs_backup_user_password }}"
   tags: [proxmox_backup, pbs, secrets]
 
-- name: Remove Proxmox enterprise repo if present
-  ansible.builtin.file:
-    path: /etc/apt/sources.list.d/pbs-enterprise.list
-    state: absent
-  register: proxmox_enterprise_repo_removed
-  tags:
-    - proxmox_backup
-    - pbs
-    - backup
-    - packages
-
-- name: Remove Proxmox enterprise repo from /etc/apt/sources.list if present
-  ansible.builtin.lineinfile:
-    path: /etc/apt/sources.list
-    regexp: '^deb .*enterprise.proxmox.com/debian/pbs'
-    state: absent
-  register: proxmox_enterprise_repo_line_removed
-  tags:
-    - proxmox_backup
-    - pbs
-    - backup
-    - packages
-
 - name: Check if Proxmox Backup Server GPG key exists
   ansible.builtin.stat:
     path: /etc/apt/trusted.gpg.d/proxmox-release-bookworm.gpg
@@ -82,34 +59,11 @@
     - backup
     - packages
 
-- name: Check if Proxmox Backup Server repo is present
-  ansible.builtin.shell: grep -q '^deb .*/pbs' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null
-  register: proxmox_backup_repo_present
-  changed_when: false
-  failed_when: false
-  tags:
-    - proxmox_backup
-    - pbs
-    - backup
-    - packages
-
-- name: Add Proxmox Backup Server repository
+- name: Add Proxmox Backup Server no-subscription repository
   ansible.builtin.apt_repository:
     repo: "deb [signed-by=/etc/apt/keyrings/proxmox-release-bookworm.gpg] http://download.proxmox.com/debian/pbs bookworm pbs-no-subscription"
     state: present
     filename: proxmox-backup
-  when: proxmox_backup_repo_present.rc != 0
-  tags:
-    - proxmox_backup
-    - pbs
-    - backup
-    - packages
-
-- name: Check if Proxmox Backup Server is installed
-  ansible.builtin.shell: dpkg -l | grep -qw proxmox-backup-server
-  register: proxmox_backup_installed
-  changed_when: false
-  failed_when: false
   tags:
     - proxmox_backup
     - pbs
@@ -121,8 +75,42 @@
     name: proxmox-backup-server
     state: present
     update_cache: true
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - packages
 
-  when: proxmox_backup_installed.rc != 0
+# PBS install drops an enterprise repo file — remove it after install
+- name: Find all Proxmox enterprise repo files
+  ansible.builtin.find:
+    paths: /etc/apt/sources.list.d
+    patterns: '*enterprise*'
+  register: _enterprise_repo_files
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - packages
+
+- name: Remove Proxmox enterprise repo files
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ _enterprise_repo_files.files }}"
+  loop_control:
+    label: "{{ item.path }}"
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - packages
+
+- name: Remove Proxmox enterprise repo from /etc/apt/sources.list if present
+  ansible.builtin.lineinfile:
+    path: /etc/apt/sources.list
+    regexp: '.*enterprise.proxmox.com'
+    state: absent
   tags:
     - proxmox_backup
     - pbs

@@ -431,7 +431,7 @@
     login_password: "{{ secrets.plex_services.postgres_password }}"
     login_db: "{{ postgres_default_db }}"
     name: "{{ item.value.db_user }}"
-    password: "{{ secrets[item.key ~ '_db_password'] }}"
+    password: "{{ secrets.plex_services[item.key ~ '_db_password'] }}"
     encrypted: true
     state: present
   loop: "{{ plex_services | dict2items }}"
@@ -635,7 +635,7 @@
       community.general.xml:
         path: "/opt/plex-services/{{ item.key }}/{{ item.value.config }}"
         xpath: /Config/PostgresPassword
-        value: "{{ secrets[item.key ~ '_db_password'] }}"
+        value: "{{ secrets.plex_services[item.key ~ '_db_password'] }}"
         state: present
       loop: "{{ plex_services | dict2items }}"
       loop_control:
@@ -1379,6 +1379,19 @@
         - item is not skipped
         - item.json | selectattr('implementation', 'equalto', 'PlexServer') | list | length == 0
       no_log: true
+      failed_when: false
+      register: _plex_notification_results
+
+    - name: Warn about Plex notification failures
+      ansible.builtin.debug:
+        msg: "WARNING: Failed to add Plex notification to {{ item.item.item.service }} (HTTP {{ item.status | default('unknown') }}). Re-run after services are fully initialized."
+      loop: "{{ _plex_notification_results.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item.item.service | default('unknown') }}"
+      when:
+        - item is not skipped
+        - item.status is defined
+        - item.status not in [200, 201]
 
 - name: Register *arr applications in Prowlarr
   when:
@@ -1530,6 +1543,18 @@
     - config
     - bazarr
   block:
+    - name: Wait for Bazarr API to be ready
+      ansible.builtin.uri:
+        url: "http://localhost:6767/api/system/status"
+        method: GET
+        headers:
+          X-API-KEY: "{{ arr_api_keys.bazarr }}"
+        status_code: 200
+      register: _bazarr_health
+      until: _bazarr_health is succeeded
+      retries: 15
+      delay: 3
+
     - name: Get current Bazarr language profiles
       ansible.builtin.uri:
         url: "http://localhost:6767/api/system/languages/profiles"

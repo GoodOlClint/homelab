@@ -96,7 +96,12 @@
 
 - name: Verify PBS connection
   ansible.builtin.shell: |
-    . /etc/proxmox-backup/pbs-client.env && proxmox-backup-client snapshot list | head -n 1 || true
+    . /etc/proxmox-backup/pbs-client.env
+    if [ -z "$PBS_PASSWORD" ] || [ -z "$PBS_FINGERPRINT" ]; then
+      echo "SKIP: PBS credentials not yet available"
+      exit 2
+    fi
+    timeout 10 proxmox-backup-client snapshot list | head -n 1
   register: pbs_connection_test
   failed_when: false
   changed_when: false
@@ -108,8 +113,12 @@
 
 - name: Display PBS connection status
   ansible.builtin.debug:
-    msg: "PBS Connection: {{ 'SUCCESS' if pbs_connection_test.rc == 0 else 'FAILED - ' + pbs_connection_test.stderr }}"
-  when: pbs_connection_test is defined and pbs_connection_test.rc is defined
+    msg: >-
+      PBS Connection: {{
+        'SKIPPED - credentials not yet available (run PBS role first)'
+        if pbs_connection_test.rc == 2
+        else ('SUCCESS' if pbs_connection_test.rc == 0
+        else 'FAILED - ' + pbs_connection_test.stderr | default('unknown error')) }}
   tags:
     - pbs_client
     - pbs

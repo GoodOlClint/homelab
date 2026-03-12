@@ -44,6 +44,17 @@
   when: item.template_src is defined
   notify: restart infisical-agent
 
+- name: Ensure parent directories exist for agent-rendered secrets
+  ansible.builtin.file:
+    path: "{{ item.dest_path | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop: "{{ infisical_agent_templates }}"
+  loop_control:
+    label: "{{ item.dest_path | dirname }}"
+
 - name: Create placeholder files for agent-rendered secrets
   ansible.builtin.copy:
     content: "# Placeholder — will be overwritten by Infisical Agent\n"

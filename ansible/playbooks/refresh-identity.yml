@@ -107,7 +107,7 @@
 # Checks agent health first — skips healthy hosts unless force=true
 # ============================================================
 - name: "Refresh: Re-provision Machine Identities on target VMs"
-  hosts: openobserve,docker,plex,plex-services
+  hosts: openobserve,docker,plex,plex-services,homepage
   become: true
   serial: 1
   gather_facts: false

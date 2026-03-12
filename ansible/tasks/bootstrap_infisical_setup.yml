@@ -300,7 +300,13 @@
           {{ playbook_dir }}/../group_vars/bootstrap.sops.yml
       no_log: true
 
-    # --- Seed secrets from SOPS to Infisical ---
+    # --- Refresh in-memory facts to match SOPS updates ---
+
+    - name: Refresh bootstrap_config fact with new Infisical credentials
+      ansible.builtin.set_fact:
+        bootstrap_config: "{{ bootstrap_config | combine({'infisical_project_id': _project_id, 'infisical_org_id': _org_id, 'infisical_url': _infisical_url}) }}"
+        bootstrap: "{{ bootstrap | combine({'infisical_client_id': _client_id, 'infisical_client_secret': _client_secret}) }}"
+      no_log: true
 
     # --- Cleanup ---
 
