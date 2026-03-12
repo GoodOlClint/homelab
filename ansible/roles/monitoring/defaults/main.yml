@@ -1,3 +1,6 @@
 ---
 # Default variables for monitoring role
 # timezone is defined in group_vars/all.yml
+
+# Docker compose base directory
+monitoring_base_dir: /opt/monitoring

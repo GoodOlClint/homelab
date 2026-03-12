@@ -2,6 +2,9 @@
 # Default variables for plex_services role
 # timezone is defined in group_vars/all.yml
 
+# Docker compose base directory
+plex_services_base_dir: /opt/plex-services
+
 # *arr services authentication
 plex_services_arr_user: "admin"
 plex_services_arr_auth_method: "Forms"

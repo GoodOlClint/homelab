@@ -1,0 +1,39 @@
+---
+# Shared task for deploying docker-compose templates and restarting containers.
+#
+# Required variables:
+#   compose_service_name    — human-readable name for task names
+#   compose_project_src     — path to directory containing docker-compose.yml
+#   compose_template_src    — path to docker-compose.yml.j2 template
+#
+# Optional variables:
+#   compose_extra_templates — list of {src, dest, mode} for additional config files
+#   compose_template_vars   — extra vars to pass to the compose template
+
+- name: "Deploy {{ compose_service_name }} docker-compose"
+  ansible.builtin.template:
+    src: "{{ compose_template_src }}"
+    dest: "{{ compose_project_src }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: '0600'
+  register: _compose_result
+
+- name: "Deploy {{ compose_service_name }} extra config files"
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: "{{ item.owner | default('root') }}"
+    group: "{{ item.group | default('root') }}"
+    mode: "{{ item.mode | default('0644') }}"
+  loop: "{{ compose_extra_templates | default([]) }}"
+  register: _config_results
+
+- name: "Restart {{ compose_service_name }} containers"
+  community.docker.docker_compose_v2:
+    project_src: "{{ compose_project_src }}"
+    state: present
+    recreate: always
+  when: >-
+    _compose_result is changed or
+    (_config_results.results | default([]) | selectattr('changed') | list | length > 0)

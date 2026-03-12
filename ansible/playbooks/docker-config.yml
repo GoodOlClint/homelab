@@ -72,7 +72,7 @@
     - name: Deploy docker VM docker-compose
       ansible.builtin.template:
         src: "{{ playbook_dir }}/../roles/docker/templates/docker-compose.yml.j2"
-        dest: /opt/docker-compose.yml
+        dest: "{{ docker_base_dir }}/docker-compose.yml"
         owner: root
         group: root
         mode: '0600'
@@ -90,7 +90,7 @@
     - name: Deploy docker VM .env file
       ansible.builtin.template:
         src: "{{ playbook_dir }}/../roles/docker/templates/docker-env.j2"
-        dest: /opt/.env
+        dest: "{{ docker_base_dir }}/.env"
         mode: '0600'
         owner: root
         group: root
@@ -117,9 +117,7 @@
 
     - name: Restart docker VM containers
       community.docker.docker_compose_v2:
-        project_src: /opt
-        files:
-          - docker-compose.yml
+        project_src: "{{ docker_base_dir }}"
         state: restarted
       when:
         - inventory_hostname == 'docker'

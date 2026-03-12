@@ -143,8 +143,7 @@ Pre_tasks compute these facts from `network-data/vlans.yaml`:
 
 ## Docker Conventions
 
-- **Compose file location:** `/opt/<service>/docker-compose.yml` on the VM (e.g., `/opt/plex-services/`, `/opt/monitoring/`, `/opt/homepage/`)
-- **Exception:** Docker legacy VM uses `/opt/docker-compose.yml` (flat, not in subdirectory)
+- **Compose file location:** `/opt/<service>/docker-compose.yml` on the VM (e.g., `/opt/docker/`, `/opt/plex-services/`, `/opt/monitoring/`, `/opt/homepage/`). Each role defines a `*_base_dir` default variable for its path.
 - **Restart policy:** `restart: unless-stopped` for all containers
 - **Logging:** Docker daemon configured for syslog to OpenObserve (`configure_docker_logging.yml`)
 - **NFS volumes:** Created as named Docker volumes with `driver_opts` for NFS. Plex-services auto-recreates volumes if mount options change.
@@ -275,7 +274,7 @@ Pre_tasks compute these facts from `network-data/vlans.yaml`:
 
 ## Known Inconsistencies (Standardization Candidates)
 
-1. **Compose file base paths differ.** Most services use `/opt/<service>/docker-compose.yml`, but the Docker legacy VM uses `/opt/docker-compose.yml` (flat). Authentik is at `/opt/authentik/docker-compose.yml` on the Docker VM.
+1. ~~Compose file base paths~~ — moved to Resolved #6.
 
 2. **NFS mount options are specified differently across roles.** `all.yml` defines `*_nfs_src` vars as `host:/path`, then some roles split them with `.split(':')`. Other roles use the NFS tuning params directly. The plex_services role auto-recreates volumes if options mismatch; others don't.
 
@@ -298,3 +297,5 @@ Pre_tasks compute these facts from `network-data/vlans.yaml`:
 4. **Monitoring role secret delivery unified.** Both OpenObserve and Grafana/exporters now use per-container Infisical agent env_files exclusively. (Resolved by secrets refactor Phases 5-6.)
 
 5. **`timezone` centralized in `group_vars/all.yml`.** Removed duplicate definitions from `docker`, `plex_services`, `homepage`, `monitoring` role defaults and `host_vars/plex-services.yml`. All roles reference the single `{{ timezone }}` variable. (Resolved in architecture cleanup Phase B.)
+
+6. **Compose file base paths unified.** All services now use `/opt/<service>/docker-compose.yml` — the docker legacy VM moved from flat `/opt/docker-compose.yml` to `/opt/docker/docker-compose.yml`. Each role defines a `*_base_dir` default variable. A shared `tasks/deploy_compose.yml` task provides a reusable deploy+restart pattern. Requires `make rebuild docker` for existing docker VMs. (Resolved in architecture cleanup Phase E+F.)

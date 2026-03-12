@@ -39,7 +39,7 @@
       - name: docker-valheim
         dest_path: /etc/infisical/secrets/docker-valheim.env
         template_src: secrets/docker-valheim.env.tpl.j2
-        post_command: "docker compose -f /opt/docker-compose.yml up -d --force-recreate valheim"
+        post_command: "docker compose -f /opt/docker/docker-compose.yml up -d --force-recreate valheim"
   roles:
     - infisical_client
     - dns_config

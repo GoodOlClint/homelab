@@ -178,10 +178,21 @@
     - validate
 
 
+- name: Ensure docker compose directory exists
+  ansible.builtin.file:
+    path: "{{ docker_base_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  tags:
+    - docker
+    - config
+
 - name: Deploy docker-compose.yml to the docker VM
   ansible.builtin.template:
     src: templates/docker-compose.yml.j2
-    dest: /opt/docker-compose.yml
+    dest: "{{ docker_base_dir }}/docker-compose.yml"
     owner: root
     group: root
     mode: '0600'
@@ -201,7 +212,7 @@
 - name: Create .env file for Docker Compose with secrets
   ansible.builtin.template:
     src: docker-env.j2
-    dest: /opt/.env
+    dest: "{{ docker_base_dir }}/.env"
     mode: '0600'
     owner: root
     group: root
@@ -230,9 +241,7 @@
 
 - name: Deploy containers with Docker Compose
   community.docker.docker_compose_v2:
-    project_src: /opt
-    files:
-      - docker-compose.yml
+    project_src: "{{ docker_base_dir }}"
     state: present
   environment:
     CLOUDFLARED_TUNNEL_TOKEN: "{{ secrets.docker.cloudflared_tunnel_token | default('') }}"
