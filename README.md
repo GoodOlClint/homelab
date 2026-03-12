@@ -1,6 +1,6 @@
 # Homelab Infrastructure-as-Code
 
-This repository manages a Proxmox-based homelab, a Vultr VPS WireGuard relay, and network segmentation across 12 VLANs. The entire stack is automated with Terraform (infrastructure provisioning, DNS, VPS), Ansible (configuration management, 30 roles), Infisical (self-hosted secret vault with per-VM machine identities, SOPS/age fallback for bootstrap secrets), pre-commit hooks (security scanning), and Make (operational interface).
+This repository manages a Proxmox-based homelab, a Vultr VPS WireGuard relay, and network segmentation across 12 VLANs. The entire stack is automated with Terraform (infrastructure provisioning, DNS, VPS), Ansible (configuration management, 29 roles), Infisical (self-hosted secret vault with per-VM machine identities), SOPS/age (bootstrap secrets only), pre-commit hooks (security scanning), and Make (operational interface).
 
 ## Architecture
 
@@ -19,7 +19,7 @@ graph TD
     PF --> STOR[Storage VLAN<br/>MTU 9000]
     PF --> MEDIA[Media VLAN]
 
-    MGMT --- M1[dns<br/>adguard<br/>unifi<br/>openobserve<br/>proxmox-backup<br/>infisical]
+    MGMT --- M1[dns<br/>adguard<br/>unifi<br/>openobserve<br/>proxmox-backup<br/>infisical<br/>homepage]
     SVC --- S1[docker<br/>plex<br/>plex-services<br/>nvidia-licensing]
     CORE --- C1[Clients<br/>Work / IoT<br/>Sonos / Guest / Vivint]
     STOR --- ST1[Synology NAS<br/>NFS / iSCSI<br/>jumbo frames]
@@ -42,7 +42,7 @@ Additional VLANs not shown: infrastructure, vpn, work, iot, sonos, vivint, guest
 - **Monitoring**: OpenObserve + Grafana + Prometheus + 8 exporters + Uptime Kuma
 - **Media**: Plex (GPU transcoding) + *arr stack + Synology NAS (NFS)
 - **Containers**: Valheim, Authentik SSO, Kiwix, BOINC, Portainer, Dogecoin
-- **Secrets**: Infisical (self-hosted vault) with per-VM machine identities, SOPS/age bootstrap fallback
+- **Secrets**: Infisical (self-hosted vault) with per-VM machine identities; SOPS/age for bootstrap only (no runtime fallback)
 - **Backup**: Proxmox Backup Server with nightly cron jobs
 - **VPS Relay**: Encrypted WireGuard tunnel forwarding Plex, Valheim, mobile WireGuard
 
@@ -324,7 +324,7 @@ Self-hosted secret management platform deployed via Docker Compose:
 - **Machine identities**: Each service VM gets a unique identity (`{hostname}-vm`) with Universal Auth credentials stored in `/etc/infisical/`
 - **Infisical Agent**: Runs as a systemd service on each VM, authenticating with its machine identity and rendering secrets to environment files via Go templates
 - **Polling interval**: 60 seconds -- secret updates propagate within one minute
-- **SOPS fallback**: If Infisical is unreachable, Ansible falls back to `secrets.sops.yml` with a warning
+- **No SOPS fallback**: If Infisical is unreachable, the deploy fails with a clear error. `secrets.sops.yml` is a DR artifact only (produced by `make infisical-backup`)
 - **Protected**: Terraform `protected = true` prevents accidental deletion
 
 ### Other Services
@@ -335,7 +335,7 @@ Self-hosted secret management platform deployed via Docker Compose:
 
 ## Ansible Roles
 
-30 roles in a single flat directory (`ansible/roles/`):
+29 roles in a single flat directory (`ansible/roles/`):
 
 ### Infrastructure
 
@@ -345,7 +345,6 @@ Self-hosted secret management platform deployed via Docker Compose:
 | adguard | AdGuard Home DNS filtering and ad-blocking |
 | dns_config | Per-VM DNS resolver configuration (resolv.conf) |
 | monitoring | Full monitoring stack (OpenObserve, Grafana, Prometheus, exporters) |
-| openobserve | OpenObserve standalone deployment |
 | openobserve_dashboards | Grafana dashboard provisioning |
 | monitoring_users | Service account provisioning for monitoring |
 | proxmox_backup | Proxmox Backup Server configuration |
@@ -364,7 +363,8 @@ Self-hosted secret management platform deployed via Docker Compose:
 | authentik | Authentik SSO/OIDC identity provider (Docker Compose) |
 | nvidia | NVIDIA GRID vGPU driver installation |
 | nvidia_licensing | FastAPI DLS license server |
-| homebridge | Homebridge home automation bridge |
+| homepage | Homepage dashboard with Caddy reverse proxy |
+| lancache | LAN game cache server |
 
 ### VPS
 
@@ -384,6 +384,7 @@ Self-hosted secret management platform deployed via Docker Compose:
 | rsyslog_client | Rsyslog forwarding to AxoSyslog/OpenObserve |
 | telegraf | Telegraf metrics agent (Prometheus output) |
 | expand_disk | Root filesystem expansion after disk resize |
+| portainer_agent | Portainer agent for remote container management |
 
 ### External (Ansible Galaxy)
 
@@ -406,6 +407,7 @@ Self-hosted secret management platform deployed via Docker Compose:
 | vps.yml | VPS | WireGuard, nftables, hardening, monitoring agents |
 | docker.yml | Docker VM | Docker daemon + Authentik |
 | unifi.yml | UniFi VM | UniFi Controller deployment |
+| docker-config.yml | Service VMs | Lightweight compose+config deploy (no full role) |
 | update-all.yml | All + VPS | OS patching (apt/apk) |
 | update-dns.yml | DNS VMs | DNS configuration updates |
 | backup-clients.yml | Multiple | PBS client configuration |
@@ -446,9 +448,9 @@ Secrets are organized into per-VM paths:
 
 The Infisical Agent runs on each service VM as a systemd service, rendering secrets to environment files via Go templates with a 60-second polling interval.
 
-### Fallback
+### No Fallback
 
-If Infisical is unreachable, Ansible falls back to reading `secrets.sops.yml` (the legacy all-in-one encrypted file) with a warning. This ensures playbooks still work during Infisical maintenance or initial bootstrap.
+If Infisical is unreachable, Ansible **fails with a clear error**. There is no SOPS fallback at runtime. `secrets.sops.yml` is a disaster recovery artifact only, produced by `make infisical-backup`.
 
 **Secret categories:**
 
@@ -557,7 +559,16 @@ The Makefile is the primary operational interface.
 | `terraform-apply` | Terraform init + apply (auto-approve) |
 | `inventory` | Generate Ansible inventory from Terraform outputs |
 
+### Targeted Operations
+
+| Target | Description |
+|--------|-------------|
+| `ansible <vm>` | Run site.yml limited to a single host (supports `TAGS=`) |
+| `docker-config <vm>` | Deploy only compose+config templates and restart (no full role) |
+
 ### Ansible Playbooks
+
+All `ansible-*` targets support `TAGS=<tag>` to filter by play-level tags (e.g., `make ansible-services TAGS=plex`).
 
 | Target | Description |
 |--------|-------------|
@@ -604,7 +615,6 @@ The Makefile is the primary operational interface.
 | Target | Description |
 |--------|-------------|
 | `clean` | Destroy all Terraform resources + clean SSH known_hosts |
-| `clean-terraform` | Destroy all Terraform resources |
 | `clean-ssh` | Remove all inventory IPs from SSH known_hosts |
 | `clean-infisical-sops` | Reset Infisical fields in SOPS files |
 
@@ -655,7 +665,7 @@ homelab/
 │   ├── group_vars/                 # all.yml, secrets.sops.yml
 │   ├── inventory/                  # vms.yaml (generated), static: pfsense, proxmox, vps
 │   ├── playbooks/                  # 15 playbooks
-│   └── roles/                      # 30 roles (flat directory)
+│   └── roles/                      # 29 roles (flat directory)
 ├── network-data/
 │   ├── vlans.example.yaml          # Schema template (tracked)
 │   ├── vlans.yaml                  # Site-specific bindings (gitignored)
