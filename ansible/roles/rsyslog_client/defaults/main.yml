@@ -1,0 +1,8 @@
+---
+# rsyslog_client role defaults
+#
+# Required variables (defined in group_vars/all.yml):
+#   openobserve_listen_host — OpenObserve VM address
+#
+# Required from pre_tasks:
+#   mgmt_vlan_prefix, services_vlan_prefix

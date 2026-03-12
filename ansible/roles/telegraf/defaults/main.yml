@@ -1,0 +1,11 @@
+---
+# telegraf role defaults
+#
+# Required variables (defined in group_vars/all.yml):
+#   openobserve_listen_host — OpenObserve VM address
+#   openobserve_listen_port — OpenObserve HTTP port
+#   openobserve_root_user_email — OpenObserve admin email
+#
+# Required from pre_tasks:
+#   dns_zones
+#   secrets.monitoring.openobserve_root_user_pass

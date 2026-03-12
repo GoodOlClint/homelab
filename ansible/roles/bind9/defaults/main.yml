@@ -1,0 +1,7 @@
+---
+# bind9 role defaults
+#
+# No role-specific variables — all referenced variables come from
+# pre_tasks (dns_zones, ipv4_prefix_reversed, network_data,
+# internal_network_cidr) or the secrets fact
+# (secrets.infrastructure.bind_tsig_key_secret).

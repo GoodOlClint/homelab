@@ -1,0 +1,22 @@
+---
+# hardening role defaults
+
+# UFW default policies (list of {direction, policy} dicts)
+# Example:
+#   - { direction: incoming, policy: deny }
+#   - { direction: outgoing, policy: allow }
+hardening_ufw_default_policies: []
+
+# UFW explicit rules (list of dicts with rule, port, proto, from_ip, etc.)
+# Example:
+#   - { rule: allow, port: "22", proto: tcp, from_ip: "10.0.0.0/8" }
+hardening_ufw_rules: []
+
+# Services to disable and stop
+# Example: ["cups", "avahi-daemon"]
+hardening_disable_services: []
+
+# Sysctl hardening settings (list of {key, value} dicts)
+# Example:
+#   - { key: "net.ipv4.conf.all.send_redirects", value: "0" }
+hardening_sysctl_settings: []

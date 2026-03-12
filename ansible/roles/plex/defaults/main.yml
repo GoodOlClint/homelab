@@ -1,0 +1,19 @@
+---
+# plex role defaults
+
+# Path to the Plex SSL certificate PFX file
+plex_pfx_path: "/var/lib/plexmediaserver/plex_certificate.pfx"
+
+# Required variables (defined in group_vars/all.yml):
+#   plex_services_media_gid — shared media group GID
+#   plex_nfs_src — NFS source for Plex media mount
+#   plex_smb_server, plex_smb_share, plex_smb_user, plex_smb_mount
+#   plex_pbs_repository, plex_pbs_namespace
+#   plex_port, plex_poster_reset_libraries
+#   pbs_backup_enabled
+#   nvidia_grid_driver_url
+#
+# Required from pre_tasks:
+#   secrets (secrets.plex.plex_smb_pass, secrets.plex.plex_token)
+#   bootstrap (bootstrap.plex_username, bootstrap.plex_password)
+#   mgmt_vlan_prefix, services_vlan_prefix

@@ -1,0 +1,8 @@
+---
+# nvidia role defaults
+#
+# Required variables (defined in group_vars/all.yml):
+#   nvidia_grid_driver_url — URL to the NVIDIA GRID driver .deb package
+#
+# Required from pre_tasks:
+#   mgmt_vlan_prefix, services_vlan_prefix

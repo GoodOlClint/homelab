@@ -1,0 +1,8 @@
+---
+# nvidia_licensing role defaults
+#
+# Required from pre_tasks:
+#   mgmt_vlan_prefix, services_vlan_prefix
+#
+# DLS lease duration in days
+dls_lease_expire_days: 90

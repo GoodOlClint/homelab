@@ -1,0 +1,9 @@
+---
+# adguard role defaults
+#
+# No role-specific variables — all referenced variables come from
+# pre_tasks (dns_zones, ipv4_prefix_reversed, core_vlan_prefix,
+# storage_vlan_prefix) or Ansible facts (ansible_host).
+#
+# Bootstrap mode flag (skips local zone DNS test during bootstrap)
+bootstrap_mode: false
