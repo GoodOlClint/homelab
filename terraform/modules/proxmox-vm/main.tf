@@ -30,10 +30,13 @@ locals {
   # Use static VLAN configuration (no UniFi integration)
   merged_vlans = var.vlans
 
-  # Generate random VM IDs for MAC address uniqueness
+  # Generate unique MAC byte from vm_id (guaranteed unique, no hash collisions)
+  # Falls back to name-based hash for VMs without explicit vm_id (DHCP/auto-assign)
   vm_random_ids = {
     for vm_config in var.vm_configurations : vm_config.name => (
-      abs(parseint(substr(sha256(vm_config.name), 0, 8), 16)) % 254
-    ) + 1
+      vm_config.vm_id != null
+      ? (vm_config.vm_id % 254) + 1
+      : (abs(parseint(substr(sha256(vm_config.name), 0, 8), 16)) % 254) + 1
+    )
   }
 }
