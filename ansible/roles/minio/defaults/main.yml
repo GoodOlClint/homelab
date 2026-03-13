@@ -1,0 +1,16 @@
+---
+# Docker compose base directory
+minio_base_dir: /opt/minio
+
+# MinIO Docker image
+minio_image: "minio/minio:latest"
+
+# Ports
+minio_api_port: 9000
+minio_console_port: 9001
+
+# NFS data mount
+minio_nfs_mount: "/mnt/minio"
+
+# MinIO admin credentials (root user is config, root password is a secret)
+minio_root_user: "admin"

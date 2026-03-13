@@ -1,0 +1,93 @@
+---
+- name: Verify required pre_tasks facts
+  ansible.builtin.assert:
+    that:
+      - mgmt_vlan_prefix is defined
+      - services_vlan_prefix is defined
+    fail_msg: "Required facts not available. This role must run from a playbook that includes full_pre_tasks.yml."
+    quiet: true
+
+- name: Install NFS client packages
+  ansible.builtin.package:
+    name:
+      - nfs-common
+    state: present
+  tags: [minio, packages]
+
+- name: Configure Docker syslog logging
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/configure_docker_logging.yml"
+  tags: [minio, logging, config]
+
+- name: Create NFS mount point
+  ansible.builtin.file:
+    path: "{{ minio_nfs_mount }}"
+    state: directory
+    mode: '0755'
+  tags: [minio, nfs]
+
+- name: Mount MinIO NFS share
+  ansible.posix.mount:
+    backup: true
+    boot: "yes"
+    path: "{{ minio_nfs_mount }}"
+    src: "{{ minio_nfs_src }}"
+    fstype: nfs
+    opts: "{{ nfs_mount_options }}"
+    state: mounted
+  tags: [minio, nfs]
+
+- name: Create MinIO data directory
+  ansible.builtin.file:
+    path: "{{ minio_nfs_mount }}/data"
+    state: directory
+    mode: '0755'
+  tags: [minio, nfs]
+
+- name: Generate MinIO root password
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/generate_secret.yml"
+  vars:
+    secret_key: "minio_root_password"
+    secret_gen_cmd: "openssl rand -base64 24 | tr -d '/+=' | head -c 32"
+    secret_comment: "MinIO root admin password"
+    secret_infisical_path: "/minio"
+    secret_dict_path: "minio"
+  tags: [minio, secrets]
+
+- name: Create MinIO compose directory
+  ansible.builtin.file:
+    path: "{{ minio_base_dir }}"
+    state: directory
+    mode: '0755'
+  tags: [minio, config]
+
+- name: Compute MinIO service IP on VLAN40
+  ansible.builtin.set_fact:
+    minio_service_ip: "{{ ansible_host | replace(mgmt_vlan_prefix, services_vlan_prefix) }}"
+  tags: [minio, config]
+
+- name: Deploy docker-compose.yml
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ minio_base_dir }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: '0600'
+  notify: restart minio
+  tags: [minio, config, compose]
+
+- name: Ensure Docker is running
+  ansible.builtin.systemd:
+    name: docker
+    state: started
+    enabled: true
+  tags: [minio, docker]
+
+- name: Deploy MinIO containers
+  community.docker.docker_compose_v2:
+    project_src: "{{ minio_base_dir }}"
+    state: present
+  retries: 3
+  delay: 30
+  register: minio_compose_result
+  until: minio_compose_result is succeeded
+  tags: [minio, compose, deploy]

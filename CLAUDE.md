@@ -34,7 +34,7 @@ This repo automates a Proxmox-based homelab with Terraform (VM provisioning, SDN
 ### Two-Tier Architecture
 - **Tier 1 (Bootstrap):** `ansible/group_vars/bootstrap.sops.yml` — SOPS-encrypted. Contains only provider credentials (Proxmox, Vultr, Cloudflare), Infisical auth (client_id, client_secret, admin creds), and external secrets (user-provided API keys, passwords). Referenced as `bootstrap.key_name` or `bootstrap_config.key_name`.
 - **Tier 2 (Runtime):** Infisical VM — stores ALL runtime secrets. Organized into folders:
-  `/shared`, `/monitoring`, `/plex`, `/plex-services`, `/homepage`, `/docker`, `/vps`, `/pfsense`, `/pbs`, `/infrastructure`
+  `/shared`, `/monitoring`, `/plex`, `/plex-services`, `/homepage`, `/docker`, `/minio`, `/vps`, `/pfsense`, `/pbs`, `/infrastructure`
   Root `/` is **empty** — all secrets live in named subfolders.
 - **No SOPS fallback.** If Infisical is unreachable, the deploy fails with a clear error. `secrets.sops.yml` is a DR artifact only (produced by `make infisical-backup`), never used at runtime.
 
@@ -91,6 +91,7 @@ Each Infisical folder is owned by the role that generates/provisions its secrets
 | `/pbs` | proxmox_backup | — (no agent) | pbs_admin_password, pbs_backup_user_password | — |
 | `/infrastructure` | bind9 | — (no agent) | bind_tsig_key_secret | unifi_admin_password, synology_admin_password |
 | `/homepage` | — (user-provided only) | homepage | — | adguard_*, unifi_*, authentik_token, portainer_api_key |
+| `/minio` | minio | minio | minio_root_password | — |
 
 **Key rules:**
 - "Owner Role" is the Ansible role whose tasks write secrets to this folder via `generate_secret.yml` or `infisical_write_secret.yml`.
@@ -140,7 +141,7 @@ Both `infrastructure.yml` and `services.yml` have play-level tags for targeted d
 
 **infrastructure.yml tags:** `phase1`, `phase2`, `phase3`, `dns`, `adguard`, `infisical`, `openobserve`, `proxmox-backup`, `unifi`, `monitoring`, `monitoring-users`, `users`
 
-**services.yml tags:** `nvidia-licensing`, `docker`, `plex`, `plex-services`, `homepage`, `lancache`
+**services.yml tags:** `nvidia-licensing`, `docker`, `plex`, `plex-services`, `minio`, `homepage`, `lancache`
 
 **How tags work with pre_tasks:**
 - All `pre_tasks` blocks have `tags: [always]`, so secrets/VLANs/facts always load regardless of `--tags` filter.

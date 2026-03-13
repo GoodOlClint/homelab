@@ -64,6 +64,7 @@
     - pbs
     - infrastructure
     - homepage
+    - minio
   register: _infisical_nested
   delegate_to: localhost
   become: false

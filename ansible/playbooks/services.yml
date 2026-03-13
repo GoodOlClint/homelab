@@ -154,6 +154,33 @@
   tags:
     - homepage
 
+- name: Configure minio VM
+  hosts: minio
+  become: true
+
+  vars_files:
+    - ../group_vars/all.yml
+  pre_tasks: *load_all_config
+  vars:
+    infisical_secret_paths: ["/shared", "/minio"]
+    infisical_agent_templates:
+      - name: pbs
+        dest_path: /etc/infisical/secrets/pbs.env
+        template_src: secrets/pbs.env.tpl.j2
+      - name: minio
+        dest_path: /etc/infisical/secrets/minio.env
+        template_src: secrets/minio.env.tpl.j2
+        post_command: "docker compose -f /opt/minio/docker-compose.yml up -d --force-recreate minio"
+  roles:
+    - infisical_client
+    - dns_config
+    - pbs_client
+    - minio
+    - rsyslog_client
+    - telegraf
+  tags:
+    - minio
+
 - name: Configure lancache VM
   hosts: lancache
   become: true

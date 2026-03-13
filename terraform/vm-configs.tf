@@ -132,5 +132,14 @@ locals {
       memory_mb    = 2048
       disk_size_gb = 10
     },
+    {
+      name         = "minio"
+      vm_id        = 112
+      vlans        = ["vlan10", "vlan40", "vlan20"]
+      ip_offset    = 112
+      cpu_cores    = 4
+      memory_mb    = 4096
+      disk_size_gb = 20
+    },
   ]
 }

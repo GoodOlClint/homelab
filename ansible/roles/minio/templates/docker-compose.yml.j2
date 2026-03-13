@@ -1,0 +1,22 @@
+services:
+  minio:
+    image: {{ minio_image }}
+    container_name: minio
+    command: server /data --console-address ":{{ minio_console_port }}"
+    restart: unless-stopped
+    ports:
+      - "{{ minio_api_port }}:9000"
+      - "{{ minio_console_port }}:9001"
+    environment:
+      - TZ={{ timezone }}
+      - MINIO_ROOT_USER={{ minio_root_user }}
+    env_file:
+      - /etc/infisical/secrets/minio.env
+    volumes:
+      - {{ minio_nfs_mount }}/data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s

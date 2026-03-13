@@ -17,6 +17,7 @@
     - ../roles/lancache/defaults/main.yml
     - ../roles/homepage/defaults/main.yml
     - ../roles/plex_services/defaults/main.yml
+    - ../roles/minio/defaults/main.yml
 
   pre_tasks:
     - name: Load all configuration and secrets
@@ -355,3 +356,22 @@
           monitoring_smokeping is changed or
           monitoring_blackbox is changed or
           monitoring_snmp is changed
+
+    # --- minio ---
+    - name: Deploy minio docker-compose
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/minio/templates/docker-compose.yml.j2"
+        dest: /opt/minio/docker-compose.yml
+        owner: root
+        group: root
+        mode: '0600'
+      register: minio_compose
+      when: inventory_hostname == 'minio'
+
+    - name: Restart minio containers
+      community.docker.docker_compose_v2:
+        project_src: /opt/minio
+        state: restarted
+      when:
+        - inventory_hostname == 'minio'
+        - minio_compose is changed
