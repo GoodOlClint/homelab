@@ -34,7 +34,7 @@ BOOTSTRAP_TF_TARGETS := \
 # Enables: make plan <vm>, make build <vm>, make rebuild <vm>
 # Captures the VM name from the second word in MAKECMDGOALS and creates a no-op
 # target for it so Make doesn't error on the unknown target name.
-ifneq (,$(filter build rebuild plan ansible docker-config,$(firstword $(MAKECMDGOALS))))
+ifneq (,$(filter build rebuild plan ansible docker-config update,$(firstword $(MAKECMDGOALS))))
   VM := $(wordlist 2,2,$(MAKECMDGOALS))
   ifneq (,$(VM))
     $(eval $(VM):;@:)
@@ -167,7 +167,7 @@ docker-deploy:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/docker.yml
 
 update:
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/update-all.yml
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/update-all.yml $(if $(VM),--limit $(VM),)
 
 update-dns:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/update-dns.yml
