@@ -4,13 +4,21 @@
   hosts: all
   become: true
   tasks:
-    - name: Update apt cache and upgrade all packages
+    - name: Update apt cache and upgrade all packages (Debian/Ubuntu)
       ansible.builtin.apt:
         update_cache: true
         upgrade: dist
         autoremove: true
         autoclean: true
       register: upgrade_result
+      when: ansible_os_family | default('') == 'Debian'
+
+    - name: Update all packages (Alpine)
+      community.general.apk:
+        update_cache: true
+        upgrade: true
+      register: upgrade_result_alpine
+      when: ansible_os_family | default('') == 'Alpine'
 
 - name: Update all Docker containers (pull latest and recreate)
   hosts: docker,plex-services,openobserve,homepage,infisical,lancache,minio
