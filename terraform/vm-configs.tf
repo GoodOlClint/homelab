@@ -80,8 +80,8 @@ locals {
       vm_id        = 104
       vlans        = ["vlan10", "vlan40", "vlan20"]
       ip_offset    = 104
-      cpu_cores    = 16
-      memory_mb    = 65536 # 64GB
+      cpu_cores    = 4
+      memory_mb    = 16384 # 16GB — Valheim, BOINC (GPU), Kiwix, Doge-node
       disk_size_gb = 100
       needs_gpu    = true # GPU passthrough for container workloads
     },
