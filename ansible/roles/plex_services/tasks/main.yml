@@ -1514,12 +1514,6 @@
       no_log: true
 
 - name: Run Recyclarr sync to apply TRaSH Guide profiles
-  community.docker.docker_container_exec:
-    container: recyclarr
-    command: recyclarr sync
-  register: recyclarr_sync
-  failed_when: false
-  changed_when: recyclarr_sync.rc == 0
   when:
     - arr_api_keys is defined
     - arr_api_keys.sonarr is defined
@@ -1529,6 +1523,24 @@
     - plex_services
     - config
     - recyclarr
+  block:
+    - name: Write recyclarr secrets.yml from extracted API keys
+      ansible.builtin.copy:
+        dest: /opt/plex-services/recyclarr/secrets.yml
+        content: |
+          sonarr_api_key: {{ arr_api_keys.sonarr }}
+          radarr_api_key: {{ arr_api_keys.radarr }}
+        owner: recyclarr
+        group: "{{ plex_services_group }}"
+        mode: '0640'
+
+    - name: Execute recyclarr sync
+      community.docker.docker_container_exec:
+        container: recyclarr
+        command: recyclarr sync
+      register: recyclarr_sync
+      failed_when: false
+      changed_when: recyclarr_sync.rc == 0
 
 # Configure Bazarr language profile and providers BEFORE Sonarr/Radarr integration.
 # On greenfield builds, this ensures the default profile is set before Bazarr's
@@ -2101,9 +2113,7 @@
           X-Api-Key: "{{ arr_api_keys.radarr }}"
         return_content: true
       register: radarr_quality_profiles
-      when:
-        - _seerr_api_key is defined
-        - not (seerr_public.json.initialized | default(false))
+      when: _seerr_api_key is defined
 
     - name: Get Radarr root folders for Seerr
       ansible.builtin.uri:
@@ -2113,9 +2123,7 @@
           X-Api-Key: "{{ arr_api_keys.radarr }}"
         return_content: true
       register: radarr_root_folders
-      when:
-        - _seerr_api_key is defined
-        - not (seerr_public.json.initialized | default(false))
+      when: _seerr_api_key is defined
 
     - name: Check existing Seerr Radarr servers
       ansible.builtin.uri:
@@ -2126,6 +2134,15 @@
         return_content: true
       register: seerr_radarr_existing
       when: _seerr_api_key is defined
+
+    - name: Set Radarr profile facts
+      ansible.builtin.set_fact:
+        _radarr_desired_profile: "{{ seerr_radarr_profile | default('Any') }}"
+        _radarr_profile_id: "{{ (radarr_quality_profiles.json | selectattr('name', 'equalto', seerr_radarr_profile | default('Any')) | first).id | default(radarr_quality_profiles.json[0].id) }}"
+        _radarr_current_profile: "{{ (seerr_radarr_existing.json | first).activeProfileName | default('') }}"
+      when:
+        - _seerr_api_key is defined
+        - radarr_quality_profiles is not skipped
 
     - name: Add Radarr to Seerr
       ansible.builtin.uri:
@@ -2142,8 +2159,8 @@
           apiKey: "{{ arr_api_keys.radarr }}"
           useSsl: false
           baseUrl: ""
-          activeProfileId: "{{ (radarr_quality_profiles.json | selectattr('name', 'equalto', seerr_radarr_profile | default('Any')) | first).id | default(radarr_quality_profiles.json[0].id) }}"
-          activeProfileName: "{{ seerr_radarr_profile | default(radarr_quality_profiles.json[0].name) }}"
+          activeProfileId: "{{ _radarr_profile_id }}"
+          activeProfileName: "{{ _radarr_desired_profile }}"
           activeDirectory: "{{ radarr_root_folders.json[0].path }}"
           is4k: false
           minimumAvailability: released
@@ -2157,6 +2174,24 @@
         - radarr_root_folders is not skipped
         - seerr_radarr_existing.json | default([]) | length == 0
 
+    - name: Update Radarr quality profile in Seerr
+      ansible.builtin.uri:
+        url: "http://localhost:5055/api/v1/settings/radarr/{{ (seerr_radarr_existing.json | first).id }}"
+        method: PUT
+        headers:
+          X-Api-Key: "{{ _seerr_api_key }}"
+          Content-Type: application/json
+        body_format: json
+        body:
+          activeProfileId: "{{ _radarr_profile_id }}"
+          activeProfileName: "{{ _radarr_desired_profile }}"
+        status_code: [200]
+      when:
+        - _seerr_api_key is defined
+        - _radarr_current_profile is defined
+        - seerr_radarr_existing.json | default([]) | length > 0
+        - _radarr_current_profile != _radarr_desired_profile
+
     - name: Get Sonarr quality profiles for Seerr
       ansible.builtin.uri:
         url: "http://localhost:8989/api/v3/qualityprofile"
@@ -2165,9 +2200,7 @@
           X-Api-Key: "{{ arr_api_keys.sonarr }}"
         return_content: true
       register: sonarr_quality_profiles
-      when:
-        - _seerr_api_key is defined
-        - not (seerr_public.json.initialized | default(false))
+      when: _seerr_api_key is defined
 
     - name: Get Sonarr root folders for Seerr
       ansible.builtin.uri:
@@ -2177,9 +2210,7 @@
           X-Api-Key: "{{ arr_api_keys.sonarr }}"
         return_content: true
       register: sonarr_root_folders
-      when:
-        - _seerr_api_key is defined
-        - not (seerr_public.json.initialized | default(false))
+      when: _seerr_api_key is defined
 
     - name: Check existing Seerr Sonarr servers
       ansible.builtin.uri:
@@ -2190,6 +2221,15 @@
         return_content: true
       register: seerr_sonarr_existing
       when: _seerr_api_key is defined
+
+    - name: Set Sonarr profile facts
+      ansible.builtin.set_fact:
+        _sonarr_desired_profile: "{{ seerr_sonarr_profile | default('Any') }}"
+        _sonarr_profile_id: "{{ (sonarr_quality_profiles.json | selectattr('name', 'equalto', seerr_sonarr_profile | default('Any')) | first).id | default(sonarr_quality_profiles.json[0].id) }}"
+        _sonarr_current_profile: "{{ (seerr_sonarr_existing.json | first).activeProfileName | default('') }}"
+      when:
+        - _seerr_api_key is defined
+        - sonarr_quality_profiles is not skipped
 
     - name: Add Sonarr to Seerr
       ansible.builtin.uri:
@@ -2206,8 +2246,8 @@
           apiKey: "{{ arr_api_keys.sonarr }}"
           useSsl: false
           baseUrl: ""
-          activeProfileId: "{{ (sonarr_quality_profiles.json | selectattr('name', 'equalto', seerr_sonarr_profile | default('Any')) | first).id | default(sonarr_quality_profiles.json[0].id) }}"
-          activeProfileName: "{{ seerr_sonarr_profile | default(sonarr_quality_profiles.json[0].name) }}"
+          activeProfileId: "{{ _sonarr_profile_id }}"
+          activeProfileName: "{{ _sonarr_desired_profile }}"
           activeDirectory: "{{ sonarr_root_folders.json[0].path }}"
           is4k: false
           enableSeasonFolders: true
@@ -2220,6 +2260,24 @@
         - sonarr_quality_profiles is not skipped
         - sonarr_root_folders is not skipped
         - seerr_sonarr_existing.json | default([]) | length == 0
+
+    - name: Update Sonarr quality profile in Seerr
+      ansible.builtin.uri:
+        url: "http://localhost:5055/api/v1/settings/sonarr/{{ (seerr_sonarr_existing.json | first).id }}"
+        method: PUT
+        headers:
+          X-Api-Key: "{{ _seerr_api_key }}"
+          Content-Type: application/json
+        body_format: json
+        body:
+          activeProfileId: "{{ _sonarr_profile_id }}"
+          activeProfileName: "{{ _sonarr_desired_profile }}"
+        status_code: [200]
+      when:
+        - _seerr_api_key is defined
+        - _sonarr_current_profile is defined
+        - seerr_sonarr_existing.json | default([]) | length > 0
+        - _sonarr_current_profile != _sonarr_desired_profile
 
     - name: Initialize Seerr (mark setup complete)
       ansible.builtin.uri:

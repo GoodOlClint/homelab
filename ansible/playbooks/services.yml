@@ -116,6 +116,7 @@
       - name: plex-services-recyclarr-secrets
         dest_path: /opt/plex-services/recyclarr/secrets.yml
         template_src: secrets/plex-services-recyclarr-secrets.tpl.j2
+        post_command: "chown 2010:2000 /opt/plex-services/recyclarr/secrets.yml"
   roles:
     - infisical_client
     - dns_config
