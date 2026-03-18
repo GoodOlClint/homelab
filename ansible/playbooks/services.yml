@@ -182,6 +182,25 @@
   tags:
     - minio
 
+- name: Configure github-runner VM
+  hosts: github-runner
+  become: true
+
+  vars_files:
+    - ../group_vars/all.yml
+  pre_tasks: *load_all_config
+  vars:
+    infisical_secret_paths: ["/shared", "/github-runner"]
+  roles:
+    - infisical_client
+    - dns_config
+    - pbs_client
+    - github_runner
+    - rsyslog_client
+    - telegraf
+  tags:
+    - github-runner
+
 - name: Configure lancache VM
   hosts: lancache
   become: true

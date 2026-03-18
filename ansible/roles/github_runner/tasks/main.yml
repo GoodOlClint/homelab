@@ -1,0 +1,366 @@
+---
+# GitHub Actions self-hosted runner
+#
+# Installs the official GitHub Actions runner as a systemd service along with
+# required tooling for PSProxmoxVE integration tests: terraform, dotnet-sdk-9,
+# powershell, proxmox-auto-install-assistant, and SSH access to Proxmox.
+#
+# Authentication uses a GitHub App (no expiring PATs). The App's private key
+# and ID are stored in Infisical /github-runner. At registration time, we
+# generate a short-lived JWT, exchange it for an installation token, then
+# use that to get a runner registration token.
+
+- name: Verify required pre_tasks facts
+  ansible.builtin.assert:
+    that:
+      - mgmt_vlan_prefix is defined
+      - secrets is defined
+    fail_msg: "Required facts not available. This role must run from a playbook that includes full_pre_tasks.yml."
+    quiet: true
+
+- name: Verify GitHub App credentials are available
+  ansible.builtin.assert:
+    that:
+      - (secrets.github_runner | default({})).github_app_id | default('REPLACE_ME') != 'REPLACE_ME'
+      - (secrets.github_runner | default({})).github_app_id | default('') | length > 0
+      - (secrets.github_runner | default({})).github_app_private_key | default('REPLACE_ME') != 'REPLACE_ME'
+      - (secrets.github_runner | default({})).github_app_private_key | default('') | length > 0
+      - (secrets.github_runner | default({})).github_app_installation_id | default('REPLACE_ME') != 'REPLACE_ME'
+      - (secrets.github_runner | default({})).github_app_installation_id | default('') | length > 0
+    fail_msg: >-
+      GitHub App credentials not found in Infisical /github-runner folder.
+      Create a GitHub App with Administration read+write permission on
+      {{ github_runner_repo }}, then store github_app_id, github_app_private_key,
+      and github_app_installation_id in Infisical before running this role.
+    quiet: true
+
+# --- Package repositories ---
+
+- name: Install prerequisite packages
+  ansible.builtin.apt:
+    name:
+      - curl
+      - jq
+      - dosfstools
+      - mtools
+      - openssh-client
+      - apt-transport-https
+      - gnupg
+      - lsb-release
+    state: present
+    update_cache: true
+  tags: [github-runner, packages]
+
+- name: Add Ubuntu .NET backports PPA (dotnet-sdk-9.0)
+  ansible.builtin.apt_repository:
+    repo: "ppa:dotnet/backports"
+    state: present
+  tags: [github-runner, packages, repos]
+
+- name: Add Microsoft GPG key (PowerShell)
+  ansible.builtin.apt_key:
+    url: https://packages.microsoft.com/keys/microsoft.asc
+    keyring: /usr/share/keyrings/microsoft-archive-keyring.gpg
+    state: present
+  tags: [github-runner, packages, repos]
+
+- name: Add Microsoft apt repository (PowerShell)
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-archive-keyring.gpg] https://packages.microsoft.com/ubuntu/24.04/prod noble main"
+    filename: microsoft-prod
+    state: present
+  tags: [github-runner, packages, repos]
+
+- name: Add HashiCorp GPG key
+  ansible.builtin.apt_key:
+    url: https://apt.releases.hashicorp.com/gpg
+    keyring: /usr/share/keyrings/hashicorp-archive-keyring.gpg
+    state: present
+  tags: [github-runner, packages, repos]
+
+- name: Add HashiCorp apt repository
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com noble main"
+    filename: hashicorp
+    state: present
+  tags: [github-runner, packages, repos]
+
+- name: Add Proxmox GPG key
+  ansible.builtin.apt_key:
+    url: https://enterprise.proxmox.com/debian/proxmox-release-bookworm.gpg
+    keyring: /usr/share/keyrings/proxmox-release-bookworm.gpg
+    state: present
+  tags: [github-runner, packages, repos]
+
+- name: Add Proxmox apt repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/proxmox-release-bookworm.gpg] http://download.proxmox.com/debian/pve bookworm pve-no-subscription"
+    filename: proxmox-pve
+    state: present
+  tags: [github-runner, packages, repos]
+
+- name: Install tooling packages
+  ansible.builtin.apt:
+    name:
+      - dotnet-sdk-9.0
+      - powershell
+      - terraform
+      - proxmox-auto-install-assistant
+    state: present
+    update_cache: true
+  tags: [github-runner, packages]
+
+# --- Runner user ---
+
+- name: Create runner system user
+  ansible.builtin.user:
+    name: "{{ github_runner_user }}"
+    home: "{{ github_runner_dir }}"
+    shell: /bin/bash
+    system: true
+    create_home: true
+  tags: [github-runner, user]
+
+# --- SSH keypair for Proxmox access ---
+
+- name: Generate SSH private key for Proxmox access
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/generate_secret.yml"
+  vars:
+    secret_key: "github_runner_ssh_private_key"
+    secret_gen_cmd: >-
+      tmpf=$(mktemp) && rm -f "$tmpf" &&
+      ssh-keygen -t ed25519 -f "$tmpf" -N '' -C 'github-runner@homelab' -q &&
+      cat "$tmpf" && rm -f "$tmpf" "$tmpf.pub"
+    secret_comment: "GitHub runner SSH private key for Proxmox access"
+    secret_infisical_path: "/github-runner"
+    secret_dict_path: "github_runner"
+  tags: [github-runner, ssh, secrets]
+
+- name: Create runner .ssh directory
+  ansible.builtin.file:
+    path: "{{ github_runner_dir }}/.ssh"
+    state: directory
+    owner: "{{ github_runner_user }}"
+    group: "{{ github_runner_user }}"
+    mode: '0700'
+  tags: [github-runner, ssh]
+
+- name: Deploy SSH private key
+  ansible.builtin.copy:
+    content: "{{ secrets.github_runner.github_runner_ssh_private_key }}\n"
+    dest: "{{ github_runner_dir }}/.ssh/id_ed25519"
+    owner: "{{ github_runner_user }}"
+    group: "{{ github_runner_user }}"
+    mode: '0600'
+  no_log: true
+  tags: [github-runner, ssh]
+
+- name: Derive SSH public key from private key
+  ansible.builtin.shell:
+    cmd: "ssh-keygen -y -f {{ github_runner_dir }}/.ssh/id_ed25519"
+  register: _runner_ssh_pubkey
+  changed_when: false
+  tags: [github-runner, ssh]
+
+- name: Deploy SSH public key
+  ansible.builtin.copy:
+    content: "{{ _runner_ssh_pubkey.stdout }}\n"
+    dest: "{{ github_runner_dir }}/.ssh/id_ed25519.pub"
+    owner: "{{ github_runner_user }}"
+    group: "{{ github_runner_user }}"
+    mode: '0644'
+  tags: [github-runner, ssh]
+
+- name: Authorize runner SSH key on Proxmox host
+  ansible.posix.authorized_key:
+    user: root
+    key: "{{ _runner_ssh_pubkey.stdout }}"
+    comment: "github-runner-vm"
+  delegate_to: "{{ github_runner_proxmox_host }}"
+  vars:
+    ansible_user: root
+  tags: [github-runner, ssh]
+
+- name: Deploy SSH config for Proxmox access
+  ansible.builtin.template:
+    src: ssh_config.j2
+    dest: "{{ github_runner_dir }}/.ssh/config"
+    owner: "{{ github_runner_user }}"
+    group: "{{ github_runner_user }}"
+    mode: '0600'
+  tags: [github-runner, ssh, config]
+
+- name: Scan Proxmox host SSH key into known_hosts
+  ansible.builtin.shell:
+    cmd: "ssh-keyscan -H {{ github_runner_proxmox_host }} > {{ github_runner_dir }}/.ssh/known_hosts"
+    creates: "{{ github_runner_dir }}/.ssh/known_hosts"
+  tags: [github-runner, ssh]
+
+- name: Set known_hosts ownership
+  ansible.builtin.file:
+    path: "{{ github_runner_dir }}/.ssh/known_hosts"
+    owner: "{{ github_runner_user }}"
+    group: "{{ github_runner_user }}"
+    mode: '0644'
+  tags: [github-runner, ssh]
+
+# --- GitHub Actions runner installation ---
+
+- name: Check if runner is already installed
+  ansible.builtin.stat:
+    path: "{{ github_runner_dir }}/config.sh"
+  register: _runner_installed
+  tags: [github-runner, install]
+
+- name: Get latest runner release version
+  ansible.builtin.uri:
+    url: https://api.github.com/repos/actions/runner/releases/latest
+    return_content: true
+    headers:
+      Accept: application/vnd.github+json
+  register: _runner_release
+  delegate_to: localhost
+  become: false
+  when: not _runner_installed.stat.exists
+  tags: [github-runner, install]
+
+- name: Download GitHub Actions runner
+  ansible.builtin.unarchive:
+    src: "https://github.com/actions/runner/releases/download/{{ _runner_release.json.tag_name }}/actions-runner-linux-x64-{{ _runner_release.json.tag_name | regex_replace('^v', '') }}.tar.gz"
+    dest: "{{ github_runner_dir }}"
+    remote_src: true
+    owner: "{{ github_runner_user }}"
+    group: "{{ github_runner_user }}"
+  when: not _runner_installed.stat.exists
+  tags: [github-runner, install]
+
+- name: Install runner dependencies
+  ansible.builtin.command:
+    cmd: "{{ github_runner_dir }}/bin/installdependencies.sh"
+  when: not _runner_installed.stat.exists
+  changed_when: true
+  tags: [github-runner, install]
+
+# --- Runner registration via GitHub App ---
+
+- name: Check if runner is already configured
+  ansible.builtin.stat:
+    path: "{{ github_runner_dir }}/.runner"
+  register: _runner_configured
+  tags: [github-runner, config]
+
+- name: Write GitHub App private key to temp file
+  ansible.builtin.copy:
+    content: "{{ secrets.github_runner.github_app_private_key }}"
+    dest: /tmp/.github_app_key.pem
+    mode: '0600'
+  delegate_to: localhost
+  become: false
+  no_log: true
+  when: not _runner_configured.stat.exists
+  tags: [github-runner, config]
+
+- name: Generate GitHub App JWT
+  ansible.builtin.shell:
+    cmd: |
+      set -euo pipefail
+      app_id='{{ secrets.github_runner.github_app_id }}'
+      now=$(date +%s)
+      iat=$((now - 60))
+      exp=$((now + 600))
+      b64url() { openssl base64 -e -A | tr '+/' '-_' | tr -d '='; }
+      header=$(printf '{"alg":"RS256","typ":"JWT"}' | b64url)
+      payload=$(printf '{"iss":"%s","iat":%d,"exp":%d}' "$app_id" "$iat" "$exp" | b64url)
+      signature=$(printf '%s.%s' "$header" "$payload" | \
+        openssl dgst -sha256 -sign /tmp/.github_app_key.pem -binary | b64url)
+      printf '%s.%s.%s' "$header" "$payload" "$signature"
+    executable: /bin/bash
+  register: _github_app_jwt
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  no_log: true
+  when: not _runner_configured.stat.exists
+  tags: [github-runner, config]
+
+- name: Remove temp private key file
+  ansible.builtin.file:
+    path: /tmp/.github_app_key.pem
+    state: absent
+  delegate_to: localhost
+  become: false
+  when: not _runner_configured.stat.exists
+  tags: [github-runner, config]
+
+- name: Get GitHub App installation token
+  ansible.builtin.uri:
+    url: "https://api.github.com/app/installations/{{ secrets.github_runner.github_app_installation_id }}/access_tokens"
+    method: POST
+    headers:
+      Accept: application/vnd.github+json
+      Authorization: "Bearer {{ _github_app_jwt.stdout }}"
+    return_content: true
+    status_code: 201
+  register: _github_installation_token
+  delegate_to: localhost
+  become: false
+  no_log: true
+  when:
+    - not _runner_configured.stat.exists
+    - _github_app_jwt is not skipped
+  tags: [github-runner, config]
+
+- name: Get runner registration token
+  ansible.builtin.uri:
+    url: "https://api.github.com/repos/{{ github_runner_repo }}/actions/runners/registration-token"
+    method: POST
+    headers:
+      Accept: application/vnd.github+json
+      Authorization: "Bearer {{ _github_installation_token.json.token }}"
+    return_content: true
+    status_code: 201
+  register: _runner_reg_token
+  delegate_to: localhost
+  become: false
+  no_log: true
+  when:
+    - not _runner_configured.stat.exists
+    - _github_installation_token is not skipped
+  tags: [github-runner, config]
+
+- name: Configure runner
+  ansible.builtin.command:
+    cmd: >-
+      su -s /bin/bash {{ github_runner_user }} -c '
+      {{ github_runner_dir }}/config.sh
+      --url https://github.com/{{ github_runner_repo }}
+      --token {{ _runner_reg_token.json.token }}
+      --name {{ github_runner_name }}
+      --labels {{ github_runner_labels }}
+      --work {{ github_runner_work_dir }}
+      --unattended
+      --replace'
+    chdir: "{{ github_runner_dir }}"
+  when:
+    - not _runner_configured.stat.exists
+    - _runner_reg_token is not skipped
+  no_log: true
+  changed_when: true
+  tags: [github-runner, config]
+
+# --- Systemd service ---
+
+- name: Install runner as systemd service
+  ansible.builtin.command:
+    cmd: "{{ github_runner_dir }}/svc.sh install {{ github_runner_user }}"
+    creates: "/etc/systemd/system/actions.runner.{{ github_runner_repo | replace('/', '-') }}.{{ github_runner_name }}.service"
+    chdir: "{{ github_runner_dir }}"
+  tags: [github-runner, service]
+
+- name: Enable and start runner service
+  ansible.builtin.systemd:
+    name: "actions.runner.{{ github_runner_repo | replace('/', '-') }}.{{ github_runner_name }}.service"
+    enabled: true
+    state: started
+    daemon_reload: true
+  tags: [github-runner, service]

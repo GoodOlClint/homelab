@@ -1,0 +1,23 @@
+---
+# github_runner role defaults
+
+# Installation directory
+github_runner_dir: /opt/actions-runner
+
+# Runner work directory
+github_runner_work_dir: /opt/actions-runner/_work
+
+# System user to run the runner service
+github_runner_user: runner
+
+# Repository to register runner with
+github_runner_repo: "goodolclint/PSProxmoxVE"
+
+# Runner name (defaults to inventory hostname)
+github_runner_name: "{{ inventory_hostname }}"
+
+# Runner labels
+github_runner_labels: "self-hosted,linux,x64,homelab"
+
+# Proxmox host for SSH access
+github_runner_proxmox_host: "{{ proxmox_host }}"

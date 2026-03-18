@@ -17,6 +17,7 @@ adguard_rewrite_vms:
   - plex
   - plex-services
   - homepage
+  - github-runner
 
 # Service aliases: alternative domain names pointing to existing VMs
 adguard_service_aliases:

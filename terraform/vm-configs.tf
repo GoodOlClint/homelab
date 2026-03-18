@@ -141,5 +141,14 @@ locals {
       memory_mb    = 4096
       disk_size_gb = 20
     },
+    {
+      name         = "github-runner"
+      vm_id        = 113
+      vlans        = ["vlan10", "vlan40"]
+      ip_offset    = 113
+      cpu_cores    = 4
+      memory_mb    = 8192  # dotnet builds + Terraform
+      disk_size_gb = 50    # Runner workspace, SDK caches, Terraform providers
+    },
   ]
 }

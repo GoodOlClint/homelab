@@ -1,6 +1,6 @@
 # Homelab Infrastructure-as-Code
 
-This repository manages a Proxmox-based homelab, a Vultr VPS WireGuard relay, and network segmentation across 12 VLANs. The entire stack is automated with Terraform (infrastructure provisioning, DNS, VPS), Ansible (configuration management, 29 roles), Infisical (self-hosted secret vault with per-VM machine identities), SOPS/age (bootstrap secrets only), pre-commit hooks (security scanning), and Make (operational interface).
+This repository manages a Proxmox-based homelab, a Vultr VPS WireGuard relay, and network segmentation across 12 VLANs. The entire stack is automated with Terraform (infrastructure provisioning, DNS, VPS), Ansible (configuration management, 30 roles), Infisical (self-hosted secret vault with per-VM machine identities), SOPS/age (bootstrap secrets only), pre-commit hooks (security scanning), and Make (operational interface).
 
 ## Architecture
 
@@ -221,12 +221,16 @@ All VMs are defined in `terraform/vm-configs.tf` and provisioned with cloud-init
 | proxmox-backup | 101 | mgmt, services, storage | 4 | 8 GB | 20 GB | -- | Proxmox Backup Server |
 | adguard | 102 | mgmt, services | 4 | 2 GB | 20 GB | -- | AdGuard Home (DNS filtering) |
 | openobserve | 103 | mgmt, services | 4 | 16 GB | 50 GB | -- | Monitoring stack (OpenObserve, Grafana, Prometheus) |
-| docker | 104 | mgmt, services, storage | 16 | 64 GB | 100 GB | NVIDIA | Container workloads (Valheim, Authentik, etc.) |
+| docker | 104 | mgmt, services, storage | 4 | 16 GB | 100 GB | NVIDIA | Container workloads (Valheim, Authentik, etc.) |
 | infisical | 105 | mgmt, services | 4 | 4 GB | 30 GB | -- | Self-hosted secret vault |
 | plex-services | 106 | mgmt, services, storage | 4 | 8 GB | 256 GB | -- | *arr stack, PostgreSQL, Jellyseerr |
 | nvidia-licensing | 107 | mgmt, services | 2 | 2 GB | 20 GB | -- | NVIDIA GRID license server (FastAPI DLS) |
 | plex | 108 | mgmt, services, storage | 8 | 32 GB | 100 GB | NVIDIA | Plex Media Server (hardware transcoding) |
 | dns | 109 | mgmt, services | 4 | 2 GB | 20 GB | -- | BIND9 authoritative DNS |
+| lancache | 110 | mgmt, services, storage | 4 | 8 GB | 20 GB | -- | LAN game cache server |
+| homepage | 111 | mgmt, services | 2 | 2 GB | 10 GB | -- | Homepage dashboard |
+| minio | 112 | mgmt, services, storage | 4 | 4 GB | 20 GB | -- | MinIO object storage |
+| github-runner | 113 | mgmt, services | 4 | 8 GB | 50 GB | -- | GitHub Actions self-hosted runner |
 
 **IP addressing:**
 
@@ -335,7 +339,7 @@ Self-hosted secret management platform deployed via Docker Compose:
 
 ## Ansible Roles
 
-29 roles in a single flat directory (`ansible/roles/`):
+30 roles in a single flat directory (`ansible/roles/`):
 
 ### Infrastructure
 
@@ -364,6 +368,7 @@ Self-hosted secret management platform deployed via Docker Compose:
 | nvidia | NVIDIA GRID vGPU driver installation |
 | nvidia_licensing | FastAPI DLS license server |
 | homepage | Homepage dashboard with Caddy reverse proxy |
+| github_runner | GitHub Actions self-hosted runner for CI integration tests |
 | lancache | LAN game cache server |
 
 ### VPS
@@ -652,7 +657,7 @@ homelab/
 ├── terraform/
 │   ├── main.tf, provider.tf        # Provider configuration
 │   ├── variables.tf, outputs.tf    # Variables and inventory output
-│   ├── vm-configs.tf               # All 10 VM definitions
+│   ├── vm-configs.tf               # All VM definitions
 │   ├── vultr-vps.tf                # VPS instance, firewall, bootstrap
 │   ├── cloudflare-dns.tf           # DNS A/AAAA records
 │   ├── pci.tf                      # GPU passthrough configuration
@@ -665,7 +670,7 @@ homelab/
 │   ├── group_vars/                 # all.yml, secrets.sops.yml
 │   ├── inventory/                  # vms.yaml (generated), static: pfsense, proxmox, vps
 │   ├── playbooks/                  # 15 playbooks
-│   └── roles/                      # 29 roles (flat directory)
+│   └── roles/                      # 30 roles (flat directory)
 ├── network-data/
 │   ├── vlans.example.yaml          # Schema template (tracked)
 │   ├── vlans.yaml                  # Site-specific bindings (gitignored)
