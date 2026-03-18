@@ -3,7 +3,7 @@
 #
 # Installs the official GitHub Actions runner as a systemd service along with
 # required tooling for PSProxmoxVE integration tests: terraform, dotnet-sdk-9,
-# powershell, proxmox-auto-install-assistant, and SSH access to Proxmox.
+# powershell, proxmox-auto-install-assistant, and PVE installer ISOs.
 #
 # Authentication uses a GitHub App (no expiring PATs). The App's private key
 # and ID are stored in Infisical /github-runner. At registration time, we
@@ -121,88 +121,29 @@
     create_home: true
   tags: [github-runner, user]
 
-# --- SSH keypair for Proxmox access ---
+# --- PVE installer ISOs ---
 
-- name: Generate SSH private key for Proxmox access
-  ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/generate_secret.yml"
-  vars:
-    secret_key: "github_runner_ssh_private_key"
-    secret_gen_cmd: >-
-      tmpf=$(mktemp) && rm -f "$tmpf" &&
-      ssh-keygen -t ed25519 -f "$tmpf" -N '' -C 'github-runner@homelab' -q &&
-      cat "$tmpf" && rm -f "$tmpf" "$tmpf.pub"
-    secret_comment: "GitHub runner SSH private key for Proxmox access"
-    secret_infisical_path: "/github-runner"
-    secret_dict_path: "github_runner"
-  tags: [github-runner, ssh, secrets]
-
-- name: Create runner .ssh directory
+- name: Create PVE ISO directory
   ansible.builtin.file:
-    path: "{{ github_runner_dir }}/.ssh"
+    path: "{{ github_runner_iso_dir }}"
     state: directory
     owner: "{{ github_runner_user }}"
     group: "{{ github_runner_user }}"
-    mode: '0700'
-  tags: [github-runner, ssh]
+    mode: '0755'
+  tags: [github-runner, isos]
 
-- name: Deploy SSH private key
-  ansible.builtin.copy:
-    content: "{{ secrets.github_runner.github_runner_ssh_private_key }}\n"
-    dest: "{{ github_runner_dir }}/.ssh/id_ed25519"
-    owner: "{{ github_runner_user }}"
-    group: "{{ github_runner_user }}"
-    mode: '0600'
-  no_log: true
-  tags: [github-runner, ssh]
-
-- name: Derive SSH public key from private key
-  ansible.builtin.shell:
-    cmd: "ssh-keygen -y -f {{ github_runner_dir }}/.ssh/id_ed25519"
-  register: _runner_ssh_pubkey
-  changed_when: false
-  tags: [github-runner, ssh]
-
-- name: Deploy SSH public key
-  ansible.builtin.copy:
-    content: "{{ _runner_ssh_pubkey.stdout }}\n"
-    dest: "{{ github_runner_dir }}/.ssh/id_ed25519.pub"
+- name: Download PVE installer ISOs
+  ansible.builtin.get_url:
+    url: "{{ item.url }}"
+    dest: "{{ github_runner_iso_dir }}/{{ item.name }}"
+    checksum: "{{ item.checksum }}"
     owner: "{{ github_runner_user }}"
     group: "{{ github_runner_user }}"
     mode: '0644'
-  tags: [github-runner, ssh]
-
-- name: Authorize runner SSH key on Proxmox host
-  ansible.posix.authorized_key:
-    user: root
-    key: "{{ _runner_ssh_pubkey.stdout }}"
-    comment: "github-runner-vm"
-  delegate_to: "{{ github_runner_proxmox_host }}"
-  vars:
-    ansible_user: root
-  tags: [github-runner, ssh]
-
-- name: Deploy SSH config for Proxmox access
-  ansible.builtin.template:
-    src: ssh_config.j2
-    dest: "{{ github_runner_dir }}/.ssh/config"
-    owner: "{{ github_runner_user }}"
-    group: "{{ github_runner_user }}"
-    mode: '0600'
-  tags: [github-runner, ssh, config]
-
-- name: Scan Proxmox host SSH key into known_hosts
-  ansible.builtin.shell:
-    cmd: "ssh-keyscan -H {{ github_runner_proxmox_host }} > {{ github_runner_dir }}/.ssh/known_hosts"
-    creates: "{{ github_runner_dir }}/.ssh/known_hosts"
-  tags: [github-runner, ssh]
-
-- name: Set known_hosts ownership
-  ansible.builtin.file:
-    path: "{{ github_runner_dir }}/.ssh/known_hosts"
-    owner: "{{ github_runner_user }}"
-    group: "{{ github_runner_user }}"
-    mode: '0644'
-  tags: [github-runner, ssh]
+  loop: "{{ github_runner_pve_isos }}"
+  loop_control:
+    label: "{{ item.name }}"
+  tags: [github-runner, isos]
 
 # --- GitHub Actions runner installation ---
 

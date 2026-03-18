@@ -92,7 +92,7 @@ Each Infisical folder is owned by the role that generates/provisions its secrets
 | `/infrastructure` | bind9 | — (no agent) | bind_tsig_key_secret | unifi_admin_password, synology_admin_password |
 | `/homepage` | — (user-provided only) | homepage | — | adguard_*, unifi_*, authentik_token, portainer_api_key |
 | `/minio` | minio | minio | minio_root_password | — |
-| `/github-runner` | github_runner | — (no agent) | github_runner_ssh_private_key | github_app_id, github_app_private_key, github_app_installation_id |
+| `/github-runner` | github_runner | — (no agent) | — | github_app_id, github_app_private_key, github_app_installation_id |
 
 **Key rules:**
 - "Owner Role" is the Ansible role whose tasks write secrets to this folder via `generate_secret.yml` or `infisical_write_secret.yml`.
