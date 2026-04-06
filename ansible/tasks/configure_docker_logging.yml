@@ -3,6 +3,12 @@
 # Required variable: openobserve_listen_host (from group_vars/all.yml)
 # Notifies: restart docker (handler must exist in calling role)
 
+- name: Add deploy user to docker group
+  ansible.builtin.user:
+    name: "{{ ansible_user | default(lookup('env', 'USER')) }}"
+    groups: docker
+    append: true
+
 - name: Read existing Docker daemon.json
   ansible.builtin.slurp:
     src: /etc/docker/daemon.json
