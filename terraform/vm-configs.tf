@@ -91,7 +91,7 @@ locals {
       vlans        = ["vlan10", "vlan40", "vlan20"]
       ip_offset    = 108
       cpu_cores    = 8
-      memory_mb    = 32768
+      memory_mb    = 16384 # GPU handles transcoding, 16GB is plenty
       disk_size_gb = 100
       needs_gpu    = true # GPU for hardware transcoding
     },
@@ -149,6 +149,15 @@ locals {
       cpu_cores    = 4
       memory_mb    = 8192  # dotnet builds + Terraform
       disk_size_gb = 50    # Runner workspace, SDK caches, Terraform providers
+    },
+    {
+      name         = "squid"
+      vm_id        = 114
+      vlans        = ["vlan10", "vlan40", "vlan140"]
+      ip_offset    = 114
+      cpu_cores    = 2
+      memory_mb    = 2048
+      disk_size_gb = 20
     },
   ]
 }
