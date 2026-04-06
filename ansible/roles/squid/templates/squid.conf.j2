@@ -1,0 +1,50 @@
+# Squid forward proxy with SSL bump -- managed by Ansible
+# {{ ansible_managed }}
+
+# --- ACLs ---
+acl localnet src {{ services_vlan_prefix }}0/24
+{% for subnet in squid_extra_client_subnets %}
+acl localnet src {{ subnet }}
+{% endfor %}
+
+acl SSL_ports port 443
+acl Safe_ports port 80
+acl Safe_ports port 443
+
+# Domain allowlist (file-based ACL)
+acl allowed_domains dstdomain "/etc/squid/allowlist.txt"
+
+# SSL bump step ACLs
+acl step1 at_step SslBump1
+
+# --- Ports ---
+http_port {{ squid_listen_port }} ssl-bump \
+  cert={{ squid_ca_cert }} \
+  key={{ squid_ca_key }} \
+  generate-host-certificates=on \
+  dynamic_cert_mem_cache_size=4MB
+
+# --- SSL bump ---
+sslcrtd_program /usr/lib/squid/security_file_certgen -s {{ squid_ssl_db }} -M 4MB
+sslproxy_cert_error allow all
+
+ssl_bump peek step1
+ssl_bump bump allowed_domains
+ssl_bump terminate all
+
+# --- Access rules ---
+http_access deny !Safe_ports
+http_access deny CONNECT !SSL_ports
+http_access allow localnet allowed_domains
+http_access deny all
+
+# --- Logging ---
+access_log daemon:/var/log/squid/access.log squid
+cache_log /var/log/squid/cache.log
+
+# --- Cache (minimal) ---
+cache_dir ufs /var/spool/squid {{ squid_cache_dir_size_mb }} 16 256
+
+# --- Misc ---
+coredump_dir /var/spool/squid
+refresh_pattern .               0       20%     4320

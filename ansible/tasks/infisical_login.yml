@@ -66,6 +66,7 @@
     - homepage
     - minio
     - github-runner
+    - squid
   register: _infisical_nested
   delegate_to: localhost
   become: false

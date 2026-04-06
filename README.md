@@ -1,6 +1,6 @@
 # Homelab Infrastructure-as-Code
 
-This repository manages a Proxmox-based homelab, a Vultr VPS WireGuard relay, and network segmentation across 12 VLANs. The entire stack is automated with Terraform (infrastructure provisioning, DNS, VPS), Ansible (configuration management, 30 roles), Infisical (self-hosted secret vault with per-VM machine identities), SOPS/age (bootstrap secrets only), pre-commit hooks (security scanning), and Make (operational interface).
+This repository manages a Proxmox-based homelab, a Vultr VPS WireGuard relay, and network segmentation across 12 VLANs. The entire stack is automated with Terraform (infrastructure provisioning, DNS, VPS), Ansible (configuration management, 31 roles), Infisical (self-hosted secret vault with per-VM machine identities), SOPS/age (bootstrap secrets only), pre-commit hooks (security scanning), and Make (operational interface).
 
 ## Architecture
 
@@ -231,6 +231,7 @@ All VMs are defined in `terraform/vm-configs.tf` and provisioned with cloud-init
 | homepage | 111 | mgmt, services | 2 | 2 GB | 10 GB | -- | Homepage dashboard |
 | minio | 112 | mgmt, services, storage | 4 | 4 GB | 20 GB | -- | MinIO object storage |
 | github-runner | 113 | mgmt, services | 4 | 8 GB | 50 GB | -- | GitHub Actions self-hosted runner |
+| squid | 114 | mgmt, services, openclaw | 2 | 2 GB | 20 GB | -- | Squid forward proxy (SSL bump) |
 
 **IP addressing:**
 
@@ -339,7 +340,7 @@ Self-hosted secret management platform deployed via Docker Compose:
 
 ## Ansible Roles
 
-30 roles in a single flat directory (`ansible/roles/`):
+31 roles in a single flat directory (`ansible/roles/`):
 
 ### Infrastructure
 
@@ -369,6 +370,7 @@ Self-hosted secret management platform deployed via Docker Compose:
 | nvidia_licensing | FastAPI DLS license server |
 | homepage | Homepage dashboard with Caddy reverse proxy |
 | github_runner | GitHub Actions self-hosted runner for CI integration tests |
+| squid | Squid forward proxy with SSL bump for OpenClaw VLAN |
 | lancache | LAN game cache server |
 
 ### VPS
@@ -670,7 +672,7 @@ homelab/
 │   ├── group_vars/                 # all.yml, secrets.sops.yml
 │   ├── inventory/                  # vms.yaml (generated), static: pfsense, proxmox, vps
 │   ├── playbooks/                  # 15 playbooks
-│   └── roles/                      # 30 roles (flat directory)
+│   └── roles/                      # 31 roles (flat directory)
 ├── network-data/
 │   ├── vlans.example.yaml          # Schema template (tracked)
 │   ├── vlans.yaml                  # Site-specific bindings (gitignored)

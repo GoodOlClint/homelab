@@ -1,0 +1,37 @@
+---
+# squid role defaults
+
+# Squid listen port
+squid_listen_port: 3128
+
+# CA certificate storage
+squid_ca_dir: /etc/squid/ssl_cert
+squid_ca_key: "{{ squid_ca_dir }}/squid-ca.pem"
+squid_ca_cert: "{{ squid_ca_dir }}/squid-ca-cert.pem"
+
+# SSL DB for certificate generation helper
+squid_ssl_db: /var/lib/squid/ssl_db
+
+# Cache settings (minimal — this is a filtering proxy, not a caching proxy)
+squid_cache_dir_size_mb: 256
+
+# Client subnets allowed to use the proxy
+# Derived from VLAN prefixes at deploy time; add static entries here for
+# networks not computable from Ansible facts (e.g., VLAN 140 before it has
+# a prefix fact).
+squid_extra_client_subnets:
+  - "172.16.140.0/24"
+
+# Domain allowlist (leading dot matches domain + all subdomains)
+squid_allowed_domains:
+  - ".anthropic.com"
+  - ".github.com"
+  - ".githubusercontent.com"
+  - ".npmjs.org"
+  - ".npmjs.com"
+  - ".pypi.org"
+  - ".pythonhosted.org"
+  - ".ghcr.io"
+  - ".docker.io"
+  - ".docker.com"
+  - ".telegram.org"

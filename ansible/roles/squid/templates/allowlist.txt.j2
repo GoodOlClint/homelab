@@ -1,0 +1,5 @@
+# Squid domain allowlist -- managed by Ansible
+# Leading dot matches domain and all subdomains.
+{% for domain in squid_allowed_domains %}
+{{ domain }}
+{% endfor %}

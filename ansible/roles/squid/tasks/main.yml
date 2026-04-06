@@ -1,0 +1,142 @@
+---
+# Squid forward proxy with SSL bump HTTPS inspection
+#
+# Provides URL-level domain allowlisting for the OpenClaw AI agent on VLAN 140.
+# Generates a self-signed CA for SSL bump; the CA cert must be imported on
+# clients that route through the proxy.
+
+- name: Verify required pre_tasks facts
+  ansible.builtin.assert:
+    that:
+      - mgmt_vlan_prefix is defined
+      - services_vlan_prefix is defined
+      - secrets is defined
+    fail_msg: "Required facts not available. This role must run from a playbook that includes full_pre_tasks.yml."
+    quiet: true
+
+# --- Install Squid ---
+
+- name: Install squid and dependencies
+  ansible.builtin.apt:
+    name:
+      - squid-openssl
+      - openssl
+      - ssl-cert
+    state: present
+    update_cache: true
+  tags: [squid, packages]
+
+# --- CA certificate generation ---
+
+- name: Create CA directory
+  ansible.builtin.file:
+    path: "{{ squid_ca_dir }}"
+    state: directory
+    owner: proxy
+    group: proxy
+    mode: '0700'
+  tags: [squid, ssl]
+
+- name: Generate CA private key
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/generate_secret.yml"
+  vars:
+    secret_key: "squid_ca_private_key"
+    secret_gen_cmd: >-
+      openssl genrsa 2048 2>/dev/null
+    secret_comment: "Squid SSL bump CA private key"
+    secret_infisical_path: "/squid"
+    secret_dict_path: "squid"
+  tags: [squid, ssl, secrets]
+
+- name: Deploy CA private key
+  ansible.builtin.copy:
+    content: "{{ secrets.squid.squid_ca_private_key }}\n"
+    dest: "{{ squid_ca_key }}"
+    owner: proxy
+    group: proxy
+    mode: '0600'
+  no_log: true
+  tags: [squid, ssl]
+
+- name: Generate CA certificate from key
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/generate_secret.yml"
+  vars:
+    secret_key: "squid_ca_cert_pem"
+    secret_gen_cmd: >-
+      printf '%s' '{{ secrets.squid.squid_ca_private_key }}' |
+      openssl req -new -x509 -sha256 -days 3650 -nodes
+      -key /dev/stdin
+      -subj "/CN=Squid CA/O=Homelab/OU=Squid Proxy"
+      2>/dev/null
+    secret_comment: "Squid SSL bump CA certificate (public)"
+    secret_infisical_path: "/squid"
+    secret_dict_path: "squid"
+  tags: [squid, ssl, secrets]
+
+- name: Deploy CA certificate
+  ansible.builtin.copy:
+    content: "{{ secrets.squid.squid_ca_cert_pem }}\n"
+    dest: "{{ squid_ca_cert }}"
+    owner: proxy
+    group: proxy
+    mode: '0644'
+  notify: restart squid
+  tags: [squid, ssl]
+
+# --- SSL certificate database ---
+
+- name: Create SSL DB parent directory
+  ansible.builtin.file:
+    path: "{{ squid_ssl_db | dirname }}"
+    state: directory
+    owner: proxy
+    group: proxy
+    mode: '0755'
+  tags: [squid, ssl]
+
+- name: Initialize SSL certificate database
+  ansible.builtin.command:
+    cmd: /usr/lib/squid/security_file_certgen -c -s {{ squid_ssl_db }} -M 4MB
+    creates: "{{ squid_ssl_db }}/index.txt"
+  tags: [squid, ssl]
+
+- name: Set SSL DB ownership
+  ansible.builtin.file:
+    path: "{{ squid_ssl_db }}"
+    state: directory
+    owner: proxy
+    group: proxy
+    recurse: true
+  tags: [squid, ssl]
+
+# --- Squid configuration ---
+
+- name: Deploy domain allowlist
+  ansible.builtin.template:
+    src: allowlist.txt.j2
+    dest: /etc/squid/allowlist.txt
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart squid
+  tags: [squid, config]
+
+- name: Deploy squid.conf
+  ansible.builtin.template:
+    src: squid.conf.j2
+    dest: /etc/squid/squid.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart squid
+  tags: [squid, config]
+
+# --- Service management ---
+
+- name: Enable and start squid
+  ansible.builtin.systemd:
+    name: squid
+    enabled: true
+    state: started
+    daemon_reload: true
+  tags: [squid, service]
