@@ -1,9 +1,9 @@
 ---
 # GitHub Actions self-hosted runner
 #
-# Installs the official GitHub Actions runner as a systemd service along with
-# required tooling for PSProxmoxVE integration tests: terraform, dotnet-sdk-9,
-# powershell, proxmox-auto-install-assistant, and PVE installer ISOs.
+# Installs multiple GitHub Actions runner instances as systemd services with
+# Docker for container-based CI workflows. Runner count is configurable via
+# github_runner_count (default: 2).
 #
 # Authentication uses a GitHub App (no expiring PATs). The App's private key
 # and ID are stored in Infisical /github-runner. At registration time, we
@@ -34,123 +34,76 @@
       and github_app_installation_id in Infisical before running this role.
     quiet: true
 
-# --- Package repositories ---
+# --- Prerequisite packages ---
 
 - name: Install prerequisite packages
   ansible.builtin.apt:
     name:
       - curl
       - jq
-      - dosfstools
-      - mtools
-      - openssh-client
-      - apt-transport-https
-      - gnupg
-      - lsb-release
     state: present
     update_cache: true
   tags: [github-runner, packages]
 
-- name: Add Ubuntu .NET backports PPA (dotnet-sdk-9.0)
-  ansible.builtin.apt_repository:
-    repo: "ppa:dotnet/backports"
+- name: Load NFS kernel modules
+  community.general.modprobe:
+    name: "{{ item }}"
     state: present
-  tags: [github-runner, packages, repos]
-
-- name: Add Microsoft GPG key (PowerShell)
-  ansible.builtin.apt_key:
-    url: https://packages.microsoft.com/keys/microsoft.asc
-    keyring: /usr/share/keyrings/microsoft-archive-keyring.gpg
-    state: present
-  tags: [github-runner, packages, repos]
-
-- name: Add Microsoft apt repository (PowerShell)
-  ansible.builtin.apt_repository:
-    repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-archive-keyring.gpg] https://packages.microsoft.com/ubuntu/24.04/prod noble main"
-    filename: microsoft-prod
-    state: present
-  tags: [github-runner, packages, repos]
-
-- name: Add HashiCorp GPG key
-  ansible.builtin.apt_key:
-    url: https://apt.releases.hashicorp.com/gpg
-    keyring: /usr/share/keyrings/hashicorp-archive-keyring.gpg
-    state: present
-  tags: [github-runner, packages, repos]
-
-- name: Add HashiCorp apt repository
-  ansible.builtin.apt_repository:
-    repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com noble main"
-    filename: hashicorp
-    state: present
-  tags: [github-runner, packages, repos]
-
-- name: Add Proxmox GPG key
-  ansible.builtin.apt_key:
-    url: https://enterprise.proxmox.com/debian/proxmox-release-bookworm.gpg
-    keyring: /usr/share/keyrings/proxmox-release-bookworm.gpg
-    state: present
-  tags: [github-runner, packages, repos]
-
-- name: Add Proxmox apt repository
-  ansible.builtin.apt_repository:
-    repo: "deb [signed-by=/usr/share/keyrings/proxmox-release-bookworm.gpg] http://download.proxmox.com/debian/pve bookworm pve-no-subscription"
-    filename: proxmox-pve
-    state: present
-  tags: [github-runner, packages, repos]
-
-- name: Install tooling packages
-  ansible.builtin.apt:
-    name:
-      - dotnet-sdk-9.0
-      - powershell
-      - terraform
-      - proxmox-auto-install-assistant
-    state: present
-    update_cache: true
+    persistent: present
+  loop:
+    - nfs
+    - nfsd
   tags: [github-runner, packages]
 
-# --- Runner user ---
+# --- Users ---
+
+- name: Add deploy user to docker group
+  ansible.builtin.user:
+    name: "{{ ansible_user | default(lookup('env', 'USER')) }}"
+    groups: docker
+    append: true
+  tags: [github-runner, user]
 
 - name: Create runner system user
   ansible.builtin.user:
     name: "{{ github_runner_user }}"
-    home: "{{ github_runner_dir }}"
+    home: "{{ github_runner_base_dir }}"
     shell: /bin/bash
     system: true
     create_home: true
+    groups: docker
+    append: true
   tags: [github-runner, user]
 
-# --- PVE installer ISOs ---
+# --- Build runner instance list ---
 
-- name: Create PVE ISO directory
+- name: Set runner instance facts
+  ansible.builtin.set_fact:
+    _runner_instances: >-
+      {{ range(1, github_runner_count + 1) | map('regex_replace', '^(.*)$', '\1') | list }}
+  tags: [github-runner]
+
+# --- GitHub Actions runner installation (per instance) ---
+
+- name: Create runner instance directories
   ansible.builtin.file:
-    path: "{{ github_runner_iso_dir }}"
+    path: "{{ github_runner_base_dir }}/{{ item }}"
     state: directory
     owner: "{{ github_runner_user }}"
     group: "{{ github_runner_user }}"
     mode: '0755'
-  tags: [github-runner, isos]
-
-- name: Download PVE installer ISOs
-  ansible.builtin.get_url:
-    url: "{{ item.url }}"
-    dest: "{{ github_runner_iso_dir }}/{{ item.name }}"
-    checksum: "{{ item.checksum }}"
-    owner: "{{ github_runner_user }}"
-    group: "{{ github_runner_user }}"
-    mode: '0644'
-  loop: "{{ github_runner_pve_isos }}"
+  loop: "{{ _runner_instances }}"
   loop_control:
-    label: "{{ item.name }}"
-  tags: [github-runner, isos]
+    label: "runner-{{ item }}"
+  tags: [github-runner, install]
 
-# --- GitHub Actions runner installation ---
-
-- name: Check if runner is already installed
+- name: Check if runners are already installed
   ansible.builtin.stat:
-    path: "{{ github_runner_dir }}/config.sh"
-  register: _runner_installed
+    path: "{{ github_runner_base_dir }}/{{ item }}/config.sh"
+  loop: "{{ _runner_instances }}"
+  loop_control:
+    label: "runner-{{ item }}"
+  register: _runners_installed
   tags: [github-runner, install]
 
 - name: Get latest runner release version
@@ -162,32 +115,46 @@
   register: _runner_release
   delegate_to: localhost
   become: false
-  when: not _runner_installed.stat.exists
+  when: _runners_installed.results | selectattr('stat.exists', 'equalto', false) | list | length > 0
   tags: [github-runner, install]
 
-- name: Download GitHub Actions runner
+- name: Download and extract runner to each instance directory
   ansible.builtin.unarchive:
     src: "https://github.com/actions/runner/releases/download/{{ _runner_release.json.tag_name }}/actions-runner-linux-x64-{{ _runner_release.json.tag_name | regex_replace('^v', '') }}.tar.gz"
-    dest: "{{ github_runner_dir }}"
+    dest: "{{ github_runner_base_dir }}/{{ item.item }}"
     remote_src: true
     owner: "{{ github_runner_user }}"
     group: "{{ github_runner_user }}"
-  when: not _runner_installed.stat.exists
+  loop: "{{ _runners_installed.results }}"
+  loop_control:
+    label: "runner-{{ item.item }}"
+  when: not item.stat.exists
   tags: [github-runner, install]
 
 - name: Install runner dependencies
   ansible.builtin.command:
-    cmd: "{{ github_runner_dir }}/bin/installdependencies.sh"
-  when: not _runner_installed.stat.exists
+    cmd: "{{ github_runner_base_dir }}/{{ item.item }}/bin/installdependencies.sh"
+  loop: "{{ _runners_installed.results }}"
+  loop_control:
+    label: "runner-{{ item.item }}"
+  when: not item.stat.exists
   changed_when: true
   tags: [github-runner, install]
 
 # --- Runner registration via GitHub App ---
 
-- name: Check if runner is already configured
+- name: Check if runners are already configured
   ansible.builtin.stat:
-    path: "{{ github_runner_dir }}/.runner"
-  register: _runner_configured
+    path: "{{ github_runner_base_dir }}/{{ item }}/.runner"
+  loop: "{{ _runner_instances }}"
+  loop_control:
+    label: "runner-{{ item }}"
+  register: _runners_configured
+  tags: [github-runner, config]
+
+- name: Set unconfigured runner list
+  ansible.builtin.set_fact:
+    _unconfigured_runners: "{{ _runners_configured.results | selectattr('stat.exists', 'equalto', false) | list }}"
   tags: [github-runner, config]
 
 - name: Write GitHub App private key to temp file
@@ -198,7 +165,7 @@
   delegate_to: localhost
   become: false
   no_log: true
-  when: not _runner_configured.stat.exists
+  when: _unconfigured_runners | length > 0
   tags: [github-runner, config]
 
 - name: Generate GitHub App JWT
@@ -221,7 +188,7 @@
   become: false
   changed_when: false
   no_log: true
-  when: not _runner_configured.stat.exists
+  when: _unconfigured_runners | length > 0
   tags: [github-runner, config]
 
 - name: Remove temp private key file
@@ -230,7 +197,7 @@
     state: absent
   delegate_to: localhost
   become: false
-  when: not _runner_configured.stat.exists
+  when: _unconfigured_runners | length > 0
   tags: [github-runner, config]
 
 - name: Get GitHub App installation token
@@ -247,11 +214,11 @@
   become: false
   no_log: true
   when:
-    - not _runner_configured.stat.exists
+    - _unconfigured_runners | length > 0
     - _github_app_jwt is not skipped
   tags: [github-runner, config]
 
-- name: Get runner registration token
+- name: Get runner registration tokens
   ansible.builtin.uri:
     url: "https://api.github.com/repos/{{ github_runner_repo }}/actions/runners/registration-token"
     method: POST
@@ -260,48 +227,58 @@
       Authorization: "Bearer {{ _github_installation_token.json.token }}"
     return_content: true
     status_code: 201
-  register: _runner_reg_token
+  register: _runner_reg_tokens
   delegate_to: localhost
   become: false
   no_log: true
+  loop: "{{ _unconfigured_runners }}"
+  loop_control:
+    label: "runner-{{ item.item }}"
   when:
-    - not _runner_configured.stat.exists
     - _github_installation_token is not skipped
   tags: [github-runner, config]
 
-- name: Configure runner
+- name: Configure runner instances
   ansible.builtin.command:
     cmd: >-
       su -s /bin/bash {{ github_runner_user }} -c '
-      {{ github_runner_dir }}/config.sh
+      {{ github_runner_base_dir }}/{{ item.0.item }}/config.sh
       --url https://github.com/{{ github_runner_repo }}
-      --token {{ _runner_reg_token.json.token }}
-      --name {{ github_runner_name }}
+      --token {{ item.1.json.token }}
+      --name {{ github_runner_name_prefix }}-{{ item.0.item }}
       --labels {{ github_runner_labels }}
-      --work {{ github_runner_work_dir }}
+      --work {{ github_runner_base_dir }}/{{ item.0.item }}/_work
       --unattended
       --replace'
-    chdir: "{{ github_runner_dir }}"
+    chdir: "{{ github_runner_base_dir }}/{{ item.0.item }}"
+  loop: "{{ _unconfigured_runners | zip(_runner_reg_tokens.results) | list }}"
+  loop_control:
+    label: "runner-{{ item.0.item }}"
   when:
-    - not _runner_configured.stat.exists
-    - _runner_reg_token is not skipped
+    - _runner_reg_tokens is not skipped
   no_log: true
   changed_when: true
   tags: [github-runner, config]
 
-# --- Systemd service ---
+# --- Systemd services ---
 
-- name: Install runner as systemd service
+- name: Install runner systemd services
   ansible.builtin.command:
-    cmd: "{{ github_runner_dir }}/svc.sh install {{ github_runner_user }}"
-    creates: "/etc/systemd/system/actions.runner.{{ github_runner_repo | replace('/', '-') }}.{{ github_runner_name }}.service"
-    chdir: "{{ github_runner_dir }}"
+    cmd: "{{ github_runner_base_dir }}/{{ item }}/svc.sh install {{ github_runner_user }}"
+    creates: "/etc/systemd/system/actions.runner.{{ github_runner_repo | replace('/', '-') }}.{{ github_runner_name_prefix }}-{{ item }}.service"
+    chdir: "{{ github_runner_base_dir }}/{{ item }}"
+  loop: "{{ _runner_instances }}"
+  loop_control:
+    label: "runner-{{ item }}"
   tags: [github-runner, service]
 
-- name: Enable and start runner service
+- name: Enable and start runner services
   ansible.builtin.systemd:
-    name: "actions.runner.{{ github_runner_repo | replace('/', '-') }}.{{ github_runner_name }}.service"
+    name: "actions.runner.{{ github_runner_repo | replace('/', '-') }}.{{ github_runner_name_prefix }}-{{ item }}.service"
     enabled: true
     state: started
     daemon_reload: true
+  loop: "{{ _runner_instances }}"
+  loop_control:
+    label: "runner-{{ item }}"
   tags: [github-runner, service]

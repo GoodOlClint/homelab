@@ -1,11 +1,8 @@
 ---
 # github_runner role defaults
 
-# Installation directory
-github_runner_dir: /opt/actions-runner
-
-# Runner work directory
-github_runner_work_dir: /opt/actions-runner/_work
+# Base installation directory (each instance gets a numbered subdirectory)
+github_runner_base_dir: /opt/actions-runner
 
 # System user to run the runner service
 github_runner_user: runner
@@ -13,20 +10,11 @@ github_runner_user: runner
 # Repository to register runner with
 github_runner_repo: "goodolclint/PSProxmoxVE"
 
-# Runner name (defaults to inventory hostname)
-github_runner_name: "{{ inventory_hostname }}"
+# Runner name prefix (instances are named <prefix>-1, <prefix>-2, etc.)
+github_runner_name_prefix: "{{ inventory_hostname }}"
 
 # Runner labels
 github_runner_labels: "self-hosted,proxmox,integration"
 
-# PVE ISO storage directory
-github_runner_iso_dir: /opt/pve-isos
-
-# PVE ISOs to download (latest 8.x and 9.x)
-github_runner_pve_isos:
-  - name: proxmox-ve_8.4-1.iso
-    url: https://enterprise.proxmox.com/iso/proxmox-ve_8.4-1.iso
-    checksum: "sha256:d237d70ca48a9f6eb47f95fd4fd337722c3f69f8106393844d027d28c26523d8"
-  - name: proxmox-ve_9.1-1.iso
-    url: https://enterprise.proxmox.com/iso/proxmox-ve_9.1-1.iso
-    checksum: "sha256:6d8f5afc78c0c66812d7272cde7c8b98be7eb54401ceb045400db05eb5ae6d22"
+# Number of parallel runner instances
+github_runner_count: 2
