@@ -1,9 +1,16 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   # OpenObserve - Metrics and Logs Storage
   openobserve:
     image: public.ecr.aws/zinclabs/openobserve:latest
     container_name: openobserve
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "{{ openobserve_listen_port }}:5080"
     env_file:
@@ -28,6 +35,7 @@ services:
     image: grafana/grafana:latest
     container_name: grafana
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "3000:3000"
     env_file:
@@ -58,6 +66,7 @@ services:
     image: prom/prometheus:latest
     container_name: prometheus
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "9090:9090"
     command:
@@ -87,6 +96,7 @@ services:
     image: prom/blackbox-exporter:latest
     container_name: blackbox-exporter
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "9115:9115"
     command:
@@ -110,6 +120,7 @@ services:
     image: miguelndecarvalho/speedtest-exporter:latest
     container_name: speedtest-exporter
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "9798:9798"
     environment:
@@ -130,6 +141,7 @@ services:
     image: quay.io/superq/smokeping-prober:latest
     container_name: smokeping-prober
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "9374:9374"
     command:
@@ -157,6 +169,7 @@ services:
     image: prom/node-exporter:latest
     container_name: node-exporter
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "9100:9100"
     command:
@@ -187,6 +200,7 @@ services:
     image: prompve/prometheus-pve-exporter
     container_name: proxmox-exporter
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "9221:9221"
     volumes:
@@ -213,6 +227,7 @@ services:
     image: ghcr.io/axoflow/axosyslog:latest
     container_name: axosyslog
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "5514:5514/udp"  # Syslog UDP
       - "5514:5514/tcp"  # Syslog TCP
@@ -224,7 +239,7 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - /opt/monitoring/axosyslog:/etc/syslog-ng:ro
-    command: ["-edv"]
+    command: ["-e"]
     networks:
       - monitoring
     depends_on:
@@ -235,6 +250,7 @@ services:
     image: prom/snmp-exporter:latest
     container_name: snmp-exporter
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "9116:9116"
     volumes:
@@ -258,6 +274,7 @@ services:
     image: golift/unifi-poller:latest
     container_name: unifi-poller
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "9130:9130"
     env_file:
@@ -287,6 +304,7 @@ services:
     container_name: pbs-exporter
     user: '65534'
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "10019:10019"
     env_file:
@@ -315,6 +333,7 @@ services:
     image: louislam/uptime-kuma:2
     container_name: uptime-kuma
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "3001:3001"
     environment:
