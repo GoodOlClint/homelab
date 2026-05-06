@@ -1,0 +1,13 @@
+---
+# mcp role defaults
+
+# MemPalace MCP server
+mempalace_base_dir: /opt/mempalace
+mempalace_data_dir: /opt/mempalace/data
+mempalace_venv_dir: /opt/mempalace/venv
+mempalace_user: mempalace
+mempalace_port: 8765
+mempalace_tcp_port: 8765
+mempalace_host: "0.0.0.0"
+mempalace_pip_packages:
+  - "git+https://github.com/GoodOlClint/mempalace.git@main"

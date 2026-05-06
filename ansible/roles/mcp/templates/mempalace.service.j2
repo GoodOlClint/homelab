@@ -1,0 +1,17 @@
+[Unit]
+Description=MemPalace MCP Server
+After=network.target
+
+[Service]
+User={{ mempalace_user }}
+Group={{ mempalace_user }}
+WorkingDirectory={{ mempalace_base_dir }}
+EnvironmentFile=/etc/mempalace/env
+ExecStart={{ mempalace_venv_dir }}/bin/mempalace serve \
+  --host {{ mempalace_host }} \
+  --port {{ mempalace_port }}
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

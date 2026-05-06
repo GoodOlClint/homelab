@@ -1,0 +1,97 @@
+---
+# MemPalace — ChromaDB-backed vector memory MCP server
+
+# --- Packages ---
+
+- name: Install Python and build dependencies
+  ansible.builtin.apt:
+    name:
+      - python3
+      - python3-venv
+      - python3-dev
+      - build-essential
+      - git
+    state: present
+    update_cache: true
+  tags: [mcp, mempalace, packages]
+
+# --- System user ---
+
+- name: Create mempalace system user
+  ansible.builtin.user:
+    name: "{{ mempalace_user }}"
+    home: "{{ mempalace_base_dir }}"
+    shell: /usr/sbin/nologin
+    system: true
+    create_home: true
+  tags: [mcp, mempalace, user]
+
+# --- Directories ---
+
+- name: Create mempalace directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ mempalace_user }}"
+    group: "{{ mempalace_user }}"
+    mode: '0755'
+  loop:
+    - "{{ mempalace_base_dir }}"
+    - "{{ mempalace_data_dir }}"
+    - /etc/mempalace
+  tags: [mcp, mempalace, config]
+
+# --- Python venv + packages ---
+
+- name: Create Python virtual environment
+  ansible.builtin.command:
+    cmd: "python3 -m venv {{ mempalace_venv_dir }}"
+    creates: "{{ mempalace_venv_dir }}/bin/activate"
+  tags: [mcp, mempalace, install]
+
+- name: Install mempalace packages
+  ansible.builtin.pip:
+    name: "{{ mempalace_pip_packages }}"
+    virtualenv: "{{ mempalace_venv_dir }}"
+  tags: [mcp, mempalace, install]
+
+# --- Configuration ---
+
+- name: Deploy mempalace environment file
+  ansible.builtin.template:
+    src: mempalace.env.j2
+    dest: /etc/mempalace/env
+    owner: "{{ mempalace_user }}"
+    group: "{{ mempalace_user }}"
+    mode: '0644'
+  notify: restart mempalace
+  tags: [mcp, mempalace, config]
+
+- name: Deploy mempalace systemd service
+  ansible.builtin.template:
+    src: mempalace.service.j2
+    dest: /etc/systemd/system/mempalace.service
+    mode: '0644'
+  notify: restart mempalace
+  tags: [mcp, mempalace, service]
+
+# --- Ownership ---
+
+- name: Set mempalace directory ownership
+  ansible.builtin.file:
+    path: "{{ mempalace_base_dir }}"
+    state: directory
+    owner: "{{ mempalace_user }}"
+    group: "{{ mempalace_user }}"
+    recurse: true
+  tags: [mcp, mempalace, config]
+
+# --- Service ---
+
+- name: Enable and start mempalace
+  ansible.builtin.systemd:
+    name: mempalace
+    enabled: true
+    state: started
+    daemon_reload: true
+  tags: [mcp, mempalace, service]

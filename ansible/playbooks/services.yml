@@ -217,6 +217,22 @@
   tags:
     - squid
 
+- name: Configure mcp VM
+  hosts: mcp
+  become: true
+
+  vars_files:
+    - ../group_vars/all.yml
+  pre_tasks: *load_all_config
+  roles:
+    - dns_config
+    - mcp
+    - pbs_client
+    - rsyslog_client
+    - telegraf
+  tags:
+    - mcp
+
 - name: Configure lancache VM
   hosts: lancache
   become: true

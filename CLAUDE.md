@@ -143,7 +143,7 @@ Both `infrastructure.yml` and `services.yml` have play-level tags for targeted d
 
 **infrastructure.yml tags:** `phase1`, `phase2`, `phase3`, `dns`, `adguard`, `infisical`, `openobserve`, `proxmox-backup`, `unifi`, `monitoring`, `monitoring-users`, `users`
 
-**services.yml tags:** `nvidia-licensing`, `docker`, `plex`, `plex-services`, `minio`, `homepage`, `github-runner`, `squid`, `lancache`
+**services.yml tags:** `nvidia-licensing`, `docker`, `plex`, `plex-services`, `minio`, `homepage`, `github-runner`, `squid`, `mcp`, `lancache`
 
 **How tags work with pre_tasks:**
 - All `pre_tasks` blocks have `tags: [always]`, so secrets/VLANs/facts always load regardless of `--tags` filter.

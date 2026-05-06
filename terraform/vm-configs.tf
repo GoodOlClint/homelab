@@ -159,5 +159,14 @@ locals {
       memory_mb    = 4096 # 4 GB — needed for TCP buffer pool with many parallel spliced downloads
       disk_size_gb = 20
     },
+    {
+      name         = "mcp"
+      vm_id        = 115
+      vlans        = ["vlan10", "vlan40"]
+      ip_offset    = 115
+      cpu_cores    = 4
+      memory_mb    = 8192   # ChromaDB HNSW index operations
+      disk_size_gb = 200    # Vector index storage
+    },
   ]
 }

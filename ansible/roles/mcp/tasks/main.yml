@@ -1,0 +1,17 @@
+---
+# MCP server host
+#
+# Hosts MCP (Model Context Protocol) servers as systemd services.
+# Each server gets its own task file, venv, user, and systemd unit.
+
+- name: Verify required pre_tasks facts
+  ansible.builtin.assert:
+    that:
+      - mgmt_vlan_prefix is defined
+      - services_vlan_prefix is defined
+    fail_msg: "Required facts not available. This role must run from a playbook that includes full_pre_tasks.yml."
+    quiet: true
+
+- name: Install MemPalace MCP server
+  ansible.builtin.include_tasks: mempalace.yml
+  tags: [mcp, mempalace]
