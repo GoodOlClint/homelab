@@ -155,8 +155,8 @@ locals {
       vm_id        = 114
       vlans        = ["vlan10", "vlan40", "vlan140"]
       ip_offset    = 114
-      cpu_cores    = 2
-      memory_mb    = 2048
+      cpu_cores    = 4   # 4 cores — one per SMP worker (see squid_workers)
+      memory_mb    = 4096 # 4 GB — needed for TCP buffer pool with many parallel spliced downloads
       disk_size_gb = 20
     },
   ]

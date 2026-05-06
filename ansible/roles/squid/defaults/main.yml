@@ -1,37 +1,206 @@
 ---
 # squid role defaults
+#
+# This proxy operates in two modes:
+#
+# 1. Restricted mode (SSL bump + allowlist)
+#    Full HTTPS inspection, domain allowlist, audit logging.
+#    Requires clients to trust the Squid CA cert.
+#    Use for security-sensitive hosts (OpenClaw agent, etc.)
+#
+# 2. Unrestricted mode (SSL splice, no filter)
+#    CONNECT tunnels pass through without decryption.
+#    No CA cert needed on clients. Domain visible in logs via SNI.
+#    Use for general lab VMs that just need outbound access.
+#
+# Restricted rules are evaluated first, so a host can appear in both lists —
+# the restricted list wins.
 
 # Squid listen port
 squid_listen_port: 3128
+
+# Visible hostname advertised in error pages / upstream requests
+squid_visible_hostname: "squid.services.goodolclint.internal"
 
 # CA certificate storage
 squid_ca_dir: /etc/squid/ssl_cert
 squid_ca_key: "{{ squid_ca_dir }}/squid-ca.pem"
 squid_ca_cert: "{{ squid_ca_dir }}/squid-ca-cert.pem"
 
+# SMP workers — parallelize the event loop across cores to avoid per-stream
+# starvation on high-parallelism spliced downloads (e.g. ollama model pulls).
+# Must be ≤ CPU cores allocated in terraform vm-configs.tf.
+squid_workers: 4
+
 # SSL DB for certificate generation helper
 squid_ssl_db: /var/lib/squid/ssl_db
+squid_sslcrtd_children: 5
 
-# Cache settings (minimal — this is a filtering proxy, not a caching proxy)
-squid_cache_dir_size_mb: 256
+# Cache settings (filtering proxy, not a caching proxy)
+squid_cache_mem_mb: 64
+squid_max_object_size_mb: 50
+squid_cache_dir_size_mb: 1000
 
-# Client subnets allowed to use the proxy
-# Derived from VLAN prefixes at deploy time; add static entries here for
-# networks not computable from Ansible facts (e.g., VLAN 140 before it has
-# a prefix fact).
-squid_extra_client_subnets:
-  - "172.16.140.0/24"
+# Logging
+squid_access_log: /var/log/squid/access.log
+squid_audit_log: /var/log/squid/openclaw-audit.log
+squid_denied_log: /var/log/squid/denied.log
 
-# Domain allowlist (leading dot matches domain + all subdomains)
+# Restricted clients: SSL-bumped, must match allowlist
+squid_restricted_clients: []
+
+# Unrestricted clients: SSL-spliced, no domain filter
+# Default allows any host on the internal /12 supernet (all homelab VLANs).
+# OpenClaw is listed explicitly so its named ACL can drive audit logging
+# without SSL bump or domain filtering — avoids CA trust issues in build
+# containers and splice stalls on large downloads.
+# Restricted clients listed above are evaluated first, so their rules still
+# win even though they're also covered by this range.
+squid_unrestricted_clients:
+  - name: openclaw_host
+    src: "172.16.140.10/32"
+  - name: internal
+    src: "172.16.0.0/12"
+
+# Audit-logged unrestricted clients — spliced (no inspection) but all
+# connection metadata (SNI, timestamps, bytes) written to the audit log.
+# List client ACL names from squid_unrestricted_clients above.
+squid_audit_clients:
+  - openclaw_host
+
+# Dynamic API endpoints (cache-denied so audit log captures all requests)
+squid_no_cache_domains:
+  - api.anthropic.com
+  - api.github.com
+  - api.telegram.org
+
+# Download endpoints that must never be cached. Large binary artifacts
+# (installers, tarballs, wheels) should always be fetched fresh — caching
+# them risks serving stale or truncated content if the upstream changes,
+# and a cached invalid response from a previous ACL failure would persist.
+squid_no_cache_downloads:
+  - downloads.claude.ai
+  - claude.ai
+  - storage.googleapis.com
+  - files.pythonhosted.org
+  - objects.githubusercontent.com
+  - codeload.github.com
+
+# HTTP-only allowlist for restricted clients (OCSP, CRL, cert validation)
+# These are plain HTTP (port 80) endpoints whose responses are independently
+# signed (OCSP responses, CRLs), so TLS isn't needed for integrity. Passed
+# through without bump or splice.
+squid_http_only_domains:
+  # Apple cert validation
+  - "ocsp.apple.com"
+  - "ocsp2.apple.com"
+  - "crl.apple.com"
+  # Public CA OCSP responders
+  - "ocsp.digicert.com"
+  - "ocsp.sectigo.com"
+  - "ocsp.comodoca.com"
+  - "ocsp.entrust.net"
+  - "ocsp.globalsign.com"
+  - "ocsp.godaddy.com"
+  - "ocsp.verisign.com"
+  - "ocsp.pki.goog"
+  # Let's Encrypt
+  - "ocsp.int-x3.letsencrypt.org"
+  - "ocsp.root-x1.letsencrypt.org"
+  - "r3.o.lencr.org"
+  - "e5.o.lencr.org"
+  - "e6.o.lencr.org"
+  - "x1.c.lencr.org"
+  - "x2.c.lencr.org"
+  # Public CA CRL distribution points
+  - "crl3.digicert.com"
+  - "crl4.digicert.com"
+  - "crl.sectigo.com"
+  - "crl.globalsign.com"
+
+# Splice list for restricted clients
+# Domains forwarded through TLS without decryption. Used for:
+#   - Cert-pinning services (HPKP, app-level)
+#   - Services where macOS needs to see the real cert chain for OCSP AIA
+#     lookups (Apple SU domains fall into this category)
+#   - Long-lived streaming responses (SSE) that break under SSL bump
+# Content inspection is sacrificed, but connection metadata is still logged.
+squid_pinned_domains:
+  # Apple software update CDN — spliced so macOS can follow the real cert's
+  # AIA extension to find ocsp.apple.com for revocation checks. Content
+  # integrity is guaranteed independently by Apple's package signing.
+  - "swscan.apple.com"
+  - "swcdn.apple.com"
+  - "swdist.apple.com"
+  - "mesu.apple.com"
+  # Ollama (registry + Cloudflare R2 blob storage) — spliced so multi-GB
+  # model blob downloads stream directly without SSL bump overhead. Disk
+  # cache + SSL re-encryption on a small VM stalled downloads into a
+  # pause-resume-pause pattern. Blobs are content-addressed and signed by
+  # Ollama anyway, so there's nothing to policy-check.
+  - ".ollama.ai"
+  - ".ollama.com"
+  - ".r2.cloudflarestorage.com"
+
+# Domain allowlist for restricted clients (leading dot = wildcard subdomains)
+# Organized by category for auditability. Both dstdomain and ssl::server_name
+# ACLs are generated from this list so HTTP CONNECT and HTTPS SNI both match.
 squid_allowed_domains:
+  # Anthropic / Claude (API, claude.ai install script, Claude Code auth)
   - ".anthropic.com"
+  - ".claude.ai"
+  - ".claude.com"
+  # GitHub (API, git, raw content, releases, Pages)
   - ".github.com"
   - ".githubusercontent.com"
+  - "github.io"
+  # npm / yarn registries
   - ".npmjs.org"
   - ".npmjs.com"
+  - ".yarnpkg.com"
+  # PyPI
   - ".pypi.org"
   - ".pythonhosted.org"
+  - "pypi.python.org"
+  # Container registries
   - ".ghcr.io"
   - ".docker.io"
   - ".docker.com"
+  # Telegram bot API
   - ".telegram.org"
+  # OpenRouter (model pricing reference data for gateway bootstrap)
+  - ".openrouter.ai"
+  # (Ollama domains moved to squid_pinned_domains — spliced to avoid
+  # SSL-bump overhead on multi-GB model blob downloads.)
+  # Hugging Face (pyannote, embedding models)
+  - ".huggingface.co"
+  - ".hf.co"
+  # Knowledge layer ingestion sources
+  - "eutils.ncbi.nlm.nih.gov"
+  - ".case.law"
+  - ".childwelfare.gov"
+  - ".cdc.gov"
+  - ".who.int"
+  - ".icsahome.com"
+  - "law.justia.com"
+  - ".courtlistener.com"
+  # (Apple SU CDN domains moved to squid_pinned_domains below — spliced
+  # so macOS sees Apple's real cert chain for OCSP AIA lookups.)
+  # Homebrew (formulae.brew.sh JSON API for `brew update`; bottles via ghcr.io)
+  - ".brew.sh"
+
+# SNI-only allowlist — matched by ssl::server_name for SSL bump but NOT by
+# dstdomain. Use this for shared-tenant hostnames (e.g. storage.googleapis.com)
+# where the general http_access rule must NOT allow the whole domain. Each
+# entry here needs a corresponding squid_url_patterns rule to gate access.
+squid_sni_only_domains:
+  - "storage.googleapis.com"
+
+# URL pattern allowlist — path-level control for shared-tenant hosts.
+# Each entry gets its own acl + http_access allow rule evaluated BEFORE
+# the general allowed_dstdomain rule. Paired with squid_sni_only_domains
+# so SSL bump can decrypt the traffic and match the path.
+squid_url_patterns:
+  # Claude Code binary distribution on Google Cloud Storage
+  - name: allowed_claude_gcs
+    regex: '^https?://storage\.googleapis\.com/claude-code-dist-[a-f0-9-]+/'

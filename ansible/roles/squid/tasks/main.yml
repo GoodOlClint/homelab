@@ -26,6 +26,53 @@
     update_cache: true
   tags: [squid, packages]
 
+# --- Kernel TCP tuning ---
+# Two things need tuning for a high-throughput forward proxy:
+#   1. Per-socket buffer ceilings (rmem_max/wmem_max) — default 208 KB
+#      limits throughput to ~33 Mbit/s at 50 ms RTT.
+#   2. Global TCP memory pool (tcp_mem) — kernel-wide ceiling on all TCP
+#      buffers combined. Default is sized for the total RAM, which on a
+#      2 GB VM is far too small for a proxy handling dozens of parallel
+#      large downloads.
+#
+# Per-socket max of 4 MB is 20× the default — plenty for gigabit paths at
+# 30-50 ms RTT (4 MB / 40 ms = 100 MB/s). Global pool sized so that ~32
+# concurrent sockets at full buffer (128 MB) still leaves headroom for
+# squid itself and the kernel.
+
+- name: Configure kernel TCP buffer tuning
+  ansible.posix.sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    sysctl_file: /etc/sysctl.d/90-squid-tcp-tuning.conf
+    state: present
+    reload: true
+  loop:
+    - { name: net.core.rmem_max, value: "4194304" }
+    - { name: net.core.wmem_max, value: "4194304" }
+    - { name: net.core.rmem_default, value: "262144" }
+    - { name: net.core.wmem_default, value: "262144" }
+    - { name: net.ipv4.tcp_rmem, value: "4096 262144 4194304" }
+    - { name: net.ipv4.tcp_wmem, value: "4096 262144 4194304" }
+    # tcp_mem in pages (4 KB): low=512 MB, pressure=768 MB, high=1024 MB
+    # Sized for a 4 GB VM — leaves ~3 GB for squid + kernel + page cache.
+    - { name: net.ipv4.tcp_mem, value: "131072 196608 262144" }
+    - { name: net.core.netdev_max_backlog, value: "16384" }
+    - { name: net.ipv4.tcp_congestion_control, value: "bbr" }
+    # Aggressive keepalive — default 7200s is too long for long-lived
+    # spliced downloads. Intermediate stateful devices (pfSense, upstream
+    # LBs) evict idle sessions well before that. Covers squid's outgoing
+    # sockets; incoming client sockets use the http_port tcp_keepalive=
+    # parameter in squid.conf for the same values.
+    - { name: net.ipv4.tcp_keepalive_time, value: "60" }
+    - { name: net.ipv4.tcp_keepalive_intvl, value: "10" }
+    - { name: net.ipv4.tcp_keepalive_probes, value: "3" }
+    # tcp_retries2 — declare a dead peer in ~25s instead of ~924s (15 retries)
+    - { name: net.ipv4.tcp_retries2, value: "8" }
+  loop_control:
+    label: "{{ item.name }}"
+  tags: [squid, tuning]
+
 # --- CA certificate generation ---
 
 - name: Create CA directory
@@ -42,7 +89,7 @@
   vars:
     secret_key: "squid_ca_private_key"
     secret_gen_cmd: >-
-      openssl genrsa 2048 2>/dev/null
+      openssl genrsa 4096 2>/dev/null
     secret_comment: "Squid SSL bump CA private key"
     secret_infisical_path: "/squid"
     secret_dict_path: "squid"
@@ -67,8 +114,12 @@
       openssl req -new -x509 -sha256 -days 3650 -nodes
       -key /dev/stdin
       -subj "/CN=Squid CA/O=Homelab/OU=Squid Proxy"
+      -addext "basicConstraints=critical,CA:TRUE"
+      -addext "keyUsage=critical,keyCertSign,cRLSign"
+      -addext "subjectKeyIdentifier=hash"
+      -addext "authorityKeyIdentifier=keyid"
       2>/dev/null
-    secret_comment: "Squid SSL bump CA certificate (public)"
+    secret_comment: "Squid SSL bump CA certificate (public, RFC 5280 compliant)"
     secret_infisical_path: "/squid"
     secret_dict_path: "squid"
   tags: [squid, ssl, secrets]
@@ -80,6 +131,7 @@
     owner: proxy
     group: proxy
     mode: '0644'
+  register: _squid_ca_cert_state
   notify: restart squid
   tags: [squid, ssl]
 
@@ -92,6 +144,16 @@
     owner: proxy
     group: proxy
     mode: '0755'
+  tags: [squid, ssl]
+
+# When the CA cert changes, all cached bump certs in ssl_db are now signed
+# by the wrong root and must be regenerated. Wipe the DB so the init task
+# below (guarded by creates:) re-fires and rebuilds it.
+- name: Wipe SSL cert database when CA changes
+  ansible.builtin.file:
+    path: "{{ squid_ssl_db }}"
+    state: absent
+  when: _squid_ca_cert_state is changed
   tags: [squid, ssl]
 
 - name: Initialize SSL certificate database
@@ -111,14 +173,10 @@
 
 # --- Squid configuration ---
 
-- name: Deploy domain allowlist
-  ansible.builtin.template:
-    src: allowlist.txt.j2
-    dest: /etc/squid/allowlist.txt
-    owner: root
-    group: root
-    mode: '0644'
-  notify: restart squid
+- name: Remove legacy allowlist file (now inlined in squid.conf)
+  ansible.builtin.file:
+    path: /etc/squid/allowlist.txt
+    state: absent
   tags: [squid, config]
 
 - name: Deploy squid.conf

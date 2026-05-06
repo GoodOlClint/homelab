@@ -1,50 +1,266 @@
-# Squid forward proxy with SSL bump -- managed by Ansible
+# Squid forward proxy — dual-mode (restricted + unrestricted)
 # {{ ansible_managed }}
 
-# --- ACLs ---
-acl localnet src {{ services_vlan_prefix }}0/24
-{% for subnet in squid_extra_client_subnets %}
-acl localnet src {{ subnet }}
+# =============================================================================
+# SMP WORKERS
+# =============================================================================
+# Multiple workers split the event loop across cores. Required to avoid
+# per-stream starvation under high parallelism (ollama pulls open 16+
+# simultaneous spliced tunnels; a single worker's event loop falls behind
+# on individual fds, causing 30+ second stalls on specific streams while
+# aggregate throughput stays high). With workers, the listening socket is
+# shared via SO_REUSEPORT and the kernel distributes connections.
+#
+# Disk cache is disabled below (cache_dir) because SMP workers can't share
+# a single cache_dir. We're a filtering proxy, not a caching proxy, so
+# this costs nothing.
+workers {{ squid_workers }}
+
+# =============================================================================
+# CLIENT ACLs
+# =============================================================================
+
+# Restricted clients: SSL bump + allowlist enforced
+{% if squid_restricted_clients %}
+{% for client in squid_restricted_clients %}
+acl {{ client.name }} src {{ client.src }}
+{% endfor %}
+acl restricted_clients src{% for client in squid_restricted_clients %} {{ client.src }}{% endfor %}
+
+{% else %}
+# (no restricted clients — placeholder so ACL references parse)
+acl restricted_clients src 0.0.0.0/32
+{% endif %}
+
+# Unrestricted clients: SSL splice, no domain filter
+{% for client in squid_unrestricted_clients %}
+acl {{ client.name }} src {{ client.src }}
+{% endfor %}
+acl unrestricted_clients src{% for client in squid_unrestricted_clients %} {{ client.src }}{% endfor %}
+
+
+# =============================================================================
+# BUMPED ALLOWLIST — restricted clients, full SSL inspection
+# =============================================================================
+# Squid requires distinct ACL names per type. We match on both:
+#   - dstdomain: plain HTTP GETs (URL host) + HTTPS CONNECT (target host)
+#   - ssl::server_name: HTTPS SNI during SSL bump peek/bump steps
+{% for domain in squid_allowed_domains %}
+acl allowed_dstdomain dstdomain        {{ domain }}
+acl allowed_sni       ssl::server_name {{ domain }}
 {% endfor %}
 
-acl SSL_ports port 443
+# SNI-only domains — bumped via SNI match but NOT generally allowed by
+# dstdomain. Access is gated by url_regex rules below. Used for shared-tenant
+# hosts where we need path-level restriction (e.g. GCS buckets).
+#
+# We generate two ACLs per domain:
+#   1. allowed_sni entry — lets ssl_bump match at step 2 for bumping
+#   2. sni_only_connect entry — dstdomain form, used in a CONNECT-only
+#      http_access rule so the tunnel can be established. After bump, the
+#      decrypted GET requests use a different method (GET) so this rule
+#      won't match — only url_regex rules allow the actual content.
+{% for domain in squid_sni_only_domains | default([]) %}
+acl allowed_sni      ssl::server_name {{ domain }}
+acl sni_only_connect dstdomain        {{ domain }}
+{% endfor %}
+
+# URL pattern ACLs for path-level control on shared-tenant hosts
+{% for pattern in squid_url_patterns | default([]) %}
+acl {{ pattern.name }} url_regex {{ pattern.regex }}
+{% endfor %}
+
+# =============================================================================
+# HTTP-ONLY ALLOWLIST — OCSP, CRL, cert validation (no TLS)
+# =============================================================================
+# Plain HTTP on port 80. Responses are self-signed (OCSP/CRL), so no bump.
+{% for domain in squid_http_only_domains %}
+acl allowed_http_dstdomain dstdomain {{ domain }}
+{% endfor %}
+
+# =============================================================================
+# PINNED-CERT SPLICE ALLOWLIST — spliced, not bumped
+# =============================================================================
+# Domains that cert-pin (HPKP, app-level). Forwarded through TLS unmodified.
+{% if squid_pinned_domains %}
+{% for domain in squid_pinned_domains %}
+acl allowed_pinned_sni       ssl::server_name {{ domain }}
+acl allowed_pinned_dstdomain dstdomain        {{ domain }}
+{% endfor %}
+{% else %}
+# (empty — placeholder ACL so ssl_bump references are valid)
+acl allowed_pinned_sni       ssl::server_name .invalid.placeholder
+acl allowed_pinned_dstdomain dstdomain        .invalid.placeholder
+{% endif %}
+
+# =============================================================================
+# METHOD / PORT ACLs
+# =============================================================================
+
+# Safe_ports: destination ports the proxy will forward to
+# - 80:   plain HTTP
+# - 443:  HTTPS (CONNECT tunneling)
+# - 8080: alternate HTTP
+# - 8443: alternate HTTPS
+acl SSL_ports  port 443
+acl SSL_ports  port 8443
 acl Safe_ports port 80
 acl Safe_ports port 443
-
-# Domain allowlist (file-based ACL)
-acl allowed_domains dstdomain "/etc/squid/allowlist.txt"
+acl Safe_ports port 8080
+acl Safe_ports port 8443
+acl CONNECT    method CONNECT
 
 # SSL bump step ACLs
 acl step1 at_step SslBump1
+acl step2 at_step SslBump2
 
-# --- Ports ---
-http_port {{ squid_listen_port }} ssl-bump \
+# RFC1918 — restricted clients must not proxy to internal networks
+acl rfc1918 dst 10.0.0.0/8
+acl rfc1918 dst 172.16.0.0/12
+acl rfc1918 dst 192.168.0.0/16
+
+# =============================================================================
+# LISTENER
+# =============================================================================
+
+http_port 0.0.0.0:{{ squid_listen_port }} ssl-bump \
   cert={{ squid_ca_cert }} \
   key={{ squid_ca_key }} \
   generate-host-certificates=on \
-  dynamic_cert_mem_cache_size=4MB
+  dynamic_cert_mem_cache_size=8MB \
+  tcpkeepalive=60,10,3
 
-# --- SSL bump ---
-sslcrtd_program /usr/lib/squid/security_file_certgen -s {{ squid_ssl_db }} -M 4MB
+sslcrtd_program /usr/lib/squid/security_file_certgen -s {{ squid_ssl_db }} -M 8MB
+sslcrtd_children {{ squid_sslcrtd_children }}
 sslproxy_cert_error allow all
 
+# =============================================================================
+# SSL BUMP POLICY
+# =============================================================================
+# Step 1: peek at SNI to learn the hostname
+# Step 2: (first-match-wins)
+#   1. Splice pinned domains — pass through TLS unmodified (e.g. Apple SU)
+#   2. Bump restricted clients on allowed SNI — full inspection
+#   3. Terminate any remaining restricted client traffic — prevents fall-
+#      through to the broad unrestricted splice rule below, which would
+#      otherwise match because restricted client IPs are inside the
+#      172.16.0.0/12 unrestricted supernet.
+#   4. Splice unrestricted clients — general lab use, no inspection
+#   5. Terminate anything else
+
 ssl_bump peek step1
-ssl_bump bump allowed_domains
+ssl_bump splice allowed_pinned_sni
+ssl_bump bump step2 restricted_clients allowed_sni
+ssl_bump terminate restricted_clients
+ssl_bump splice unrestricted_clients
 ssl_bump terminate all
 
-# --- Access rules ---
+# =============================================================================
+# ACCESS RULES (first-match-wins)
+# =============================================================================
+# These rules apply to both plain HTTP (GET http://...) and HTTPS CONNECT.
+# For restricted clients, the allowed_dstdomain ACL matches the URL host in
+# both cases, so the allowlist enforces identically on HTTP and HTTPS.
+
 http_access deny !Safe_ports
 http_access deny CONNECT !SSL_ports
-http_access allow localnet allowed_domains
+
+# Restricted clients must not reach private networks
+http_access deny restricted_clients rfc1918
+
+# Restricted clients → URL-pattern allowlist (path-restricted shared hosts)
+# Evaluated before the general dstdomain rule so that SNI-only domains like
+# storage.googleapis.com only pass when the URL matches the specific pattern.
+{% for pattern in squid_url_patterns | default([]) %}
+http_access allow restricted_clients {{ pattern.name }}
+{% endfor %}
+
+# Restricted clients → bumped allowlist (HTTP URL host or HTTPS CONNECT target)
+http_access allow restricted_clients allowed_dstdomain
+
+# Restricted clients → CONNECT-only passthrough for SNI-only hosts
+# This allows the CONNECT tunnel to be established so SSL bump can peek the
+# SNI and then bump the connection. Only CONNECT requests match (not
+# decrypted GETs after bump), so url_regex rules above still enforce the
+# actual content path.
+{% if squid_sni_only_domains | default([]) %}
+http_access allow restricted_clients CONNECT sni_only_connect
+{% endif %}
+
+# Restricted clients → pinned-cert splice allowlist (HTTPS, no inspection)
+http_access allow restricted_clients allowed_pinned_dstdomain
+
+# Restricted clients → HTTP-only allowlist (OCSP, CRL, cert validation)
+http_access allow restricted_clients allowed_http_dstdomain
+
+# Deny everything else for restricted clients
+http_access deny  restricted_clients
+
+# Unrestricted clients → everything (HTTP + HTTPS)
+http_access allow unrestricted_clients
+
+# Default deny
 http_access deny all
 
-# --- Logging ---
-access_log daemon:/var/log/squid/access.log squid
-cache_log /var/log/squid/cache.log
+# =============================================================================
+# LOGGING
+# =============================================================================
 
-# --- Cache (minimal) ---
-cache_dir ufs /var/spool/squid {{ squid_cache_dir_size_mb }} 16 256
+logformat openclaw_audit %ts.%03tu %6tr %>a %Ss/%03>Hs %<st %rm %ru %[un %Sh/%<a %mt "%{User-Agent}>h"
 
-# --- Misc ---
-coredump_dir /var/spool/squid
-refresh_pattern .               0       20%     4320
+access_log {{ squid_access_log }} squid
+{% for client_acl in squid_audit_clients | default([]) %}
+access_log {{ squid_audit_log }} openclaw_audit {{ client_acl }}
+{% endfor %}
+{% if squid_restricted_clients %}
+access_log {{ squid_denied_log }} squid restricted_clients !allowed_dstdomain !allowed_pinned_dstdomain !allowed_http_dstdomain
+{% endif %}
+cache_log  /var/log/squid/cache.log
+
+# =============================================================================
+# CACHE
+# =============================================================================
+
+cache_mem           {{ squid_cache_mem_mb }} MB
+maximum_object_size {{ squid_max_object_size_mb }} MB
+# Disk cache disabled — SMP workers cannot share a single cache_dir, and
+# we're a filtering proxy, not a caching proxy. In-memory cache_mem is
+# still per-worker and handles short-lived hot objects fine.
+
+# Don't cache dynamic API endpoints (so audit log reflects real upstream hits)
+{% if squid_no_cache_domains %}
+acl api_endpoints dstdomain{% for domain in squid_no_cache_domains %} {{ domain }}{% endfor %}
+
+cache deny api_endpoints
+{% endif %}
+
+# Don't cache download/installer endpoints — large binary artifacts should
+# always fetch fresh, and a cached failure from a prior ACL denial would
+# persist otherwise.
+{% if squid_no_cache_downloads | default([]) %}
+acl download_endpoints dstdomain{% for domain in squid_no_cache_downloads %} {{ domain }}{% endfor %}
+
+cache deny download_endpoints
+{% endif %}
+
+# =============================================================================
+# HEADER HARDENING + MISC
+# =============================================================================
+
+visible_hostname {{ squid_visible_hostname }}
+coredump_dir     /var/spool/squid
+
+# --- Throughput tuning ---
+# Squid defaults are conservative. These help large downloads (container
+# images, model blobs, installer packages) stream smoothly without the
+# pause/resume stutter that small buffers cause.
+read_ahead_gap 16 MB
+quick_abort_min -1 KB
+half_closed_clients off
+
+forwarded_for off
+via           off
+request_header_access X-Forwarded-For deny all
+request_header_access Via              deny all
+
+refresh_pattern . 0 20% 4320
