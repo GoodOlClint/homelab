@@ -167,3 +167,13 @@ pkg/
 
 # macOS temporary files
 *~
+
+# Infisical CLI workspace config (local)
+.infisical.json
+
+# Infisical DR backup (plaintext secrets — never commit)
+infisical-backup.yml
+
+# MemPalace local state (per-checkout taxonomy/wing config)
+entities.json
+mempalace.yaml
