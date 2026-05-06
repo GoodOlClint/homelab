@@ -39,7 +39,7 @@ locals {
       vlans        = ["vlan10", "vlan40"]
       ip_offset    = 103
       cpu_cores    = 4
-      memory_mb    = 16384 # Higher memory for log processing
+      memory_mb    = 12288 # Log processing and queries
       disk_size_gb = 50    # Storage for logs and metrics
     },
     {
@@ -48,7 +48,7 @@ locals {
       vlans        = ["vlan10", "vlan40", "vlan20"]
       ip_offset    = 101
       cpu_cores    = 4
-      memory_mb    = 8192
+      memory_mb    = 4096
       disk_size_gb = 20
     },
     {
@@ -101,7 +101,7 @@ locals {
       vlans        = ["vlan10", "vlan40", "vlan20"]
       ip_offset    = 106
       cpu_cores    = 4
-      memory_mb    = 8192
+      memory_mb    = 4096
       disk_size_gb = 256
       extra_disks  = [{ size_gb = 100 }] # Scratch disk for SABnzbd par2 repair
     },
@@ -120,7 +120,7 @@ locals {
       vlans        = ["vlan10", "vlan40", "vlan20"]
       ip_offset    = 110
       cpu_cores    = 4
-      memory_mb    = 8192
+      memory_mb    = 4096
       disk_size_gb = 20
     },
     {

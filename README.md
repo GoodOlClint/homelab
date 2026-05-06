@@ -218,16 +218,16 @@ All VMs are defined in `terraform/vm-configs.tf` and provisioned with cloud-init
 | VM | VMID | VLANs | CPU | RAM | Disk | GPU | Purpose |
 |----|------|-------|-----|-----|------|-----|---------|
 | unifi | 100 | mgmt | 4 | 4 GB | 50 GB | -- | UniFi Controller |
-| proxmox-backup | 101 | mgmt, services, storage | 4 | 8 GB | 20 GB | -- | Proxmox Backup Server |
+| proxmox-backup | 101 | mgmt, services, storage | 4 | 4 GB | 20 GB | -- | Proxmox Backup Server |
 | adguard | 102 | mgmt, services | 4 | 2 GB | 20 GB | -- | AdGuard Home (DNS filtering) |
-| openobserve | 103 | mgmt, services | 4 | 16 GB | 50 GB | -- | Monitoring stack (OpenObserve, Grafana, Prometheus) |
+| openobserve | 103 | mgmt, services | 4 | 12 GB | 50 GB | -- | Monitoring stack (OpenObserve, Grafana, Prometheus) |
 | docker | 104 | mgmt, services, storage | 4 | 16 GB | 100 GB | NVIDIA | Container workloads (Valheim, Authentik, etc.) |
 | infisical | 105 | mgmt, services | 4 | 4 GB | 30 GB | -- | Self-hosted secret vault |
-| plex-services | 106 | mgmt, services, storage | 4 | 8 GB | 256 GB | -- | *arr stack, PostgreSQL, Jellyseerr |
+| plex-services | 106 | mgmt, services, storage | 4 | 4 GB | 256 GB | -- | *arr stack, PostgreSQL, Jellyseerr |
 | nvidia-licensing | 107 | mgmt, services | 2 | 2 GB | 20 GB | -- | NVIDIA GRID license server (FastAPI DLS) |
 | plex | 108 | mgmt, services, storage | 8 | 32 GB | 100 GB | NVIDIA | Plex Media Server (hardware transcoding) |
 | dns | 109 | mgmt, services | 4 | 2 GB | 20 GB | -- | BIND9 authoritative DNS |
-| lancache | 110 | mgmt, services, storage | 4 | 8 GB | 20 GB | -- | LAN game cache server |
+| lancache | 110 | mgmt, services, storage | 4 | 4 GB | 20 GB | -- | LAN game cache server |
 | homepage | 111 | mgmt, services | 2 | 2 GB | 10 GB | -- | Homepage dashboard |
 | minio | 112 | mgmt, services, storage | 4 | 4 GB | 20 GB | -- | MinIO object storage |
 | github-runner | 113 | mgmt, services | 4 | 8 GB | 50 GB | -- | GitHub Actions self-hosted runner |
