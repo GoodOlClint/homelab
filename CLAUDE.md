@@ -4,6 +4,8 @@
 
 This repo automates a Proxmox-based homelab with Terraform (VM provisioning, SDN, Vultr VPS, Cloudflare DNS) and Ansible (software configuration, Docker stacks, monitoring, secrets management). Key VMs: AdGuard (DNS filtering), BIND9 (authoritative DNS), Infisical (secrets vault), OpenObserve (monitoring stack), Proxmox Backup Server, UniFi, Plex, plex-services (arr stack), Docker (legacy services), Homepage, Lancache, NVIDIA licensing. A Vultr VPS acts as a WireGuard relay for external access.
 
+**Architectural decisions** live in `docs/decisions/` (ADRs) — read them before proposing architecture changes. In flight: the MS-01 3-node cluster migration ([plan](docs/ms01-cluster-iac-plan.md), ADRs 0001–0007, status Proposed pending operator approval) — 3-node PVE 9 + Ceph, Terraform-managed hosts, static-IP LXCs, greenfield rebuild.
+
 **Key directories:**
 - `terraform/` — Single consolidated Terraform project with `modules/proxmox-vm/` and `modules/network/`
 - `ansible/roles/` — Single flat directory (~30 roles)
@@ -176,7 +178,8 @@ make ansible-services TAGS=plex,homepage  # plex + homepage plays
 ## Terraform Conventions
 
 ### Structure
-- Single project at `terraform/` with `main.tf`, `vm-configs.tf`, `variables.tf`, `outputs.tf`, `provider.tf`
+- Single fleet project at `terraform/` with `main.tf`, `vm-configs.tf`, `variables.tf`, `outputs.tf`, `provider.tf`
+- **`terraform/hosts/`** is a SEPARATE root (own local state) for the host/cluster plane — host networking (bpg `network_linux_bond/bridge/vlan`), and later cluster options / Ceph pool / SDN / ACME (ADR-0002, WP1). Two-stage apply ordering: `hosts/` (rare) before `terraform/` (routine). Answer-file install → `make node-iso` (bake) → `make node-bootstrap` (token) → `make hosts-apply ENDPOINT=…`. It manages the X710/82599ES bond→`vmbr0`→VLAN 20/40 and never touches the VLAN 30 install link, the ConnectX mesh ports, or ring1. Baked `answer-*.toml` + `nodes.auto.tfvars` + `network-data/local/host-bindings.yaml` are gitignored (carry MAC/IP/root-hash); templates + `*.example` are tracked. See `terraform/hosts/README.md`.
 - `vm-configs.tf` defines all VMs in `local.infrastructure_vms` and `local.services_vms`
 - `vars.auto.tfvars` for non-sensitive config only
 
@@ -277,6 +280,8 @@ make ansible-services TAGS=plex,homepage  # plex + homepage plays
 ## What Never To Do
 
 - **Never hardcode IPs in templates** — derive from `ansible_host`, VLAN prefix replacement, or `hostvars`
+- **Never reconfigure host networking over the interface carrying the PVE API session** — `terraform/hosts/` applies run over the stable VLAN 30 mgmt link and never touch it; a re-apply must never drop the link Terraform is talking over (ADR-0002)
+- **Never DHCP an LXC** — static IPs only, so plan-time inventory is deterministic (ADR-0003)
 - **Never put secrets in `vars.auto.tfvars`** — pre-commit hook blocks this
 - **Never set `vlan_id` on SDN VNETs** — only for physical bridges (`vmbr*`)
 - **Never use `regex_replace` for literal string substitution** — use `replace()` instead

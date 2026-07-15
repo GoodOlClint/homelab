@@ -1,0 +1,35 @@
+# proxmox-auto-install answer file — pve node (rebuilt MSI, Ceph node 3 + GPU/LLM host).
+# TEMPLATE: @PLACEHOLDERS@ injected by scripts/bake-answer.sh at ISO-bake time.
+# Validate the baked file with `proxmox-auto-install-assistant validate-answer <file>`.
+#
+# Disk layout (default, 2026-07): pve has dedicated boot disks, so NO hdsize cap —
+#   boot  = ZFS mirror on the 2x Samsung 980 PRO 500G
+#   Ceph  = the 2x Samsung 990 PRO 2TB, whole-disk OSDs (WP2)
+#   the 5T Synology iSCSI SAN (sda) is RETIRED (ADR-0001: NAS = media/PBS/ISO only)
+# @BOOT_DISKS@ is injected as the two 980 PRO device names — VERIFY them at bake
+# time (NVMe enumeration can shift); pick the 500G pair, not the 2TB OSD disks.
+#
+# NIC: pve installs over the I225-V (single 2.5G, VLAN 30). Its 10G bond is the
+# 82599ES SFP+ pair (managed post-install by terraform/hosts). Seat the 25G card
+# BEFORE installing so the ConnectX ports get pinned to nicN too.
+
+[global]
+keyboard             = "en-us"
+country              = "us"
+timezone             = "America/Denver"
+fqdn                 = "@FQDN@"
+mailto               = "@MAILTO@"
+root-password-hashed = "@ROOT_PW_HASH@"
+root-ssh-keys        = ["@ROOT_SSH_KEY@"]
+
+[network]
+source                 = "from-answer"
+cidr                   = "@INSTALL_CIDR@"    # VLAN 30 mgmt, e.g. 172.16.30.104/24
+gateway                = "@INSTALL_GATEWAY@" # 172.16.30.1
+dns                    = "1.1.1.1"
+filter.ID_NET_NAME_MAC = "*@INSTALL_NIC_MAC@" # I225-V MAC, no colons
+
+[disk-setup]
+filesystem = "zfs"
+zfs.raid   = "raid1"
+disk-list  = @BOOT_DISKS@   # ["nvmeXn1","nvmeYn1"] — the two 980 PRO 500G, whole-disk boot mirror

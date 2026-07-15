@@ -1,0 +1,34 @@
+# proxmox-auto-install answer file — MS-01 nodes (crete, crete2).
+# TEMPLATE: @PLACEHOLDERS@ are injected by scripts/bake-answer.sh at ISO-bake time
+# (nothing secret or site-specific is committed — repo is public). Validate the
+# baked file with `proxmox-auto-install-assistant validate-answer <file>`.
+#
+# Disk decision (operator, 2026-07): 2x 1TB NVMe -> capped ZFS-mirror boot (120G)
+# + the remaining ~810G of each disk left FREE for a Ceph OSD partition per node
+# (WP2 creates the OSDs). hdsize caps the boot pool and leaves that free space.
+#
+# NIC decision: select the install NIC (i226-V, VLAN 30 mgmt / corosync ring0) by
+# MAC so naming is deterministic regardless of PCIe enumeration. Seat the 25G card
+# BEFORE installing so the installer also pins the ConnectX ports to nicN.
+
+[global]
+keyboard             = "en-us"
+country              = "us"
+timezone             = "America/Denver"
+fqdn                 = "@FQDN@"
+mailto               = "@MAILTO@"
+root-password-hashed = "@ROOT_PW_HASH@"
+root-ssh-keys        = ["@ROOT_SSH_KEY@"]
+
+[network]
+source                  = "from-answer"
+cidr                    = "@INSTALL_CIDR@"    # VLAN 30 mgmt, e.g. 172.16.30.103/24
+gateway                 = "@INSTALL_GATEWAY@" # 172.16.30.1
+dns                     = "1.1.1.1"           # bootstrap resolver (AdGuard not up yet)
+filter.ID_NET_NAME_MAC  = "*@INSTALL_NIC_MAC@" # i226-V MAC, no colons (e.g. *58:47ca... -> *5847ca78f9d9)
+
+[disk-setup]
+filesystem = "zfs"
+zfs.raid   = "raid1"
+zfs.hdsize = 120                       # GiB — cap boot pool; rest of each NVMe -> Ceph OSD (WP2)
+disk-list  = ["nvme0n1", "nvme1n1"]    # both 1TB NVMe -> boot mirror

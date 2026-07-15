@@ -319,3 +319,32 @@ clean-ssh:
 	ips = set();\
 	[ips.update(h.get('ansible_host','') for h in yaml.safe_load(open(f)).get('all',{}).get('hosts',{}).values()) for f in glob.glob('ansible/inventory/*.yaml')];\
 	[os.system(f'ssh-keygen -R {ip}') for ip in ips if ip]"
+
+# === Host/cluster plane — terraform/hosts/ (ADR-0002, WP1) =====================
+# Separate state from the main fleet project. ENDPOINT points at the node's stable
+# VLAN 30 mgmt URL during bring-up (never the bond being reconfigured), the VLAN 40
+# VIP later. TF_VAR_virtual_environment_endpoint is passed INLINE (never exported
+# globally — that would clobber the main project's endpoint from its tfvars).
+# hosts-apply is deliberately INTERACTIVE (no auto-approve): a host-networking apply
+# can drop connectivity, so review the plan and confirm by hand.
+.PHONY: node-iso node-bootstrap hosts-plan hosts-apply
+
+# Bake a node's answer file (+ optional ISO): make node-iso NODE=crete [ISO=/path/pve-9.iso]
+node-iso:
+	@bash scripts/bake-answer.sh $(NODE) $(ISO)
+
+# One hand-off step: create terraform@pve token on a fresh node. make node-bootstrap IP=172.16.30.103
+node-bootstrap:
+	@bash scripts/node-bootstrap.sh $(IP)
+
+# Plan the host plane. make hosts-plan ENDPOINT=https://172.16.30.103:8006/
+hosts-plan:
+	@test -n "$(ENDPOINT)" || { echo "ERROR: set ENDPOINT=https://<node-vlan30-ip>:8006/"; exit 1; }
+	@cd terraform/hosts && terraform init -input=false >/dev/null && \
+		TF_VAR_virtual_environment_endpoint="$(ENDPOINT)" terraform plan -no-color -input=false
+
+# Apply the host plane (interactive confirm). make hosts-apply ENDPOINT=https://172.16.30.103:8006/
+hosts-apply:
+	@test -n "$(ENDPOINT)" || { echo "ERROR: set ENDPOINT=https://<node-vlan30-ip>:8006/"; exit 1; }
+	@cd terraform/hosts && terraform init -input=false >/dev/null && \
+		TF_VAR_virtual_environment_endpoint="$(ENDPOINT)" terraform apply -input=false

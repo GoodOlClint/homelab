@@ -177,3 +177,10 @@ infisical-backup.yml
 # MemPalace local state (per-checkout taxonomy/wing config)
 entities.json
 mempalace.yaml
+
+# Pre-migration state capture (MACs/IPs/storage internals — reference only, repo is public)
+docs/pre-migration-state/
+
+# WP1: baked answer files (injected MAC/IP/root-hash) + auto-install ISOs — never commit
+terraform/hosts/answer-*.toml
+terraform/hosts/*.iso

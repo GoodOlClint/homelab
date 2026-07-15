@@ -1,0 +1,32 @@
+# Copy to nodes.auto.tfvars (gitignored) and fill in per node.
+#
+# bond_slaves MUST be captured AFTER each node's fresh answer-file install — the
+# installer pins every present NIC by MAC to stable nicN names, and the numbering
+# depends on what's seated at install time (so seat the 25G card FIRST). On each
+# node after install, the two 10G bond ports are:
+#   crete / crete2 : the two Intel X710 ports  -> ethtool -i <nic> shows driver "i40e"
+#   pve            : the two 82599ES SFP+ ports -> ethtool -i <nic> shows driver "ixgbe"
+# Capture with:
+#   for n in $(ls /sys/class/net); do d=$(ethtool -i "$n" 2>/dev/null|awk '/^driver/{print $2}'); \
+#     echo "$n $d"; done | grep -E 'i40e|ixgbe'
+#
+# services_ip = VLAN 40 (web UI / API / VIP subnet); storage_ip = VLAN 20 (jumbo).
+# Host octets below are EXAMPLES — set the real ones in the gitignored file.
+
+nodes = {
+  crete = {
+    bond_slaves = ["nic0", "nic1"] # <- the two i40e (X710) nicN, post-install
+    services_ip = "172.16.40.11/24"
+    storage_ip  = "172.16.20.11/24"
+  }
+  crete2 = {
+    bond_slaves = ["nic0", "nic1"]
+    services_ip = "172.16.40.12/24"
+    storage_ip  = "172.16.20.12/24"
+  }
+  pve = {
+    bond_slaves = ["nic0", "nic1"] # <- the two ixgbe (82599ES) nicN, post-install
+    services_ip = "172.16.40.13/24"
+    storage_ip  = "172.16.20.13/24"
+  }
+}
