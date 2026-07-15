@@ -18,3 +18,8 @@ github_runner_labels: "self-hosted,proxmox,integration"
 
 # Number of parallel runner instances
 github_runner_count: 2
+
+# Scheduled Docker prune (prevents per-commit CI images from filling the disk).
+# Removes unused images and build cache older than the keep window.
+github_runner_prune_schedule: "daily"   # systemd OnCalendar expression
+github_runner_prune_keep_hours: 48      # keep images/cache newer than this many hours

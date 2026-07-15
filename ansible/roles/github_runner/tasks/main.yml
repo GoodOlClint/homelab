@@ -64,6 +64,10 @@
     append: true
   tags: [github-runner, user]
 
+- name: Configure Docker daemon syslog logging to OpenObserve
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/configure_docker_logging.yml"
+  tags: [github-runner, docker-logging]
+
 - name: Create runner system user
   ansible.builtin.user:
     name: "{{ github_runner_user }}"
@@ -282,3 +286,28 @@
   loop_control:
     label: "runner-{{ item }}"
   tags: [github-runner, service]
+
+# --- Scheduled Docker prune ---
+# Per-commit CI images accumulate (~1.9GB each) and fill the disk. A daily
+# timer reclaims unused images and build cache older than the keep window.
+
+- name: Install docker-prune systemd units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: '0644'
+  loop:
+    - docker-prune.service
+    - docker-prune.timer
+  register: _docker_prune_units
+  tags: [github-runner, prune]
+
+- name: Enable and start docker-prune timer
+  ansible.builtin.systemd:
+    name: docker-prune.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ _docker_prune_units is changed }}"
+  tags: [github-runner, prune]

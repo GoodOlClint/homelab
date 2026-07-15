@@ -1,0 +1,13 @@
+[Unit]
+Description=Prune unused Docker images and build cache (github-runner)
+Documentation=https://github.com/goodolclint/homelab CLAUDE.md
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+# Remove unused images and build cache older than the keep window. The runner's
+# CI workflow tags an integration image per commit; without this they accumulate
+# ~1.9GB each and eventually fill the disk (see MEMORY.md).
+ExecStart=/usr/bin/docker image prune -af --filter "until={{ github_runner_prune_keep_hours }}h"
+ExecStart=/usr/bin/docker builder prune -f --filter "until={{ github_runner_prune_keep_hours }}h"
