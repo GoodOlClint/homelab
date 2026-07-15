@@ -16,7 +16,7 @@ Repoints this repo from the single-node `pve` hypervisor to a 3-node PVE 9 clust
 | Infisical isolation | Stays a VM (crown jewel), `protected = true`, Ceph-backed |
 | Storage | Ceph `size=3, min_size=2` on local NVMe day one; 25G switchless mesh (CX-4 Lx + DACs, hardware in hand); Synology = media + PBS datastore + ISO/templates only |
 | GPU | vGPU retired entirely; LLM VM on `pve` with full passthrough (driver in guest); Plex uses MS-01 iGPU QuickSync via LXC `/dev/dri` bind-mount; `nvidia-licensing` VM retired |
-| Endpoint | keepalived VRRP VIP on VLAN 40 (DNS name in the gitignored bindings) is the Terraform/Ansible endpoint |
+| Endpoint | keepalived VRRP VIP on VLAN 30 (with host mgmt; DNS name in the gitignored bindings) is the Terraform/Ansible endpoint (ADR-0008; was VLAN 40) |
 | Management pane | PDM VM for human single-pane (cluster + standalone worklab); worklab never joins the cluster |
 | LXC rule | Static IPs only — **never DHCP an LXC**. Verified 2026-07-10: bpg reads DHCP LXC IPs since v0.88, so this is convention (deterministic plan-time inventory), not workaround |
 | DNS availability | Redundancy over migration: 2× AdGuard LXCs + BIND9 primary/secondary on different nodes, both resolvers handed out (LXC restart-migration verified: no live migration, blip is stop+start on Ceph) |
@@ -52,7 +52,7 @@ New Terraform root **`terraform/hosts/`** with its own state for the host/cluste
 
 ### WP1 — `terraform/hosts/` root + auto-install
 - `answer-crete.toml` / `answer-crete2.toml` / `answer-pve.toml`: disk layout (ZFS boot mirror where applicable), initial mgmt IP on the i226-V / VLAN 30, root key.
-- Host networking per node: `bond0` (X710 ×2, 802.3ad layer3+4) → VLAN-aware `vmbr0`; host VLAN 40 IP (web UI) + VLAN 20 IP (storage, MTU 9000) on the bridge; i226-V keeps VLAN 30 (corosync ring0); i226-LM = ring1 subnet (+ AMT is ME-side config, documented not managed); 25G ports left for the mesh (FRR, WP2). pve variant: 82599ES bond, single I225-V.
+- Host networking per node: `bond0` (X710 ×2, 802.3ad layer3+4) → VLAN-aware `vmbr0`; `terraform/hosts` puts only the **VLAN 20 storage IP** (MTU 9000) on the bridge. **i226-V** carries VLAN 30 native (install/mgmt bootstrap) + **VLAN 31 tagged (corosync ring0)**; **i226-LM** carries AMT (VLAN 10, ME-tagged) + **VLAN 32 tagged (corosync ring1)**; corosync VLANs 31/32 are dedicated, switch-local on the 2.5G switch (no gateway, not trunked upstream — ADR-0008); 25G ports left for the mesh (FRR, WP2). Host mgmt (VLAN 30, web UI/API) + the keepalived VIP are **WP2** — Ansible re-homes mgmt from the i226-V install link to the bond (VLAN 30) and stands up the VIP there (a second VLAN 30 IP on the bond can't be set by `terraform/hosts`, which runs over that link — ADR-0002/0008). AMT is ME-side config, documented not managed. pve variant: 82599ES bond, single I225-V.
 - **NIC naming: install the 25G cards BEFORE the answer-file install.** The PVE 9 installer auto-pins every present NIC by MAC via `/usr/local/lib/systemd/network/50-pmx-nicN.link` (`MACAddress=` match) — so a fresh install gives stable `nicN` names immune to later PCIe renumbering, *including the ConnectX ports* as long as the card is seated at install time. Reference the pinned `nicN` names in the answer-file/`interfaces`, not `enpXsY`. (Verified 2026-07: crete2, fresh-installed, was MAC-pinned and survived its card install untouched; crete, upgraded-from-PVE-8, kept unpinned `enpXsY` and lost all networking when its card renumbered the bus — the config still pointed at the old `enp90s0`. Upgraded nodes not being rebuilt need manual MAC `.link` pinning; pve was pinned by hand to `mgmt0/sfp0/sfp1`.)
 - **Same rule protects GPU passthrough.** Adding the ConnectX card to pve renumbered its IOMMU groups, breaking the RTX 5000 resource mapping (`iommugroup` 20→21) and stopping the vGPU guests until the mapping was corrected. IOMMU groups, like NIC names and PCI addresses, are stable across reboots but shift when PCIe hardware changes — so seat every card (NIC + GPU) *before* configuring the LLM-VM passthrough. Full passthrough binds by PCI path (`0000:01:00.0`); the optional `iommugroup` pin in the PVE resource mapping can be omitted for extra robustness.
 - Cluster options, ACME, `terraform@pve` ACLs once the cluster exists.
@@ -62,7 +62,7 @@ New Terraform root **`terraform/hosts/`** with its own state for the host/cluste
 - Idempotent `pvecm create`/`add` (skip when already a member), temporary QDevice while 2-node (drop when pve joins).
 - `pveceph install` + MON/MGR/OSD creation (idempotent: check before create), FRR OpenFabric on the 25G mesh, keepalived VIP with `pveproxy` track_script + unicast peers.
 - New `proxmox` inventory group: `crete`, `crete2`, `pve` (replaces the single-host `inventory/proxmox.yaml`); `update-all.yml` and `monitoring_users` (currently hardcoding a single `proxmox_host` IP in `group_vars/all.yml:34`) go per-node.
-- **DoD:** role run twice = zero changes; `pvecm status` quorate; `ceph -s` HEALTH_OK; VIP answers on VLAN 40 and survives killing pveproxy on its holder.
+- **DoD:** role run twice = zero changes; `pvecm status` quorate; `ceph -s` HEALTH_OK; VIP answers on VLAN 30 and survives killing pveproxy on its holder.
 
 ### WP3 — Main project cluster rework
 - Provider bump `~> 0.78` → `~> 0.111`; endpoint → the VIP; per-node `node {}` SSH blocks for file uploads.
@@ -147,7 +147,7 @@ Placement per the okf doc: **VMs** — infisical (protected), pfsense-test, gith
 ## Open items (not blocking approval)
 
 - **BOINC:** keep CPU-only or drop — decide before WP4 lands the docker-legacy stack.
-- **Corosync ring1:** design allows ring1 on the i226-LM subnet or the bond; default to configuring ring1 on i226-LM in WP2 (cheap), drop if flaky.
+- **Corosync ring1:** ring1 on **VLAN 32** (i226-LM, tagged alongside AMT), configured in WP2 (cheap); drop if flaky. ring0 is VLAN 31 on i226-V (ADR-0008).
 - **MS-01 PCIe lane-sharing:** verify the x4 slot doesn't starve an M.2/OSD when the 25G NIC is installed (check during Day-1 bring-up, before Ceph).
 - **Packer golden images:** unaffected; revisit after migration.
 

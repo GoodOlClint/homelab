@@ -7,7 +7,9 @@ fleet's state hostage (ADR-0002).
 
 **This root owns**, per node, over the stable VLAN 30 mgmt link:
 the X710 (pve: 82599ES) LACP `bond0` → VLAN-aware `vmbr0` → the storage (VLAN 20,
-jumbo) and services (VLAN 40, web-UI/VIP) host interfaces.
+jumbo) host interface. Host mgmt (VLAN 30) + the keepalived VIP are **not** here —
+WP2 re-homes mgmt from the i226-V install link to the bond and stands up the VIP
+(adding a VLAN 30 IP on the bond here would collide with the install link — ADR-0008).
 
 **It deliberately leaves alone** the i226-V/VLAN 30 install link (carries the API
 session + corosync ring0), the ConnectX 25G ports (FRR mesh, WP2), and the second
@@ -61,7 +63,7 @@ i226 (ring1, WP2) — so a re-apply can never drop the link Terraform is talking
 - Fresh answer-file install of crete → `make hosts-apply` converges with **zero**
   manual host edits; a re-apply is a **no-op**.
 - After a host reboot all planes come up: `bond0` LACP negotiated, `vmbr0` VLAN-aware,
-  VLAN 20/40 addresses present, and jumbo to the NAS works:
+  VLAN 20 storage address present, and jumbo to the NAS works:
   ```
   ping -M do -s 8972 172.16.20.10   # storage VLAN, 9000-byte frames, no fragmentation
   ```

@@ -4,7 +4,7 @@
 
 This repo automates a Proxmox-based homelab with Terraform (VM provisioning, SDN, Vultr VPS, Cloudflare DNS) and Ansible (software configuration, Docker stacks, monitoring, secrets management). Key VMs: AdGuard (DNS filtering), BIND9 (authoritative DNS), Infisical (secrets vault), OpenObserve (monitoring stack), Proxmox Backup Server, UniFi, Plex, plex-services (arr stack), Docker (legacy services), Homepage, Lancache, NVIDIA licensing. A Vultr VPS acts as a WireGuard relay for external access.
 
-**Architectural decisions** live in `docs/decisions/` (ADRs) — read them before proposing architecture changes. In flight: the MS-01 3-node cluster migration ([plan](docs/ms01-cluster-iac-plan.md), ADRs 0001–0007, status Proposed pending operator approval) — 3-node PVE 9 + Ceph, Terraform-managed hosts, static-IP LXCs, greenfield rebuild.
+**Architectural decisions** live in `docs/decisions/` (ADRs) — read them before proposing architecture changes. In flight: the MS-01 3-node cluster migration ([plan](docs/ms01-cluster-iac-plan.md), ADRs 0001–0008, status Proposed pending operator approval) — 3-node PVE 9 + Ceph, Terraform-managed hosts, static-IP LXCs, greenfield rebuild.
 
 **Key directories:**
 - `terraform/` — Single consolidated Terraform project with `modules/proxmox-vm/` and `modules/network/`

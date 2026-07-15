@@ -11,7 +11,7 @@ The repo targets a single Proxmox node (`pve`, PVE 8.4) — one endpoint, one `n
 
 ## Decision
 
-The IaC target is a 3-node PVE 9 cluster — `crete` + `crete2` (MS-01) + rebuilt `pve` (MSI) — with Ceph `size=3, min_size=2` on local NVMe over a 25G switchless FRR mesh as the VM/LXC disk store. Every guest gets an explicit `node_name`; Ceph-backed guests get HA resources. Terraform and Ansible talk to a keepalived VRRP VIP on VLAN 40 (DNS name kept in the gitignored bindings), not a node IP. Cloud-init snippets move to a small CephFS datastore. The Synology stays media + PBS datastore + ISO/templates only — never the VM SAN. Worklab stays standalone; PDM (not corosync) provides the single management pane over cluster + worklab.
+The IaC target is a 3-node PVE 9 cluster — `crete` + `crete2` (MS-01) + rebuilt `pve` (MSI) — with Ceph `size=3, min_size=2` on local NVMe over a 25G switchless FRR mesh as the VM/LXC disk store. Every guest gets an explicit `node_name`; Ceph-backed guests get HA resources. Terraform and Ansible talk to a keepalived VRRP VIP on VLAN 40 (DNS name kept in the gitignored bindings), not a node IP. *(Amended by ADR-0008: the VIP/endpoint moved to VLAN 30, with host mgmt.)* Cloud-init snippets move to a small CephFS datastore. The Synology stays media + PBS datastore + ISO/templates only — never the VM SAN. Worklab stays standalone; PDM (not corosync) provides the single management pane over cluster + worklab.
 
 ## Rejected alternatives
 

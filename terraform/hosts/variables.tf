@@ -25,13 +25,19 @@ variable "virtual_environment_password" {
 #   The ConnectX 25G ports and the second i226 (ring1) are intentionally left out
 #   here — they belong to the FRR mesh + corosync ring1 (WP2), not this bond.
 #
-# services_ip / storage_ip: host IPs on the VLAN-aware vmbr0. No gateway on these
-#   sub-interfaces — the host's single default route stays on the VLAN 30 install
-#   link, and pfSense routes inter-VLAN replies (avoids a double default route).
+# storage_ip: the host's VLAN 20 (jumbo) IP on the bond — the only host IP this
+#   root provisions. No gateway on it: the host's default route stays on the
+#   VLAN 30 install link, and pfSense routes inter-VLAN replies.
+#
+# NOT here (deliberately): the host mgmt IP (VLAN 30) + keepalived VIP. Host mgmt
+#   arrives on the i226-V VLAN 30 install link, and this root runs OVER that link
+#   (ADR-0002) so it must not add a second VLAN 30 IP on the bond — two interfaces
+#   on 172.16.30.0/24 is the classic rp_filter/asymmetric-ARP footgun. WP2's
+#   Ansible proxmox_host role re-homes mgmt from the i226-V to the bond (VLAN 30)
+#   and stands up the VIP there, over a stable connection — see ADR-0008.
 variable "nodes" {
   type = map(object({
-    bond_slaves = list(string) # e.g. ["nic2", "nic3"] — the two X710 ports, post-install
-    services_ip = string       # VLAN 40 web-UI / API address, CIDR — e.g. "172.16.40.11/24"
+    bond_slaves = list(string) # e.g. ["nic0", "nic1"] — the two X710 ports, post-install
     storage_ip  = string       # VLAN 20 storage address, CIDR (jumbo) — e.g. "172.16.20.11/24"
   }))
   description = "Per-node host-networking bindings. Real values live in the gitignored nodes.auto.tfvars."
@@ -40,11 +46,6 @@ variable "nodes" {
 variable "storage_vlan" {
   type    = number
   default = 20
-}
-
-variable "services_vlan" {
-  type    = number
-  default = 40
 }
 
 variable "storage_mtu" {
