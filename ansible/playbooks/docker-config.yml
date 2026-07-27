@@ -64,7 +64,8 @@
     - name: Restart plex-services containers
       community.docker.docker_compose_v2:
         project_src: /opt/plex-services
-        state: restarted
+        state: present
+        recreate: always
       when:
         - inventory_hostname == 'plex-services'
         - plex_services_compose is changed or plex_services_recyclarr is changed
@@ -119,7 +120,8 @@
     - name: Restart docker VM containers
       community.docker.docker_compose_v2:
         project_src: "{{ docker_base_dir }}"
-        state: restarted
+        state: present
+        recreate: always
       when:
         - inventory_hostname == 'docker'
         - docker_compose is changed or docker_env is changed
@@ -127,7 +129,8 @@
     - name: Restart authentik containers
       community.docker.docker_compose_v2:
         project_src: /opt/authentik
-        state: restarted
+        state: present
+        recreate: always
       when:
         - inventory_hostname == 'docker'
         - authentik_dir.stat.exists | default(false)
@@ -147,7 +150,8 @@
     - name: Restart lancache containers
       community.docker.docker_compose_v2:
         project_src: /opt/lancache
-        state: restarted
+        state: present
+        recreate: always
       when:
         - inventory_hostname == 'lancache'
         - lancache_compose is changed
@@ -212,7 +216,8 @@
     - name: Restart infisical containers
       community.docker.docker_compose_v2:
         project_src: /opt/infisical
-        state: restarted
+        state: present
+        recreate: always
       when:
         - inventory_hostname == 'infisical'
         - infisical_compose is changed
@@ -341,7 +346,8 @@
     - name: Restart monitoring containers
       community.docker.docker_compose_v2:
         project_src: /opt/monitoring
-        state: restarted
+        state: present
+        recreate: always
       when:
         - inventory_hostname == 'openobserve'
         - >-
@@ -371,7 +377,8 @@
     - name: Restart minio containers
       community.docker.docker_compose_v2:
         project_src: /opt/minio
-        state: restarted
+        state: present
+        recreate: always
       when:
         - inventory_hostname == 'minio'
         - minio_compose is changed

@@ -7,7 +7,7 @@ x-logging: &default-logging
 services:
   # OpenObserve - Metrics and Logs Storage
   openobserve:
-    image: public.ecr.aws/zinclabs/openobserve:latest
+    image: {{ openobserve_image }}
     container_name: openobserve
     restart: unless-stopped
     logging: *default-logging

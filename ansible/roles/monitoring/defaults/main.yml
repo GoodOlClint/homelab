@@ -4,3 +4,12 @@
 
 # Docker compose base directory
 monitoring_base_dir: /opt/monitoring
+
+# PINNED — deliberate exception to the repo's "no version pinning without reason" rule.
+# The metadata DB at /var/lib/openobserve/db is on schema 46, which only v0.92.x
+# understands. The `latest` tag currently resolves to v0.91.1 (schema 45), which panics
+# on every start with "Migration file ... is missing". Verified 2026-07-27: v0.91.2 and
+# v0.91.3 also fail; v0.92.0-rc1 and -rc2 both start clean with "DB_SCHEMA_VERSION match".
+# amd64 suffix because upstream published no multi-arch tag for this rc; the host is x86_64.
+# UNPIN WHEN: v0.92.0 final ships a multi-arch tag. Renovate watches this line.
+openobserve_image: "public.ecr.aws/zinclabs/openobserve:v0.92.0-rc2-amd64"
