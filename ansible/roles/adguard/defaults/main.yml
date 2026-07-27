@@ -32,11 +32,11 @@ adguard_service_aliases:
 adguard_cross_vlan_rewrites:
   - hostname: plex
     zone_key: vlan20
-    from_prefix: "{{ core_vlan_prefix }}"
+    from_prefix: "{{ mgmt_vlan_prefix }}"
     to_prefix: "{{ storage_vlan_prefix }}"
   - hostname: docker
     zone_key: vlan20
-    from_prefix: "{{ core_vlan_prefix }}"
+    from_prefix: "{{ mgmt_vlan_prefix }}"
     to_prefix: "{{ storage_vlan_prefix }}"
 
 # Query log retention. AdGuardHome's own default is 2160h (90 days), which on the
