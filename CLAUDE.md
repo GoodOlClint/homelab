@@ -287,6 +287,8 @@ make ansible-services TAGS=plex,homepage  # plex + homepage plays
 - **Never put secrets in `vars.auto.tfvars`** — pre-commit hook blocks this
 - **Never set `vlan_id` on SDN VNETs** — only for physical bridges (`vmbr*`)
 - **Never use `regex_replace` for literal string substitution** — use `replace()` instead
+- **Never write a source-based `routing-policy` rule with the interface prefix** — it must be `/32`. A `from: <ip>/24` rule matches every host in the subnet, not just this one, so any *forwarded* packet (a reply to a Docker container) from a neighbour on that VLAN is looked up in the per-VLAN table, which has no bridge route, and is sent back out the gateway. Symptom: containers reach the internet fine but hang on every connection to a host on that interface's own subnet
+- **The AdGuard config template is `when: not _adguard_config.stat.exists` — "initial only"** — AdGuardHome rewrites its own YAML at runtime, so editing `adguardhome.yaml.j2` affects fresh VMs only. Changing a setting on a running host means editing the live config (stop service → edit → start) or using the AdGuard API; a redeploy silently no-ops
 - **Never write a bare `$` in a docker-compose `environment:` value that must expand inside the container** — compose interpolates `${...}` at parse time on the Ansible host and silently substitutes empty. Escape as `$$` (see the Valheim `ON_VALHEIM_LOG_FILTER_CONTAINS_*` hook in `docker/templates/docker-compose.yml.j2`)
 - **Never use `echo -n`** in secret generation commands — use `printf '%s'`
 - **Never use `is succeeded` alone** to gate on a registered variable — add `is not skipped`
