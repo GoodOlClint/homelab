@@ -38,3 +38,8 @@ adguard_cross_vlan_rewrites:
     zone_key: vlan20
     from_prefix: "{{ core_vlan_prefix }}"
     to_prefix: "{{ storage_vlan_prefix }}"
+
+# Query log retention. AdGuardHome's own default is 2160h (90 days), which on the
+# 19 GB root disk grew querylog.json{,.1} to 12 GB and drove the VM to 88% full.
+# 30 days is roughly 4 GB at this network's query rate — adjust if the disk changes.
+adguard_querylog_interval: "720h"
