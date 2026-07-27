@@ -12,7 +12,7 @@ This repo automates a Proxmox-based homelab with Terraform (VM provisioning, SDN
 
 **IPv6** is per-VLAN on both address families — GUA `track6` with prefix ID = VLAN ID, ULA derived in Terraform for stable internal service addressing ([ADR 0010](docs/decisions/0010-per-vlan-ipv6-addressing-gua-tracks-the-vlan-id-ula-carries-stable-internal-services.md)). The pfSense half is hand-managed per ADR 0005 and documented in [docs/ipv6.md](docs/ipv6.md). Management, infrastructure and openclaw VLANs are deliberately IPv4-only — do not "fix" them. A static `ipv6_offset` must never imply `accept_ra: false`; RA is the only source of the default route.
 
-**VPS relay tunnel MTU** is measured, not computed ([ADR 0013](docs/decisions/0013-vps-wireguard-tunnel-mtu-is-measured-set-to-1360-with-headroom.md)): the tunnel endpoint is IPv6, so encapsulation costs 80 bytes (not 60), and the real path drops WireGuard UDP above a 1456-byte outer — below what the WAN MTU predicts. `wg_mtu` is 1360 (16 bytes headroom); pfSense `tun_wg1` must be hand-set to match in BOTH the tunnel config and the interface override (see [docs/pfsense-wireguard-vps-peer.md](docs/pfsense-wireguard-vps-peer.md)).
+**VPS relay tunnel** peers over the reserved IPv4 (rebuild-stable) and its MTU is measured, not computed ([ADR 0013](docs/decisions/0013-vps-tunnel-peers-over-reserved-ipv4-mtu-is-measured-per-address-family.md)): `wg_mtu` is 1400 with the IPv4 endpoint (60-byte encapsulation; path measured clean to a 1500-byte outer). If the endpoint ever returns to IPv6 the number is 1360, not 1400 — v6 encapsulation costs 80 bytes and the v6 path silently drops WG UDP above a 1456-byte outer. pfSense `tun_wg1` must match in BOTH the tunnel config and the interface override, and the peer public key must match the Infisical `/vps` pair (see [docs/pfsense-wireguard-vps-peer.md](docs/pfsense-wireguard-vps-peer.md)).
 
 **Key directories:**
 - `terraform/` — Single consolidated Terraform project with `modules/proxmox-vm/` and `modules/network/`
@@ -223,7 +223,9 @@ make ansible-services TAGS=plex,homepage  # plex + homepage plays
 | `make ansible-infra` | Run infrastructure.yml only (supports `TAGS=`) |
 | `make ansible-services` | Run services.yml only (supports `TAGS=`) |
 | `make update` | apt upgrade + docker pull on all hosts |
-| `make vps-deploy` | 3-phase: terraform (SSH open) → ansible → terraform (SSH closed) |
+| `make vps-deploy` | 3-phase: terraform (SSH open) → ansible → terraform (SSH closed). Initial provisioning only — phase 2 needs root SSH, which hardening removes |
+| `make vps-ansible` | Day-2 VPS deploy over the tunnel (survives the wg restart via async handler) |
+| `make vps-close-ssh` | Close the Vultr provisioning SSH rule after a failed vps-deploy |
 | `make vps-rebuild` | Destroy + rebuild VPS |
 | `make rebuild-infisical` | Destroy + rebuild Infisical VM (handles stale credentials) |
 | `make infisical-seed` | Restore Infisical from backup (disaster recovery only) |
@@ -302,7 +304,8 @@ make ansible-services TAGS=plex,homepage  # plex + homepage plays
 - **Never probe the UniFi controller with credentials from a monitor** — its `/status` gate now passes on port 11443, so authenticating risks locking the admin account. TCP port check only, and do not run the `monitoring_users` role
 - **Never use `iif`/`oif` in nftables rules for interfaces created after boot (wg0)** — they resolve interface indexes at ruleset load, so the whole ruleset fails to load when the interface doesn't exist yet, leaving the box unfiltered. Use `iifname`/`oifname`. Cost a full VPS lockout on 2026-07-27
 - **Never synchronously restart WireGuard over the tunnel it carries** — the service task dies between `down` and `up` when its own SSH session severs, and the box is unreachable (VPS sshd binds tunnel IPs only). The `vps_wireguard` restart handler is `async: 60 / poll: 0` fire-and-forget; keep it that way. Recovery required a full `make vps-rebuild`
-- **Never trust computed tunnel MTU arithmetic — measure with DF-set probes** (procedure in docs/pfsense-wireguard-vps-peer.md). The relay path drops WG UDP outers ≥ 1458 even though raw ICMPv6 passes at 1462. An IPv6 tunnel endpoint costs 80 bytes of encapsulation, not IPv4's 60 (ADR 0013)
+- **Never trust computed tunnel MTU arithmetic — measure with DF-set probes** (procedure in docs/pfsense-wireguard-vps-peer.md). The IPv6 relay path drops WG UDP outers ≥ 1458 even though raw ICMPv6 passes at 1462; the IPv4 path carries full 1500 outers. An IPv6 tunnel endpoint costs 80 bytes of encapsulation, not IPv4's 60 (ADR 0013)
+- **Never peer WireGuard against the VPS instance IPv6, and never set narrow AllowedIPs** — the SLAAC address dies on every rebuild (new MAC), and AllowedIPs narrower than the internal supernets makes cryptokey routing silently drop LAN-sourced SSH/pings while breaking VPS-originated telegraf/rsyslog (ADR 0013)
 - **Never use `echo -n`** in secret generation commands — use `printf '%s'`
 - **Never use `is succeeded` alone** to gate on a registered variable — add `is not skipped`
 - **Never use `--start-at-task` with `services.yml --limit plex-services`** — breaks role dependencies

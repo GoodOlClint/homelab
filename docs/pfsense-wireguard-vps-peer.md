@@ -64,27 +64,35 @@ If Plex/Valheim are on different VLANs, ensure pfSense routes or NATs the traffi
 - Traffic arrives on WG_VPS interface destined for specific ports
 - pfSense forwards to the actual service IPs on internal VLANs
 
+## Endpoint, keys, and AllowedIPs (hard-won 2026-07-27)
+
+- **Peer endpoint on pfSense = the VPS reserved IPv4** (see `terraform output vps_reserved_ip`), port 51821. Never the instance IPv6: a rebuild changes the instance MAC and therefore its SLAAC address, silently orphaning the endpoint — and the IPv6 path drops large WireGuard UDP (see MTU section).
+- **Peer public key on pfSense must match the Infisical `/vps` keypair** (`vps_wg_public_key`). Rebuilds always redeploy the Infisical private key; if keys are ever rotated, update Infisical *and* pfSense together, or the next rebuild resurrects the old key and handshakes fail silently.
+- **VPS-side peer AllowedIPs must cover the internal supernets** (IPv4 /12 + the ULA /48), not just the transit /24. Cryptokey routing silently drops LAN-sourced SSH/pings to the VPS and breaks its telegraf/rsyslog egress otherwise. Real values live in gitignored `ansible/group_vars/local/all.yml` (`vps_wg_tunnel.peer_allowed_ips`).
+
 ## Tunnel MTU (measured — do not compute)
 
-Decision and evidence: [ADR 0013](decisions/0013-vps-wireguard-tunnel-mtu-is-measured-set-to-1360-with-headroom.md).
+Decision and evidence: [ADR 0013](decisions/0013-vps-tunnel-peers-over-reserved-ipv4-mtu-is-measured-per-address-family.md).
 
-The tunnel MTU is **1360 on both ends**. The VPS side is Ansible-managed (`wg_mtu` in `ansible/roles/vps_wireguard/defaults/main.yml`). The pfSense side is hand-managed (ADR 0005) and has **two** places that must agree — they historically did not (tunnel said 1420, interface said 1400):
+With the IPv4 endpoint the tunnel MTU is **1400 on both ends**. The VPS side is Ansible-managed (`wg_mtu` in `ansible/roles/vps_wireguard/defaults/main.yml`). The pfSense side is hand-managed (ADR 0005) and has **two** places that must agree — they historically did not (tunnel said 1420, interface said 1400):
 
-1. **VPN > WireGuard > Tunnels > VPS-Relay**: set MTU to `1360`.
-2. **Interfaces > WG_VPS (tun_wg1)**: set the MTU override to `1360`.
+1. **VPN > WireGuard > Tunnels > VPS-Relay**: set MTU to `1400`.
+2. **Interfaces > WG_VPS (tun_wg1)**: MTU override `1400`.
 
-Why 1360: the peer endpoint is the VPS's **IPv6** address, so encapsulation costs 80 bytes (40 IPv6 + 8 UDP + 32 WireGuard) — 20 more than an IPv4 endpoint. Measured 2026-07-27: WireGuard UDP outer packets ≤ 1456 pass deterministically, ≥ 1458 drop 100% (below the WAN's 1462 — the drop is a path behavior specific to big UDP, not the interface MTU, and raw ICMPv6 at 1462 passes). Max safe inner = 1376; 1360 leaves 16 bytes headroom. Failures are silent blackholes (PMTUD is filtered upstream): TLS handshakes succeed, small packets flow, full-size segments vanish.
+Measured 2026-07-27: over the IPv4 endpoint (60 bytes encapsulation), WireGuard UDP outers pass at every size up to 1500 — 1400 inner (outer 1460) has ~40 bytes of demonstrated headroom and fits pfSense's 1462 WAN egress. Over the old **IPv6** endpoint (80 bytes encapsulation), outers ≥ 1458 dropped 100% while ≤ 1456 passed — **if the endpoint ever returns to IPv6, use 1360, not 1400** (measured inner ceiling 1376, minus headroom). Failures in this class are silent blackholes (PMTUD is filtered upstream): TLS handshakes succeed, small packets flow, full-size segments vanish.
 
 **Re-measure whenever** the WAN MTU, the endpoint address family, or the VPS provider/location changes. From the VPS (needs iputils ping), sweep DF-set pings through the tunnel and find the largest inner size that gets replies:
 
 ```sh
-# inner = payload + 28; outer on the wire = inner + 80
-for t in 1400 1380 1376 1360 1340 1320 1300 1280; do
+# inner = payload + 28; outer on the wire = inner + 60 (IPv4 endpoint) or + 80 (IPv6)
+for t in 1440 1420 1400 1380 1376 1360 1340 1320 1300 1280; do
   s=$((t-28))
   /bin/ping -4 -M do -c 5 -W 2 -s $s <pfsense-tunnel-ip> >/dev/null 2>&1 \
-    && echo "inner=$t outer=$((t+80)) OK" || echo "inner=$t outer=$((t+80)) DROP"
+    && echo "inner=$t OK" || echo "inner=$t DROP"
 done
 ```
+
+Probing above the current tunnel MTU requires temporarily raising it (`ip link set wg0 mtu <n>`, live-only); set it back afterwards.
 
 Then set the tunnel MTU comfortably (≥ 16 bytes) below the measured maximum, on both ends.
 
