@@ -64,12 +64,15 @@ locals {
         # Management VLAN: DHCP only when neither vm_id nor mgmt_ip_offset is set
         dhcp = vlan_key == var.management_vlan ? (coalesce(vm_config.mgmt_ip_offset, vm_config.vm_id) == null) : (vm_config.ip_offset == null)
 
-        # IPv6 RA - management VLAN always accepts RA; others follow existing logic
+        # IPv6 RA - accept on every v6-enabled interface unless v6 is explicitly disabled.
+        # A static ipv6_offset does NOT imply "no RA": the router advertisement is the only
+        # source of the IPv6 default route here, so suppressing it strands the interface in
+        # its own /64. That stranded adguard (the sole static-offset VM) with no v6 route,
+        # silently timing out every AAAA lookup and every reply to a GUA client.
         accept_ra = (
           var.ipv6_config.enabled &&
           local.merged_vlans[vlan_key].subnet_v6 != null &&
-          vm_config.ipv6_mode != "disabled" &&
-          (vlan_key == var.management_vlan || vm_config.ipv6_offset == null || vm_config.ipv6_mode == "slaac")
+          vm_config.ipv6_mode != "disabled"
         ) ? true : false
 
         dhcp6 = false
