@@ -6,5 +6,11 @@ docker_base_dir: /opt/docker
 
 # Valheim Server Configuration
 valheim_server_name: "Homelab Valheim"
-valheim_world_name: "HomeWorld"
+# ponytail: rename, don't delete — the old HomeWorld.db/.fwl stay in
+# /config/worlds_local, so reverting is a one-line flip back to "HomeWorld"
+valheim_world_name: "HomeWorld2"
 valheim_server_public: "false"
+# Crossplay issues a PlayFab join code per session (logged on start, rotates each restart)
+valheim_crossplay: "true"
+valheim_supervisor_user: "admin"
+valheim_supervisor_port: 9002

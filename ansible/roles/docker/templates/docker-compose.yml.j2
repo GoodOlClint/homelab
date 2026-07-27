@@ -229,19 +229,29 @@ services:
       - doge-node_config:/data
   valheim:
     container_name: valheim
-    image: lloesche/valheim-server:latest
+    image: ghcr.io/community-valheim-tools/valheim-server:latest
     restart: unless-stopped
     cap_add:
       - sys_nice
     ports:
       - "2456-2458:2456-2458/udp"
+{# ponytail: host 9002 — container 9001 is supervisor's default, but host 9001 belongs to portainer-agent #}
+      - "{{ valheim_supervisor_port }}:9001/tcp"
     env_file:
       - /etc/infisical/secrets/docker-valheim.env
     environment:
       - TZ={{ timezone }}
+      - SUPERVISOR_HTTP=true
+      - SUPERVISOR_HTTP_USER={{ valheim_supervisor_user }}
       - SERVER_NAME={{ valheim_server_name }}
       - WORLD_NAME={{ valheim_world_name }}
       - SERVER_PUBLIC={{ valheim_server_public | default('false') }}
+      - CROSSPLAY={{ valheim_crossplay | default('true') }}
+{# The join code rotates on every restart (nightly UPDATE_CRON, any redeploy), so it #}
+{# gets posted by the image's own log-filter hook. $$ escapes compose interpolation — #}
+{# these must expand in the container's shell, not on the Ansible host. #}
+      - VALHEIM_LOG_FILTER_CONTAINS_JoinCode=registered with join code
+      - 'ON_VALHEIM_LOG_FILTER_CONTAINS_JoinCode={ read l; [ -n "$$DISCORD_WEBHOOK" ] || exit 0; curl -sfSL -X POST -H "Content-Type: application/json" -d "{\"content\":\"Valheim is up - join code **$${l##*join code }**\"}" "$$DISCORD_WEBHOOK"; }'
       - BACKUPS_ENABLED=true
       - BACKUPS_CRON=0 */6 * * *
       - BACKUPS_MAX_COUNT=10
