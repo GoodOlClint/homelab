@@ -1,0 +1,24 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "labels": ["dependencies", "pin-review"],
+  "customManagers": [
+    {
+      "description": "Track container image pins declared as *_image vars in Ansible role defaults. Pins are the exception here (the repo defaults to :latest), so anything matching this is deliberate and wants a review PR when upstream moves.",
+      "customType": "regex",
+      "managerFilePatterns": ["/^ansible/roles/.+/defaults/main\\.ya?ml$/"],
+      "matchStrings": [
+        "_image:\\s*\"(?<depName>[^\"\\s:]+):(?<currentValue>[^\"\\s]+)\""
+      ],
+      "datasourceTemplate": "docker"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "OpenObserve is pinned to an arch-suffixed release candidate because the metadata DB is on schema 46 and the latest tag regressed to a schema-45 build. Default docker versioning cannot order 'v0.92.0-rc2-amd64', so parse it explicitly: this makes v0.92.0-amd64 (final) sort above the rc and open the unpin PR.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["public.ecr.aws/zinclabs/openobserve"],
+      "versioning": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?:-rc(?<build>\\d+))?-amd64$"
+    }
+  ]
+}
