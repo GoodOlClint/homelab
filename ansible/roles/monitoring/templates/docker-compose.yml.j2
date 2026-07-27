@@ -21,12 +21,11 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - /var/lib/openobserve:/data
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5080/healthz"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+{# No healthcheck: this image is distroless — no wget, curl, nc, or even a shell — #}
+{# so nothing can be exec'd inside it. The previous wget check failed on every run #}
+{# ("executable file not found in $PATH"), which pinned the container to unhealthy #}
+{# forever and made `docker ps` health useless for spotting a genuinely sick one. #}
+{# Liveness for this service belongs in an external prober, not a container check. #}
     networks:
       - monitoring
 
@@ -127,12 +126,14 @@ services:
       - TZ={{ timezone }}
     volumes:
       - /etc/localtime:/etc/localtime:ro
+{# Healthcheck explicitly DISABLED, not merely omitted: this image ships its own #}
+{# HEALTHCHECK (wget --spider on the metrics port), and omitting the key here would #}
+{# inherit it. That probe triggers the very speedtest it then times out waiting for, #}
+{# so it fails forever and burns bandwidth on each attempt. A `nc -z` TCP check is no #}
+{# alternative either -- this busybox build has no -z. Prometheus scrape failures are #}
+{# the liveness signal for this exporter. #}
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9798/metrics"]
-      interval: 60s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+      disable: true
     networks:
       - monitoring
 
@@ -287,14 +288,13 @@ services:
       - UP_UNIFI_DEFAULT_VERIFY_SSL={{ unifi_verify_ssl | default('false') }}
       - UP_PROMETHEUS_HTTP_LISTEN=0.0.0.0:9130
       - UP_PROMETHEUS_NAMESPACE=unpoller
+{# This stack scrapes with Prometheus; there is no InfluxDB. unpoller enables its #}
+{# InfluxDB output by default and its own --health check pings it, so leaving this #}
+{# on marks the container unhealthy forever regardless of whether polling works. #}
+      - UP_INFLUXDB_DISABLE=true
     volumes:
       - /etc/localtime:/etc/localtime:ro
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9130/metrics"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+{# No healthcheck: distroless image, nothing to exec — see the openobserve note above. #}
     networks:
       - monitoring
 
@@ -319,12 +319,7 @@ services:
       - PBS_LOGLEVEL=info
     volumes:
       - /etc/localtime:/etc/localtime:ro
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:10019/metrics"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+{# No healthcheck: distroless image, nothing to exec — see the openobserve note above. #}
     networks:
       - monitoring
 
@@ -342,7 +337,8 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /var/lib/uptime-kuma:/app/data
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3001/"]
+{# This image ships curl but not wget. #}
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:3001/"]
       interval: 30s
       timeout: 10s
       retries: 3
