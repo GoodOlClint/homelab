@@ -604,7 +604,9 @@ All `ansible-*` targets support `TAGS=<tag>` to filter by play-level tags (e.g.,
 
 | Target | Description |
 |--------|-------------|
-| `vps-deploy` | Three-phase: open SSH, Ansible configure, close SSH |
+| `vps-deploy` | Three-phase: open SSH, Ansible configure, close SSH (initial provisioning only — root SSH) |
+| `vps-ansible` | Day-2: run the vps playbook over the WireGuard tunnel |
+| `vps-close-ssh` | Day-2: close the provisioning SSH rule if a failed vps-deploy left it open |
 | `vps-destroy` | Destroy VPS instance (keeps reserved IP) |
 | `vps-rebuild` | Destroy + redeploy VPS from scratch |
 | `vps-rotate-keys` | Rotate WireGuard keys on VPS |

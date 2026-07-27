@@ -176,7 +176,7 @@ expand-disk:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/expand-disk.yml
 
 # === VPS Management ===
-.PHONY: vps-deploy vps-destroy vps-rebuild vps-rotate-keys clean-vps-ssh
+.PHONY: vps-deploy vps-ansible vps-close-ssh vps-destroy vps-rebuild vps-rotate-keys clean-vps-ssh
 
 # Phase 1: terraform with SSH open -> ansible configures everything -> terraform closes SSH
 VPS_TF_TARGETS := \
@@ -211,6 +211,15 @@ vps-deploy:
 	@echo "Phase 3: Closing SSH in Vultr firewall..."
 	@cd terraform && terraform apply -no-color -auto-approve -var vps_provisioning=false $(VPS_TF_TARGETS)
 	@echo "VPS deployment complete. SSH now only accessible via WireGuard tunnel."
+
+# Day-2: run the vps playbook over the tunnel (post-hardening, root SSH is gone)
+vps-ansible:
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vps.yaml -i ansible/inventory/vms.yaml ansible/playbooks/vps.yml
+
+# Day-2: close the provisioning SSH rule if a failed vps-deploy left it open
+vps-close-ssh:
+	@echo "Closing SSH in Vultr firewall..."
+	@cd terraform && terraform apply -no-color -auto-approve -var vps_provisioning=false $(VPS_TF_TARGETS)
 
 vps-destroy:
 	@echo "Destroying VPS instance (keeping reserved IP)..."
