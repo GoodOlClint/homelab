@@ -7,46 +7,43 @@
     fail_msg: "Required facts not available. This role must run from a playbook that includes full_pre_tasks.yml."
     quiet: true
 
-- name: Set IPv4 DNS server for each interface using resolvectl
-  loop: "{{ dns_zones | dict2items }}"
-  loop_control:
-    loop_var: vlan
-  ansible.builtin.command: >
-    resolvectl dns eth_{{ vlan.key }} {{ vlan.value.dns_ip }}
+# Durable DNS override via systemd-networkd drop-ins (ADR 0012).
+# Not resolvectl (runtime-only, lost on reboot) and not a netplan override
+# file (netplan merges nameserver lists across files, so it cannot remove
+# the 1.1.1.1 bootstrap failover from the cloud-init base).
+- name: Create networkd drop-in directories
+  ansible.builtin.file:
+    path: "/etc/systemd/network/10-netplan-{{ item }}.network.d"
+    state: directory
+    mode: '0755'
   become: true
-  changed_when: false
-  when: "'eth_' + vlan.key in ansible_facts.interfaces"
+  loop: "{{ ansible_facts.interfaces | select('match', '^eth_vlan') | sort }}"
   tags:
     - dns_config
     - dns
     - config
 
-- name: Set IPv6 DNS server for each interface using resolvectl
-  loop: "{{ dns_zones | dict2items }}"
-  loop_control:
-    loop_var: vlan
-  ansible.builtin.command: >
-    resolvectl dns eth_{{ vlan.key }} {{ vlan.value.dns_ip }} {{ vlan.value.dns_ipv6 }}
+- name: Deploy DNS override drop-in
+  ansible.builtin.template:
+    src: dns-override.conf.j2
+    dest: "/etc/systemd/network/10-netplan-{{ item }}.network.d/dns-override.conf"
+    mode: '0644'
   become: true
-  changed_when: false
-  when:
-    - "'eth_' + vlan.key in ansible_facts.interfaces"
-    - vlan.value.dns_ipv6 is defined
-    - vlan.value.dns_ipv6 | length > 0
+  loop: "{{ ansible_facts.interfaces | select('match', '^eth_vlan') | sort }}"
+  vars:
+    dns_override_iface: "{{ item }}"
+  notify: netplan apply
   tags:
     - dns_config
     - dns
     - config
 
-- name: Set DNS search suffix for each interface by VLAN
-  loop: "{{ dns_zones | dict2items }}"
-  loop_control:
-    loop_var: vlan
-  ansible.builtin.command: >
-    resolvectl domain eth_{{ vlan.key }} {{ vlan.value.zone }}
+- name: Remove obsolete netplan DNS override
+  ansible.builtin.file:
+    path: /etc/netplan/90-dns-override.yaml
+    state: absent
   become: true
-  changed_when: false
-  when: "'eth_' + vlan.key in ansible_facts.interfaces"
+  notify: netplan apply
   tags:
     - dns_config
     - dns

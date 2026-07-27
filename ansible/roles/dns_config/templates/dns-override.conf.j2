@@ -1,0 +1,17 @@
+# Managed by Ansible (dns_config role) — do not edit.
+# Drop-in for the netplan-generated {{ dns_override_iface }} config.
+# The empty DNS= resets the list inherited from cloud-init's netplan base,
+# removing the 1.1.1.1 bootstrap failover — a public resolver in the set
+# NXDOMAIN-poisons split-horizon internal zones (ADR 0012). netplan itself
+# cannot do this: it merges nameserver lists across files instead of
+# replacing them.
+{% set zone = dns_zones.get(dns_override_iface | replace('eth_', '')) or (dns_zones.values() | list | first) %}
+[Network]
+DNS=
+DNS={{ zone.dns_ip }}
+{% if zone.dns_ipv6 | default('') | length > 0 %}
+DNS={{ zone.dns_ipv6 }}
+{% endif %}
+{% if dns_zones.get(dns_override_iface | replace('eth_', '')) %}
+Domains={{ zone.zone }}
+{% endif %}

@@ -1,9 +1,12 @@
 ---
-- name: Update dynamic DNS records on all servers except the DNS server
+- name: Update DNS resolver configuration on all VMs
   hosts: all:!dns
   become: true
-
   vars_files:
-  - ../group_vars/all.yml
+    - ../group_vars/all.yml
+  pre_tasks:
+    - name: Load all configuration and secrets
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/full_pre_tasks.yml"
+      tags: [always]
   roles:
     - dns_config
