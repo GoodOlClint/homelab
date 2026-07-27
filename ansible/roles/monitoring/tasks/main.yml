@@ -58,6 +58,7 @@
     - /opt/monitoring/grafana/provisioning/datasources
     - /opt/monitoring/grafana/provisioning/dashboards
     - /opt/monitoring/prometheus
+    - /opt/monitoring/alertmanager
     - /opt/monitoring/blackbox
     - /opt/monitoring/proxmox
     - /opt/monitoring/snmp
@@ -252,6 +253,17 @@
     dest: /opt/monitoring/prometheus/alert.rules.yml
     mode: '0644'
   notify: reload prometheus
+  tags:
+    - monitoring
+    - prometheus
+    - config
+
+- name: Create Alertmanager configuration
+  ansible.builtin.template:
+    src: alertmanager.yml.j2
+    dest: /opt/monitoring/alertmanager/alertmanager.yml
+    mode: '0644'
+  notify: restart alertmanager
   tags:
     - monitoring
     - prometheus

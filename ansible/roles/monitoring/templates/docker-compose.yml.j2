@@ -76,6 +76,10 @@ services:
       - '--web.enable-lifecycle'
     environment:
       - TZ={{ timezone }}
+    extra_hosts:
+{# Lets Prometheus scrape the host's own telegraf without using the mgmt IP, #}
+{# whose replies the /32 policy-routing rules blackhole — see prometheus.yml.j2. #}
+      - "host.docker.internal:host-gateway"
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - /opt/monitoring/prometheus:/etc/prometheus
@@ -83,6 +87,33 @@ services:
       - prometheus-data:/prometheus
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - monitoring
+
+  # Alertmanager - Delivery path for Prometheus alert rules
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: alertmanager
+    restart: unless-stopped
+    logging: *default-logging
+    ports:
+      - "9093:9093"
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    environment:
+      - TZ={{ timezone }}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /opt/monitoring/alertmanager:/etc/alertmanager
+      - /etc/infisical/secrets:/etc/alertmanager/secrets:ro
+      - alertmanager-data:/alertmanager
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9093/-/healthy"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -352,3 +383,4 @@ networks:
 
 volumes:
   prometheus-data:
+  alertmanager-data:

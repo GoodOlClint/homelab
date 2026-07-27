@@ -1,0 +1,21 @@
+# Alertmanager — routes all Prometheus alerts to ntfy (ADR-0011).
+# The ntfy topic is the credential: the Infisical agent renders the full
+# publish URL (https://ntfy.sh/<topic>?template=alertmanager) to a bare file;
+# no secret is baked here. ntfy's built-in alertmanager template formats the
+# webhook JSON into readable firing/resolved notifications.
+route:
+  receiver: ntfy
+  group_by: ['alertname', 'instance']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 12h
+
+receivers:
+  - name: ntfy
+    webhook_configs:
+      - url_file: /etc/alertmanager/secrets/alert-ntfy-url
+        send_resolved: true
+        # ntfy accepts one JSON document per request; without this Alertmanager
+        # batches grouped alerts into one payload, which still renders, but
+        # max_alerts keeps each notification readable.
+        max_alerts: 10

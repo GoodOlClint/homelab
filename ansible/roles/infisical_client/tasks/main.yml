@@ -104,6 +104,22 @@
   ignore_errors: true
   register: _agent_render_wait
 
+# The agent renders every file 0600 root and offers no permission option, so a
+# container running as a non-root user (prom/* images run as nobody) gets EACCES
+# on any *_file directive pointing into this directory. That failure is silent
+# in Prometheus — it retries forever at WARN — so remote_write and Alertmanager
+# webhooks both died unnoticed until 2026-07-27. Templates whose consumer is a
+# non-root container declare `mode:` and get relaxed here; their post_command
+# re-applies it after a rotation rewrites the file.
+- name: Relax mode on agent-rendered secrets read by non-root containers
+  ansible.builtin.file:
+    path: "{{ item.dest_path }}"
+    mode: "{{ item.mode }}"
+  loop: "{{ infisical_agent_templates }}"
+  when: item.mode is defined
+  loop_control:
+    label: "{{ item.dest_path }}"
+
 - name: Warn if agent failed to render secrets
   ansible.builtin.debug:
     msg: >-

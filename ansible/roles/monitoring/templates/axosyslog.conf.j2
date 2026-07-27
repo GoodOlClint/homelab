@@ -68,6 +68,13 @@ source s_network_tcp {
         transport("tcp")
         port(5514)
         flags(no-parse)
+        # syslog-ng's default max-connections is 10. Every Docker daemon holds one
+        # TCP connection per container it logs for, so the fleet exceeds 10 easily;
+        # once the limit is hit, all new senders are rejected and ingestion silently
+        # stalls (observed live 2026-07-27). log-iw-size scales the flow-control
+        # window with the connection count (docs recommend >= 100 per connection).
+        max-connections(100)
+        log-iw-size(10000)
     );
 };
 

@@ -26,8 +26,19 @@ groups:
         annotations:
           summary: "TLS certificate for {{ $labels.instance }} expires in less than 14 days"
 
+      # node_exporter runs only on the monitoring VM; every other host reports
+      # via telegraf (mem_used_percent / disk_used_percent), so both metric
+      # families need a rule or 7 of 8 hosts have no memory/disk coverage.
       - alert: HighMemoryUsage
         expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Memory usage above 90% on {{ $labels.instance }}"
+
+      - alert: HighMemoryUsageTelegraf
+        expr: mem_used_percent > 90
         for: 5m
         labels:
           severity: warning
@@ -42,6 +53,14 @@ groups:
         annotations:
           summary: "Disk usage above 85% on {{ $labels.instance }}:{{ $labels.mountpoint }}"
 
+      - alert: HighDiskUsageTelegraf
+        expr: disk_used_percent{fstype!~"tmpfs|squashfs|overlay"} > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk usage above 85% on {{ $labels.instance }}:{{ $labels.path }}"
+
       - alert: PBSBackupStale
         expr: time() - pbs_snapshot_timestamp > 86400 * 2
         for: 1h
@@ -52,6 +71,20 @@ groups:
 
   - name: services
     rules:
+      # The 2026-07 OpenObserve incident: the container ran and answered on 5080
+      # for 24 days while ingesting nothing, so no reachability check can catch
+      # this. The signal is ingestion volume — successful _json log-ingest
+      # requests counted by OpenObserve's own /metrics, which Prometheus already
+      # scrapes. Fires ~45 min after syslog delivery stops for any reason
+      # (axosyslog dead, connection-limit rejection, OpenObserve schema wedge).
+      - alert: SyslogIngestionStalled
+        expr: sum(increase(zo_http_incoming_requests{endpoint="/api/org/ingest/logs/_json", status="200"}[30m])) == 0
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OpenObserve has ingested zero syslog batches in 30+ minutes"
+
       - alert: PlexDown
         expr: probe_success{job="blackbox-http", instance=~".*:32400.*"} == 0
         for: 5m

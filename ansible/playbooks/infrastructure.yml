@@ -119,6 +119,13 @@
       - name: openobserve-password
         dest_path: /etc/infisical/secrets/openobserve_password
         template_src: secrets/openobserve-password.tpl.j2
+        mode: '0644'
+        post_command: "chmod 0644 /etc/infisical/secrets/openobserve_password"
+      - name: alert-ntfy-url
+        dest_path: /etc/infisical/secrets/alert-ntfy-url
+        template_src: secrets/alert-ntfy-url.tpl.j2
+        mode: '0644'
+        post_command: "chmod 0644 /etc/infisical/secrets/alert-ntfy-url && docker compose -f /opt/monitoring/docker-compose.yml up -d --force-recreate alertmanager"
       - name: openobserve
         dest_path: /etc/infisical/secrets/openobserve.env
         template_src: secrets/openobserve.env.tpl.j2

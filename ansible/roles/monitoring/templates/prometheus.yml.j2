@@ -8,6 +8,11 @@ global:
 rule_files:
   - /etc/prometheus/alert.rules.yml
 
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
 # Remote write to OpenObserve
 remote_write:
   - url: http://openobserve:5080/api/default/prometheus/api/v1/write
@@ -139,7 +144,11 @@ scrape_configs:
   - job_name: 'telegraf'
     honor_labels: true
     static_configs:
-      - targets: ['{{ ansible_host }}:9273']
+{# host.docker.internal (host-gateway), not the mgmt IP: replies the host sources #}
+{# from its own /32 VLAN IP to a container are policy-routed into the per-VLAN #}
+{# table (no docker bridge route) and blackholed, so scraping the mgmt IP from #}
+{# inside the container network times out. #}
+      - targets: ['host.docker.internal:9273']
         labels:
           instance: 'openobserve'
           role: 'monitoring'
