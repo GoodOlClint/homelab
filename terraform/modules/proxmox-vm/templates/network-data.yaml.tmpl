@@ -57,7 +57,16 @@ ethernets:
 %{ endif }
 %{ if !iface.is_gateway }
     routing-policy:
-      - from: ${iface.address}/${iface.prefix}
+      # /32, NOT the interface prefix. This rule exists to send traffic ORIGINATING
+      # from this host's own address out the matching interface. Using /${iface.prefix}
+      # makes it match every source in the subnet, including *remote* hosts — so any
+      # forwarded packet (e.g. a reply to a Docker container) whose source is a
+      # neighbour on this VLAN gets looked up in the per-VLAN table, which has no route
+      # to the bridge, and is sent back out the gateway instead of to the container.
+      # Symptom: containers can reach the internet and other VLANs fine, but every
+      # connection to a host on THIS interface's subnet hangs with the SYN-ACK arriving
+      # and never being reverse-NATed.
+      - from: ${iface.address}/32
         table: ${iface.routing_table}
 %{ endif }
 %{ endif }
