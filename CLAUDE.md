@@ -4,7 +4,9 @@
 
 This repo automates a Proxmox-based homelab with Terraform (VM provisioning, SDN, Vultr VPS, Cloudflare DNS) and Ansible (software configuration, Docker stacks, monitoring, secrets management). Key VMs: AdGuard (DNS filtering), BIND9 (authoritative DNS), Infisical (secrets vault), OpenObserve (monitoring stack), Proxmox Backup Server, UniFi, Plex, plex-services (arr stack), Docker (legacy services), Homepage, Lancache, NVIDIA licensing. A Vultr VPS acts as a WireGuard relay for external access.
 
-**Architectural decisions** live in `docs/decisions/` (ADRs) — read them before proposing architecture changes. In flight: the MS-01 3-node cluster migration ([plan](docs/ms01-cluster-iac-plan.md), ADRs 0001–0008, status Proposed pending operator approval) — 3-node PVE 9 + Ceph, Terraform-managed hosts, static-IP LXCs, greenfield rebuild.
+**Architectural decisions** live in `docs/decisions/` (ADRs) — read them before proposing architecture changes. In flight: the MS-01 3-node cluster migration ([plan](docs/ms01-cluster-iac-plan.md), ADRs 0001–0009, status Proposed pending operator approval) — 3-node PVE 9 + Ceph, Terraform-managed hosts, static-IP LXCs, greenfield rebuild.
+
+**IPv6** is per-VLAN on both address families — GUA `track6` with prefix ID = VLAN ID, ULA derived in Terraform for stable internal service addressing ([ADR 0010](docs/decisions/0010-per-vlan-ipv6-addressing-gua-tracks-the-vlan-id-ula-carries-stable-internal-services.md)). The pfSense half is hand-managed per ADR 0005 and documented in [docs/ipv6.md](docs/ipv6.md). Management, infrastructure and openclaw VLANs are deliberately IPv4-only — do not "fix" them. A static `ipv6_offset` must never imply `accept_ra: false`; RA is the only source of the default route.
 
 **Key directories:**
 - `terraform/` — Single consolidated Terraform project with `modules/proxmox-vm/` and `modules/network/`
@@ -87,7 +89,7 @@ Each Infisical folder is owned by the role that generates/provisions its secrets
 | `/monitoring` | monitoring, monitoring_users, proxmox_backup | openobserve, homepage | grafana_admin_password, openobserve_root_user_pass, unifi_monitoring_password, pbs_api_token, proxmox_token_value | uptimerobot_heartbeat_url |
 | `/plex` | plex, plex_certificate | plex, homepage | plex_token, plex_smb_pass, plex_cert_pfx_password | cloudflare_dns_api_token |
 | `/plex-services` | plex_services | plex-services, homepage | postgres_password, *_db_password (×6), arr_admin_password, *_api_key (×8) | cloudflared_tunnel_token, usenet_*, nzb*_api_key, opensubtitlescom_* |
-| `/docker` | docker, authentik | docker | valheim_server_password, authentik_secret_key, authentik_postgres_password | cloudflared_tunnel_token |
+| `/docker` | docker, authentik | docker | valheim_server_password, valheim_supervisor_password, authentik_secret_key, authentik_postgres_password | cloudflared_tunnel_token, valheim_discord_webhook |
 | `/vps` | vps_wireguard | — (no agent) | vps_wg_private_key | maxmind_license_key |
 | `/pfsense` | — (manual ref) | — (no agent) | — | cloudflare_dns_api_token, bind_tsig_key_secret |
 | `/pbs` | proxmox_backup | — (no agent) | pbs_admin_password, pbs_backup_user_password | — |
@@ -285,6 +287,7 @@ make ansible-services TAGS=plex,homepage  # plex + homepage plays
 - **Never put secrets in `vars.auto.tfvars`** — pre-commit hook blocks this
 - **Never set `vlan_id` on SDN VNETs** — only for physical bridges (`vmbr*`)
 - **Never use `regex_replace` for literal string substitution** — use `replace()` instead
+- **Never write a bare `$` in a docker-compose `environment:` value that must expand inside the container** — compose interpolates `${...}` at parse time on the Ansible host and silently substitutes empty. Escape as `$$` (see the Valheim `ON_VALHEIM_LOG_FILTER_CONTAINS_*` hook in `docker/templates/docker-compose.yml.j2`)
 - **Never use `echo -n`** in secret generation commands — use `printf '%s'`
 - **Never use `is succeeded` alone** to gate on a registered variable — add `is not skipped`
 - **Never use `--start-at-task` with `services.yml --limit plex-services`** — breaks role dependencies
