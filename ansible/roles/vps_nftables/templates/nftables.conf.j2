@@ -1,6 +1,10 @@
 #!/usr/sbin/nft -f
 # VPS WireGuard Relay — nftables ruleset
 # Managed by Ansible — do not edit manually
+#
+# iifname/oifname (not iif/oif): iif resolves the interface index at load time
+# and fails the whole ruleset if wg0 doesn't exist yet — at boot nftables loads
+# before wg-quick, which left the box wide open (2026-07-27 lockout incident).
 
 flush ruleset
 
@@ -15,7 +19,7 @@ table inet filter {
         ct state invalid log prefix "nft-input-invalid: " counter drop
 
         # Allow loopback
-        iif lo accept
+        iifname "lo" accept
 
         # ICMP (rate-limited)
         ip protocol icmp icmp type { echo-request, echo-reply, destination-unreachable, time-exceeded } limit rate 10/second accept
@@ -25,13 +29,13 @@ table inet filter {
         ip6 nexthdr icmpv6 icmpv6 type { echo-request, echo-reply, nd-neighbor-solicit, nd-neighbor-advert, nd-router-solicit, nd-router-advert, packet-too-big } accept
 
         # WireGuard tunnel from pfSense (public interface)
-        iif {{ nft_public_interface }} udp dport {{ nft_wg_listen_port }} accept
+        iifname {{ nft_public_interface }} udp dport {{ nft_wg_listen_port }} accept
 
         # SSH only on WireGuard tunnel interface
-        iif {{ nft_wg_interface }} tcp dport 22 accept
+        iifname {{ nft_wg_interface }} tcp dport 22 accept
 
         # Telegraf metrics (Prometheus scraping via tunnel)
-        iif {{ nft_wg_interface }} tcp dport 9273 accept
+        iifname {{ nft_wg_interface }} tcp dport 9273 accept
 
         # Log and drop everything else
         log prefix "nft-input-drop: " flags all counter drop
@@ -39,6 +43,12 @@ table inet filter {
 
     chain forward {
         type filter hook forward priority 0; policy drop;
+
+        # Clamp TCP MSS to the path MTU. Relayed traffic arrives from a 1500-MTU
+        # internet path and is forwarded into the {{ wg_mtu | default(1400) }}-MTU tunnel; PMTUD
+        # blackholes whenever ICMP "packet too big" is filtered upstream, which
+        # stalls bulk transfer (Plex playback) while small packets still work.
+        tcp flags syn tcp option maxseg size set rt mtu
 
         # Allow established/related
         ct state established,related accept
@@ -51,22 +61,22 @@ table inet filter {
 {% set port_range = rule.port | replace('-', '-') %}
         # {{ rule.comment }}
 {% if rule.proto == 'tcp' and rule.port | string == '32400' %}
-        iif {{ nft_public_interface }} oif {{ nft_wg_interface }} {{ rule.proto }} dport {{ port_range }} ct state new meter plex_ratelimit { ip saddr limit rate {{ nft_rate_limit_tcp_32400 }} } log prefix "nft-fwd-new-{{ rule.comment | lower | replace(' ', '-') }}: " accept
+        iifname {{ nft_public_interface }} oifname {{ nft_wg_interface }} {{ rule.proto }} dport {{ port_range }} ct state new meter plex_ratelimit { ip saddr limit rate {{ nft_rate_limit_tcp_32400 }} } log prefix "nft-fwd-new-{{ rule.comment | lower | replace(' ', '-') }}: " accept
 {% else %}
-        iif {{ nft_public_interface }} oif {{ nft_wg_interface }} {{ rule.proto }} dport {{ port_range }} ct state new log prefix "nft-fwd-new-{{ rule.comment | lower | replace(' ', '-') }}: " accept
+        iifname {{ nft_public_interface }} oifname {{ nft_wg_interface }} {{ rule.proto }} dport {{ port_range }} ct state new log prefix "nft-fwd-new-{{ rule.comment | lower | replace(' ', '-') }}: " accept
 {% endif %}
 {% else %}
         # {{ rule.comment }}
 {% if rule.proto == 'tcp' and rule.port | string == '32400' %}
-        iif {{ nft_public_interface }} oif {{ nft_wg_interface }} {{ rule.proto }} dport {{ rule.port }} ct state new meter plex_ratelimit { ip saddr limit rate {{ nft_rate_limit_tcp_32400 }} } log prefix "nft-fwd-new-{{ rule.comment | lower | replace(' ', '-') }}: " accept
+        iifname {{ nft_public_interface }} oifname {{ nft_wg_interface }} {{ rule.proto }} dport {{ rule.port }} ct state new meter plex_ratelimit { ip saddr limit rate {{ nft_rate_limit_tcp_32400 }} } log prefix "nft-fwd-new-{{ rule.comment | lower | replace(' ', '-') }}: " accept
 {% else %}
-        iif {{ nft_public_interface }} oif {{ nft_wg_interface }} {{ rule.proto }} dport {{ rule.port }} ct state new log prefix "nft-fwd-new-{{ rule.comment | lower | replace(' ', '-') }}: " accept
+        iifname {{ nft_public_interface }} oifname {{ nft_wg_interface }} {{ rule.proto }} dport {{ rule.port }} ct state new log prefix "nft-fwd-new-{{ rule.comment | lower | replace(' ', '-') }}: " accept
 {% endif %}
 {% endif %}
 {% endfor %}
 
         # Allow return traffic from tunnel to public
-        iif {{ nft_wg_interface }} oif {{ nft_public_interface }} accept
+        iifname {{ nft_wg_interface }} oifname {{ nft_public_interface }} accept
 
         # Log and drop everything else
         log prefix "nft-forward-drop: " flags all counter drop
@@ -85,10 +95,10 @@ table ip nat {
 {% if '-' in rule.port | string %}
 {% set port_range = rule.port | replace('-', '-') %}
         # DNAT: {{ rule.comment }}
-        iif {{ nft_public_interface }} {{ rule.proto }} dport {{ port_range }} dnat to {{ nft_tunnel_peer_ip }}
+        iifname {{ nft_public_interface }} {{ rule.proto }} dport {{ port_range }} dnat to {{ nft_tunnel_peer_ip }}
 {% else %}
         # DNAT: {{ rule.comment }}
-        iif {{ nft_public_interface }} {{ rule.proto }} dport {{ rule.port }} dnat to {{ nft_tunnel_peer_ip }}
+        iifname {{ nft_public_interface }} {{ rule.proto }} dport {{ rule.port }} dnat to {{ nft_tunnel_peer_ip }}
 {% endif %}
 {% endfor %}
     }
@@ -97,10 +107,10 @@ table ip nat {
         type nat hook postrouting priority 100; policy accept;
 
         # Masquerade traffic going out the WireGuard tunnel
-        oif {{ nft_wg_interface }} masquerade
+        oifname {{ nft_wg_interface }} masquerade
 
         # Masquerade traffic going out the public interface
-        oif {{ nft_public_interface }} masquerade
+        oifname {{ nft_public_interface }} masquerade
     }
 }
 {% if nft_tunnel_peer_ip_v6 %}
@@ -113,10 +123,10 @@ table ip6 nat {
 {% if '-' in rule.port | string %}
 {% set port_range = rule.port | replace('-', '-') %}
         # DNAT: {{ rule.comment }} (IPv6)
-        iif {{ nft_public_interface }} {{ rule.proto }} dport {{ port_range }} dnat to {{ nft_tunnel_peer_ip_v6 }}
+        iifname {{ nft_public_interface }} {{ rule.proto }} dport {{ port_range }} dnat to {{ nft_tunnel_peer_ip_v6 }}
 {% else %}
         # DNAT: {{ rule.comment }} (IPv6)
-        iif {{ nft_public_interface }} {{ rule.proto }} dport {{ rule.port }} dnat to {{ nft_tunnel_peer_ip_v6 }}
+        iifname {{ nft_public_interface }} {{ rule.proto }} dport {{ rule.port }} dnat to {{ nft_tunnel_peer_ip_v6 }}
 {% endif %}
 {% endfor %}
     }
@@ -125,10 +135,10 @@ table ip6 nat {
         type nat hook postrouting priority 100; policy accept;
 
         # Masquerade traffic going out the WireGuard tunnel
-        oif {{ nft_wg_interface }} masquerade
+        oifname {{ nft_wg_interface }} masquerade
 
         # Masquerade traffic going out the public interface
-        oif {{ nft_public_interface }} masquerade
+        oifname {{ nft_public_interface }} masquerade
     }
 }
 {% endif %}

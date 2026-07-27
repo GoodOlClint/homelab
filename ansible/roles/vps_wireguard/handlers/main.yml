@@ -1,5 +1,12 @@
 ---
+# Fire-and-forget: this restart tears down the tunnel that carries the SSH
+# session running it. A synchronous service restart dies mid-flight when the
+# connection drops, leaving wg0 down and the box unreachable (2026-07-27
+# lockout incident). async lets the restart finish on the host; the tunnel
+# re-forms via pfSense's persistent keepalive within ~25s.
 - name: Restart WireGuard
   ansible.builtin.service:
     name: "wg-quick.{{ wg_interface }}"
     state: restarted
+  async: 60
+  poll: 0

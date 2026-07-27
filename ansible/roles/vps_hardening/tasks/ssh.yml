@@ -58,3 +58,16 @@
   notify: Restart sshd
   tags:
     - ssh
+
+# sshd binds only the tunnel addresses, so at boot it must start after wg0
+# exists — without this it fails to bind and dies, locking the box out
+# (2026-07-27 lockout incident).
+- name: Ensure sshd waits for the WireGuard tunnel at boot
+  ansible.builtin.lineinfile:
+    path: /etc/conf.d/sshd
+    regexp: '^rc_need='
+    line: 'rc_need="wg-quick.wg0"'
+    create: true
+    mode: '0644'
+  tags:
+    - ssh

@@ -12,6 +12,16 @@
     - vps_nftables
     - validate
 
+# ufw races nftables in the default runlevel — whichever wins owns the ruleset.
+# ufw only permits 22/tcp, so when it wins the WireGuard tunnel dies silently.
+- name: Ensure ufw is absent (conflicts with nftables ruleset)
+  ansible.builtin.apk:
+    name: ufw
+    state: absent
+  tags:
+    - vps_nftables
+    - packages
+
 - name: Install nftables
   ansible.builtin.apk:
     name: nftables

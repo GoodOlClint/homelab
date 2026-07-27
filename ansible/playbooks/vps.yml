@@ -42,8 +42,10 @@
       tags:
         - always
 
+    # /tmp is tmpfs — the marker vanishes on reboot, so also accept an already
+    # installed python3 (day-2 reruns over the tunnel).
     - name: Wait for startup script to install Python3
-      ansible.builtin.raw: test -f /tmp/.bootstrap_complete
+      ansible.builtin.raw: test -f /tmp/.bootstrap_complete || command -v python3
       register: bootstrap_check
       until: bootstrap_check is succeeded
       retries: 30
