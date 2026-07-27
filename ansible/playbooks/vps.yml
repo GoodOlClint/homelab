@@ -64,8 +64,21 @@
 
     - name: Load all configuration and secrets
       ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/full_pre_tasks.yml"
-      vars:
-        skip_vlan_computation: true
+
+    # The tracked all.yml carries scrubbed REPLACE_ME sentinels (public repo);
+    # real values live in gitignored group_vars/local/all.yml. Deploying the
+    # sentinels renders an unparseable wg0.conf and bricks the relay — fail
+    # loudly instead (2026-07-27 incident).
+    - name: Refuse to deploy scrubbed vps_wg_tunnel sentinels
+      ansible.builtin.assert:
+        that:
+          - vps_wg_tunnel.values() | select('search', 'REPLACE_ME') | list | length == 0
+        fail_msg: >-
+          vps_wg_tunnel still contains REPLACE_ME sentinels. Fill the real
+          values in ansible/group_vars/local/all.yml (gitignored) — see
+          docs/pfsense-wireguard-vps-peer.md for the tunnel plan.
+      tags:
+        - always
 
   roles:
     - vps_wireguard
