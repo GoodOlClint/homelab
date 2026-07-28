@@ -4,7 +4,7 @@
 
 Repoints this repo from the single-node `pve` hypervisor to a 3-node PVE 9 cluster (`crete`, `crete2`, rebuilt `pve`) with Ceph, brings the Proxmox hosts themselves under Terraform from first boot, and rebuilds the service fleet greenfield as static-IP LXCs / docker-on-LXC / VMs per the placement doc.
 
-**Design inputs (canon for the ops side):** `~/okf/playbooks/ms01-cluster-migration.md` (runbook), `~/okf/brainstorm/ms01-cluster-network.md` (network design), `~/okf/brainstorm/workload-placement-vm-lxc-docker.md` (placement), `docs/audit-2026-07-07.md` (IaC gaps).
+**Design inputs (canon for the ops side):** `~/okf/playbooks/ms01-cluster-migration.md` (runbook), `~/okf/brainstorm/ms01-cluster-network.md` (network design), `~/okf/brainstorm/workload-placement-vm-lxc-docker.md` (placement), `docs/audit-2026-07-07.md` (IaC gaps), [rebuild-as-routine-design.md](rebuild-as-routine-design.md) (end-state per-service state/rebuild matrix + image policy — ADRs 0015/0016).
 
 ## Decisions locked (interview 2026-07-10 + design docs)
 
@@ -72,7 +72,9 @@ New Terraform root **`terraform/hosts/`** with its own state for the host/cluste
 - SDN: `nodes = [all three]` (fixes `modules/network/sdn.tf:13`); bridge references updated to the new `vmbr0` model.
 - Delete `pci.tf`, `gpu_mapping`, `needs_gpu`, mediated-device plumbing.
 - LXC support: `proxmox_virtual_environment_container` alongside VMs in the module (static IP via `initialization.ip_config`, `nesting`/`keyctl` flags for docker hosts, `/dev/dri` device passthrough for Plex); inventory output gains guest type + node.
-- **DoD:** `terraform plan` clean against the live 3-node cluster; a test LXC + test VM deploy on each node, land on Ceph, and appear in `vms.yaml` with correct static IPs.
+- **Detached data volumes (ADR 0015):** module support for a Ceph RBD data volume whose lifecycle is independent of the guest (rebuild = destroy guest, keep volume, reattach). Gate item: verify bpg can attach a pre-existing volume to an LXC `mount_point` and a VM disk; fallback is an API/`pvesm`-created volume referenced by ID.
+- **Pinned images (ADR 0016):** image resources pinned by version URL + checksum on shared storage, replacing the `latest` download; drop the cloud-init `ignore_changes` drift shields.
+- **DoD:** `terraform plan` clean against the live 3-node cluster; a test LXC + test VM deploy on each node, land on Ceph, and appear in `vms.yaml` with correct static IPs; a test guest with a data volume rebuilds with the volume's contents intact.
 
 ### WP4 — Fleet rebuild definitions
 Placement per the okf doc: **VMs** — infisical (protected), pfsense-test, github-runner, proxmox-backup, unifi, LLM (new). **LXCs** — plex (iGPU), adguard ×2, dns ×2 (BIND primary/secondary), lancache, squid, homepage, mcp, minio, doge. **docker-on-LXC** (nesting) — plex-services, openobserve, docker-legacy. **Retired** — nvidia-licensing.
@@ -80,8 +82,9 @@ Placement per the okf doc: **VMs** — infisical (protected), pfsense-test, gith
 - DNS-first (ADR 0006): `dns` role templates BIND zone records from the Terraform inventory + node/VIP list — every guest gets a name automatically; AdGuard forwards internal zones to BIND; homepage/monitoring/inter-service configs use names, not IPs.
 - Infisical hardening tightening: UFW + PVE firewall scoped to mgmt/services VLANs, SSH from mgmt only, unattended-upgrades enabled.
 - Ansible roles port as-is (SSH is SSH); expected touch-ups: anything assuming a full VM (qemu-guest-agent tasks, kernel/sysctl tasks like the SABnzbd NFS tuning move to the host or get `when: not lxc` guards), plex role gains the `/dev/dri` render group bits.
-- Stateful-data checklist (see below) drives per-service restore steps.
-- **DoD:** `make apply` from a clean clone (+ SOPS key) converges the whole fleet; second run zero changes; per-service smoke checks pass (DNS resolves, Plex plays with QuickSync transcode, arr stack healthy, monitoring ingesting).
+- Stateful-data checklist (see below) drives per-service restore steps; the **end-state** home for each service's data is the matrix in [rebuild-as-routine-design.md](rebuild-as-routine-design.md) — cutover copy-outs land directly onto the ADR 0015 data volumes.
+- End-state items from the matrix: per-service volume definitions; pg_dump timer on plex-services (writes to its volume so PBS snapshots hold a consistent dump); AdGuard admin password seeded into Infisical **before** the first AdGuard build; OpenObserve/Prometheus/Kuma data dirs on the openobserve volume (parquet + metadata.sqlite together).
+- **DoD:** `make apply` from a clean clone (+ SOPS key) converges the whole fleet; second run zero changes; per-service smoke checks pass (DNS resolves, Plex plays with QuickSync transcode, arr stack healthy, monitoring ingesting); `make rebuild` of each Class-V service preserves its state, and rebuilding either instance of a DNS pair causes zero resolution failures observed from a client.
 
 ### WP5 — UniFi network module (ADR 0005)
 - `modules/unifi-network/` in the main project: `unifi_network` resources from the gitignored `network-data/vlans.yaml` (creates the UniFi-only L2 VLANs — corosync 31/32 + ceph 33; dual-managed VLANs referenced via data sources), port profiles (node-bond trunks, NAS LAG, corosync + ceph SFP28 access — ADR 0014), port overrides + LACP aggregation for the new switch, device-level jumbo. Port-to-device assignments in gitignored `network-data/local/unifi-ports.yaml`.
@@ -119,6 +122,8 @@ Placement per the okf doc: **VMs** — infisical (protected), pfsense-test, gith
 | Day 3+ | LLM VM (vfio passthrough, pinned), HA resources, PDM VM, monitoring per-node, PKI + certs (WP8), repo scrub + guard (WP6), docs (WP7), decommission sweep. |
 
 ## Stateful-data checklist (decide per service before its rebuild)
+
+Decisions below are the **cutover** carries; the **end-state** home of each service's data (data volume / re-seed / restore-on-provision / accepted loss) is the per-service matrix in [rebuild-as-routine-design.md](rebuild-as-routine-design.md) (ADR 0015).
 
 | Service | State at risk | Proposal |
 |---|---|---|
