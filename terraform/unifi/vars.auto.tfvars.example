@@ -1,4 +1,8 @@
 # Copy to vars.auto.tfvars (gitignored) and fill. The password is NOT set
 # here — the Makefile exports TF_VAR_unifi_password from bootstrap.sops.yml.
+#
+# unifi_api_url is scheme+host+port ONLY — never append /api; the provider SDK
+# discovers the right path (classic vs UniFi-OS /proxy/network) itself. It's
+# the controller UI URL stripped to its base (UniFi OS Server: port 11443).
 unifi_username = "REPLACE_ME"
-unifi_api_url  = "https://REPLACE_ME:8443"
+unifi_api_url  = "https://REPLACE_ME:11443"
