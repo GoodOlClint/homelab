@@ -113,7 +113,7 @@ locals {
 }
 # Generate cloud-init user data files for each VM (only when not using Packer)
 resource "proxmox_virtual_environment_file" "user_data" {
-  for_each = var.use_packer_template ? {} : { for vm in var.vm_configurations : vm.name => vm }
+  for_each = var.use_packer_template ? {} : local.vm_guests
 
   content_type = "snippets"
   datastore_id = var.virtual_environment_storage
@@ -134,7 +134,7 @@ resource "proxmox_virtual_environment_file" "user_data" {
 
 # Generate cloud-init network data files for each VM (only when not using Packer)
 resource "proxmox_virtual_environment_file" "network_data" {
-  for_each = var.use_packer_template ? {} : { for vm in var.vm_configurations : vm.name => vm }
+  for_each = var.use_packer_template ? {} : local.vm_guests
 
   content_type = "snippets"
   datastore_id = var.virtual_environment_storage
@@ -168,13 +168,13 @@ resource "proxmox_virtual_environment_file" "network_data" {
   }
 }
 
-# Create VMs dynamically based on configuration
+# Create VMs dynamically based on configuration (LXC guests live in containers.tf)
 resource "proxmox_virtual_environment_vm" "vms" {
-  for_each = { for vm in var.vm_configurations : vm.name => vm }
+  for_each = local.vm_guests
 
   name       = each.value.name
   vm_id      = each.value.vm_id # null = auto-assign by Proxmox
-  node_name  = var.virtual_environment_node
+  node_name  = coalesce(each.value.node_name, var.virtual_environment_node)
   protection = var.unprotect ? false : each.value.protected
 
   # Dependencies are inferred from resource references in initialization block
@@ -224,6 +224,20 @@ resource "proxmox_virtual_environment_vm" "vms" {
     }
   }
 
+  # Detached data volume attach (ADR 0015): existing holder-owned volume by
+  # in-datastore path — this VM never owns it, so rebuilds leave the data intact.
+  # The volume arrives ext4-formatted (CT volume); the role mounts it directly.
+  dynamic "disk" {
+    for_each = each.value.data_volume != null ? [each.value.data_volume] : []
+    content {
+      datastore_id      = split(":", local.data_volume_ids[disk.value.name])[0]
+      path_in_datastore = split(":", local.data_volume_ids[disk.value.name])[1]
+      interface         = "virtio${1 + length(each.value.extra_disks)}"
+      size              = var.data_volumes[disk.value.name].size_gb
+      backup            = false # The holder's PBS job owns volume backup
+    }
+  }
+
   # Conditional cloud-init initialization (only when not using Packer)
   dynamic "initialization" {
     for_each = var.use_packer_template ? [] : [1]
@@ -234,14 +248,9 @@ resource "proxmox_virtual_environment_vm" "vms" {
     }
   }
 
-  # Ignore changes to cloud-init files - they only run on first boot
-  # Updating templates will affect new VMs only, not existing ones
-  lifecycle {
-    ignore_changes = [
-      initialization[0].user_data_file_id,
-      initialization[0].network_data_file_id,
-    ]
-  }
+  # No lifecycle.ignore_changes on cloud-init file IDs (ADR 0016): a changed
+  # snippet or image pin SHOWS as guest replacement in plan — that visibility is
+  # the point. Rolls are deliberate, per-guest, via `make rebuild <guest>`.
 
   dynamic "network_device" {
     for_each = local.build_vm_interfaces[each.value.name]
@@ -251,16 +260,6 @@ resource "proxmox_virtual_environment_vm" "vms" {
       vlan_id     = can(regex("^vmbr", network_device.value.bridge)) ? network_device.value.vlan_id : null
       mtu         = network_device.value.mtu
       mac_address = network_device.value.macaddress
-    }
-  }
-
-  # Optional GPU passthrough
-  dynamic "hostpci" {
-    for_each = each.value.needs_gpu ? [1] : []
-    content {
-      device  = var.gpu_mapping.device
-      mapping = var.gpu_mapping.mapping
-      mdev    = var.gpu_mapping.mdev
     }
   }
 }

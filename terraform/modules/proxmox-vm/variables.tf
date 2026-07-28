@@ -44,27 +44,45 @@ variable "ipv6_config" {
   }
 }
 
-# VM Configuration
+# Guest Configuration (VMs and LXCs — ADR 0003: LXC by default, VM where isolation demands)
 variable "vm_configurations" {
-  description = "VM configuration mapping - list of VMs to create with their specifications"
+  description = "Guest configuration mapping - list of VMs/LXCs to create with their specifications"
   type = list(object({
-    name           = string                        # Unique VM name (used for hostname if hostname not specified)
+    name           = string                        # Unique guest name (used for hostname if hostname not specified)
+    type           = optional(string, "vm")        # Guest type: "vm" or "lxc"
+    node_name      = optional(string, null)        # Cluster node placement (null = module default node)
+    ha             = optional(bool, false)         # Register as an HA resource (requires vm_id and Ceph-backed disk)
     vm_id          = optional(number, null)        # Explicit Proxmox VMID (also sets static management IP). null = auto-assign + DHCP on management VLAN.
     mgmt_ip_offset = optional(number, null)        # Override management IP offset (default: use vm_id). Decouples management IP from VMID.
-    vlans          = list(string)                  # List of VLAN names to connect VM to (must exist in vlans variable)
-    ip_offset      = optional(number, null)        # Static IP offset within VLAN subnet (null = DHCP)
+    vlans          = list(string)                  # List of VLAN names to connect guest to (must exist in vlans variable)
+    ip_offset      = optional(number, null)        # Static IP offset within VLAN subnet (null = DHCP; LXCs must be static — ADR 0003)
     ipv6_offset    = optional(number, null)        # Static IPv6 offset within VLAN subnet (null = SLAAC/auto)
     ipv6_mode      = optional(string, "auto")      # IPv6 mode: "static", "slaac", "disabled", or "auto"
     cpu_cores      = optional(number, 4)           # Number of CPU cores to assign
-    cpu_type       = optional(string, "x86-64-v3") # CPU type/architecture
+    cpu_type       = optional(string, "x86-64-v3") # CPU type/architecture (VM only)
     memory_mb      = optional(number, 4096)        # Memory in MB
-    disk_size_gb   = optional(number, 10)          # Primary disk size in GB
+    disk_size_gb   = optional(number, 10)          # Primary/rootfs disk size in GB
     disk_storage   = optional(string, null)        # Storage pool for disk (uses primary_disk_storage if null)
     hostname       = optional(string, null)        # Custom hostname (uses name if null)
     fqdn           = optional(string, null)        # Custom FQDN (uses name.domain_suffix if null)
-    needs_gpu      = optional(bool, false)         # Enable GPU passthrough (requires gpu_mapping configuration)
-    protected      = optional(bool, false)         # Proxmox VM protection — prevents accidental deletion
-    # Additional disks (beyond the primary OS disk)
+    protected      = optional(bool, false)         # Proxmox guest protection — prevents accidental deletion
+    # LXC-only options
+    unprivileged = optional(bool, true)  # Unprivileged container (LXC only)
+    nesting      = optional(bool, false) # Enable nesting (docker-on-LXC)
+    keyctl       = optional(bool, false) # Enable keyctl (docker-on-LXC)
+    devices = optional(list(object({     # Host device passthrough (e.g. /dev/dri for QuickSync)
+      path = string
+      uid  = optional(number, null)
+      gid  = optional(number, null)
+      mode = optional(string, null)
+    })), [])
+    # Detached data volume attachment (ADR 0015): name references var.data_volumes;
+    # LXCs mount it at `path`, VMs get it attached as the next virtio disk (role formats/mounts it)
+    data_volume = optional(object({
+      name = string
+      path = optional(string, "/data") # Mount path inside the guest (LXC only)
+    }), null)
+    # Additional disks (beyond the primary OS disk; VM only)
     extra_disks = optional(list(object({
       size_gb = number                 # Disk size in GB
       storage = optional(string, null) # Storage pool (uses primary_disk_storage if null)
@@ -74,24 +92,56 @@ variable "vm_configurations" {
   }))
 }
 
+# Pinned guest OS images (ADR 0016 — bumping these is the deliberate image roll)
+variable "cloud_image" {
+  description = "Pinned Ubuntu cloud image for VMs (ADR 0016: explicit version URL + checksum, never 'current')"
+  type = object({
+    url                = string
+    file_name          = string
+    checksum           = string
+    checksum_algorithm = optional(string, "sha256")
+  })
+}
+
+variable "lxc_template" {
+  description = "Pinned LXC template for containers (ADR 0016)"
+  type = object({
+    url                = string
+    file_name          = string
+    checksum           = string
+    checksum_algorithm = optional(string, "sha512")
+  })
+}
+
+# Detached data volumes (ADR 0015): formatted CT volumes owned by a never-started
+# holder container, so destroying any consuming guest never deletes the data.
+# `index` fixes the mount-point slot on the holder — NEVER renumber an existing
+# volume's index; that would remap live data volumes across mount slots.
+variable "data_volumes" {
+  description = "Map of detached data volumes: name => { index (stable slot, never renumber), size_gb, storage }"
+  type = map(object({
+    index   = number
+    size_gb = number
+    storage = optional(string, null) # Uses primary_disk_storage if null
+  }))
+  default = {}
+
+  validation {
+    condition     = length(distinct([for v in var.data_volumes : v.index])) == length(var.data_volumes)
+    error_message = "data_volumes indices must be unique — they are stable mount-point slots on the holder container."
+  }
+}
+
+variable "data_volume_holder_vmid" {
+  type        = number
+  description = "Reserved VMID for the never-started data-volume holder container (ADR 0015)"
+  default     = 900
+}
+
 variable "unprotect" {
   type        = bool
   description = "Override all VM protection flags to false (for teardown)"
   default     = false
-}
-
-variable "gpu_mapping" {
-  description = "GPU mapping configuration for VMs that need GPU passthrough (used when needs_gpu=true)"
-  type = object({
-    device  = string # PCI device name (e.g., "hostpci0")
-    mapping = string # Proxmox GPU mapping name (configured in Proxmox GUI)
-    mdev    = string # Mediated device type (for GPU sharing/virtualization)
-  })
-  default = {
-    device  = "hostpci0"
-    mapping = "Nvidia-GPU"
-    mdev    = "nvidia-256"
-  }
 }
 
 # Static VLAN configuration (required)

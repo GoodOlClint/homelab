@@ -10,7 +10,7 @@ resource "proxmox_virtual_environment_sdn_zone_vlan" "zones" {
   id     = each.key
   bridge = each.value.bridge
   mtu    = try(each.value.mtu, null)
-  nodes  = [var.proxmox_node]
+  nodes  = var.proxmox_nodes
 }
 
 # --- SDN VNETs ---

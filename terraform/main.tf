@@ -3,7 +3,7 @@ module "network" {
   source          = "./modules/network"
   vlans_file_path = "${path.root}/../network-data/vlans.yaml"
   manage_sdn      = true
-  proxmox_node    = var.virtual_environment_node
+  proxmox_nodes   = coalesce(var.proxmox_nodes, [var.virtual_environment_node])
 }
 
 # All VMs using the shared Proxmox VM module
@@ -35,11 +35,13 @@ module "vms" {
   # DNS servers from canonical YAML
   dns_servers = module.network.dns_servers
 
-  # GPU configuration
-  gpu_mapping = var.gpu_mapping
-
-  # Cloud image management
+  # Pinned guest OS images (ADR 0016)
   create_cloud_image = var.create_cloud_image
+  cloud_image        = var.cloud_image
+  lxc_template       = var.lxc_template
+
+  # Detached data volumes (ADR 0015) — defined alongside the fleet in vm-configs.tf
+  data_volumes = local.data_volumes
 
   # Packer template configuration
   use_packer_template  = var.use_packer_template

@@ -10,6 +10,12 @@ locals {
     local.services_vms,
   )
 
+  # Detached data volumes (ADR 0015): the WP4 fleet rebuild populates this map.
+  # `index` is the volume's permanent mount slot on the holder container —
+  # assign the next free number and NEVER renumber an existing volume.
+  # Example: plex = { index = 0, size_gb = 100 }
+  data_volumes = {}
+
   # --- Infrastructure VMs ---
   # Core infrastructure services: DNS, monitoring, backup, network management
   infrastructure_vms = [
@@ -83,7 +89,6 @@ locals {
       cpu_cores    = 4
       memory_mb    = 16384 # 16GB — Valheim, BOINC (GPU), Kiwix, Doge-node
       disk_size_gb = 100
-      needs_gpu    = true # GPU passthrough for container workloads
     },
     {
       name         = "plex"
@@ -93,7 +98,6 @@ locals {
       cpu_cores    = 8
       memory_mb    = 16384 # GPU handles transcoding, 16GB is plenty
       disk_size_gb = 100
-      needs_gpu    = true # GPU for hardware transcoding
     },
     {
       name         = "plex-services"

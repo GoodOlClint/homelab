@@ -1,4 +1,4 @@
-# Output for Ansible inventory
+# Output for Ansible inventory (WP3: guests carry type + node for LXC-aware roles)
 output "ansible_inventory_yaml" {
   value = yamlencode({
     all = {
@@ -6,6 +6,8 @@ output "ansible_inventory_yaml" {
         for vm_name, ip in module.vms.vm_management_ips : vm_name => {
           ansible_host = ip
           service_ip   = module.vms.vm_service_ips[vm_name]
+          guest_type   = module.vms.guest_types[vm_name]
+          pve_node     = try(module.vms.vm_nodes[vm_name], null)
         }
       }
     }

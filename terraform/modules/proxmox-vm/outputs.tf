@@ -1,40 +1,53 @@
 output "vm_ids" {
-  description = "Map of VM names to their IDs"
-  value = {
-    for vm_name, vm in proxmox_virtual_environment_vm.vms : vm_name => vm.id
-  }
+  description = "Map of guest names to their IDs (VMs and LXCs)"
+  value = merge(
+    { for vm_name, vm in proxmox_virtual_environment_vm.vms : vm_name => vm.id },
+    { for ct_name, ct in proxmox_virtual_environment_container.containers : ct_name => ct.id },
+  )
 }
 
 output "vm_names" {
-  description = "Map of VM names to their display names"
-  value = {
-    for vm_name, vm in proxmox_virtual_environment_vm.vms : vm_name => vm.name
-  }
+  description = "Map of guest names (VMs and LXCs)"
+  value = merge(
+    { for vm_name, vm in proxmox_virtual_environment_vm.vms : vm_name => vm.name },
+    { for ct_name, ct in proxmox_virtual_environment_container.containers : ct_name => ct_name },
+  )
 }
 
 output "vm_ipv4_addresses" {
-  description = "Map of VM names to their IPv4 addresses"
+  description = "Map of VM names to their IPv4 addresses (VMs only — LXC IPs are static config)"
   value = {
     for vm_name, vm in proxmox_virtual_environment_vm.vms : vm_name => vm.ipv4_addresses
   }
 }
 
 output "vm_ipv6_addresses" {
-  description = "Map of VM names to their IPv6 addresses"
+  description = "Map of VM names to their IPv6 addresses (VMs only)"
   value = {
     for vm_name, vm in proxmox_virtual_environment_vm.vms : vm_name => vm.ipv6_addresses
   }
 }
 
 output "vm_nodes" {
-  description = "Map of VM names to their Proxmox nodes"
-  value = {
-    for vm_name, vm in proxmox_virtual_environment_vm.vms : vm_name => vm.node_name
-  }
+  description = "Map of guest names to their Proxmox nodes"
+  value = merge(
+    { for vm_name, vm in proxmox_virtual_environment_vm.vms : vm_name => vm.node_name },
+    { for ct_name, ct in proxmox_virtual_environment_container.containers : ct_name => ct.node_name },
+  )
+}
+
+output "guest_types" {
+  description = "Map of guest names to their type (vm | lxc)"
+  value       = { for vm in var.vm_configurations : vm.name => vm.type }
+}
+
+output "data_volume_ids" {
+  description = "Map of detached data-volume names to their PVE volume IDs (ADR 0015)"
+  value       = local.data_volume_ids
 }
 
 output "vm_mac_addresses" {
-  description = "Map of VM names to their MAC addresses"
+  description = "Map of VM names to their MAC addresses (VMs only)"
   value = {
     for vm_name, vm in proxmox_virtual_environment_vm.vms : vm_name => vm.mac_addresses
   }

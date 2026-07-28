@@ -11,8 +11,8 @@ variable "manage_sdn" {
   default     = true
 }
 
-variable "proxmox_node" {
-  description = "Proxmox node name for SDN zone deployment (e.g., 'pve'). Only used when manage_sdn = true."
-  type        = string
-  default     = "pve"
+variable "proxmox_nodes" {
+  description = "All cluster node names for SDN zone deployment (WP3: zones span every node). Only used when manage_sdn = true."
+  type        = list(string)
+  default     = ["pve"]
 }

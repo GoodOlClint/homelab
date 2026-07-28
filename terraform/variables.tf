@@ -58,18 +58,47 @@ variable "ipv6_config" {
   }
 }
 
-variable "gpu_mapping" {
-  description = "GPU mapping configuration for VMs that need GPU passthrough"
+# ──────────────────────────────────────────────
+# Pinned guest OS images (ADR 0016)
+# Bumping these defaults IS the deliberate image roll: the commit shows the new
+# version, plan shows exactly which guests replace, and the roll happens
+# per-guest via `make rebuild <guest>`. Never point these at "current"/latest.
+# ──────────────────────────────────────────────
+
+variable "cloud_image" {
+  description = "Pinned Ubuntu cloud image for VMs (explicit release + checksum — ADR 0016)"
   type = object({
-    device  = string
-    mapping = string
-    mdev    = string
+    url                = string
+    file_name          = string
+    checksum           = string
+    checksum_algorithm = optional(string, "sha256")
   })
   default = {
-    device  = "hostpci0"
-    mapping = "Nvidia-GPU"
-    mdev    = "nvidia-256"
+    url       = "https://cloud-images.ubuntu.com/noble/20260725/noble-server-cloudimg-amd64.img"
+    file_name = "noble-server-cloudimg-amd64-20260725.img"
+    checksum  = "d1940f7d69d343355e183dff1e08a59852d32e7309baa7a4bad8365b11b005ac"
   }
+}
+
+variable "lxc_template" {
+  description = "Pinned LXC template for containers (explicit release + checksum — ADR 0016)"
+  type = object({
+    url                = string
+    file_name          = string
+    checksum           = string
+    checksum_algorithm = optional(string, "sha512")
+  })
+  default = {
+    url       = "http://download.proxmox.com/images/system/ubuntu-24.04-standard_24.04-2_amd64.tar.zst"
+    file_name = "ubuntu-24.04-standard_24.04-2_amd64.tar.zst"
+    checksum  = "45c2978e6b97fe292ada95fe06834276015e5739a594db4de2fdfd830fa0c37942e8ae118fc1e32ffd9154b3f9378b592738b668ea3957db41f2907b86f219de"
+  }
+}
+
+variable "proxmox_nodes" {
+  description = "All cluster node names (SDN zones span these). Defaults to the single API node until the cluster cutover."
+  type        = list(string)
+  default     = null
 }
 
 variable "unprotect" {
