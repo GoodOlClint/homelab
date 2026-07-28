@@ -88,20 +88,53 @@ parser p_rfc5424 {
     syslog-parser(flags(syslog-protocol));
 };
 
-# pfSense filterlog CSV parser — IPv4 TCP/UDP (covers ~90% of firewall logs)
-# Field positions: common(0-8) + IPv4(9-16) + proto-specific(17-21)
-# Non-TCP/UDP or IPv6 traffic may have empty fields for trailing columns
-parser p_pfsense_full {
+# pfSense filterlog CSV parsers — two-stage: common header, then per-ip-version.
+# filterlog's column layout DIVERGES after ip_version: v4 has 8 IP-header fields
+# (tos,ecn,ttl,id,offset,flags,proto_id,proto_name) before length/src/dst, v6 has
+# 4 (class,flow,hoplimit,proto_name,proto_id). The old single fixed-v4 map wrote
+# ports into pf.src_ip and IPv6 addresses into pf.proto_name for every v6 row
+# (~24% of traffic, verified live 2026-07-28) — useless for rule mining.
+# ICMP/other-proto rows still carry proto data in the port columns; filter on
+# pf.proto_name when mining.
+parser p_pfsense_common {
     csv-parser(
         columns("rule_number", "sub_rule", "anchor", "tracker",
                 "interface", "reason", "action", "direction",
-                "ip_version", "tos", "ecn", "ttl", "id",
-                "offset", "flags", "proto_id", "proto_name",
+                "ip_version", "rest")
+        delimiters(",")
+        prefix(".pf.")
+        flags(greedy)
+        template("${MESSAGE}")
+    );
+};
+
+parser p_pfsense_v4 {
+    csv-parser(
+        columns("tos", "ecn", "ttl", "id", "offset", "flags",
+                "proto_id", "proto_name",
                 "length", "src_ip", "dst_ip", "src_port", "dst_port")
         delimiters(",")
         prefix(".pf.")
-        template("${MESSAGE}")
+        template("${.pf.rest}")
     );
+};
+
+parser p_pfsense_v6 {
+    csv-parser(
+        columns("class", "flow", "hoplimit", "proto_name", "proto_id",
+                "length", "src_ip", "dst_ip", "src_port", "dst_port")
+        delimiters(",")
+        prefix(".pf.")
+        template("${.pf.rest}")
+    );
+};
+
+filter f_pf_v4 {
+    match("^4$" value(".pf.ip_version"));
+};
+
+filter f_pf_v6 {
+    match("^6$" value(".pf.ip_version"));
 };
 
 # =============================================================================
@@ -151,7 +184,7 @@ destination d_openobserve_syslog {
 # flags(final) on each channel implements first-match routing.
 #
 # Channel order:
-#   1. pfSense:  p_rfc5424 → f_pfsense → csv-parser → firewall stream
+#   1. pfSense:  p_rfc5424 → f_pfsense → common csv → v4/v6 csv → firewall stream
 #   2. Catch-all: p_rfc5424 → syslog stream (VMs, Docker)
 # =============================================================================
 
@@ -163,7 +196,12 @@ log {
         channel {
             parser(p_rfc5424);
             filter(f_pfsense);
-            parser(p_pfsense_full);
+            parser(p_pfsense_common);
+            junction {
+                channel { filter(f_pf_v4); parser(p_pfsense_v4); flags(final); };
+                channel { filter(f_pf_v6); parser(p_pfsense_v6); flags(final); };
+                channel { flags(final); }; # unknown ip_version: common fields only
+            };
             destination(d_openobserve_firewall);
             flags(final);
         };
