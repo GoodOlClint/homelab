@@ -244,12 +244,10 @@ infisical-seed:
 
 # Export ALL Infisical secrets to SOPS backup (disaster recovery)
 # Run before major infrastructure changes and periodically (monthly) as DR insurance.
-# The .bak file is SOPS-encrypted and safe to commit to git as an offline backup.
+# Output: ansible/group_vars/secrets.sops.yml (gitignored DR artifact — never committed;
+# previous export preserved at .bak). Restores via make infisical-seed.
 infisical-backup:
-	@echo "Backing up Infisical secrets to SOPS..."
-	@$(VENV_PYTHON) scripts/infisical_backup_all.py > ansible/group_vars/secrets.sops.yml.bak
-	@sops --encrypt --in-place ansible/group_vars/secrets.sops.yml.bak
-	@echo "Backup saved to ansible/group_vars/secrets.sops.yml.bak"
+	@bash scripts/infisical_backup.sh
 
 # One-time: organize flat Infisical secrets into per-VM folders
 infisical-organize:

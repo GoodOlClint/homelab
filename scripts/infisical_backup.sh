@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
-# Export Infisical secrets back to YAML (backup/disaster recovery)
+# Export ALL Infisical secrets → SOPS-encrypted DR backup (the ONLY export path).
 #
 # Authenticates via Machine Identity (Universal Auth) using SOPS bootstrap
-# credentials, exports secrets from each folder as JSON, then converts to
-# a nested YAML structure via infisical_to_sops.py.
+# credentials, exports every folder as JSON, converts to the secrets.sops.yml
+# structure via infisical_to_sops.py, encrypts with SOPS, and verifies the
+# result decrypts. The previous export is kept at secrets.sops.yml.bak so a
+# failed run can never destroy the only good backup.
+#
+# Round-trip contract: the output must restore via scripts/seed_infisical.sh
+# (nested dict per folder → seeded to /<folder>, underscores→hyphens).
 #
 # Usage: make infisical-backup
 
@@ -14,20 +19,25 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 VENV_PYTHON="$REPO_ROOT/.venv/bin/python3"
 BOOTSTRAP_FILE="$REPO_ROOT/ansible/group_vars/bootstrap.sops.yml"
 INFISICAL_ENV="prod"
-OUTPUT_FILE="$REPO_ROOT/infisical-backup.yml"
+OUTPUT_FILE="$REPO_ROOT/ansible/group_vars/secrets.sops.yml"
 
-# Folders that match infisical_login.yml nested paths
-FOLDERS=(monitoring plex plex-services homepage docker vps pfsense shared infrastructure)
+# All Infisical folders — keep in lockstep with the CLAUDE.md
+# "Infisical Folder Ownership" table. Root / is exported too (must be empty;
+# any stray keys get captured rather than silently dropped).
+FOLDERS=(shared monitoring plex plex-services homepage docker minio vps
+         pfsense pbs infrastructure github-runner squid)
 
 if [ ! -x "$VENV_PYTHON" ]; then
-    echo "ERROR: .venv not found. Run: make bootstrap-local"
+    echo "ERROR: .venv not found. Run: make init"
     exit 1
 fi
 
-if ! command -v infisical &> /dev/null; then
-    echo "ERROR: infisical CLI not found."
-    exit 1
-fi
+for cmd in infisical sops; do
+    if ! command -v "$cmd" &> /dev/null; then
+        echo "ERROR: $cmd CLI not found."
+        exit 1
+    fi
+done
 
 # Read config from SOPS
 PROJECT_ID=$(sops -d --extract '["bootstrap_config"]["infisical_project_id"]' "$BOOTSTRAP_FILE" 2>/dev/null)
@@ -44,7 +54,6 @@ for var in PROJECT_ID INFISICAL_URL CLIENT_ID CLIENT_SECRET; do
 done
 
 DOMAIN="${INFISICAL_URL}/api"
-CLI_FLAGS="--env $INFISICAL_ENV --projectId $PROJECT_ID --domain $DOMAIN"
 
 echo "Backing up Infisical secrets..."
 
@@ -61,33 +70,41 @@ if [ -z "$TOKEN" ]; then
     exit 1
 fi
 
-CLI_FLAGS="$CLI_FLAGS --token $TOKEN"
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
 
-# Build a combined JSON object: {"/" : [...], "/folder": [...], ...}
-# The Python script reads this to produce nested YAML.
+# Build {"/": [...], "/folder": [...], ...}. The CLI returns `null` for an
+# empty folder and non-zero for a missing one — both become [].
 {
-    echo "{"
-
-    # Root path
-    echo "\"/$( echo '": ' )"
-    infisical secrets --path / $CLI_FLAGS -o json 2>/dev/null
-    echo ","
-
-    # Each subfolder
-    first=true
-    for folder in "${FOLDERS[@]}"; do
-        if [ "$first" = true ]; then
-            first=false
-        else
-            echo ","
-        fi
-        echo "\"/$folder\": "
-        # Folder may not exist — output empty array on failure
-        infisical secrets --path "/$folder" $CLI_FLAGS -o json 2>/dev/null || echo "[]"
+    printf '{'
+    sep=""
+    for folder in "" "${FOLDERS[@]}"; do
+        out=$(infisical secrets --path "/$folder" \
+            --env "$INFISICAL_ENV" --projectId "$PROJECT_ID" \
+            --domain "$DOMAIN" --token "$TOKEN" \
+            -o json 2>/dev/null || true)
+        [ -z "$out" ] || [ "$out" = "null" ] && out="[]"
+        printf '%s"/%s": %s' "$sep" "$folder" "$out"
+        sep=","
     done
+    printf '}'
+} > "$TMP/export.json"
 
-    echo "}"
-} | "$VENV_PYTHON" "$SCRIPT_DIR/infisical_to_sops.py" > "$OUTPUT_FILE"
+# Convert; exits non-zero on zero total secrets (auth/CLI silently broken).
+"$VENV_PYTHON" "$SCRIPT_DIR/infisical_to_sops.py" < "$TMP/export.json" > "$TMP/secrets.yml"
 
-count=$(grep -c ':' "$OUTPUT_FILE" 2>/dev/null || echo '?')
-echo "Backup saved to $OUTPUT_FILE ($count entries)"
+# Keep the previous encrypted export so a bad run can't destroy it.
+if [ -f "$OUTPUT_FILE" ]; then
+    cp "$OUTPUT_FILE" "$OUTPUT_FILE.bak"
+fi
+
+mv "$TMP/secrets.yml" "$OUTPUT_FILE"
+sops --encrypt --in-place "$OUTPUT_FILE"
+
+# Verify the artifact actually decrypts before calling it a backup.
+if ! sops -d "$OUTPUT_FILE" > /dev/null; then
+    echo "ERROR: encrypted backup does not decrypt — previous export preserved at $OUTPUT_FILE.bak"
+    exit 1
+fi
+
+echo "Backup saved to $OUTPUT_FILE (encrypted, decrypt verified)"
