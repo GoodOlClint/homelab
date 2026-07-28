@@ -340,17 +340,17 @@ clean-ssh:
 node-iso:
 	@bash scripts/bake-answer.sh $(NODE) $(ISO)
 
-# One hand-off step: create terraform@pve token on a fresh node. make node-bootstrap IP=172.16.30.103
+# One hand-off step: create terraform@pve token on a fresh node. make node-bootstrap IP=<node-vlan30-ip>
 node-bootstrap:
 	@bash scripts/node-bootstrap.sh $(IP)
 
-# Plan the host plane. make hosts-plan ENDPOINT=https://172.16.30.103:8006/
+# Plan the host plane. make hosts-plan ENDPOINT=https://<node-vlan30-ip>:8006/
 hosts-plan:
 	@test -n "$(ENDPOINT)" || { echo "ERROR: set ENDPOINT=https://<node-vlan30-ip>:8006/"; exit 1; }
 	@cd terraform/hosts && terraform init -input=false >/dev/null && \
 		TF_VAR_virtual_environment_endpoint="$(ENDPOINT)" terraform plan -no-color -input=false
 
-# Apply the host plane (interactive confirm). make hosts-apply ENDPOINT=https://172.16.30.103:8006/
+# Apply the host plane (interactive confirm). make hosts-apply ENDPOINT=https://<node-vlan30-ip>:8006/
 hosts-apply:
 	@test -n "$(ENDPOINT)" || { echo "ERROR: set ENDPOINT=https://<node-vlan30-ip>:8006/"; exit 1; }
 	@cd terraform/hosts && terraform init -input=false >/dev/null && \

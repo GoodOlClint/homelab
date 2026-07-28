@@ -22,8 +22,8 @@ root-ssh-keys        = ["@ROOT_SSH_KEY@"]
 
 [network]
 source                  = "from-answer"
-cidr                    = "@INSTALL_CIDR@"    # VLAN 30 mgmt, e.g. 172.16.30.103/24
-gateway                 = "@INSTALL_GATEWAY@" # 172.16.30.1
+cidr                    = "@INSTALL_CIDR@"    # VLAN 30 mgmt CIDR
+gateway                 = "@INSTALL_GATEWAY@" # VLAN 30 gateway
 dns                     = "1.1.1.1"           # bootstrap resolver (AdGuard not up yet)
 filter.ID_NET_NAME_MAC  = "*@INSTALL_NIC_MAC@" # i226-V MAC, no colons (e.g. *58:47ca... -> *5847ca78f9d9)
 

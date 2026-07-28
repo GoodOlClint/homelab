@@ -8,7 +8,7 @@
 #
 # NOT provisioned here: the host mgmt IP (VLAN 30) + keepalived VIP. Adding a
 # VLAN 30 IP on the bond while the i226-V install link already holds one would put
-# two interfaces on 172.16.30.0/24 (rp_filter/asymmetric-ARP footgun), and this
+# two interfaces on the VLAN 30 subnet (rp_filter/asymmetric-ARP footgun), and this
 # root runs over that very link (ADR-0002). WP2 (Ansible proxmox_host) re-homes
 # mgmt to the bond and stands up the VIP on VLAN 30. See ADR-0008.
 

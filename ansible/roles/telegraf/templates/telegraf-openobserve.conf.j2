@@ -98,7 +98,7 @@
     "8.8.8.8",
     "1.1.1.1",
 {% if inventory_hostname == 'vps' %}
-    "172.16.91.1",
+    "{{ vps_wg_tunnel.peer_ip }}",
 {% endif %}
   ]
   count = 4

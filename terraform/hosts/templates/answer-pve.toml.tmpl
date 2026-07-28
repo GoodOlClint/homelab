@@ -24,8 +24,8 @@ root-ssh-keys        = ["@ROOT_SSH_KEY@"]
 
 [network]
 source                 = "from-answer"
-cidr                   = "@INSTALL_CIDR@"    # VLAN 30 mgmt, e.g. 172.16.30.104/24
-gateway                = "@INSTALL_GATEWAY@" # 172.16.30.1
+cidr                   = "@INSTALL_CIDR@"    # VLAN 30 mgmt CIDR
+gateway                = "@INSTALL_GATEWAY@" # VLAN 30 gateway
 dns                    = "1.1.1.1"
 filter.ID_NET_NAME_MAC = "*@INSTALL_NIC_MAC@" # I225-V MAC, no colons
 

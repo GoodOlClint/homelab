@@ -7,7 +7,7 @@
 
 ## Context
 
-Every VM's cloud-init netplan listed `1.1.1.1` ahead of AdGuard (`dns_servers` in `network-data/vlans.yaml`, deliberately ordered so greenfield bootstrap has DNS before AdGuard exists). With a public resolver in a link's server set, systemd-resolved sticks to whichever server answers — and 1.1.1.1 answers NXDOMAIN for every split-horizon `*.goodolclint.internal` name. The `dns_config` role masked this with per-link `resolvectl` calls, which are runtime-only: any reboot silently reverted the fleet to the poisoned state. This is what kept pbs-exporter down (ADR 0011) and makes any internal-name consumer fail nondeterministically after a reboot, looking like a missing DNS record rather than resolver ordering.
+Every VM's cloud-init netplan listed `1.1.1.1` ahead of AdGuard (`dns_servers` in `network-data/vlans.yaml`, deliberately ordered so greenfield bootstrap has DNS before AdGuard exists). With a public resolver in a link's server set, systemd-resolved sticks to whichever server answers — and 1.1.1.1 answers NXDOMAIN for every split-horizon `*.<internal-domain>` name. The `dns_config` role masked this with per-link `resolvectl` calls, which are runtime-only: any reboot silently reverted the fleet to the poisoned state. This is what kept pbs-exporter down (ADR 0011) and makes any internal-name consumer fail nondeterministically after a reboot, looking like a missing DNS record rather than resolver ordering.
 
 ## Decision
 
@@ -21,7 +21,7 @@ Verified: fleet rollout to 15 VMs, then a reboot of the openobserve VM with zero
 
 ## Rejected alternatives
 
-- **AdGuard-only base (`dns_servers: ['172.16.40.53']`).** Deadlocks greenfield bootstrap: the AdGuard VM itself needs working DNS to download AdGuardHome from GitHub before AdGuard exists.
+- **AdGuard-only base (`dns_servers: ['<adguard-ip>']`).** Deadlocks greenfield bootstrap: the AdGuard VM itself needs working DNS to download AdGuardHome from GitHub before AdGuard exists.
 - **A netplan override file (`/etc/netplan/90-dns-override.yaml`).** Tried live and disproven: netplan *merges* `nameservers.addresses` lists across files (verified with `netplan get` — the union appeared), so an override can add servers but can never remove `1.1.1.1`.
 - **BIND as the fallback resolver.** `named.conf.options` is `recursion no` — authoritative-only, cannot resolve public names.
 - **Keeping resolvectl.** Runtime-only; demonstrated failure mode is exactly the incident that prompted this ADR.

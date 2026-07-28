@@ -48,14 +48,14 @@ i226 (ring1, WP2) — so a re-apply can never drop the link Terraform is talking
 
 5. **Hand-off token** (ADR-0002 boundary — the one manual step):
    ```
-   make node-bootstrap IP=172.16.30.103   # creates terraform@pve + token; store it in bootstrap.sops.yml
+   make node-bootstrap IP=<node-vlan30-ip>   # creates terraform@pve + token; store it in bootstrap.sops.yml
    ```
 
 6. **Apply the host networking.** Endpoint = the node's VLAN 30 mgmt URL (the stable
    link — never the bond being reconfigured):
    ```
-   make hosts-plan  ENDPOINT=https://172.16.30.103:8006/
-   make hosts-apply ENDPOINT=https://172.16.30.103:8006/   # interactive confirm
+   make hosts-plan  ENDPOINT=https://<node-vlan30-ip>:8006/
+   make hosts-apply ENDPOINT=https://<node-vlan30-ip>:8006/   # interactive confirm
    ```
 
 ## DoD (WP1)
@@ -65,7 +65,7 @@ i226 (ring1, WP2) — so a re-apply can never drop the link Terraform is talking
 - After a host reboot all planes come up: `bond0` LACP negotiated, `vmbr0` VLAN-aware,
   VLAN 20 storage address present, and jumbo to the NAS works:
   ```
-  ping -M do -s 8972 172.16.20.10   # storage VLAN, 9000-byte frames, no fragmentation
+  ping -M do -s 8972 <nas-storage-ip>   # storage VLAN, 9000-byte frames, no fragmentation
   ```
 
 ## Notes

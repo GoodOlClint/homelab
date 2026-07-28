@@ -20,7 +20,7 @@
 squid_listen_port: 3128
 
 # Visible hostname advertised in error pages / upstream requests
-squid_visible_hostname: "squid.services.goodolclint.internal"
+squid_visible_hostname: "squid.services.{{ network_data.domain_suffix }}"
 
 # CA certificate storage
 squid_ca_dir: /etc/squid/ssl_cert
@@ -58,9 +58,9 @@ squid_restricted_clients: []
 # win even though they're also covered by this range.
 squid_unrestricted_clients:
   - name: openclaw_host
-    src: "172.16.140.10/32"
+    src: "{{ network_data.ipv4_prefix }}.{{ network_data.vlans.openclaw.id }}.10/32"
   - name: internal
-    src: "172.16.0.0/12"
+    src: "{{ internal_network_cidr }}"
 
 # Audit-logged unrestricted clients — spliced (no inspection) but all
 # connection metadata (SNI, timestamps, bytes) written to the audit log.

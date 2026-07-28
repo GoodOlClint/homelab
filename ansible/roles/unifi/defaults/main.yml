@@ -10,6 +10,6 @@ unifi_uos_installer_url: ""
 # Firewall configuration
 unifi_configure_firewall: true
 unifi_firewall_allowed_ips:
-  - "{{ internal_network_cidr | default('172.16.0.0/12') }}"
+  - "{{ internal_network_cidr }}"
   - "10.0.0.0/8"
   - "192.168.0.0/16"

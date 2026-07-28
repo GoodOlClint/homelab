@@ -57,6 +57,48 @@ if changed_files | grep -E "$PROTECTED_TFVARS_REGEX" >/dev/null 2>&1; then
   fi
 fi
 
+# --- WP6: private addressing / internal domain must not enter tracked files ---
+# Specific RFC1918 addresses and the internal domain are site bindings (policy
+# vs binding split). Scans ADDED lines only, so legacy context never blocks a
+# commit. Allowlisted: example files (placeholder addressing) and the generic
+# supernet literals used in firewall/ACL config.
+LEAK_EXCLUDE_REGEX='(example|\.gitignore$)'
+RFC1918_REGEX='(^|[^0-9.])(10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|172\.(1[6-9]|2[0-9]|3[01])\.[0-9]{1,3}\.[0-9]{1,3}|192\.168\.[0-9]{1,3}\.[0-9]{1,3})'
+SUPERNET_ALLOW='10\.0\.0\.0/8|172\.16\.0\.0/12|192\.168\.0\.0/16'
+INTERNAL_DOMAIN=""
+if [[ -f network-data/vlans.yaml ]]; then
+  INTERNAL_DOMAIN=$(sed -n 's/^domain_suffix: *"\([^"]*\)".*/\1/p' network-data/vlans.yaml | head -1)
+fi
+
+added_lines() {
+  if [[ "$MODE" == "staged" ]]; then
+    git diff --cached -U0 -- "$1" | grep '^+' | grep -v '^+++' || true
+  else
+    git diff -U0 "$RANGE" -- "$1" | grep '^+' | grep -v '^+++' || true
+  fi
+}
+
+echo "[guardrails] scanning added lines for private IPs / internal domain"
+leak_fail=0
+while IFS= read -r f; do
+  [[ -z "$f" ]] && continue
+  [[ "$f" =~ $LEAK_EXCLUDE_REGEX ]] && continue
+  hits=$(added_lines "$f" | grep -E "$RFC1918_REGEX" | grep -vE "$SUPERNET_ALLOW" || true)
+  if [[ -n "$INTERNAL_DOMAIN" ]]; then
+    dhits=$(added_lines "$f" | grep -F "$INTERNAL_DOMAIN" || true)
+    if [[ -n "$dhits" ]]; then hits="${hits:+$hits$'\n'}$dhits"; fi
+  fi
+  if [[ -n "$hits" ]]; then
+    leak_fail=1
+    echo "[guardrails] private addressing / internal domain in $f:" >&2
+    echo "$hits" | sed 's/^/    /' >&2
+  fi
+done < <(changed_files)
+if [[ "$leak_fail" == "1" ]]; then
+  echo "[guardrails] blocked: site bindings belong in gitignored files or derived vars (vlans.yaml facts) — see WP6 in docs/ms01-cluster-iac-plan.md." >&2
+  exit 1
+fi
+
 echo "[guardrails] validating publishable policy files"
 python3 scripts/validate_public_policy.py network-data/public_policy.yaml
 

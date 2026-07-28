@@ -88,12 +88,12 @@ Placement per the okf doc: **VMs** — infisical (protected), pfsense-test, gith
 - Scope: the new aggregation switch + migration-touched ports only; full-fabric import is future work. Gated behind `manage_unifi` (default false) until the switch is adopted. Provider pinned `~> 0.55` (module written against that schema).
 - **DoD:** switch adopted → `terraform apply` produces the complete working switch config with zero hand edits in the controller; re-apply is a no-op; node bonds negotiate LACP; jumbo validated end-to-end.
 
-### WP6 — Public-repo scrub + guard
-- Repo is public; 15 tracked files carry private IPs, 6 the internal domain (scan 2026-07-10) — violating the policy-vs-binding rule. Operator decision: keep public, scrub going forward, accept history exposure.
-- Move concrete IPs/domains out of role defaults, templates, and examples into gitignored bindings or inventory-derived vars; examples get RFC 5737 / placeholder values; delete `archive/` (pre-consolidation cruft holding full old IP maps) and the obsolete `scripts/nvidia-vgpu-project-prompt.md`.
-- Pre-commit hook blocking RFC 1918 addresses and the internal domain in tracked files (allowlist for `*.example.*` placeholders where needed).
-- Scope call to confirm during WP6: hostnames and VLAN *numbers* stay tracked (they're structural, already public throughout the repo, and unavoidable in working IaC); IPs, subnets, and domain names are the scrub targets. Tighten later if the operator wants VLAN IDs treated as bindings per the strict policy reading.
-- **DoD:** the leak scan (`git grep` for private-IP ranges + domain over tracked files) returns zero hits; hook demonstrably rejects a test commit containing an internal IP.
+### WP6 — Public-repo scrub + guard ✅ (landed 2026-07-27)
+- Repo is public; 15 tracked files carried private IPs, 6 the internal domain (scan 2026-07-10) — violating the policy-vs-binding rule. Operator decision: keep public, scrub going forward, accept history exposure.
+- Done: concrete IPs/domains moved out of role defaults, templates, and docs into derived vars (`network_data.*` facts, `internal_network_cidr`, `vps_wg_tunnel.*`) or neutral placeholders; `archive/` and `scripts/nvidia-vgpu-project-prompt.md` deleted.
+- Guard: `scripts/security_guardrails.sh` (existing pre-commit hook) now scans **added lines** for RFC 1918 addresses + the internal domain (read at runtime from gitignored `vlans.yaml`). Allowlisted: `*example*` files and the generic supernet literals (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16).
+- Scope call (confirmed): hostnames and VLAN *numbers* stay tracked (structural); IPs, subnets, and domain names are bindings. Example files keep their illustrative 172.16.x values under the allowlist — tighten to RFC 5737 later if the operator wants.
+- **DoD met 2026-07-27:** leak scan zero hits over tracked files; hook verified rejecting a staged file containing an internal IP and passing the clean stage.
 
 ### WP8 — PKI + certs (ADR 0007)
 - **Gate first:** verify Infisical PKI (internal CA + ACME) is available on the self-hosted tier and that `make infisical-backup` captures PKI objects; if gated → step-ca LXC, same shape.

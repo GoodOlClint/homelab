@@ -195,12 +195,12 @@
 {% endif %}
     - pfSense:
         icon: pfsense.svg
-        href: https://{{ pfsense_mgmt_ip | default('172.16.10.1') }}
+        href: https://{{ pfsense_mgmt_ip | default(network_data.ipv4_prefix ~ '.' ~ network_data.vlans.management.id ~ '.1') }}
         description: Firewall / Gateway
         # Widget requires pfsense-api package — install, then store creds in Infisical /homepage
         # widget:
         #   type: pfsense
-        #   url: https://{{ pfsense_mgmt_ip | default('172.16.10.1') }}
+        #   url: https://{{ pfsense_mgmt_ip | default(network_data.ipv4_prefix ~ '.' ~ network_data.vlans.management.id ~ '.1') }}
         #   username: {{ '{{HOMEPAGE_VAR_PFSENSE_USERNAME}}' }}
         #   password: {{ '{{HOMEPAGE_VAR_PFSENSE_PASSWORD}}' }}
         #   wan: igb0

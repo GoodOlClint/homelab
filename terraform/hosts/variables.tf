@@ -32,13 +32,13 @@ variable "virtual_environment_password" {
 # NOT here (deliberately): the host mgmt IP (VLAN 30) + keepalived VIP. Host mgmt
 #   arrives on the i226-V VLAN 30 install link, and this root runs OVER that link
 #   (ADR-0002) so it must not add a second VLAN 30 IP on the bond — two interfaces
-#   on 172.16.30.0/24 is the classic rp_filter/asymmetric-ARP footgun. WP2's
+#   on the VLAN 30 subnet is the classic rp_filter/asymmetric-ARP footgun. WP2's
 #   Ansible proxmox_host role re-homes mgmt from the i226-V to the bond (VLAN 30)
 #   and stands up the VIP there, over a stable connection — see ADR-0008.
 variable "nodes" {
   type = map(object({
     bond_slaves = list(string) # e.g. ["nic0", "nic1"] — the two X710 ports, post-install
-    storage_ip  = string       # VLAN 20 storage address, CIDR (jumbo) — e.g. "172.16.20.11/24"
+    storage_ip  = string       # VLAN 20 storage address, CIDR (jumbo) — e.g. "<prefix>.20.11/24"
   }))
   description = "Per-node host-networking bindings. Real values live in the gitignored nodes.auto.tfvars."
 }

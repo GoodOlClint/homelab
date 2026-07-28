@@ -290,6 +290,7 @@ make ansible-services TAGS=plex,homepage  # plex + homepage plays
 ## What Never To Do
 
 - **Never hardcode IPs in templates** — derive from `ansible_host`, VLAN prefix replacement, or `hostvars`
+- **Never put a specific RFC 1918 address or the internal domain in a tracked file** — the repo is public; IPs/subnets/domains are bindings (gitignored or derived from `network_data.*` facts). The `security_guardrails.sh` pre-commit hook blocks added lines containing them (example files and generic supernets allowlisted) — WP6
 - **Never reconfigure host networking over the interface carrying the PVE API session** — `terraform/hosts/` applies run over the stable VLAN 30 mgmt link and never touch it; a re-apply must never drop the link Terraform is talking over (ADR-0002)
 - **Never DHCP an LXC** — static IPs only, so plan-time inventory is deterministic (ADR-0003)
 - **Never put secrets in `vars.auto.tfvars`** — pre-commit hook blocks this
