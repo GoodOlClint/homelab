@@ -96,19 +96,19 @@ locals {
   # Explicit values avoid resource dependency — safe for -target operations
   vm_management_ips = {
     for vm_config in var.vm_configurations : vm_config.name =>
-      cidrhost(
-        local.merged_vlans[var.management_vlan].subnet,
-        coalesce(vm_config.mgmt_ip_offset, vm_config.vm_id, try(proxmox_virtual_environment_vm.vms[vm_config.name].vm_id, 0))
-      )
+    cidrhost(
+      local.merged_vlans[var.management_vlan].subnet,
+      coalesce(vm_config.mgmt_ip_offset, vm_config.vm_id, try(proxmox_virtual_environment_vm.vms[vm_config.name].vm_id, 0))
+    )
   }
 
   # Service-facing IP: services VLAN IP if VM has it, otherwise falls back to management IP.
   # Used by Homepage dashboard and other templates that need user-accessible URLs.
   vm_service_ips = {
     for vm_config in var.vm_configurations : vm_config.name =>
-      contains(vm_config.vlans, var.services_vlan) && vm_config.ip_offset != null
-      ? cidrhost(local.merged_vlans[var.services_vlan].subnet, vm_config.ip_offset)
-      : local.vm_management_ips[vm_config.name]
+    contains(vm_config.vlans, var.services_vlan) && vm_config.ip_offset != null
+    ? cidrhost(local.merged_vlans[var.services_vlan].subnet, vm_config.ip_offset)
+    : local.vm_management_ips[vm_config.name]
   }
 }
 # Generate cloud-init user data files for each VM (only when not using Packer)
@@ -156,10 +156,10 @@ resource "proxmox_virtual_environment_file" "network_data" {
           gateway       = vlan_entry.iface.gw != null ? vlan_entry.iface.gw : ""
           gateway_v6    = vlan_entry.iface.gw_v6 != null ? vlan_entry.iface.gw_v6 : ""
           macaddress    = vlan_entry.iface.macaddress != null ? vlan_entry.iface.macaddress : ""
-          is_primary    = vlan_entry.key == var.management_vlan # Management VLAN is primary for DHCP metric
-          is_gateway    = vlan_entry.iface.is_gateway           # This interface gets the default route
-          routing_table = vlan_entry.iface.routing_table         # VLAN ID used as policy routing table number
-          subnet        = vlan_entry.iface.subnet != null ? vlan_entry.iface.subnet : ""  # For connected route in policy table
+          is_primary    = vlan_entry.key == var.management_vlan                          # Management VLAN is primary for DHCP metric
+          is_gateway    = vlan_entry.iface.is_gateway                                    # This interface gets the default route
+          routing_table = vlan_entry.iface.routing_table                                 # VLAN ID used as policy routing table number
+          subnet        = vlan_entry.iface.subnet != null ? vlan_entry.iface.subnet : "" # For connected route in policy table
           dns_servers   = var.dns_servers
         }
       ]
@@ -204,7 +204,7 @@ resource "proxmox_virtual_environment_vm" "vms" {
 
   disk {
     datastore_id = coalesce(each.value.disk_storage, var.primary_disk_storage)
-    file_id      = local.vm_disk_source  # Only for cloud images, null for Packer
+    file_id      = local.vm_disk_source # Only for cloud images, null for Packer
     interface    = "virtio0"
     iothread     = true
     discard      = "on"
@@ -246,7 +246,7 @@ resource "proxmox_virtual_environment_vm" "vms" {
   dynamic "network_device" {
     for_each = local.build_vm_interfaces[each.value.name]
     content {
-      bridge      = network_device.value.bridge
+      bridge = network_device.value.bridge
       # Only set vlan_id for physical bridges (vmbr*), not for SDN VNETs
       vlan_id     = can(regex("^vmbr", network_device.value.bridge)) ? network_device.value.vlan_id : null
       mtu         = network_device.value.mtu

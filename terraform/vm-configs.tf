@@ -26,8 +26,8 @@ locals {
       name         = "adguard"
       vm_id        = 102
       vlans        = ["vlan10", "vlan40"]
-      ip_offset    = 53  # .53 on service VLANs
-      ipv6_offset  = 53  # ::35 on service VLANs
+      ip_offset    = 53 # .53 on service VLANs
+      ipv6_offset  = 53 # ::35 on service VLANs
       ipv6_mode    = "static"
       cpu_cores    = 4
       memory_mb    = 2048
@@ -52,13 +52,13 @@ locals {
       disk_size_gb = 20
     },
     {
-      name            = "unifi"
-      vm_id           = 100
-      mgmt_ip_offset  = 10 # static management IP (decoupled from VMID)
-      vlans           = ["vlan10"]
-      cpu_cores       = 4
-      memory_mb       = 4096 # UniFi needs decent RAM for MongoDB
-      disk_size_gb    = 50   # Space for MongoDB + backups
+      name           = "unifi"
+      vm_id          = 100
+      mgmt_ip_offset = 10 # static management IP (decoupled from VMID)
+      vlans          = ["vlan10"]
+      cpu_cores      = 4
+      memory_mb      = 4096 # UniFi needs decent RAM for MongoDB
+      disk_size_gb   = 50   # Space for MongoDB + backups
     },
     {
       name         = "infisical"
@@ -147,15 +147,15 @@ locals {
       vlans        = ["vlan10", "vlan40"]
       ip_offset    = 113
       cpu_cores    = 4
-      memory_mb    = 8192  # dotnet builds + Terraform
-      disk_size_gb = 50    # Runner workspace, SDK caches, Terraform providers
+      memory_mb    = 8192 # dotnet builds + Terraform
+      disk_size_gb = 50   # Runner workspace, SDK caches, Terraform providers
     },
     {
       name         = "squid"
       vm_id        = 114
       vlans        = ["vlan10", "vlan40", "vlan140"]
       ip_offset    = 114
-      cpu_cores    = 4   # 4 cores — one per SMP worker (see squid_workers)
+      cpu_cores    = 4    # 4 cores — one per SMP worker (see squid_workers)
       memory_mb    = 4096 # 4 GB — needed for TCP buffer pool with many parallel spliced downloads
       disk_size_gb = 20
     },
@@ -165,8 +165,8 @@ locals {
       vlans        = ["vlan10", "vlan40"]
       ip_offset    = 115
       cpu_cores    = 4
-      memory_mb    = 8192   # ChromaDB HNSW index operations
-      disk_size_gb = 200    # Vector index storage
+      memory_mb    = 8192 # ChromaDB HNSW index operations
+      disk_size_gb = 200  # Vector index storage
     },
   ]
 }

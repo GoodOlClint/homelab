@@ -1,0 +1,34 @@
+# Aggregation-switch port bindings for terraform/modules/unifi-network (WP5).
+# Copy to network-data/local/unifi-ports.yaml (gitignored) and fill real values.
+# Port-to-device assignments are site bindings — kept out of the public repo.
+#
+#   mac               : the switch MAC (from the UniFi controller after adoption).
+#   jumbo_frames      : device-level jumbo toggle (covers the storage VLAN end-to-end).
+#   ports[].index     : physical port number.
+#   ports[].profile   : trunk | ceph | corosync | corosync_ring1 | storage
+#                       (module port-profile names; omit to leave the port default).
+#   ports[].aggregate_members : LACP group, listed ONLY on the first member port
+#                       (e.g. [1, 2]); the member ports still get their profile.
+#
+# USW-Pro-Aggregation layout: ports 1–28 SFP+ 10G, ports 29–32 SFP28 25G.
+# Ceph node links are SFP28 access ports on VLAN 33 (ADR 0014), one per node,
+# one spare for a future 4th node.
+
+aggregation_switch:
+  mac: "aa:bb:cc:dd:ee:ff"
+  name: "USW-Pro-Aggregation"
+  jumbo_frames: true
+  ports:
+    - { index: 1, name: "synology LAG a", profile: "storage", aggregate_members: [1, 2] }
+    - { index: 2, name: "synology LAG b", profile: "storage" }
+    - { index: 3, name: "pfsense uplink", profile: "trunk" }
+    - { index: 4, name: "usw-pro-24 downlink", profile: "trunk" }
+    - { index: 5, name: "crete bond0 a", profile: "trunk", aggregate_members: [5, 6] }
+    - { index: 6, name: "crete bond0 b", profile: "trunk" }
+    - { index: 7, name: "crete2 bond0 a", profile: "trunk", aggregate_members: [7, 8] }
+    - { index: 8, name: "crete2 bond0 b", profile: "trunk" }
+    - { index: 9, name: "pve bond0 a", profile: "trunk", aggregate_members: [9, 10] }
+    - { index: 10, name: "pve bond0 b", profile: "trunk" }
+    - { index: 29, name: "crete ceph 25g", profile: "ceph" }
+    - { index: 30, name: "crete2 ceph 25g", profile: "ceph" }
+    - { index: 31, name: "pve ceph 25g", profile: "ceph" }

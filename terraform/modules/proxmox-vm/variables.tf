@@ -48,26 +48,26 @@ variable "ipv6_config" {
 variable "vm_configurations" {
   description = "VM configuration mapping - list of VMs to create with their specifications"
   type = list(object({
-    name         = string                        # Unique VM name (used for hostname if hostname not specified)
-    vm_id           = optional(number, null)        # Explicit Proxmox VMID (also sets static management IP). null = auto-assign + DHCP on management VLAN.
-    mgmt_ip_offset  = optional(number, null)        # Override management IP offset (default: use vm_id). Decouples management IP from VMID.
-    vlans        = list(string)                  # List of VLAN names to connect VM to (must exist in vlans variable)
-    ip_offset    = optional(number, null)        # Static IP offset within VLAN subnet (null = DHCP)
-    ipv6_offset  = optional(number, null)        # Static IPv6 offset within VLAN subnet (null = SLAAC/auto)
-    ipv6_mode    = optional(string, "auto")      # IPv6 mode: "static", "slaac", "disabled", or "auto"
-    cpu_cores    = optional(number, 4)           # Number of CPU cores to assign
-    cpu_type     = optional(string, "x86-64-v3") # CPU type/architecture
-    memory_mb    = optional(number, 4096)        # Memory in MB
-    disk_size_gb = optional(number, 10)          # Primary disk size in GB
-    disk_storage = optional(string, null)        # Storage pool for disk (uses primary_disk_storage if null)
-    hostname     = optional(string, null)        # Custom hostname (uses name if null)
-    fqdn         = optional(string, null)        # Custom FQDN (uses name.domain_suffix if null)
-    needs_gpu    = optional(bool, false)         # Enable GPU passthrough (requires gpu_mapping configuration)
-    protected    = optional(bool, false)         # Proxmox VM protection — prevents accidental deletion
+    name           = string                        # Unique VM name (used for hostname if hostname not specified)
+    vm_id          = optional(number, null)        # Explicit Proxmox VMID (also sets static management IP). null = auto-assign + DHCP on management VLAN.
+    mgmt_ip_offset = optional(number, null)        # Override management IP offset (default: use vm_id). Decouples management IP from VMID.
+    vlans          = list(string)                  # List of VLAN names to connect VM to (must exist in vlans variable)
+    ip_offset      = optional(number, null)        # Static IP offset within VLAN subnet (null = DHCP)
+    ipv6_offset    = optional(number, null)        # Static IPv6 offset within VLAN subnet (null = SLAAC/auto)
+    ipv6_mode      = optional(string, "auto")      # IPv6 mode: "static", "slaac", "disabled", or "auto"
+    cpu_cores      = optional(number, 4)           # Number of CPU cores to assign
+    cpu_type       = optional(string, "x86-64-v3") # CPU type/architecture
+    memory_mb      = optional(number, 4096)        # Memory in MB
+    disk_size_gb   = optional(number, 10)          # Primary disk size in GB
+    disk_storage   = optional(string, null)        # Storage pool for disk (uses primary_disk_storage if null)
+    hostname       = optional(string, null)        # Custom hostname (uses name if null)
+    fqdn           = optional(string, null)        # Custom FQDN (uses name.domain_suffix if null)
+    needs_gpu      = optional(bool, false)         # Enable GPU passthrough (requires gpu_mapping configuration)
+    protected      = optional(bool, false)         # Proxmox VM protection — prevents accidental deletion
     # Additional disks (beyond the primary OS disk)
     extra_disks = optional(list(object({
-      size_gb  = number                    # Disk size in GB
-      storage  = optional(string, null)    # Storage pool (uses primary_disk_storage if null)
+      size_gb = number                 # Disk size in GB
+      storage = optional(string, null) # Storage pool (uses primary_disk_storage if null)
     })), [])
     # Additional cloud-init or VM configuration options
     extra_config = optional(map(string), {})

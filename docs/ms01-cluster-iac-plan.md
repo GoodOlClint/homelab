@@ -84,8 +84,8 @@ Placement per the okf doc: **VMs** — infisical (protected), pfsense-test, gith
 - **DoD:** `make apply` from a clean clone (+ SOPS key) converges the whole fleet; second run zero changes; per-service smoke checks pass (DNS resolves, Plex plays with QuickSync transcode, arr stack healthy, monitoring ingesting).
 
 ### WP5 — UniFi network module (ADR 0005)
-- `modules/unifi-network/` in the main project: `unifi_network` resources from the gitignored `network-data/vlans.yaml`, port profiles (node-bond trunks, NAS LAG, corosync access), port overrides + LACP aggregation for the new switch, jumbo MTU on the storage VLAN. Port-to-device assignments in a gitignored bindings file.
-- Scope: the new aggregation switch + migration-touched ports only; full-fabric import is future work.
+- `modules/unifi-network/` in the main project: `unifi_network` resources from the gitignored `network-data/vlans.yaml` (creates the UniFi-only L2 VLANs — corosync 31/32 + ceph 33; dual-managed VLANs referenced via data sources), port profiles (node-bond trunks, NAS LAG, corosync + ceph SFP28 access — ADR 0014), port overrides + LACP aggregation for the new switch, device-level jumbo. Port-to-device assignments in gitignored `network-data/local/unifi-ports.yaml`.
+- Scope: the new aggregation switch + migration-touched ports only; full-fabric import is future work. Gated behind `manage_unifi` (default false) until the switch is adopted. Provider pinned `~> 0.55` (module written against that schema).
 - **DoD:** switch adopted → `terraform apply` produces the complete working switch config with zero hand edits in the controller; re-apply is a no-op; node bonds negotiate LACP; jumbo validated end-to-end.
 
 ### WP6 — Public-repo scrub + guard

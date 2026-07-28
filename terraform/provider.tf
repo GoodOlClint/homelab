@@ -8,8 +8,8 @@ terraform {
       version = "~> 0.78"
     }
     unifi = {
-      source  = "ubiquiti-community/unifi" # Unifi Controller provider for network discovery
-      version = "~> 0.41"
+      source  = "ubiquiti-community/unifi" # Unifi Controller provider (WP5 unifi-network module)
+      version = "~> 0.55"                  # schema-verified for the unifi-network module (vlan/purpose attrs)
     }
     local = {
       source = "hashicorp/local" # Local file provider for SSH keys and outputs

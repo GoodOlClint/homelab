@@ -113,6 +113,12 @@ variable "unifi_site" {
   default     = "default"
 }
 
+variable "manage_unifi" {
+  type        = bool
+  description = "Enable the unifi-network module (WP5). Requires the aggregation switch adopted and network-data/local/unifi-ports.yaml filled."
+  default     = false
+}
+
 variable "ssh_public_key_path" {
   type        = string
   description = "Path to SSH public key file"

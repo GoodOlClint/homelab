@@ -6,6 +6,18 @@ module "network" {
   proxmox_node    = var.virtual_environment_node
 }
 
+# UniFi network module (WP5) — the new aggregation switch + migration-touched
+# config (L2 VLANs corosync/ceph, port profiles, LACP, jumbo). Inert until the
+# switch is adopted: flip manage_unifi=true, with the port bindings filled in
+# network-data/local/unifi-ports.yaml (see unifi-ports.example.yaml).
+module "unifi_network" {
+  source = "./modules/unifi-network"
+  count  = var.manage_unifi ? 1 : 0
+
+  vlans_file_path = "${path.root}/../network-data/vlans.yaml"
+  ports_file_path = "${path.root}/../network-data/local/unifi-ports.yaml"
+}
+
 # All VMs using the shared Proxmox VM module
 module "vms" {
   source = "./modules/proxmox-vm"
