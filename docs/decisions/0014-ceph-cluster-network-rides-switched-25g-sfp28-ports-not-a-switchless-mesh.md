@@ -13,7 +13,9 @@ The mesh carried real costs: FRR + OpenFabric as an extra routed control plane o
 
 ## Decision
 
-Each node's Ceph cluster-network link is **one ConnectX 25G port cabled to an SFP28 port on the aggregation switch**, as an **access/native port on a dedicated unrouted VLAN 33 ("Ceph"), MTU 9000, static IPs** (`<prefix>.33.<node-octet>`). No FRR, no OpenFabric, no loopbacks. The second ConnectX port stays uncabled as a spare.
+Each node's Ceph cluster-network link is **one ConnectX 25G port cabled to an SFP28 port on the aggregation switch**, as an **access/native port on a dedicated unrouted VLAN 21 ("Ceph"), MTU 9000, static IPs** (`<prefix>.21.<node-octet>`). No FRR, no OpenFabric, no loopbacks. The second ConnectX port stays uncabled as a spare.
+
+> **Amended 2026-07-28 (ADR 0017 session):** the Ceph VLAN was renumbered **33 → 21** to sit adjacent to storage VLAN 20 (client access / replication as a numeric pair). Renumber done before anything was cabled or applied; substance of this ADR unchanged.
 
 The ADR-0009 network split is unchanged: Ceph **public** network stays on the 10G storage VLAN 20 (client access for non-25G nodes such as worklab); the **cluster** network (OSD replication) is this switched 25G VLAN, both set at `pveceph init`.
 
@@ -25,8 +27,8 @@ The ADR-0009 network split is unchanged: Ceph **public** network stays on the 10
 
 ## Consequences
 
-- WP2's `proxmox_host` role drops FRR entirely; the ceph link is one static stanza in the interfaces drop-in. VLAN 33 joins `vlans.yaml` as an unrouted, UniFi-only entry (same pattern as corosync 31/32, ADR-0008).
-- WP5's UniFi module gains the Ceph VLAN + an SFP28 access-port profile (native VLAN 33, jumbo) for the three node ports — the whole Ceph network becomes IaC-visible.
+- WP2's `proxmox_host` role drops FRR entirely; the ceph link is one static stanza in the interfaces drop-in. VLAN 21 joins `vlans.yaml` as an unrouted, UniFi-only entry (same pattern as corosync 31/32, ADR-0008).
+- WP5's UniFi module gains the Ceph VLAN + an SFP28 access-port profile (native VLAN 21, jumbo) for the three node ports — the whole Ceph network becomes IaC-visible.
 - Cabling: 3× SFP28 DAC node→switch (not the 3-edge triangle); a 4th 25G node needs only the spare port.
 - A single 25G link (and the switch itself) is now in the Ceph cluster-network failure path; acceptable — cluster-network loss degrades replication, it doesn't take down client I/O, and the spare ConnectX port is the repair path.
 - The plan's hardware row ("switchless mesh, DACs node-to-node") and terraform/hosts comments referencing "the FRR mesh (WP2)" are amended in the same change.

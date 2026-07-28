@@ -12,7 +12,7 @@ WP2 re-homes mgmt from the i226-V install link to the bond and stands up the VIP
 (adding a VLAN 30 IP on the bond here would collide with the install link — ADR-0008).
 
 **It deliberately leaves alone** the i226-V/VLAN 30 install link (carries the API
-session + corosync ring0), the ConnectX 25G ports (Ceph VLAN 33 link, WP2 — ADR 0014), and the second
+session + corosync ring0), the ConnectX 25G ports (Ceph VLAN 21 link, WP2 — ADR 0014), and the second
 i226 (ring1, WP2) — so a re-apply can never drop the link Terraform is talking over.
 
 ## Day-1 bring-up (per node: crete, crete2, then pve on Day-2)

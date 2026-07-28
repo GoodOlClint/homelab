@@ -12,6 +12,7 @@ Defines what makes "rebuild any guest from the latest image" a routine, no-drama
 | Guest OS image policy | **Pinned + deliberately rolled** — images pinned by version/checksum; a bump is an explicit commit; container tags stay `latest` (ADR 0016) |
 | Zero-outage tier | **DNS only** (dual AdGuard + BIND pair, ADR 0003 stands). Every other service tolerates its rebuild window |
 | Observability history | **Preserved across routine rebuilds** — OpenObserve parquet + metadata.sqlite and `/var/lib/uptime-kuma` ride the data-volume pattern. (Cutover still drops OpenObserve history per the plan checklist — preservation begins at first cluster deploy) |
+| Guest networking (added 2026-07-28) | **Single-homed on services VLAN 40** ([ADR 0017](decisions/0017-guests-are-single-homed-on-the-services-vlan-storage-reaches-containers-via-host-bind-mounts.md)): no guest management-VLAN legs; storage via host bind mounts; PBS keeps the sole VLAN 20 leg; squid retired with VLAN 140; Ceph cluster VLAN renumbered 33→21 |
 
 ## State classes
 
@@ -36,7 +37,7 @@ Every guest falls into exactly one class; the matrix below assigns them.
 | proxmox-backup | VM | S | The datastore on the Synology NAS is the asset and survives independently (decided). Config re-provisioned by role; admin creds/tokens regenerate into Infisical `/pbs` + `/shared`. Fingerprint rotates on rebuild → fleet `pbs_client` re-run required (and beware its known always-SUCCESS false positive when verifying) | Backup-window gap only; nothing consumer-facing | Nothing to carry — datastore stays on the NAS; WP0 vzdump insurance unaffected |
 | github-runner | VM | S | None — runners ephemeral, GitHub App creds in Infisical `/github-runner` | CI jobs queue until the runner returns | Nothing |
 | lancache | LXC | — | Cache contents: **accepted loss** (cold cache re-warms) | Zero user-visible — clients fall through to origin | Nothing |
-| squid | LXC | S | CA key/cert in Infisical `/squid` | Proxy clients blip for minutes | Nothing |
+| squid | — | retired | **Retired at cutover (ADR 0017)** — its purpose was transparent interception of the openclaw staging VLAN 140, which is deleted. Role/tag/`/squid` Infisical folder go dormant; lancache continues to cover game caching | n/a | Nothing — not rebuilt |
 | homepage | LXC | S | Config is IaC; tokens in Infisical `/homepage` | Cosmetic | Nothing |
 | mcp | LXC | S | Assumed stateless — **verify at WP4 rebuild time**; promote to V if it holds real state | Minutes | Nothing |
 | minio | LXC | V | Bucket contents on a data volume | Minutes; S3 consumers retry | `mc mirror` out of the old VM → volume (plan, decided) |
