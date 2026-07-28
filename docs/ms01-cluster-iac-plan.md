@@ -65,8 +65,10 @@ New Terraform root **`terraform/hosts/`** with its own state for the host/cluste
 - New `proxmox` inventory group: `crete`, `crete2`, `pve` (replaces the single-host `inventory/proxmox.yaml`); `update-all.yml` and `monitoring_users` (currently hardcoding a single `proxmox_host` IP in `group_vars/all.yml:34`) go per-node.
 - **DoD:** role run twice = zero changes; `pvecm status` quorate; `ceph -s` HEALTH_OK; VIP answers on VLAN 30 and survives killing pveproxy on its holder.
 
-### WP3 — Main project cluster rework
+### WP3 — Main project cluster rework ✅ code landed 2026-07-28 (DoD gates at cutover)
 - Provider bump `~> 0.78` → `~> 0.111`; endpoint → the VIP; per-node `node {}` SSH blocks for file uploads.
+- **Landed 2026-07-28:** pinned images (ADR 0016, `ignore_changes` shields dropped), LXC container support + shared interface/MAC builder, detached data volumes via never-started holder CT (ADR 0015), per-guest `node_name` + `ha` (haresource), SDN zones span `proxmox_nodes`, inventory carries `guest_type`/`pve_node`, vGPU plumbing deleted. Deferred to cutover as **tfvars-only changes**: endpoint → VIP, `primary_disk_storage` → Ceph RBD pool id, `virtual_environment_storage` → CephFS datastore id, `proxmox_nodes` → the three nodes. Per-node `ssh { node {} }` blocks skipped — bpg resolves node addresses via the API, which works over the VIP; add only if file uploads fail at cutover. Note: bpg has **no RBD/CephFS storage-definition resource** — storage defs come from `pveceph pool create --add_storages` / the WP2 role, and the fleet consumes storage IDs as strings.
+- **Remaining live checks (cutover DoD):** clean plan against the 3-node cluster; test LXC + VM per node on Ceph; data-volume guest rebuild preserves contents; cross-VMID CT mount accepted by the API (ADR 0015 fallback: `pvesh`-alloc script).
 - `vm_configurations` schema gains `node_name` (placement) + `ha` (bool); HA resources for Ceph-backed guests; LLM VM pinned to pve, excluded from HA.
 - Storage: default disk storage → Ceph RBD pool (`proxmox_ceph_pool` + storage def); cloud-init snippets → a small CephFS datastore (shared, so snippet upload is node-agnostic).
 - SDN: `nodes = [all three]` (fixes `modules/network/sdn.tf:13`); bridge references updated to the new `vmbr0` model.
@@ -77,6 +79,7 @@ New Terraform root **`terraform/hosts/`** with its own state for the host/cluste
 - **DoD:** `terraform plan` clean against the live 3-node cluster; a test LXC + test VM deploy on each node, land on Ceph, and appear in `vms.yaml` with correct static IPs; a test guest with a data volume rebuilds with the volume's contents intact.
 
 ### WP4 — Fleet rebuild definitions
+**Deliberately NOT pre-written:** swapping `vm-configs.tf` to the cluster fleet before the cluster exists would make any apply against live pve propose destroying production guests (today's replace-all drift is bad enough). The new fleet definitions are written at cutover, when the endpoint already points at the cluster.
 Placement per the okf doc: **VMs** — infisical (protected), pfsense-test, github-runner, proxmox-backup, unifi, LLM (new). **LXCs** — plex (iGPU), adguard ×2, dns ×2 (BIND primary/secondary), lancache, squid, homepage, mcp, minio, doge. **docker-on-LXC** (nesting) — plex-services, openobserve, docker-legacy. **Retired** — nvidia-licensing.
 - DNS redundancy (ADR 0003): the two AdGuard instances get identical IaC config; BIND secondary via zone transfer; instances pinned to different nodes via `node_name`; pfSense DHCP hands out both resolver IPs (manual step this round, documented).
 - DNS-first (ADR 0006): `dns` role templates BIND zone records from the Terraform inventory + node/VIP list — every guest gets a name automatically; AdGuard forwards internal zones to BIND; homepage/monitoring/inter-service configs use names, not IPs.
