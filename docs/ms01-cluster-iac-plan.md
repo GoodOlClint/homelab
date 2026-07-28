@@ -61,6 +61,7 @@ New Terraform root **`terraform/hosts/`** with its own state for the host/cluste
 ### WP2 — Ansible `proxmox_host` role
 - Idempotent `pvecm create`/`add` (skip when already a member), temporary QDevice while 2-node (drop when pve joins).
 - `pveceph install` + MON/MGR/OSD creation (idempotent: check before create), FRR OpenFabric on the 25G mesh, keepalived VIP with `pveproxy` track_script + unicast peers.
+- **Ceph network split (decide at bootstrap — ADR-0009):** `cluster` network (OSD replication) on the **25G mesh**; `public` network (client access) on the **10G fabric**. The switchless 3-node triangle can't extend to a 4th node, so putting the public network on the 10G fabric is what lets a non-mesh node (worklab, later) be a Ceph *client*. Retrofitting this onto a live cluster is painful — set it at `pveceph init` time.
 - New `proxmox` inventory group: `crete`, `crete2`, `pve` (replaces the single-host `inventory/proxmox.yaml`); `update-all.yml` and `monitoring_users` (currently hardcoding a single `proxmox_host` IP in `group_vars/all.yml:34`) go per-node.
 - **DoD:** role run twice = zero changes; `pvecm status` quorate; `ceph -s` HEALTH_OK; VIP answers on VLAN 30 and survives killing pveproxy on its holder.
 
@@ -110,7 +111,7 @@ Placement per the okf doc: **VMs** — infisical (protected), pfsense-test, gith
 
 | When | Work |
 |---|---|
-| Day 0 (today) | WP0 backups (incl. credential-gap verification). Rack + adopt the new SFP+ switch, then **WP5 UniFi apply** configures it (VLANs, port profiles, LACP, jumbo) before cabling. Install 25G NICs + cable mesh DACs + 10G links on the MS-01s (their VMs are disposable — power off freely). Write WP1+WP2 code against the docs. |
+| Day 0 (today) | WP0 backups (incl. credential-gap verification). Rack + adopt the new SFP+ switch (USW-Pro-Aggregation — purchased, awaiting install), then **WP5 UniFi apply** configures it (VLANs, port profiles, LACP, jumbo) before cabling. Install 25G NICs + cable mesh DACs + 10G links on the MS-01s (their VMs are disposable — power off freely). Write WP1+WP2 code against the docs. |
 | Day 1 | Wipe crete/crete2 → answer-file install → `hosts/` apply → `proxmox_host` role → 2-node cluster (+ temp QDevice). Verify DoD gates. |
 | Day 1–2 | `make bootstrap` at the new cluster (adguard + infisical on MS-01 local ZFS interim), `make infisical-seed` from the SOPS export, dns LXC, unifi VM + cloud re-import. Per-service cutover: stop the old VM on pve as each replacement goes live (avoids static-IP conflicts). |
 | Day 2 | Nothing left needed on pve → wipe pve (25G NIC installed, GPU stays), answer-file install, join cluster, drop QDevice, Ceph bootstrap + pool, validate mesh/`HEALTH_OK`. Keepalived VIP up; repoint endpoint at it. |
@@ -143,6 +144,7 @@ Placement per the okf doc: **VMs** — infisical (protected), pfsense-test, gith
 - **pfSense IaC** (ADR 0005): evaluate pfsensible Ansible collection vs a REST-API Terraform provider (needs the pfSense-API package); targets firewall rules, DHCP/resolver options, WireGuard peers. The redundant-DNS DHCP change and any migration-driven rule edits are documented manual steps until then.
 - **Full UniFi fabric under Terraform**: import the Pro-24, Flex, APs, and remaining port profiles (WP6 covers only the new switch + touched ports).
 - **Re-publicizing history**: operator accepted history exposure; if that changes, a git-filter-repo rewrite is the path.
+- **Fold worklab into the cluster** (ADR-0009, amends 0001): at the worklab rebuild, join the NUC 15 Pro as a **non-voting (`quorum_votes: 0`), compute-only** member — corosync on its native I226-V 2.5G (never the Thunderbolt 10G), no Ceph OSDs (Ceph *client* via the WP2 public network), and homelab HA resources restricted to `crete/crete2/pve` so nothing homelab fails over onto it. Driver: pooled capacity + one IaC endpoint for scaling multi-version work labs. Needs, above the cluster: an IaC lab-environment module per product version, SDN-isolated VNets per lab, and templates/linked clones.
 
 ## Open items (not blocking approval)
 
