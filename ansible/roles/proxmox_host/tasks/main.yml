@@ -1,0 +1,10 @@
+---
+# Order matters: network (mgmt re-home + rings + ceph VLAN) must precede the
+# cluster (corosync needs the ring IPs) and Ceph (its cluster network needs the
+# 25G link up), and the VIP comes last (it tracks a working pveproxy).
+
+- ansible.builtin.import_tasks: network.yml
+- ansible.builtin.import_tasks: cluster.yml
+- ansible.builtin.import_tasks: qdevice.yml
+- ansible.builtin.import_tasks: ceph.yml
+- ansible.builtin.import_tasks: keepalived.yml

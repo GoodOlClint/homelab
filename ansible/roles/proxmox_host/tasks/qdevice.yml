@@ -1,0 +1,38 @@
+---
+# Temporary QDevice while the cluster is 2-node (plan: crete+crete2 before pve
+# joins). Needs corosync-qnetd running on the external host (Synology/Pi) —
+# operator-provided, bound as cluster.qdevice_addr. Dropped automatically once
+# the play sees 3+ nodes.
+
+- name: Check for an active QDevice
+  ansible.builtin.command:
+    cmd: pvecm status
+  register: _qdev_status
+  changed_when: false
+
+- name: Install corosync-qdevice
+  ansible.builtin.apt:
+    name: corosync-qdevice
+    state: present
+  when:
+    - groups['proxmox'] | length == 2
+    - proxmox_host_qdevice_addr | length > 0
+
+- name: Set up the QDevice (2-node cluster only)
+  ansible.builtin.command:
+    cmd: "pvecm qdevice setup {{ proxmox_host_qdevice_addr }} -f"
+  run_once: true
+  changed_when: true
+  when:
+    - groups['proxmox'] | length == 2
+    - proxmox_host_qdevice_addr | length > 0
+    - "'Qdevice' not in _qdev_status.stdout"
+
+- name: Remove the QDevice (3rd node has joined)
+  ansible.builtin.command:
+    cmd: pvecm qdevice remove
+  run_once: true
+  changed_when: true
+  when:
+    - groups['proxmox'] | length >= 3
+    - "'Qdevice' in _qdev_status.stdout"

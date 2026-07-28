@@ -1,0 +1,47 @@
+---
+# Re-home mgmt (VLAN 30) from the i226-V install link to the bond, and stand up
+# the corosync ring sub-ifs + the 25G ceph link. This reconfigures the interface
+# carrying THIS SSH session — the ifreload is fire-and-forget async (same lesson
+# as the VPS WireGuard restart: a synchronous task dies with its own session).
+
+- name: Assert the terraform/hosts plane exists (vmbr0 on the bond)
+  ansible.builtin.stat:
+    path: "/sys/class/net/vmbr0"
+  register: _vmbr0
+  failed_when: not _vmbr0.stat.exists
+
+- name: Ensure /etc/network/interfaces sources interfaces.d
+  ansible.builtin.lineinfile:
+    path: /etc/network/interfaces
+    line: "source /etc/network/interfaces.d/*"
+    insertafter: EOF
+
+# The installer wrote the mgmt address + gateway onto the install NIC. Re-home
+# strips it to a manual carrier (VLAN 31 ring0 stays tagged on it); the same
+# address + gateway move to vmbr0.30 in our drop-in. Same IP — no inventory churn.
+- name: Strip the install NIC to a manual carrier in /etc/network/interfaces
+  ansible.builtin.replace:
+    path: /etc/network/interfaces
+    regexp: '(?ms)^iface {{ proxmox_host_node.install_nic }} inet static.*?(?=^\S|\Z)'
+    replace: "iface {{ proxmox_host_node.install_nic }} inet manual\n\n"
+  register: _install_nic_stripped
+
+- name: Deploy proxmox_host interface drop-in (mgmt on bond, rings, mesh)
+  ansible.builtin.template:
+    src: interfaces.j2
+    dest: /etc/network/interfaces.d/proxmox_host
+    mode: "0644"
+  register: _ifaces_dropin
+
+- name: Reload networking (async — survives its own SSH session dropping)
+  ansible.builtin.shell: sleep 2 && ifreload -a
+  async: 60
+  poll: 0
+  changed_when: true
+  when: _install_nic_stripped is changed or _ifaces_dropin is changed
+
+- name: Wait for the host to come back on the re-homed mgmt IP
+  ansible.builtin.wait_for_connection:
+    delay: 5
+    timeout: 120
+  when: _install_nic_stripped is changed or _ifaces_dropin is changed

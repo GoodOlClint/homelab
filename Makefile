@@ -334,7 +334,7 @@ clean-ssh:
 # globally — that would clobber the main project's endpoint from its tfvars).
 # hosts-apply is deliberately INTERACTIVE (no auto-approve): a host-networking apply
 # can drop connectivity, so review the plan and confirm by hand.
-.PHONY: node-iso node-bootstrap hosts-plan hosts-apply
+.PHONY: node-iso node-bootstrap hosts-plan hosts-apply proxmox-hosts
 
 # Bake a node's answer file (+ optional ISO): make node-iso NODE=crete [ISO=/path/pve-9.iso]
 node-iso:
@@ -355,3 +355,9 @@ hosts-apply:
 	@test -n "$(ENDPOINT)" || { echo "ERROR: set ENDPOINT=https://<node-vlan30-ip>:8006/"; exit 1; }
 	@cd terraform/hosts && terraform init -input=false >/dev/null && \
 		TF_VAR_virtual_environment_endpoint="$(ENDPOINT)" terraform apply -input=false
+
+# WP2: cluster plane (pvecm, corosync rings, Ceph, VIP). Day-1: run AFTER
+# hosts-apply. Needs ansible/inventory/proxmox.yaml (see proxmox.example.yml)
+# and the WP2 fields in network-data/local/host-bindings.yaml.
+proxmox-hosts:
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/proxmox.yaml ansible/playbooks/proxmox-hosts.yml $(if $(LIMIT),--limit $(LIMIT),)

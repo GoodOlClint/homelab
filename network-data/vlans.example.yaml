@@ -80,6 +80,48 @@ vlans:
     is_wireguard: false
     managed_by: ["pfsense", "unifi"]
 
+  # Host control-plane VLANs (cluster, WP2) — NOT SDN guest VNETs: no bridge,
+  # no gateway, no DHCP, unrouted L2 (corosync ones are switch-local, ADR-0008).
+  corosync:
+    id: REPLACE_WITH_VLAN_ID
+    name: "Corosync"
+    bridge: null
+    sdn_zone: null
+    description: "Corosync ring0 — dedicated, switch-local, unrouted (ADR-0008)"
+    domain_prefix: "corosync"
+    dhcp_enabled: false
+    client_isolation: false
+    allows_mdns: false
+    is_wireguard: false
+    managed_by: ["unifi"]
+
+  corosync_ring1:
+    id: REPLACE_WITH_VLAN_ID
+    name: "Corosync Ring1"
+    bridge: null
+    sdn_zone: null
+    description: "Corosync ring1 — second distinct subnet for knet (ADR-0008)"
+    domain_prefix: "corosync-ring1"
+    dhcp_enabled: false
+    client_isolation: false
+    allows_mdns: false
+    is_wireguard: false
+    managed_by: ["unifi"]
+
+  ceph:
+    id: REPLACE_WITH_VLAN_ID
+    name: "Ceph"
+    bridge: null
+    sdn_zone: null
+    mtu: 9000
+    description: "Ceph cluster network — 25G SFP28 switch ports, jumbo, unrouted (ADR-0014)"
+    domain_prefix: "ceph"
+    dhcp_enabled: false
+    client_isolation: false
+    allows_mdns: false
+    is_wireguard: false
+    managed_by: ["unifi"]
+
   infrastructure:
     id: REPLACE_WITH_VLAN_ID
     name: "Infrastructure"

@@ -1,0 +1,52 @@
+---
+# Idempotent pvecm create/add. The FIRST host in the proxmox group creates the
+# cluster; the rest join it over ring0. Membership check = corosync.conf exists
+# in pmxcfs (a joined node always has it).
+
+- name: Check cluster membership
+  ansible.builtin.stat:
+    path: /etc/pve/corosync.conf
+  register: _corosync_conf
+
+- name: Create the cluster on the first node
+  ansible.builtin.command:
+    cmd: >-
+      pvecm create {{ proxmox_host_cluster_name }}
+      --link0 {{ proxmox_host_ring0_ip }}
+      --link1 {{ proxmox_host_ring1_ip }}
+  changed_when: true
+  when:
+    - inventory_hostname == groups['proxmox'][0]
+    - not _corosync_conf.stat.exists
+
+- name: Wait for pmxcfs quorum on the first node
+  ansible.builtin.command:
+    cmd: pvecm status
+  register: _pvecm_status
+  until: _pvecm_status.rc == 0
+  retries: 12
+  delay: 5
+  changed_when: false
+  when: inventory_hostname == groups['proxmox'][0]
+
+# Joining reconfigures pmxcfs and needs the creator reachable — join serially
+# (throttle 1) so two nodes never race the join.
+- name: Join the cluster
+  ansible.builtin.command:
+    cmd: >-
+      pvecm add {{ hostvars[groups['proxmox'][0]].proxmox_host_ring0_ip }}
+      --link0 {{ proxmox_host_ring0_ip }}
+      --link1 {{ proxmox_host_ring1_ip }}
+      --use_ssh
+  changed_when: true
+  throttle: 1
+  when:
+    - inventory_hostname != groups['proxmox'][0]
+    - not _corosync_conf.stat.exists
+
+- name: Verify quorum
+  ansible.builtin.command:
+    cmd: pvecm status
+  register: _quorum
+  changed_when: false
+  failed_when: _quorum.stdout is not search('Quorate:\\s+Yes')

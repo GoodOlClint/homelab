@@ -1,0 +1,27 @@
+# {{ ansible_managed }} — proxmox_host role (WP2): mgmt VIP on VLAN {{ proxmox_host_mgmt_vlan }}
+vrrp_script chk_pveproxy {
+    script "/usr/local/bin/check_pveproxy.sh"
+    interval 2
+    fall 2
+    rise 2
+}
+
+vrrp_instance PVE_VIP {
+    state {{ 'MASTER' if inventory_hostname == groups['proxmox'][0] else 'BACKUP' }}
+    interface vmbr0.{{ proxmox_host_mgmt_vlan }}
+    virtual_router_id {{ proxmox_host_vrrp_router_id }}
+    priority {{ proxmox_host_vrrp_base_priority - (groups['proxmox'].index(inventory_hostname) * 10) }}
+    advert_int 1
+    unicast_src_ip {{ proxmox_host_mgmt_ip }}
+    unicast_peer {
+{% for host in groups['proxmox'] if host != inventory_hostname %}
+        {{ hostvars[host].ansible_host }}
+{% endfor %}
+    }
+    virtual_ipaddress {
+        {{ proxmox_host_vip_cidr }}
+    }
+    track_script {
+        chk_pveproxy
+    }
+}

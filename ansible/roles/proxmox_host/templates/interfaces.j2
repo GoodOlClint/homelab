@@ -1,0 +1,25 @@
+# {{ ansible_managed }} — proxmox_host role (WP2). Host planes NOT owned by
+# terraform/hosts: mgmt re-home, corosync rings, 25G ceph link.
+
+# Host mgmt (VLAN {{ proxmox_host_mgmt_vlan }}) re-homed onto the bond (ADR-0008)
+auto vmbr0.{{ proxmox_host_mgmt_vlan }}
+iface vmbr0.{{ proxmox_host_mgmt_vlan }} inet static
+    address {{ proxmox_host_mgmt_cidr }}
+    gateway {{ proxmox_host_gateway }}
+
+# Corosync ring0 — VLAN {{ proxmox_host_ring0_vlan }} tagged on the install NIC (switch-local, ADR-0008)
+auto {{ proxmox_host_node.install_nic }}.{{ proxmox_host_ring0_vlan }}
+iface {{ proxmox_host_node.install_nic }}.{{ proxmox_host_ring0_vlan }} inet static
+    address {{ proxmox_host_ring0_ip }}/24
+
+# Corosync ring1 — VLAN {{ proxmox_host_ring1_vlan }} on {{ proxmox_host_node.ring1_nic }}
+auto {{ proxmox_host_node.ring1_nic }}.{{ proxmox_host_ring1_vlan }}
+iface {{ proxmox_host_node.ring1_nic }}.{{ proxmox_host_ring1_vlan }} inet static
+    address {{ proxmox_host_ring1_ip }}/24
+
+# Ceph cluster network — 25G SFP28 to the aggregation switch, access/native
+# VLAN {{ proxmox_host_ceph_vlan }} (ADR-0014), jumbo. No gateway: unrouted L2.
+auto {{ proxmox_host_node.ceph_nic }}
+iface {{ proxmox_host_node.ceph_nic }} inet static
+    address {{ proxmox_host_ceph_ip }}/24
+    mtu {{ proxmox_host_ceph_mtu }}

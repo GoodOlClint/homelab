@@ -1,0 +1,41 @@
+---
+# WP2 — Proxmox host/cluster plane (pvecm, corosync rings, Ceph, VIP).
+# Site bindings come from network-data/local/host-bindings.yaml (loaded by the
+# playbook as `host_bindings`); addressing derives from vlans.yaml (`network_data`).
+
+proxmox_host_cluster_name: "homelab"
+
+# VLAN scheme (structural — actual prefix comes from vlans.yaml at runtime)
+proxmox_host_mgmt_vlan: "{{ network_data.vlans.infrastructure.id }}"
+proxmox_host_ring0_vlan: "{{ network_data.vlans.corosync.id }}"
+proxmox_host_ring1_vlan: "{{ network_data.vlans.corosync_ring1.id }}"
+proxmox_host_storage_vlan: "{{ network_data.vlans.storage.id }}"
+# Ceph cluster network: switched 25G — SFP28 ports on the aggregation switch,
+# access/native VLAN on each node's ConnectX port (ADR-0014; replaces the FRR mesh).
+proxmox_host_ceph_vlan: "{{ network_data.vlans.ceph.id }}"
+proxmox_host_ceph_mtu: "{{ network_data.vlans.ceph.mtu | default(9000) }}"
+
+# Ceph network split (ADR-0009, decided at pveceph init — retrofit is painful):
+# public (client access) on the 10G storage VLAN so non-25G nodes can be clients;
+# cluster (OSD replication) on the switched 25G ceph VLAN.
+proxmox_host_ceph_public_network: "{{ network_data.ipv4_prefix }}.{{ proxmox_host_storage_vlan }}.0/24"
+proxmox_host_ceph_cluster_network: "{{ network_data.ipv4_prefix }}.{{ proxmox_host_ceph_vlan }}.0/24"
+proxmox_host_mgr_count: 2
+
+# Cluster-wide bindings
+proxmox_host_vip_cidr: "{{ host_bindings.cluster.vip_cidr }}"
+proxmox_host_qdevice_addr: "{{ host_bindings.cluster.qdevice_addr | default('') }}"
+
+# keepalived
+proxmox_host_vrrp_router_id: 51
+proxmox_host_vrrp_base_priority: 150
+
+# Per-node derived facts (bindings + install-octet scheme)
+proxmox_host_node: "{{ host_bindings.nodes[inventory_hostname] }}"
+proxmox_host_octet: "{{ proxmox_host_node.install_cidr | regex_replace('/.*', '') | split('.') | last }}"
+proxmox_host_mgmt_cidr: "{{ proxmox_host_node.install_cidr }}"
+proxmox_host_mgmt_ip: "{{ proxmox_host_node.install_cidr | regex_replace('/.*', '') }}"
+proxmox_host_gateway: "{{ proxmox_host_node.install_gateway }}"
+proxmox_host_ring0_ip: "{{ network_data.ipv4_prefix }}.{{ proxmox_host_ring0_vlan }}.{{ proxmox_host_octet }}"
+proxmox_host_ring1_ip: "{{ network_data.ipv4_prefix }}.{{ proxmox_host_ring1_vlan }}.{{ proxmox_host_octet }}"
+proxmox_host_ceph_ip: "{{ network_data.ipv4_prefix }}.{{ proxmox_host_ceph_vlan }}.{{ proxmox_host_octet }}"

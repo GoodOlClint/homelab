@@ -1,0 +1,25 @@
+---
+# WP2 — Proxmox host/cluster plane (pvecm, corosync rings, Ceph, VIP).
+# Day-1 order: answer-file install → `make hosts-apply` (bond/vmbr0/VLAN 20) →
+# THIS playbook. It runs before any guest exists, so it must not depend on
+# Infisical — site data comes only from vlans.yaml + host-bindings.yaml.
+# Inventory: ansible/inventory/proxmox.yaml (see proxmox.example.yml — the
+# first host in the group creates the cluster).
+
+- name: Proxmox cluster hosts
+  hosts: proxmox
+  become: true
+  pre_tasks:
+    - name: Load VLAN definitions
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../../network-data/vlans.yaml"
+        name: network_data
+      tags: [always]
+
+    - name: Load host bindings
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../../network-data/local/host-bindings.yaml"
+        name: host_bindings
+      tags: [always]
+  roles:
+    - proxmox_host

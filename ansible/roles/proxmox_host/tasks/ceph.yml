@@ -1,0 +1,56 @@
+---
+# Ceph bootstrap — install, init with the network split (ADR-0009: public on the
+# 10G storage VLAN so non-25G nodes can be clients; cluster on the switched 25G
+# ceph VLAN, ADR-0014 — set at init time, retrofit is painful), then MON/MGR/OSD
+# idempotently. The pool + storage definitions are Terraform (WP3), not this role.
+
+- name: Install Ceph packages
+  ansible.builtin.command:
+    cmd: pveceph install --repository no-subscription
+    creates: /usr/bin/ceph-mon
+
+- name: Initialize Ceph with the public/cluster network split
+  ansible.builtin.command:
+    cmd: >-
+      pveceph init
+      --network {{ proxmox_host_ceph_public_network }}
+      --cluster-network {{ proxmox_host_ceph_cluster_network }}
+    creates: /etc/pve/ceph.conf
+  run_once: true
+
+- name: Create MON (per node)
+  ansible.builtin.command:
+    cmd: pveceph mon create
+    creates: "/var/lib/ceph/mon/ceph-{{ inventory_hostname }}"
+  throttle: 1
+
+- name: Create MGR (first {{ proxmox_host_mgr_count }} nodes)
+  ansible.builtin.command:
+    cmd: pveceph mgr create
+    creates: "/var/lib/ceph/mgr/ceph-{{ inventory_hostname }}"
+  when: groups['proxmox'].index(inventory_hostname) < proxmox_host_mgr_count | int
+
+- name: Check existing OSD devices
+  ansible.builtin.command:
+    cmd: "ceph-volume lvm list {{ item }}"
+  loop: "{{ proxmox_host_node.osd_disks | default([]) }}"
+  register: _osd_check
+  changed_when: false
+  failed_when: false
+
+- name: Create OSDs
+  ansible.builtin.command:
+    cmd: "pveceph osd create {{ item.item }}"
+  changed_when: true
+  loop: "{{ _osd_check.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: item.rc != 0
+
+- name: Verify Ceph health
+  ansible.builtin.command:
+    cmd: ceph health
+  register: _ceph_health
+  changed_when: false
+  run_once: true
+  failed_when: "'HEALTH_ERR' in _ceph_health.stdout"

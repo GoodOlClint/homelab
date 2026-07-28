@@ -23,7 +23,7 @@ variable "virtual_environment_password" {
 #     ls -1 /sys/class/net | while read n; do
 #       ethtool -i "$n" 2>/dev/null | grep -q i40e && echo "$n"; done
 #   The ConnectX 25G ports and the second i226 (ring1) are intentionally left out
-#   here — they belong to the FRR mesh + corosync ring1 (WP2), not this bond.
+#   here — they belong to the Ceph VLAN 33 link + corosync ring1 (WP2), not this bond.
 #
 # storage_ip: the host's VLAN 20 (jumbo) IP on the bond — the only host IP this
 #   root provisions. No gateway on it: the host's default route stays on the

@@ -2,7 +2,7 @@
 # mgmt link. This project owns the X710 bond → VLAN-aware vmbr0 → the storage VLAN
 # interface. It deliberately does NOT touch:
 #   - the i226-V / VLAN 30 install+mgmt link (carries the API session)
-#   - the ConnectX 25G ports (FRR OpenFabric mesh, WP2)
+#   - the ConnectX 25G ports (switched Ceph VLAN 33 link, WP2 — ADR 0014)
 #   - the i226 corosync VLANs 31/32 (WP2)
 # so a re-apply can never drop the interface Terraform is talking over.
 #

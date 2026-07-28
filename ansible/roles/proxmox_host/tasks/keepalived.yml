@@ -1,0 +1,28 @@
+---
+# keepalived VRRP VIP on VLAN 30 (ADR-0008) — the stable Terraform/Ansible
+# endpoint. Tracks pveproxy actually answering (not just the node being up);
+# unicast peers because VRRP multicast is unreliable across VLAN churn.
+
+- name: Install keepalived
+  ansible.builtin.apt:
+    name: keepalived
+    state: present
+
+- name: Deploy pveproxy track script
+  ansible.builtin.copy:
+    src: check_pveproxy.sh
+    dest: /usr/local/bin/check_pveproxy.sh
+    mode: "0755"
+
+- name: Deploy keepalived.conf
+  ansible.builtin.template:
+    src: keepalived.conf.j2
+    dest: /etc/keepalived/keepalived.conf
+    mode: "0644"
+  notify: Reload keepalived
+
+- name: Enable and start keepalived
+  ansible.builtin.systemd:
+    name: keepalived
+    enabled: true
+    state: started

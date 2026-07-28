@@ -1,4 +1,4 @@
-# Per-node install bindings for scripts/bake-answer.sh.
+# Per-node install bindings for scripts/bake-answer.sh + the WP2 proxmox_host role.
 # Copy to network-data/local/host-bindings.yaml (gitignored) and fill in real values.
 # These are site bindings (MACs, IPs, domain) — kept out of the public repo.
 #
@@ -9,6 +9,28 @@
 #   root_ssh_key    : operator SSH public key (goes into the installed root account).
 #   boot_disks      : pve ONLY — the two 980 PRO 500G device names (boot mirror).
 #                     Omit for crete/crete2 (their template hard-codes both 1TB NVMe).
+#
+# WP2 (proxmox_host role) fields — the nicN names are only known AFTER the
+# answer-file install pins them (see terraform/hosts/README.md):
+#   install_nic : pinned nicN name of the install NIC (carries VLAN 31 ring0 tagged).
+#   ring1_nic   : carrier for the VLAN 32 ring1 sub-if — the i226-LM nicN name on
+#                 MS-01s; "vmbr0" on pve (single copper port, ring1 rides the bond).
+#   ceph_nic    : the ConnectX 25G port cabled to an SFP28 switch port — Ceph
+#                 cluster network, access/native VLAN 33, jumbo (ADR-0014).
+#                 The second ConnectX port stays uncabled (spare).
+#   osd_disks   : whole-disk devices for Ceph OSDs (e.g. /dev/nvme1n1). NOT the boot
+#                 disks. Empty list = no OSDs on this node.
+# Per-node IPs on rings/ceph derive from the node's install_cidr last octet:
+#   ring0 = <prefix>.31.<octet>, ring1 = <prefix>.32.<octet>, ceph = <prefix>.33.<octet>.
+#
+# cluster : cluster-wide WP2 bindings.
+#   vip_cidr     : keepalived VIP on VLAN 30 (the Terraform/Ansible endpoint, ADR-0008).
+#   qdevice_addr : optional — external qnetd host (Synology/Pi) for the temporary
+#                  2-node QDevice. Empty/absent = skip QDevice setup.
+
+cluster:
+  vip_cidr: "172.16.30.100/24"
+  qdevice_addr: ""
 
 nodes:
   crete:
@@ -18,6 +40,10 @@ nodes:
     install_cidr: "172.16.30.103/24"
     install_gateway: "172.16.30.1"
     root_ssh_key: "ssh-ed25519 AAAA... operator@example"
+    install_nic: "nic2"
+    ring1_nic: "nic3"
+    ceph_nic: "nic4"
+    osd_disks: ["/dev/nvme1n1"]
 
   crete2:
     fqdn: "crete2.example.internal"
@@ -26,6 +52,10 @@ nodes:
     install_cidr: "172.16.30.106/24"
     install_gateway: "172.16.30.1"
     root_ssh_key: "ssh-ed25519 AAAA... operator@example"
+    install_nic: "nic2"
+    ring1_nic: "nic3"
+    ceph_nic: "nic4"
+    osd_disks: ["/dev/nvme1n1"]
 
   pve:
     fqdn: "pve.example.internal"
@@ -35,3 +65,7 @@ nodes:
     install_gateway: "172.16.30.1"
     root_ssh_key: "ssh-ed25519 AAAA... operator@example"
     boot_disks: ["nvme0n1", "nvme2n1"] # the two 980 PRO 500G — VERIFY device names at install
+    install_nic: "nic2"
+    ring1_nic: "vmbr0" # single copper port — ring1 rides the bond (VLAN 32 sub-if)
+    ceph_nic: "nic4"
+    osd_disks: ["/dev/nvme1n1", "/dev/nvme3n1"] # the two 990 PRO 2TB — VERIFY at install
