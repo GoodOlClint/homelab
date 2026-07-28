@@ -5,7 +5,7 @@ terraform {
   required_providers {
     proxmox = {
       source  = "bpg/proxmox" # Proxmox VE provider for VM management
-      version = "~> 0.78"
+      version = ">= 0.78"
     }
     local = {
       source = "hashicorp/local" # Local file provider for SSH keys and outputs

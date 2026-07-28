@@ -361,3 +361,16 @@ hosts-apply:
 # and the WP2 fields in network-data/local/host-bindings.yaml.
 proxmox-hosts:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/proxmox.yaml ansible/playbooks/proxmox-hosts.yml $(if $(LIMIT),--limit $(LIMIT),)
+
+# === UniFi plane — terraform/unifi/ (WP5, ADR 0005) ============================
+# Separate root: the unifi provider connects to the controller at plan time, so
+# it must never sit in the fleet project. Day-0: adopt the switch, fill
+# network-data/local/unifi-ports.yaml + terraform/unifi/vars.auto.tfvars, then
+# plan/apply. TF_VAR_unifi_password comes from bootstrap.sops.yml (top of file).
+.PHONY: unifi-plan unifi-apply
+unifi-plan:
+	@cd terraform/unifi && terraform init -input=false >/dev/null && terraform plan -no-color -input=false
+
+# Interactive confirm (like hosts-apply): switch-port changes can cut off nodes.
+unifi-apply:
+	@cd terraform/unifi && terraform init -input=false >/dev/null && terraform apply -input=false

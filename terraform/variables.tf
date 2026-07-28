@@ -90,35 +90,6 @@ variable "secondary_disk_storage" {
   default     = "iscsi-hdd-lvm"
 }
 
-# Unifi Controller Configuration
-variable "unifi_username" {
-  type        = string
-  description = "Username for Unifi Controller API access"
-}
-
-variable "unifi_password" {
-  type        = string
-  description = "Password for Unifi Controller API access"
-  sensitive   = true
-}
-
-variable "unifi_api_url" {
-  type        = string
-  description = "URL for Unifi Controller API (e.g., https://unifi.example.com:8443)"
-}
-
-variable "unifi_site" {
-  type        = string
-  description = "Unifi site name (default: 'default')"
-  default     = "default"
-}
-
-variable "manage_unifi" {
-  type        = bool
-  description = "Enable the unifi-network module (WP5). Requires the aggregation switch adopted and network-data/local/unifi-ports.yaml filled."
-  default     = false
-}
-
 variable "ssh_public_key_path" {
   type        = string
   description = "Path to SSH public key file"

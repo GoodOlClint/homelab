@@ -5,11 +5,7 @@ terraform {
   required_providers {
     proxmox = {
       source  = "bpg/proxmox" # Proxmox VE provider for VM management
-      version = "~> 0.78"
-    }
-    unifi = {
-      source  = "ubiquiti-community/unifi" # Unifi Controller provider (WP5 unifi-network module)
-      version = "~> 0.55"                  # schema-verified for the unifi-network module (vlan/purpose attrs)
+      version = "~> 0.111"    # WP3 floor: LXC container support + cluster features
     }
     local = {
       source = "hashicorp/local" # Local file provider for SSH keys and outputs
@@ -37,16 +33,11 @@ provider "proxmox" {
   }
 }
 
-# Unifi Controller provider configuration
-provider "unifi" {
-  username = var.unifi_username
-  password = var.unifi_password
-  api_url  = var.unifi_api_url
-  site     = var.unifi_site
-
-  # Allow unverified TLS for local controllers
-  allow_insecure = true
-}
+# UniFi lives in the SEPARATE terraform/unifi/ root (WP5): provider 0.55
+# eagerly connects to the controller at plan time even with zero resources,
+# which would break every routine fleet plan. Same split rationale as
+# terraform/hosts/ (ADR-0002): a rarely-changing plane must not hold the
+# fleet's plan hostage.
 
 # Vultr provider configuration (VPS relay)
 provider "vultr" {
