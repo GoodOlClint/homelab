@@ -104,8 +104,17 @@ source s_network_tcp {
 # Parsers
 # =============================================================================
 
-# RFC 5424 parser — for pfSense, VMs, Docker (standards-compliant sources)
-# Messages that don't conform to RFC 5424 are dropped from the log path.
+# RFC 5424 parser — for pfSense, VMs, Docker (standards-compliant sources).
+#
+# NOT strict, despite flags(syslog-protocol). Verified 2026-07-30: this parser
+# does NOT drop non-conforming messages, it falls back to RFC 3164 and accepts
+# them. Bare printk loses its first token to the tag field; a real RFC 3164
+# message parses fine but its timestamp carries no timezone and is read as
+# receiver-local, so a UTC sender lands hours in the future (see CLAUDE.md).
+# The earlier "non-conforming messages are dropped" comment here was wrong and
+# led to a netconsole design that routed on parse failure — which never fires.
+# Senders we control must emit RFC 5424; it is the only format that carries a
+# timezone and survives this parser unambiguously.
 parser p_rfc5424 {
     syslog-parser(flags(syslog-protocol));
 };
