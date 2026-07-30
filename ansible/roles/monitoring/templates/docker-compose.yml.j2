@@ -263,6 +263,7 @@ services:
     ports:
       - "5514:5514/udp"  # Syslog UDP
       - "5514:5514/tcp"  # Syslog TCP
+      - "5515:5515/udp"  # Host netconsole (raw kernel printk, never parsed)
       - "6514:6514/tcp"  # Syslog TLS
     env_file:
       - /etc/infisical/secrets/monitoring.env

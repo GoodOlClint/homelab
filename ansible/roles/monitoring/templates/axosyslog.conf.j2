@@ -15,10 +15,16 @@
 #   - VM rsyslog clients: TCP 5514, RFC 5424 via RSYSLOG_SyslogProtocol23Format
 #   - pfSense firewall:   UDP 5514, RFC 5424 (Status → System Logs → Settings → Log Message Format → syslog)
 #   - Docker syslog:      TCP 5514, RFC 5424 via Docker syslog driver
+#   - netconsole:         UDP 5515 (DEDICATED PORT), raw kernel printk, never parsed
+#                         Senders: PVE nodes (systemd-loaded netconsole module) and
+#                         UniFi devices (controller `syslog.netconsole_*` setting).
+#                         UniFi treats netconsole as a destination separate from its
+#                         remote syslog — point the latter at 5514, never at 5515.
 #
 # OpenObserve Streams:
-#   - firewall: pfSense filterlog with parsed CSV fields (action, IPs, ports, protocol)
-#   - syslog:   Everything else (VM system logs, Docker containers)
+#   - firewall:   pfSense filterlog with parsed CSV fields (action, IPs, ports, protocol)
+#   - syslog:     Everything else arriving on 5514 (VM system logs, Docker containers)
+#   - netconsole: Everything arriving on 5515, verbatim
 #
 # External Device Configuration (manual — not managed by Ansible):
 #
@@ -59,6 +65,22 @@ source s_network_udp {
     network(
         transport("udp")
         port(5514)
+        flags(no-parse)
+    );
+};
+
+# Host netconsole — DEDICATED port, deliberately not shared with 5514.
+#
+# netconsole emits bare printk text with no PRI and no RFC 5424 framing. It cannot
+# share the 5514 sources: syslog-parser() does NOT reject unframed text, it parses
+# it leniently as RFC 3164 and consumes the first token as the program tag. Verified
+# 2026-07-30 — "nvme nvme0: Removing after probe failure" arrived in the syslog
+# stream as "nvme0: Removing after probe failure", first word eaten. Routing by
+# parse failure is therefore impossible; the port IS the discriminator.
+source s_netconsole {
+    network(
+        transport("udp")
+        port(5515)
         flags(no-parse)
     );
 };
@@ -175,6 +197,28 @@ destination d_openobserve_syslog {
     );
 };
 
+# Host netconsole → "netconsole" stream.
+#
+# This is the only log path that survives a host losing its root disk: netconsole
+# transmits from kernel context over UDP, needing neither the filesystem nor any
+# userspace daemon. A host that dies with its journal on the dead disk still
+# reports here. Motivating incident: worklab 2026-07-27 (see WP2 in
+# docs/ms01-cluster-iac-plan.md).
+#
+# No --scope rfc5424: nothing was parsed, so there are no syslog fields to scope
+# over. ${SOURCEIP} is the only host identifier available.
+destination d_openobserve_netconsole {
+    openobserve-log(
+        url("http://openobserve")
+        port(5080)
+        organization("default")
+        stream("netconsole")
+        user("{{ openobserve_root_user_email }}")
+        password("`openobserve_root_user_pass`")
+        record("--exclude DATE --pair @timestamp=${ISODATE} --pair host=${SOURCEIP} --pair message=${MESSAGE}")
+    );
+};
+
 # =============================================================================
 # Log Routing — junction with channels for isolated parsing per source
 #
@@ -185,7 +229,10 @@ destination d_openobserve_syslog {
 #
 # Channel order:
 #   1. pfSense:  p_rfc5424 → f_pfsense → common csv → v4/v6 csv → firewall stream
-#   2. Catch-all: p_rfc5424 → syslog stream (VMs, Docker)
+#   2. RFC 5424: p_rfc5424 → syslog stream (VMs, Docker)
+#
+# netconsole is NOT in this junction — it has its own source and log path below,
+# because it cannot be discriminated by parse failure (see s_netconsole).
 # =============================================================================
 
 log {
@@ -211,7 +258,16 @@ log {
             destination(d_openobserve_syslog);
             flags(final);
         };
+
     };
 
     flags(flow-control);
+};
+
+# netconsole: separate path, no parser, no junction — raw line straight through.
+# No flow-control: netconsole is fire-and-forget UDP from kernel context with no
+# retransmit, so back-pressure here would buy nothing and could stall the reader.
+log {
+    source(s_netconsole);
+    destination(d_openobserve_netconsole);
 };
