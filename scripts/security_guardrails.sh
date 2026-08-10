@@ -4,8 +4,11 @@ set -euo pipefail
 MODE="staged"
 RANGE=""
 
-PROTECTED_CORE_PATH_REGEX='(^|/)(ansible/group_vars/all\.yml|terraform/(infrastructure|services)/terraform\.tfstate(\.backup)?|ansible/inventory/vms\.yaml)$'
-PROTECTED_TFVARS_REGEX='(^|/)terraform/(infrastructure|services)/vars\.auto\.tfvars$'
+# Paths match the CONSOLIDATED terraform layout (single root + hosts/ + unifi/);
+# the pre-2026-02 infrastructure/services split is gone. nodes.auto.tfvars carries
+# per-node MAC/IP/root-hash bindings and is protected like state.
+PROTECTED_CORE_PATH_REGEX='(^|/)(ansible/group_vars/all\.yml|terraform/(hosts/|unifi/)?terraform\.tfstate(\.backup)?|ansible/inventory/vms\.yaml)$'
+PROTECTED_TFVARS_REGEX='(^|/)terraform/((hosts/|unifi/)?vars\.auto\.tfvars|hosts/nodes\.auto\.tfvars)$'
 ALLOW_TFVARS_MIGRATION="${GUARDRAILS_ALLOW_TFVARS_EDIT:-0}"
 
 while [[ $# -gt 0 ]]; do
@@ -62,8 +65,14 @@ fi
 # vs binding split). Scans ADDED lines only, so legacy context never blocks a
 # commit. Allowlisted: example files (placeholder addressing) and the generic
 # supernet literals used in firewall/ACL config.
-LEAK_EXCLUDE_REGEX='(example|\.gitignore$)'
+# Exclusion anchored to the basename: only files NAMED *example* are exempt,
+# not any path that happens to contain the substring somewhere.
+LEAK_EXCLUDE_REGEX='(^|/)[^/]*example[^/]*$|\.gitignore$'
 RFC1918_REGEX='(^|[^0-9.])(10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|172\.(1[6-9]|2[0-9]|3[01])\.[0-9]{1,3}\.[0-9]{1,3}|192\.168\.[0-9]{1,3}\.[0-9]{1,3})'
+# IPv6 ULA prefixes (fd00::/8) are site bindings too (ADR 0010 derives them);
+# MACs identify real hardware (terraform builds them from format strings, never literals).
+ULA_REGEX='(^|[^0-9a-fA-F:])fd[0-9a-fA-F]{2}:[0-9a-fA-F:]+'
+MAC_REGEX='([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}'
 SUPERNET_ALLOW='10\.0\.0\.0/8|172\.16\.0\.0/12|192\.168\.0\.0/16'
 INTERNAL_DOMAIN=""
 if [[ -f network-data/vlans.yaml ]]; then
@@ -84,6 +93,10 @@ while IFS= read -r f; do
   [[ -z "$f" ]] && continue
   [[ "$f" =~ $LEAK_EXCLUDE_REGEX ]] && continue
   hits=$(added_lines "$f" | grep -E "$RFC1918_REGEX" | grep -vE "$SUPERNET_ALLOW" || true)
+  v6hits=$(added_lines "$f" | grep -E "$ULA_REGEX" | grep -vF 'fd00::/8' || true)
+  if [[ -n "$v6hits" ]]; then hits="${hits:+$hits$'\n'}$v6hits"; fi
+  machits=$(added_lines "$f" | grep -E "$MAC_REGEX" || true)
+  if [[ -n "$machits" ]]; then hits="${hits:+$hits$'\n'}$machits"; fi
   if [[ -n "$INTERNAL_DOMAIN" ]]; then
     dhits=$(added_lines "$f" | grep -F "$INTERNAL_DOMAIN" || true)
     if [[ -n "$dhits" ]]; then hits="${hits:+$hits$'\n'}$dhits"; fi
