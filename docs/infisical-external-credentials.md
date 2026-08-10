@@ -26,6 +26,8 @@
 | `plex_services/cloudflared_tunnel_token` | Cloudflare Zero Trust → tunnel |
 | `plex_services/usenet_express_username` / `_password` | UsenetExpress account |
 | `plex_services/usenet_newshosting_username` / `_password` | Newshosting account |
+| `plex_services/usenet_eweka_username` / `_password` | Eweka account |
+| `plex_services/usenet_frugal_username` / `_password` | Frugal Usenet account (main + bonus server share it) |
 | `plex_services/nzbgeek_api_key` | NZBgeek profile |
 | `plex_services/nzbplanet_api_key` | NZBplanet profile |
 | `plex_services/opensubtitlescom_username` / `_password` | opensubtitles.com account |
