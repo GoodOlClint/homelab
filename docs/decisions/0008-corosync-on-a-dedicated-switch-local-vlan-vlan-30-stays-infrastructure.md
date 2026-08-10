@@ -1,6 +1,6 @@
 # ADR 0008 — Corosync on dedicated switch-local VLANs; VLAN 30 stays Infrastructure
 
-- **Status:** Proposed
+- **Status:** Superseded by [ADR 0019](0019-corosync-moves-onto-the-shared-48-port-access-switch-trading-physical-isolation-for-consolidation.md) — the dedicated-switch model (VLAN 31/32 isolation itself) still holds; only the physical switch they live on changed
 - **Date:** 2026-07-15
 - **Deciders:** operator + agent
 - **Context source:** ~/okf/brainstorm/ms01-cluster-network.md · docs/ms01-cluster-iac-plan.md (WP1/WP2) · session 2026-07-15 network-design thread

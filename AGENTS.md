@@ -1,4 +1,4 @@
-# Claude Code Guidelines — Homelab Ansible/Terraform Repo
+# Codex Guidelines — Homelab Ansible/Terraform Repo
 
 ## Repo Overview
 
@@ -254,8 +254,8 @@ make ansible-services TAGS=plex,homepage  # plex + homepage plays
 - Do NOT update README for internal refactors that don't affect how a user operates the repo
 - If you're unsure whether a change warrants a README update, err on the side of updating it
 
-### CLAUDE.md
-- Update `CLAUDE.md` any time you establish a new convention, discover a new gotcha, or
+### AGENTS.md
+- Update `AGENTS.md` any time you establish a new convention, discover a new gotcha, or
   resolve one of the Known Inconsistencies
 - When a Known Inconsistency is resolved, move it to a `## Resolved` subsection with a
   note on what changed — don't silently delete it
@@ -267,7 +267,7 @@ make ansible-services TAGS=plex,homepage  # plex + homepage plays
 - After each logical unit of work is complete and verified — not mid-task
 - After any change that touches more than one file
 - Before running destructive operations (`make rebuild`, `make clean`, terraform destroy)
-- After updating CLAUDE.md or README.md
+- After updating AGENTS.md or README.md
 - Never commit in the middle of a multi-phase task — complete the phase first
 
 ### Commit message format
