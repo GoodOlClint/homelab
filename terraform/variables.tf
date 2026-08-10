@@ -192,3 +192,18 @@ variable "cloudflare_zone_id" {
   type        = string
   description = "Cloudflare zone ID for clintflix.tv"
 }
+
+# Which plane carries SSH/Ansible access to guests (audit 2026-08-10 / ADR 0017).
+# "management" = vlan10 IPs (the live dual-homed fleet). Flip to "services" in
+# vars.auto.tfvars at cutover, when guests are single-homed on the services VLAN
+# and vlan10 has zero guests — ansible_host then resolves to the services IP.
+variable "guest_access_plane" {
+  type        = string
+  description = "Inventory access plane for ansible_host: management (pre-cutover) or services (ADR 0017 end state)"
+  default     = "management"
+
+  validation {
+    condition     = contains(["management", "services"], var.guest_access_plane)
+    error_message = "guest_access_plane must be \"management\" or \"services\"."
+  }
+}
