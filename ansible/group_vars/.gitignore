@@ -1,1 +1,2 @@
 all.yml
+*.sops.tmp.yml
