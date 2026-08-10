@@ -114,46 +114,56 @@
     or (_gen_auth_secret is not skipped)
     or (_gen_admin_pass is not skipped)
   block:
+    # Values ride stdin (--value-stdin, JSON-encoded), never argv — argv is
+    # visible in `ps` for the life of the process. no_log keeps them out of
+    # callback/log output; failure output would otherwise include module args.
     - name: Update infisical_postgres_password in SOPS file
       ansible.builtin.command:
         cmd: >-
-          sops --set '["bootstrap"]["infisical_postgres_password"] "{{ bootstrap.infisical_postgres_password }}"'
+          sops set --value-stdin
           {{ playbook_dir }}/../group_vars/bootstrap.sops.yml
+          '["bootstrap"]["infisical_postgres_password"]'
+        stdin: "{{ bootstrap.infisical_postgres_password | to_json }}"
+      no_log: true
       when: _gen_pg_pass is not skipped
 
     - name: Update infisical_encryption_key in SOPS file
       ansible.builtin.command:
         cmd: >-
-          sops --set '["bootstrap"]["infisical_encryption_key"] "{{ bootstrap.infisical_encryption_key }}"'
+          sops set --value-stdin
           {{ playbook_dir }}/../group_vars/bootstrap.sops.yml
+          '["bootstrap"]["infisical_encryption_key"]'
+        stdin: "{{ bootstrap.infisical_encryption_key | to_json }}"
+      no_log: true
       when: _gen_enc_key is not skipped
 
     - name: Update infisical_auth_secret in SOPS file
       ansible.builtin.command:
         cmd: >-
-          sops --set '["bootstrap"]["infisical_auth_secret"] "{{ bootstrap.infisical_auth_secret }}"'
+          sops set --value-stdin
           {{ playbook_dir }}/../group_vars/bootstrap.sops.yml
+          '["bootstrap"]["infisical_auth_secret"]'
+        stdin: "{{ bootstrap.infisical_auth_secret | to_json }}"
+      no_log: true
       when: _gen_auth_secret is not skipped
 
     - name: Update infisical_admin_password in SOPS file
       ansible.builtin.command:
         cmd: >-
-          sops --set '["bootstrap"]["infisical_admin_password"] "{{ bootstrap.infisical_admin_password }}"'
+          sops set --value-stdin
           {{ playbook_dir }}/../group_vars/bootstrap.sops.yml
+          '["bootstrap"]["infisical_admin_password"]'
+        stdin: "{{ bootstrap.infisical_admin_password | to_json }}"
+      no_log: true
       when: _gen_admin_pass is not skipped
 
-    - name: Display generated Infisical secrets
+    - name: Report generated Infisical secrets saved
       ansible.builtin.debug:
-        msg: |
-          ============================================================
-          GENERATED INFISICAL SECRETS — saved to bootstrap.sops.yml
-          (these cannot be changed after first Infisical deployment)
-
-            infisical_postgres_password: "{{ bootstrap.infisical_postgres_password }}"
-            infisical_encryption_key: "{{ bootstrap.infisical_encryption_key }}"
-            infisical_auth_secret: "{{ bootstrap.infisical_auth_secret }}"
-            infisical_admin_password: "{{ bootstrap.infisical_admin_password }}"
-          ============================================================
+        msg: >-
+          Newly generated Infisical bootstrap secrets were saved to
+          bootstrap.sops.yml (they cannot be changed after the first Infisical
+          deployment). View them with:
+          sops -d ansible/group_vars/bootstrap.sops.yml
 
 - name: Set bootstrap mode flag
   ansible.builtin.set_fact:

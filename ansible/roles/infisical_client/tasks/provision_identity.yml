@@ -52,6 +52,7 @@
   register: _identity_check
   delegate_to: localhost
   become: false
+  no_log: true  # module args include the admin bearer token
   when: _vm_identity_id | length > 0
 
 - name: Set identity exists flag
@@ -76,6 +77,7 @@
   register: _identity_create
   delegate_to: localhost
   become: false
+  no_log: true  # module args include the admin bearer token
   when: not _identity_exists
 
 - name: Set identity ID from creation or existing
@@ -113,6 +115,7 @@
   register: _auth_method
   delegate_to: localhost
   become: false
+  no_log: true  # module args include the admin bearer token
   when: not _identity_exists
 
 # --- Create client secret ---
@@ -176,6 +179,7 @@
     status_code: [200, 201, 400, 409]
   delegate_to: localhost
   become: false
+  no_log: true  # module args include the admin bearer token
   when: not _identity_exists
 
 # --- Clean up admin token from facts ---
