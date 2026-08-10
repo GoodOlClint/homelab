@@ -12,7 +12,6 @@ network-data/private_bindings.yaml
 terraform.tfstate
 terraform.tfstate.backup
 .terraform/
-.terraform.lock.hcl
 **/terraform.tfstate.d/
 
 # Ansible sensitive files
