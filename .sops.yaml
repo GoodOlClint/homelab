@@ -1,6 +1,6 @@
 creation_rules:
   - path_regex: ansible/group_vars/bootstrap\.sops\.ya?ml$
-    encrypted_regex: '^(bootstrap)$'
+    encrypted_regex: '^(bootstrap|external_secrets)$'
     age: >-
       age1fykqszu2655hwpafemrz8txglh85980chrt05hldl5r99em69fhqux93j9
 
