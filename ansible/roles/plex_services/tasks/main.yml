@@ -859,6 +859,71 @@
     - config
     - media
 
+# Recycle bin for the arr apps: an upgrade/overwrite moves the old file here
+# instead of deleting it. Containment for wrong-series imports — a mis-tagged
+# release that clobbers good files (Scrubs 2026-over-2001, 2026-08) becomes a
+# 30-day-recoverable event instead of data loss.
+- name: Check arr recycle-bin directory
+  community.docker.docker_container_exec:
+    container: sonarr
+    command: sh -c "test -d /data/media/.recycle"
+  register: _recycle_dir_check
+  changed_when: false
+  failed_when: false
+  tags:
+    - plex_services
+    - config
+    - media
+
+- name: Create arr recycle-bin directory
+  community.docker.docker_container_exec:
+    container: sonarr
+    command: >-
+      sh -c "mkdir -p /data/media/.recycle
+      && chown {{ plex_services['sonarr'].PUID }}:{{ plex_services_pgid }} /data/media/.recycle
+      && chmod 775 /data/media/.recycle"
+    user: root
+  when: _recycle_dir_check.rc != 0
+  tags:
+    - plex_services
+    - config
+    - media
+
+- name: Configure arr recycle bin
+  vars:
+    _arr_recycle_apps:
+      - { name: sonarr, port: 8989 }
+      - { name: radarr, port: 7878 }
+  when:
+    - arr_api_keys is defined
+    - arr_api_keys[item.name] is defined
+  loop: "{{ _arr_recycle_apps }}"
+  loop_control:
+    label: "{{ item.name }}"
+  ansible.builtin.shell: |
+    set -e
+    cfg=$(curl -sf "http://localhost:{{ item.port }}/api/v3/config/mediamanagement?apikey={{ arr_api_keys[item.name] }}")
+    current=$(printf '%s' "$cfg" | python3 -c "
+    import json,sys
+    d=json.load(sys.stdin)
+    print(f\"{d.get('recycleBin') or ''}|{d.get('recycleBinCleanupDays')}\")")
+    if [ "$current" = "/data/media/.recycle|30" ]; then echo RECYCLE_UNCHANGED; exit 0; fi
+    printf '%s' "$cfg" | python3 -c "
+    import json,sys
+    d=json.load(sys.stdin)
+    d['recycleBin']='/data/media/.recycle'
+    d['recycleBinCleanupDays']=30
+    print(json.dumps(d))" | curl -sf -X PUT "http://localhost:{{ item.port }}/api/v3/config/mediamanagement/1?apikey={{ arr_api_keys[item.name] }}" \
+      -H 'Content-Type: application/json' -d @- > /dev/null
+    echo RECYCLE_APPLIED
+  register: _arr_recycle_result
+  changed_when: (_arr_recycle_result.stdout_lines | default([]) | last | default('')) == 'RECYCLE_APPLIED'
+  no_log: true  # command line carries the arr API key
+  tags:
+    - plex_services
+    - config
+    - media
+
 - name: Deploy recyclarr configuration
   ansible.builtin.template:
     src: recyclarr.yml.j2
