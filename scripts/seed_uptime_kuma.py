@@ -78,7 +78,8 @@ for t in targets:
     row["user_id"] = user_id
     row["type"] = t["type"]
     for key in ("url", "hostname", "port", "dns_resolve_server", "dns_resolve_type",
-                "interval", "maxretries", "retry_interval"):
+                "interval", "maxretries", "retry_interval",
+                "json_path", "expected_value", "json_path_operator"):
         if key in t:
             row[key] = t[key]
     if "ignoreTls" in t:

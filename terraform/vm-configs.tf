@@ -46,7 +46,7 @@ locals {
       ip_offset    = 103
       cpu_cores    = 4
       memory_mb    = 12288 # Log processing and queries
-      disk_size_gb = 50    # Storage for logs and metrics
+      disk_size_gb = 100   # Storage for logs and metrics (bumped from 50: fleet-wide syslog shipping — DSM, pve/worklab hosts — grew OO stream data into the 85% alert; pair with a retention cap)
     },
     {
       name         = "proxmox-backup"

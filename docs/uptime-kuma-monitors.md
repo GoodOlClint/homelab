@@ -14,7 +14,9 @@ Verified working 2026-07-27: stopping `axosyslog` produced `AxoSyslog — syslog
 
 ## Monitors that exist
 
-All 18 were confirmed UP on 2026-07-27. Targets use services-VLAN addresses; the real values live in the gitignored `network-data/local/uptime-kuma-monitors.json` (this repo is public).
+22 monitors. The original 18 were confirmed UP on 2026-07-27. Sonarr, Radarr and Sabnzbd were added in the UI at some point after that and were found live-but-unrecorded on 2026-08-10 — they are now back in the seeder's target list, because a rebuild driven by that list would otherwise have dropped them silently. Valheim — PlayFab lobby was seeded 2026-08-10 and confirmed UP on its first heartbeat (`JSON query passes (comparing playfab == playfab)`).
+
+Targets use services-VLAN addresses; the real values live in the gitignored `network-data/local/uptime-kuma-monitors.json` (this repo is public). **Adding a monitor in the UI without adding it here makes it invisible to a rebuild** — the drift above is the standing example.
 
 | Monitor | Type | Target | Interval |
 |---------|------|--------|----------|
@@ -36,13 +38,19 @@ All 18 were confirmed UP on 2026-07-27. Targets use services-VLAN addresses; the
 | VPS — public IP | Ping | VPS reserved IP | 60s |
 | VPS — WireGuard tunnel peer | Ping | VPS tunnel address | 60s |
 | Cloudflare Tunnel — Tautulli | HTTP | `https://tautulli.<public-domain>` | 120s |
+| Sonarr | HTTP | plex-services `:8989` | 60s |
+| Radarr | HTTP | plex-services `:7878` | 60s |
+| Sabnzbd | HTTP | plex-services `:8080` | 60s |
+| Valheim — PlayFab lobby | JSON query | docker `:8080/status.json`, `platform == playfab` | 60s |
 
 Defaults for every monitor: 2 retries (1 for AxoSyslog, so the syslog path trips fast), 60s retry interval, 16s timeout, accepted status `200-299` — widened to `300-399` for services that redirect to a login page.
 
 ### Deliberate omissions
 
 - **UniFi is a TCP port check, not HTTP.** The controller must not be probed with credentials: the `monitoring_users` role targets the classic API and its `/status` gate now passes on port 11443, so authenticating against it risks locking the admin account.
-- **No "Plex via VPS" or "Valheim via VPS" monitor.** Those are outside-in paths and belong to UptimeRobot. Empirically they do not work from inside the network anyway (the external hostname does not hairpin), and Valheim is UDP, so the TCP port check an earlier draft of this document recommended could never have passed.
+- **No "Plex via VPS" or "Valheim via VPS" monitor.** Those are outside-in paths and belong to UptimeRobot. Empirically they do not work from inside the network anyway (the external hostname does not hairpin).
+- **Valheim is monitored over HTTP, not on its game port.** The game port is UDP and answers no query — the A2S responder does not exist under crossplay, because `ZNet.OpenServer()` only creates the Steam game server on the Steamworks backend. What Kuma watches instead is the container's own `status.json`, published on `:8080` and rewritten every 10s by `valheim-status` from a PlayFab lobby query. The monitor asserts `platform == playfab`: on a failed query the status file carries only `error` and a timestamp, so the field is absent and Kuma's JSON query fails (a null or undefined query result is an error in Kuma, which is also why `error == null` cannot be the test — null is the *healthy* value there). This proves the game server is registered with PlayFab; it does not prove a player can traverse the VPS relay to reach it.
+- **Kuma does not check status.json freshness.** A frozen `valheim-status` leaves a stale but valid file and Kuma stays green. That gap is covered by the container's own healthcheck, which also requires the file's mtime to be under 2 minutes old (`roles/docker/templates/docker-compose.yml.j2`).
 - **No OpenObserve ingestion-volume check.** Reachability cannot see it — during the 2026-07 incident the port answered `200` for 24 days while ingesting nothing. That detection is `SyslogIngestionStalled` in `alert.rules.yml.j2`, evaluated by Prometheus.
 
 ## Rebuilding

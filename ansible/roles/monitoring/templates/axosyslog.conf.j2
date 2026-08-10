@@ -42,6 +42,12 @@
 
 options {
     chain_hostnames(off);
+    # ${ISODATE} (used for @timestamp in every destination) truncates to whole
+    # seconds unless frac-digits is set. Docker/RFC 5424 senders carry microseconds;
+    # without this, all lines emitted within one second share an identical
+    # _timestamp, so OpenObserve tie-breaks on UDP arrival order and multi-line
+    # stack traces render scrambled. 6 digits preserves the sender's microseconds.
+    frac-digits(6);
     flush_lines(0);
     use_dns(no);
     use_fqdn(no);
