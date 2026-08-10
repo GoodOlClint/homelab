@@ -20,15 +20,11 @@ export TF_VAR_cloudflare_api_token := $(call _read_secret,cloudflare_api_token)
 export TF_VAR_unifi_password := $(call _read_secret,unifi_admin_password)
 
 # === Bootstrap Terraform Targets ===
-# Only create the AdGuard and Infisical VMs (+ network dependencies)
-BOOTSTRAP_TF_TARGETS := \
-	-target=module.network \
-	-target=module.vms.proxmox_virtual_environment_vm.vms[\"adguard\"] \
-	-target=module.vms.proxmox_virtual_environment_file.user_data[\"adguard\"] \
-	-target=module.vms.proxmox_virtual_environment_file.network_data[\"adguard\"] \
-	-target=module.vms.proxmox_virtual_environment_vm.vms[\"infisical\"] \
-	-target=module.vms.proxmox_virtual_environment_file.user_data[\"infisical\"] \
-	-target=module.vms.proxmox_virtual_environment_file.network_data[\"infisical\"]
+# Only create the AdGuard and Infisical guests (+ network dependencies).
+# Resolved at recipe time by scripts/guest-targets.sh (B2): correct whether
+# adguard is a VM (today), an LXC, or numbered instances (adguard1/adguard2 —
+# group-targets matches the WP4 redundancy convention). Resolution failure must
+# abort the recipe: an empty expansion would make the apply unscoped.
 
 # === Per-VM Argument Capture ===
 # Enables: make plan <vm>, make build <vm>, make rebuild <vm>
@@ -56,11 +52,8 @@ ansible-bootstrap:
 
 plan:
 ifdef VM
-	@cd terraform && terraform init && terraform plan -no-color \
-		-target=module.network \
-		-target='module.vms.proxmox_virtual_environment_vm.vms["$(VM)"]' \
-		-target='module.vms.proxmox_virtual_environment_file.user_data["$(VM)"]' \
-		-target='module.vms.proxmox_virtual_environment_file.network_data["$(VM)"]'
+	@cd terraform && TARGETS="$$(../scripts/guest-targets.sh $(VM) targets)" \
+		&& terraform init && terraform plan -no-color $$TARGETS
 else
 	@cd terraform && terraform init && terraform plan -no-color
 endif
@@ -75,38 +68,47 @@ terraform-apply:
 	@cd terraform && terraform init && terraform apply -no-color -auto-approve
 
 terraform-bootstrap:
-	@cd terraform && terraform init && terraform apply -no-color -auto-approve $(BOOTSTRAP_TF_TARGETS)
+	@cd terraform \
+		&& ADGUARD_TARGETS="$$(../scripts/guest-targets.sh adguard group-targets)" \
+		&& INFISICAL_TARGETS="$$(../scripts/guest-targets.sh infisical group-targets)" \
+		&& terraform init && terraform apply -no-color -auto-approve $$ADGUARD_TARGETS $$INFISICAL_TARGETS
 
 inventory: clean-ssh
 	@cd terraform && terraform output -no-color -raw ansible_inventory_yaml > ../ansible/inventory/vms.yaml
 
 # === Per-VM Build/Rebuild ===
-# make build <vm>   — terraform-apply + inventory + ansible for a single VM
-# make rebuild <vm>  — destroy VM, clean SSH key, then build
+# make build <vm>   — terraform-apply + inventory + ansible for a single guest
+# make rebuild <vm>  — replace the guest in one apply, clean SSH key, reconfigure
+# Guest type (VM vs LXC) is resolved by scripts/guest-targets.sh (B2) — the
+# holder container is never targeted (ADR 0015).
 build:
 ifndef VM
 	$(error Usage: make build <vm-name>)
 endif
-	@echo "Building VM: $(VM)"
-	@cd terraform && terraform init && terraform apply -no-color -auto-approve \
-		-target=module.network \
-		-target='module.vms.proxmox_virtual_environment_vm.vms["$(VM)"]' \
-		-target='module.vms.proxmox_virtual_environment_file.user_data["$(VM)"]' \
-		-target='module.vms.proxmox_virtual_environment_file.network_data["$(VM)"]'
+	@echo "Building guest: $(VM)"
+	@cd terraform && TARGETS="$$(../scripts/guest-targets.sh $(VM) targets)" \
+		&& terraform init && terraform apply -no-color -auto-approve $$TARGETS
 	@$(MAKE) inventory
-	@echo "Configuring VM: $(VM)"
+	@echo "Configuring guest: $(VM)"
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/site.yml --limit $(VM)
 
+# Rebuild = one atomic apply with -replace: no destroyed-but-not-rebuilt window,
+# and cloud-init/file resources refresh in the same graph. Still staged with
+# -target pre-cutover (a full-graph apply proposes the known replace-all drift);
+# drop the `targets` part once the post-cutover plan is clean.
 rebuild:
 ifndef VM
 	$(error Usage: make rebuild <vm-name>)
 endif
-	@echo "Destroying VM: $(VM)"
-	@cd terraform && terraform init && terraform destroy -no-color -auto-approve \
-		-target='module.vms.proxmox_virtual_environment_vm.vms["$(VM)"]'
-	@VM_IP=$$(python3 -c "import yaml; print(yaml.safe_load(open('ansible/inventory/vms.yaml'))['all']['hosts']['$(VM)']['ansible_host'])"); \
-		ssh-keygen -R "$$VM_IP" 2>/dev/null || true
-	@$(MAKE) build $(VM)
+	@echo "Replacing guest: $(VM)"
+	@VM_IP=$$(python3 -c "import yaml; print(yaml.safe_load(open('ansible/inventory/vms.yaml'))['all']['hosts']['$(VM)']['ansible_host'])" 2>/dev/null); \
+		[ -n "$$VM_IP" ] && ssh-keygen -R "$$VM_IP" 2>/dev/null || true
+	@cd terraform && TARGETS="$$(../scripts/guest-targets.sh $(VM) targets)" \
+		&& REPLACE="$$(../scripts/guest-targets.sh $(VM) replace)" \
+		&& terraform init && terraform apply -no-color -auto-approve $$TARGETS $$REPLACE
+	@$(MAKE) inventory
+	@echo "Configuring guest: $(VM)"
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/site.yml --limit $(VM)
 
 # Rebuild Infisical VM — destroys, recreates, and re-bootstraps.
 # Stale credential detection in bootstrap_infisical_setup.yml handles
