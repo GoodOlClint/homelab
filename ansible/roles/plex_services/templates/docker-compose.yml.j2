@@ -258,7 +258,7 @@ services:
   # Recyclarr - Sync *arr indexers and quality profiles
   recyclarr:
     container_name: recyclarr
-    image: ghcr.io/recyclarr/recyclarr:latest
+    image: ghcr.io/recyclarr/recyclarr:8
     restart: unless-stopped
     user: "{{ plex_services['recyclarr'].PUID }}:{{ plex_services['recyclarr'].PGID }}"
     environment:
