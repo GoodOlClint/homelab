@@ -14,3 +14,11 @@ valheim_server_public: "false"
 valheim_crossplay: "true"
 valheim_supervisor_user: "admin"
 valheim_supervisor_port: 9002
+# Extra valheim_server.x86_64 CLI args. `-modifier portals casual` = no teleport
+# restrictions. Applies on EVERY start (not just world create) — but it is also
+# written into the world's .fwl on the next save, so deleting the arg does not
+# revert it. To undo, start once with `-resetmodifiers` (undocumented, real:
+# FejdStartup line ~994), then drop back to no args.
+# Other modifiers: combat|deathpenalty|resources|raids|portals, plus
+# `-preset <name>` and `-setkey <nomap|playerevents|passivemobs|nobuildcost>`.
+valheim_server_args: "-preset normal -modifier portals casual -modifiers deathpenalty easy"

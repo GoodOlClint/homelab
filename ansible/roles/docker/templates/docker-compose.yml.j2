@@ -229,12 +229,31 @@ services:
       - doge-node_config:/data
   valheim:
     container_name: valheim
-    image: ghcr.io/community-valheim-tools/valheim-server:latest
+    image: valheim-server:playfab-test
     restart: unless-stopped
+{# The server only writes the world on a clean SIGINT (ZNet.Shutdown -> Save(sync:true)). #}
+{# Docker's default 10s stop timeout SIGKILLs mid-save; the image's own shutdown waits 29s #}
+{# before escalating and supervisord allows 90s, so give it room. #}
+    stop_grace_period: 120s
+{# The failure this exists for: PlayFab returning ServiceUnavailable at boot — server up, #}
+{# no lobby, a zombie nothing external could see. A2S can't see it either (the Steam query #}
+{# responder never starts under crossplay). status.json is the direct signal: valheim-status #}
+{# rewrites it every 10s and `error` goes non-null the moment the PlayFab query fails. #}
+{# The mtime clause catches valheim-status itself dying with a stale-but-valid file. #}
+{# Replaced a log-lifecycle grep — same failure, but read from the purpose-built endpoint. #}
+{# Every failure mode here is repaired by the container restart autoheal will perform; #}
+{# a sustained PlayFab outage will restart-loop, as it would have with the log check. #}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS localhost/status.json | jq -e '.error == null' >/dev/null && [ -n \"$(find /opt/valheim/htdocs/status.json -newermt '-2 minutes')\" ]"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 6m
     cap_add:
       - sys_nice
     ports:
       - "2456-2458:2456-2458/udp"
+      - "8080:80/tcp"
 {# ponytail: host 9002 — container 9001 is supervisor's default, but host 9001 belongs to portainer-agent #}
       - "{{ valheim_supervisor_port }}:9001/tcp"
     env_file:
@@ -243,10 +262,12 @@ services:
       - TZ={{ timezone }}
       - SUPERVISOR_HTTP=true
       - SUPERVISOR_HTTP_USER={{ valheim_supervisor_user }}
+      - STATUS_HTTP=true
       - SERVER_NAME={{ valheim_server_name }}
       - WORLD_NAME={{ valheim_world_name }}
       - SERVER_PUBLIC={{ valheim_server_public | default('false') }}
       - CROSSPLAY={{ valheim_crossplay | default('true') }}
+      - SERVER_ARGS={{ valheim_server_args | default('') }}
 {# The join code rotates on every restart (nightly UPDATE_CRON, any redeploy), so it #}
 {# gets posted by the image's own log-filter hook. $$ escapes compose interpolation — #}
 {# these must expand in the container's shell, not on the Ansible host. #}
@@ -260,6 +281,25 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - valheim_config:/config
       - valheim_data:/opt/valheim
+    labels:
+      - autoheal=true
+{# autoheal restarts via the API's ?t= param, defaulting to AUTOHEAL_DEFAULT_STOP_TIMEOUT=10 — #}
+{# a SIGKILL 10s into a world save, ignoring stop_grace_period. Match it per-container. #}
+      - autoheal.stop.timeout=120
+
+{# Restarts any container marked unhealthy that carries the autoheal=true label. #}
+{# Gives the Valheim PlayFab zombie an auto-recovery path Docker's restart policy lacks #}
+{# (restart: unless-stopped never fires on an unhealthy-but-running container). #}
+  autoheal:
+    container_name: autoheal
+    image: willfarrell/autoheal:latest
+    restart: unless-stopped
+    environment:
+      - TZ={{ timezone }}
+      - AUTOHEAL_CONTAINER_LABEL=autoheal
+      - AUTOHEAL_INTERVAL=30
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:
 {# Radarr/Sonarr volumes — migrated to plex-services VM #}
