@@ -89,16 +89,6 @@
       register: docker_compose
       when: inventory_hostname == 'docker'
 
-    - name: Deploy docker VM .env file
-      ansible.builtin.template:
-        src: "{{ playbook_dir }}/../roles/docker/templates/docker-env.j2"
-        dest: "{{ docker_base_dir }}/.env"
-        mode: '0600'
-        owner: root
-        group: root
-      register: docker_env
-      when: inventory_hostname == 'docker'
-
     - name: Check if authentik is deployed
       ansible.builtin.stat:
         path: /opt/authentik
@@ -124,7 +114,7 @@
         recreate: always
       when:
         - inventory_hostname == 'docker'
-        - docker_compose is changed or docker_env is changed
+        - docker_compose is changed
 
     - name: Restart authentik containers
       community.docker.docker_compose_v2:

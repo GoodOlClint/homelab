@@ -71,14 +71,18 @@ external_secrets:
     usenet_newshosting_password: "REPLACE_ME"
     usenet_express_username: "REPLACE_ME"
     usenet_express_password: "REPLACE_ME"
+    usenet_eweka_username: "REPLACE_ME"
+    usenet_eweka_password: "REPLACE_ME"
+    usenet_frugal_username: "REPLACE_ME"
+    usenet_frugal_password: "REPLACE_ME"
     nzbgeek_api_key: "REPLACE_ME"
     nzbplanet_api_key: "REPLACE_ME"
     opensubtitlescom_username: "REPLACE_ME"
     opensubtitlescom_password: "REPLACE_ME"
 
-  # /docker — Docker VM external credentials
-  docker:
-    cloudflared_tunnel_token: "REPLACE_ME"
+  # /docker — no external credentials (cloudflared retired 2026-08-10; the
+  # docker VM never used its tunnel)
+  docker: {}
 
   # /pfsense — pfSense reference credentials
   pfsense:

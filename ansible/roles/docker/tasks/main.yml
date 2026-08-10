@@ -211,19 +211,16 @@
     - config
     - compose
 
-- name: Create .env file for Docker Compose with secrets
-  ansible.builtin.template:
-    src: docker-env.j2
-    dest: "{{ docker_base_dir }}/.env"
-    mode: '0600'
-    owner: root
-    group: root
-  notify: restart docker services
-  when: secrets.docker.cloudflared_tunnel_token | default('') != ""
+# Retired 2026-08-10: the docker VM's cloudflared tunnel was never used. The
+# old rendered .env held the tunnel token — desired state is absent, which also
+# purges the stale credential from hosts configured before the retirement.
+- name: Remove retired docker .env (held the unused cloudflared token)
+  ansible.builtin.file:
+    path: "{{ docker_base_dir }}/.env"
+    state: absent
   tags:
     - docker
     - config
-    - secrets
 
 - name: Set reboot required flag
   ansible.builtin.set_fact:
@@ -245,13 +242,10 @@
   community.docker.docker_compose_v2:
     project_src: "{{ docker_base_dir }}"
     state: present
-  environment:
-    CLOUDFLARED_TUNNEL_TOKEN: "{{ secrets.docker.cloudflared_tunnel_token | default('') }}"
   retries: 3
   delay: 30
   register: compose_result
   until: compose_result is succeeded
-  no_log: true
   tags:
     - docker
     - compose

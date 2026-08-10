@@ -167,7 +167,6 @@ copy_secret "UNIFI_ADMIN_PASSWORD" "/infrastructure"
 # /docker/ — docker VM
 echo ""
 echo "=== /docker/ ==="
-copy_secret "CLOUDFLARED_TUNNEL_TOKEN" "/docker"
 copy_secret "AUTHENTIK_POSTGRES_PASSWORD" "/docker"
 copy_secret "AUTHENTIK_SECRET_KEY" "/docker"
 copy_secret "VALHEIM_SERVER_PASSWORD" "/docker"

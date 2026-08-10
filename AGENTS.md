@@ -97,7 +97,7 @@ Each Infisical folder is owned by the role that generates/provisions its secrets
 | `/monitoring` | monitoring, monitoring_users, proxmox_backup | openobserve, homepage | grafana_admin_password, openobserve_root_user_pass, unifi_monitoring_password, pbs_api_token, proxmox_token_value | uptimerobot_heartbeat_url, alert_ntfy_topic |
 | `/plex` | plex, plex_certificate | plex, homepage | plex_token, plex_smb_pass, plex_cert_pfx_password | cloudflare_dns_api_token |
 | `/plex-services` | plex_services | plex-services, homepage | postgres_password, *_db_password (×6), arr_admin_password, *_api_key (×8) | cloudflared_tunnel_token, usenet_*, nzb*_api_key, opensubtitlescom_* |
-| `/docker` | docker, authentik | docker | valheim_server_password, valheim_supervisor_password, authentik_secret_key, authentik_postgres_password | cloudflared_tunnel_token, valheim_discord_webhook |
+| `/docker` | docker, authentik | docker | valheim_server_password, valheim_supervisor_password, authentik_secret_key, authentik_postgres_password | valheim_discord_webhook |
 | `/vps` | vps_wireguard | — (no agent) | vps_wg_private_key | maxmind_license_key |
 | `/pfsense` | — (manual ref) | — (no agent) | — | cloudflare_dns_api_token, bind_tsig_key_secret |
 | `/pbs` | proxmox_backup | — (no agent) | pbs_admin_password, pbs_backup_user_password | — |
@@ -339,7 +339,7 @@ make ansible-services TAGS=plex,homepage  # plex + homepage plays
 
 5. ~~PBS storage backend~~ — moved to Resolved #9.
 
-6. **Two Ansible-rendered .env files still bake secrets directly.** `docker/templates/docker-env.j2` references `{{ secrets.docker.cloudflared_tunnel_token }}` and `monitoring/templates/openobserve.env.j2` references `{{ openobserve_root_user_pass }}` (set via variable alias from `secrets.monitoring.*`). These are deliberate fallbacks, not oversights — the Infisical agent renders a second env_file that overrides these values at runtime. The "no baked secrets" rule in Secrets Handling applies to docker-compose templates only; these are separate .env config files.
+6. **One Ansible-rendered .env file still bakes a secret directly.** `monitoring/templates/openobserve.env.j2` references `{{ openobserve_root_user_pass }}` (set via variable alias from `secrets.monitoring.*`). Deliberate fallback, not an oversight — the Infisical agent renders a second env_file that overrides it at runtime. The "no baked secrets" rule in Secrets Handling applies to docker-compose templates only. (`docker/templates/docker-env.j2` was deleted 2026-08-10 with the docker-lane cloudflared retirement — the docker VM never used its tunnel.)
 
 ### Resolved
 
