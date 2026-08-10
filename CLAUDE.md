@@ -217,8 +217,8 @@ make ansible-services TAGS=plex,homepage  # plex + homepage plays
 | `make apply` | Full deploy: terraform → inventory → ansible-all |
 | `make bootstrap` | First-time: terraform (adguard+infisical only) → inventory → ansible-bootstrap |
 | `make plan [vm]` | Terraform plan (optionally scoped to one VM) |
-| `make build <vm>` | Terraform + inventory + ansible for a single VM |
-| `make rebuild <vm>` | Destroy VM → clean SSH → build |
+| `make build <vm>` | Terraform + inventory + ansible for a single guest (VM or LXC — `scripts/guest-targets.sh` resolves type, HA, and cloud-init targets; resolution failure aborts before terraform runs) |
+| `make rebuild <vm>` | Replace guest in one atomic `-replace` apply → clean SSH → ansible (reconciles VM↔LXC conversions + stale HA registrations) |
 | `make ansible <vm>` | Run site.yml limited to one host (supports `TAGS=`) |
 | `make docker-config <vm>` | Deploy compose+config only, skip user/group/package/API setup |
 | `make ansible-all` | Run full site.yml (supports `TAGS=`) |

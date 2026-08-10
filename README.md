@@ -563,8 +563,8 @@ The Makefile is the primary operational interface.
 | `apply` | Full deployment: Terraform apply, inventory generation, Ansible site playbook |
 | `plan` | Terraform init + plan (review changes before applying) |
 | `init` | Create Python venv, install deps, init Terraform, pull Galaxy roles |
-| `bootstrap` | First-time deployment: AdGuard + Infisical VMs + secret seeding |
-| `terraform-bootstrap` | Terraform apply for bootstrap VMs only |
+| `bootstrap` | First-time deployment: AdGuard + Infisical guests + secret seeding. Guest type (VM/LXC) and numbered instances (`adguard1`/`adguard2`) resolve automatically via `scripts/guest-targets.sh` |
+| `terraform-bootstrap` | Terraform apply for the bootstrap guests only (guest-aware targeting) |
 | `terraform-apply` | Terraform init + apply (auto-approve) |
 | `inventory` | Generate Ansible inventory from Terraform outputs |
 
@@ -572,6 +572,9 @@ The Makefile is the primary operational interface.
 
 | Target | Description |
 |--------|-------------|
+| `plan <vm>` | Targeted Terraform plan for one guest (VM or LXC — resolved by `scripts/guest-targets.sh`) |
+| `build <vm>` | Targeted Terraform apply + inventory + Ansible for one guest |
+| `rebuild <vm>` | Replace the guest in one atomic apply (`-replace`), clean SSH key, re-run Ansible. Also reconciles VM↔LXC conversions and HA registration changes |
 | `ansible <vm>` | Run site.yml limited to a single host (supports `TAGS=`) |
 | `docker-config <vm>` | Deploy only compose+config templates and restart (no full role) |
 
@@ -586,7 +589,7 @@ All `ansible-*` targets support `TAGS=<tag>` to filter by play-level tags (e.g.,
 | `ansible-services` | Run services playbook only |
 | `ansible-pfsense` | Run pfSense playbook (DHCP + DNS registration) |
 | `docker-deploy` | Run docker playbook only |
-| `update` | OS patching on all VMs + VPS |
+| `update` | OS patching. Gated: bare `make update` errors until the serialized cluster-safe play lands — use `make update <vm>` for one host, `UNSAFE_UPDATE=true` for emergencies |
 | `update-dns` | Update DNS configuration |
 | `expand-disk` | Expand root filesystem on service VMs |
 
