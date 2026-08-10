@@ -8,3 +8,4 @@
 - ansible.builtin.import_tasks: qdevice.yml
 - ansible.builtin.import_tasks: ceph.yml
 - ansible.builtin.import_tasks: keepalived.yml
+- ansible.builtin.import_tasks: logging.yml

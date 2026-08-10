@@ -1,0 +1,25 @@
+---
+# Ship host logs (pvestatd, kernel, corosync, ceph) to OpenObserve. Gated on the
+# site binding so a site without it configured simply skips — the hosts plane must
+# not hard-depend on a guest (OpenObserve) being addressable. Without this, only
+# netconsole survives a rebuild, and that is kernel-only (no userspace daemon logs,
+# so a pvestatd SEGV is invisible centrally).
+- name: Configure host syslog forwarding to OpenObserve
+  when: ((host_bindings.cluster | default({})).openobserve_syslog_target | default('')) | length > 0
+  tags:
+    - proxmox_host
+    - logging
+  block:
+    - name: Ensure rsyslog is installed
+      ansible.builtin.apt:
+        name: rsyslog
+        state: present
+
+    - name: Forward host logs to OpenObserve (services VLAN, TCP/RFC5424)
+      ansible.builtin.template:
+        src: 99-openobserve.conf.j2
+        dest: /etc/rsyslog.d/99-openobserve.conf
+        mode: '0644'
+        owner: root
+        group: root
+      notify: restart rsyslog

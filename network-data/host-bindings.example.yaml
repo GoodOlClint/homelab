@@ -27,10 +27,15 @@
 #   vip_cidr     : keepalived VIP on VLAN 30 (the Terraform/Ansible endpoint, ADR-0008).
 #   qdevice_addr : optional — external qnetd host (Synology/Pi) for the temporary
 #                  2-node QDevice. Empty/absent = skip QDevice setup.
+#   openobserve_syslog_target : optional — OpenObserve/AxoSyslog services-VLAN
+#                  address (host ships syslog there on 5514/tcp, RFC 5424). The pve
+#                  HOST is outside the VM-fleet rsyslog_client role, so its log
+#                  forwarding lives here. Empty/absent = skip (only netconsole ships).
 
 cluster:
   vip_cidr: "172.16.30.100/24"
   qdevice_addr: ""
+  openobserve_syslog_target: "172.16.40.10"
 
 nodes:
   crete:

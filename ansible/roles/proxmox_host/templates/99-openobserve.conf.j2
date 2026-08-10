@@ -1,0 +1,14 @@
+# Forward all host logs to AxoSyslog/OpenObserve. Managed by the proxmox_host role.
+# The pve HOST is outside the rsyslog_client role (VM-fleet only); without this a
+# rebuilt host silently stops shipping syslog and only netconsole (kernel-only)
+# survives — which is how a pvestatd SEGV went invisible in OpenObserve (2026-08).
+# Target is a site binding: the OO VM address is a guest binding, not derivable
+# from vlans.yaml in this pre-guest plane. TCP (@@) + RFC 5424 to match the fleet.
+*.* action(type="omfwd"
+           target="{{ (host_bindings.cluster | default({})).openobserve_syslog_target }}"
+           port="5514"
+           protocol="tcp"
+           template="RSYSLOG_SyslogProtocol23Format"
+           action.resumeRetryCount="-1"
+           queue.type="linkedList"
+           queue.size="10000")
