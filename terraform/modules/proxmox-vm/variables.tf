@@ -130,6 +130,19 @@ variable "data_volumes" {
     condition     = length(distinct([for v in var.data_volumes : v.index])) == length(var.data_volumes)
     error_message = "data_volumes indices must be unique — they are stable mount-point slots on the holder container."
   }
+
+  # Slot = list POSITION after index-sort, so a gap is as dangerous as a
+  # duplicate: with indices {1,3}, adding 2 shifts index-3 from mount_point[1]
+  # to [2] and remaps its live data. Contiguous-from-1 makes index == slot+1
+  # forever. Retire a volume by keeping its entry (or renumbering EVERYTHING in
+  # a deliberate, data-migrating change) — never by leaving a hole.
+  validation {
+    condition = length(var.data_volumes) == 0 || (
+      join(",", sort([for v in var.data_volumes : format("%08d", v.index)])) ==
+      join(",", [for i in range(1, length(var.data_volumes) + 1) : format("%08d", i)])
+    )
+    error_message = "data_volumes indices must be contiguous starting at 1 — a gap shifts every later volume's mount slot."
+  }
 }
 
 variable "data_volume_holder_vmid" {

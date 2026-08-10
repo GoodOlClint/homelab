@@ -14,9 +14,17 @@ locals {
   lxc_guests = { for vm in var.vm_configurations : vm.name => vm if vm.type == "lxc" }
   vm_guests  = { for vm in var.vm_configurations : vm.name => vm if vm.type == "vm" }
 
-  # Stable slot order: sorted by the operator-assigned index (never renumber — see variables.tf)
+  # Stable slot order: sorted by the operator-assigned index (never renumber — see
+  # variables.tf). NOT sorted by name: a later volume that sorts alphabetically
+  # earlier would shift every existing mount_point slot and remap live data disks.
+  # format("%08d") gives a fixed-width key so lexicographic sort == numeric sort.
+  # State-migration note: if volumes ever existed under the old name-sorted code,
+  # their indices must first be assigned to match the existing slot order.
+  _data_volumes_by_index = {
+    for name, v in var.data_volumes : format("%08d", v.index) => merge(v, { name = name })
+  }
   data_volumes_ordered = [
-    for name in sort(keys(var.data_volumes)) : merge(var.data_volumes[name], { name = name })
+    for k in sort(keys(local._data_volumes_by_index)) : local._data_volumes_by_index[k]
   ]
   # name => full volume ID ("<storage>:vm-<holder>-disk-<n>") read back from the holder.
   # bpg stores the PVE-resolved volume ID in state after create; if live testing at
