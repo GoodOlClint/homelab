@@ -1,0 +1,146 @@
+---
+# B3 backup control plane, step 1 (audit 2026-08-10): register the PBS datastore
+# as a PVE storage entry so backup jobs can reference it. Runs AFTER the PBS VM
+# is provisioned (its role generates the backup@pbs!backup-token and fingerprint
+# into Infisical /shared) and BEFORE the fleet root applies proxmox_backup_job
+# resources — job resources referencing an unregistered storage fail the apply.
+#
+# Usage: make backup-finalize   (loads vms.yaml + proxmox.yaml inventories)
+#
+# Storage config is cluster-wide (/etc/pve), so one node registers for all.
+- name: Register PBS storage on the PVE cluster
+  hosts: proxmox
+  become: true
+
+  vars_files:
+    - ../group_vars/all.yml
+  pre_tasks:
+    - name: Load all configuration and secrets
+      ansible.builtin.import_tasks: ../tasks/full_pre_tasks.yml
+      tags: [always]
+
+  vars:
+    pbs_pve_storage_id: "pbs"
+    pbs_pve_datastore: "synology"
+    # Nodes reach PBS over the storage VLAN (PBS keeps its vlan20 leg — ADR 0017);
+    # same-offset prefix translation is the repo convention.
+    pbs_pve_server: "{{ hostvars['proxmox-backup'].ansible_host | replace(mgmt_vlan_prefix, storage_vlan_prefix) }}"
+
+  tasks:
+    - name: Require PBS credentials from Infisical /shared
+      ansible.builtin.assert:
+        that:
+          - secrets.pbs_backup_token | default('') | length > 0
+          - secrets.pbs_fingerprint | default('') | length > 0
+        fail_msg: >-
+          /shared/pbs_backup_token and /shared/pbs_fingerprint must exist in
+          Infisical — run the proxmox-backup provisioning play first.
+        quiet: true
+      run_once: true
+
+    - name: List PVE storage definitions
+      ansible.builtin.command:
+        cmd: pvesh get /storage --output-format json
+      register: _pve_storage
+      changed_when: false
+      run_once: true
+
+    - name: Extract current PBS storage entry
+      ansible.builtin.set_fact:
+        _pbs_entry: >-
+          {{ _pve_storage.stdout | from_json
+             | selectattr('storage', 'equalto', pbs_pve_storage_id)
+             | list | first | default(none) }}
+      run_once: true
+
+    # Soft probe BEFORE deciding: an entry with rotated/stale credentials (PBS
+    # rebuild is a routine scenario — rebuild-as-routine matrix) reports
+    # inactive and must be reconciled, not skipped (Codex P1). Status parsed by
+    # exact column token — 'inactive' contains the substring 'active' (Codex P2).
+    - name: Probe PBS storage status
+      ansible.builtin.command:
+        cmd: "pvesm status --storage {{ pbs_pve_storage_id }}"
+      register: _pbs_probe
+      changed_when: false
+      failed_when: false
+      run_once: true
+
+    - name: Evaluate PBS storage state
+      ansible.builtin.set_fact:
+        _pbs_active: >-
+          {{ _pbs_probe.rc == 0 and
+             (_pbs_probe.stdout_lines
+              | select('search', '^' ~ pbs_pve_storage_id ~ '\s+\S+\s+active\s')
+              | list | length > 0) }}
+        _pbs_drifted: >-
+          {{ _pbs_entry is not none and (
+             _pbs_entry.server | default('') != pbs_pve_server or
+             _pbs_entry.datastore | default('') != pbs_pve_datastore) }}
+      run_once: true
+
+    # Token value rides the command line on the node for the duration of the
+    # call (root-only box, no_log keeps it out of Ansible output) — pvesm has
+    # no stdin/env password path.
+    - name: Register PBS storage
+      ansible.builtin.command:
+        cmd: >-
+          pvesm add pbs {{ pbs_pve_storage_id }}
+          --server {{ pbs_pve_server }}
+          --datastore {{ pbs_pve_datastore }}
+          --username backup@pbs!backup-token
+          --password {{ secrets.pbs_backup_token }}
+          --fingerprint {{ secrets.pbs_fingerprint }}
+          --content backup
+      run_once: true
+      changed_when: true
+      no_log: true
+      when: _pbs_entry is none
+
+    # Existing entry with a moved datastore cannot be edited in place.
+    - name: Recreate PBS storage (datastore/server moved)
+      ansible.builtin.shell: |
+        pvesm remove {{ pbs_pve_storage_id }}
+        pvesm add pbs {{ pbs_pve_storage_id }}           --server {{ pbs_pve_server }}           --datastore {{ pbs_pve_datastore }}           --username backup@pbs!backup-token           --password {{ secrets.pbs_backup_token }}           --fingerprint {{ secrets.pbs_fingerprint }}           --content backup
+      run_once: true
+      changed_when: true
+      no_log: true
+      when:
+        - _pbs_entry is not none
+        - _pbs_drifted | bool
+
+    # Same endpoint, but PBS was rebuilt: token + fingerprint rotated, entry
+    # inactive. Push current credentials.
+    - name: Reconcile PBS storage credentials
+      ansible.builtin.command:
+        cmd: >-
+          pvesm set {{ pbs_pve_storage_id }}
+          --username backup@pbs!backup-token
+          --password {{ secrets.pbs_backup_token }}
+          --fingerprint {{ secrets.pbs_fingerprint }}
+      run_once: true
+      changed_when: true
+      no_log: true
+      when:
+        - _pbs_entry is not none
+        - not (_pbs_drifted | bool)
+        - not (_pbs_active | bool)
+
+    - name: Verify PBS storage is active (contacts PBS)
+      ansible.builtin.command:
+        cmd: "pvesm status --storage {{ pbs_pve_storage_id }}"
+      register: _pbs_status
+      changed_when: false
+      run_once: true
+      failed_when: >-
+        _pbs_status.rc != 0 or
+        (_pbs_status.stdout_lines
+         | select('search', '^' ~ pbs_pve_storage_id ~ '\s+\S+\s+active\s')
+         | list | length) == 0
+
+    - name: Report
+      ansible.builtin.debug:
+        msg: >-
+          PBS storage '{{ pbs_pve_storage_id }}' registered and active
+          ({{ pbs_pve_server }}:{{ pbs_pve_datastore }}). Fleet backup jobs
+          (terraform backup_jobs) may now reference it.
+      run_once: true

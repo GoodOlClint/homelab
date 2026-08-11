@@ -591,6 +591,7 @@ All `ansible-*` targets support `TAGS=<tag>` to filter by play-level tags (e.g.,
 | `docker-deploy` | Run docker playbook only |
 | `update` | OS patching. Gated: bare `make update` errors until the serialized cluster-safe play lands — use `make update <vm>` for one host, `UNSAFE_UPDATE=true` for emergencies |
 | `update-dns` | Update DNS configuration |
+| `backup-finalize` | Register the PBS datastore as PVE storage (once, after PBS provisioning; prerequisite for `backup_jobs` terraform applies) |
 | `expand-disk` | Expand root filesystem on service VMs |
 
 ### Secrets

@@ -71,16 +71,23 @@ BOOTSTRAP_JSON=$(infisical bootstrap \
 ORG_ID=$(printf '%s' "$BOOTSTRAP_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)['organization']['id'])")
 [ -n "$ORG_ID" ] || { echo "ERROR: bootstrap returned no organization id"; exit 1; }
 
-# The bootstrap identity's access token is rejected as over-max-age by current
-# images (no exp claim; server-side TTL row quirk). Use the admin USER JWT via
-# CLI login instead — same flow the ansible bootstrap uses for existing
-# instances; the CLI handles Infisical's SRP login.
-echo "--- logging in as admin user"
-ADMIN_TOKEN=$(infisical login --method=user \
-    --email="$ADMIN_EMAIL" --password="$ADMIN_PASS" \
-    --organization-id="$ORG_ID" --domain="http://localhost:$PORT" \
-    --plain --silent 2>/dev/null | tail -1)
-[ -n "$ADMIN_TOKEN" ] || { echo "ERROR: admin user login failed"; exit 1; }
+# The bootstrap identity's access token is rejected by images carrying the
+# legacy no-exp sunset (upstream Infisical/infisical#7599; fix PR #7603 signs
+# it with exp). Default: admin USER JWT via CLI login — same flow the ansible
+# bootstrap uses for existing instances. REHEARSE_USE_BOOTSTRAP_TOKEN=1
+# exercises the identity-token path instead: run that against a post-#7603
+# release image to confirm the upstream fix before cutover.
+if [ "${REHEARSE_USE_BOOTSTRAP_TOKEN:-0}" = "1" ]; then
+    echo "--- using the bootstrap identity token (upstream-fix confirmation mode)"
+    ADMIN_TOKEN=$(printf '%s' "$BOOTSTRAP_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)['identity']['credentials']['token'])")
+else
+    echo "--- logging in as admin user"
+    ADMIN_TOKEN=$(infisical login --method=user \
+        --email="$ADMIN_EMAIL" --password="$ADMIN_PASS" \
+        --organization-id="$ORG_ID" --domain="http://localhost:$PORT" \
+        --plain --silent 2>/dev/null | tail -1)
+fi
+[ -n "$ADMIN_TOKEN" ] || { echo "ERROR: no usable admin token"; exit 1; }
 
 echo "--- creating rehearsal project"
 # Body mirrors ansible/tasks/bootstrap_infisical_setup.yml (the known-working

@@ -207,3 +207,37 @@ variable "guest_access_plane" {
     error_message = "guest_access_plane must be \"management\" or \"services\"."
   }
 }
+
+# PVE backup jobs → PBS (B3, audit 2026-08-10). Empty until the WP4 fleet
+# manifest lands. Storage id must be registered first: make backup-finalize.
+# vmids are strings (bpg schema); all=true backs up every guest instead.
+variable "backup_jobs" {
+  description = "PVE backup jobs keyed by job id: schedule + PBS storage + guest selection + retention"
+  type = map(object({
+    schedule  = string                          # e.g. "02:30" or "mon..fri 03:00"
+    storage   = string                          # PVE storage id (backup-finalize registers "pbs")
+    vmids     = optional(list(string), null)    # explicit guest VMIDs (null with all=true = everything)
+    all       = optional(bool, false)
+    mode      = optional(string, "snapshot")
+    # protected backups are exempt from pruning AND datastore retention —
+    # default-on would grow storage until it fills (Codex P1). Reserve for
+    # deliberately retained jobs.
+    protected = optional(bool, false)
+    prune_backups = optional(map(string), {
+      keep-daily   = "7"
+      keep-weekly  = "4"
+      keep-monthly = "3"
+    })
+  }))
+  default = {}
+
+  validation {
+    condition     = alltrue([for j in var.backup_jobs : (j.all || (j.vmids != null && length(j.vmids) > 0))])
+    error_message = "each backup job needs vmids or all=true — an empty job silently backs up nothing."
+  }
+
+  validation {
+    condition     = alltrue([for j in var.backup_jobs : !(j.all && j.vmids != null)])
+    error_message = "all=true and vmids are mutually exclusive (bpg declares them conflicting)."
+  }
+}

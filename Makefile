@@ -184,6 +184,11 @@ endif
 update-dns:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/update-dns.yml
 
+# B3: register the PBS datastore as PVE storage (run once after PBS provisioning,
+# before the first terraform apply with backup_jobs populated)
+backup-finalize:
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/backup-finalize.yml
+
 expand-disk:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/expand-disk.yml
 
