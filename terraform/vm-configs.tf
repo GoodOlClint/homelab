@@ -76,6 +76,15 @@ locals {
       disk_size_gb = 30   # Database growth, audit logs
       protected    = true # Secrets store — protect from accidental deletion
     },
+    {
+      name         = "apt-cache"
+      vm_id        = 116
+      vlans        = ["vlan10", "vlan40"]
+      ip_offset    = 116
+      cpu_cores    = 2
+      memory_mb    = 2048
+      disk_size_gb = 100 # apt-cacher-ng cache — disposable derived state (ADR 0021), no data volume
+    },
   ]
 
   # --- Services VMs ---

@@ -1,0 +1,34 @@
+---
+- name: Install apt-cacher-ng
+  ansible.builtin.apt:
+    name: apt-cacher-ng
+    state: present
+    update_cache: true
+  tags: [apt-cache, packages]
+
+- name: Deploy homelab acng config (remaps + CONNECT safety net)
+  ansible.builtin.template:
+    src: zz-homelab.conf.j2
+    dest: /etc/apt-cacher-ng/zz-homelab.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart apt-cacher-ng
+  tags: [apt-cache, config]
+
+- name: Pin Ubuntu backends (fast mirror first)
+  ansible.builtin.template:
+    src: backends_ubuntu.j2
+    dest: /etc/apt-cacher-ng/backends_ubuntu
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart apt-cacher-ng
+  tags: [apt-cache, config]
+
+- name: Enable and start apt-cacher-ng
+  ansible.builtin.systemd:
+    name: apt-cacher-ng
+    enabled: true
+    state: started
+  tags: [apt-cache, config]

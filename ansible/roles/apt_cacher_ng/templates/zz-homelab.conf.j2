@@ -1,0 +1,16 @@
+# {{ ansible_managed }}
+# Homelab overrides for apt-cacher-ng (ADR 0021). The stock acng.conf keeps
+# its defaults (Port 3142, CacheDir /var/cache/apt-cacher-ng); this file only
+# adds what the fleet needs.
+
+# Cache HTTPS upstreams: clients ask over plain http://, acng fetches the
+# https:// backend. GPG signing carries the trust; DIRECT fallback keeps
+# working because these hosts 301 http->https (verified 2026-08-11).
+{% for remap in apt_cacher_ng_https_remaps %}
+Remap-{{ remap.name }}: http://{{ remap.host }} ; https://{{ remap.host }}
+{% endfor %}
+
+# Safety net: allow CONNECT for the same hosts so an unconverted https://
+# source still works (uncached) instead of failing. acng denies CONNECT
+# by default — keep this list minimal, never .*
+PassThroughPattern: ^({{ apt_cacher_ng_https_remaps | map(attribute='host') | map('replace', '.', '\.') | join('|') }}):443$

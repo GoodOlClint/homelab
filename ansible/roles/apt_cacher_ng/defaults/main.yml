@@ -1,0 +1,22 @@
+---
+apt_cacher_ng_port: 3142
+
+# Backend order for the built-in Ubuntu remap: fast mirror first (measured
+# 2026-08-04: 8.9/9.2/3.9 MB/s vs archive's 0/4.5/0), canonical archive as
+# fallback. See ADR 0021.
+apt_cacher_ng_ubuntu_backends:
+  - http://mirror.math.princeton.edu/pub/ubuntu/
+  - http://archive.ubuntu.com/ubuntu/
+
+# HTTPS upstreams cached via remap — guest sources flip to http:// at WP4
+# (ADR 0021 Consequences). Until then these hosts also ride PassThroughPattern
+# so unconverted https:// sources keep working (uncached CONNECT).
+apt_cacher_ng_https_remaps:
+  - name: influx
+    host: repos.influxdata.com
+  - name: infisical
+    host: artifacts-cli.infisical.com
+  - name: nvidia
+    host: nvidia.github.io
+  - name: plex
+    host: repo.plex.tv

@@ -88,6 +88,9 @@ endif
 	@echo "Building guest: $(VM)"
 	@cd terraform && TARGETS="$$(../scripts/guest-targets.sh $(VM) targets)" \
 		&& terraform init && terraform apply -no-color -auto-approve $$TARGETS
+	@# Targeted applies don't recompute ansible_inventory_yaml — a brand-new
+	@# guest never reaches vms.yaml without this (found building apt-cache).
+	@cd terraform && terraform apply -refresh-only -auto-approve -no-color > /dev/null
 	@$(MAKE) inventory
 	@echo "Configuring guest: $(VM)"
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/site.yml --limit $(VM)

@@ -16,6 +16,8 @@ This repo automates a Proxmox-based homelab with Terraform (VM provisioning, SDN
 
 **Audiobook ingest** is **not built in the fleet** — parked until WP7 by decision, with an interim unmanaged Libation install on the operator's Mac carrying the archive in the meantime (OpenAudible's license expired 2026-08-02); that bridge retires at cutover and its config/migration path is in the plan doc ([ADR 0018](docs/decisions/0018-audible-library-ingest-rides-libation-in-the-plex-services-stack-one-chapterized-m4b-per-book-staged-before-publish.md), [plan](docs/libation-audiobook-sync-plan.md)): Libation joins the `plex-services` compose stack as one more service, producing one chapterized M4B per book (never per-chapter splits), staged on local scratch and published to `/data/media/Audiobooks` so Plex never scans a partial file. It lands on the ADR 0017 bind-mount model with `/config` on the ADR 0015 data volume — do not build it against the `plex_data` NFS volume. The image pin rides ADR 0016's existing demonstrated-break exception; it is not a new pinning policy.
 
+**Fleet package caching** ([ADR 0021](docs/decisions/0021-fleet-packages-ride-an-apt-cacher-ng-pull-through-cache-with-per-client-fallback-lancache-retires.md), decided 2026-08-11): apt-cacher-ng pull-through cache fronting `archive.ubuntu.com` + `download.proxmox.com`, reached via per-client `Proxy-Auto-Detect` with `DIRECT` fallback — the cache is an accelerator, never a bootstrap dependency; first boot on a cold cutover survives cache-absent. **Lancache retires** (VM 110, role, NFS share, AdGuard/homepage references — removal is follow-on work scoped in the ADR). Never DNS-rewrite public repo hostnames to a fleet-internal cache. Container images get the same treatment at WP4 via a fleet-local pull-through registry with templated `image:` refs ([ADR 0022](docs/decisions/0022-container-images-pull-through-a-fleet-local-registry-via-templated-refs-the-registry-rebuilds-itself-from-upstream.md) — Zot provisionally, Harbor evaluation open; the registry guest's own refs stay upstream so it always rebuilds itself from the WAN).
+
 **Key directories:**
 - `terraform/` — Single consolidated Terraform project with `modules/proxmox-vm/` and `modules/network/`
 - `ansible/roles/` — Single flat directory (~30 roles)
@@ -153,7 +155,7 @@ Pre_tasks compute these facts from `network-data/vlans.yaml`:
 ### Tags Strategy
 Both `infrastructure.yml` and `services.yml` have play-level tags for targeted deploys:
 
-**infrastructure.yml tags:** `phase1`, `phase2`, `phase3`, `dns`, `adguard`, `infisical`, `openobserve`, `proxmox-backup`, `unifi`, `monitoring`, `monitoring-users`, `users`
+**infrastructure.yml tags:** `phase1`, `phase2`, `phase3`, `dns`, `adguard`, `infisical`, `openobserve`, `proxmox-backup`, `unifi`, `apt-cache`, `monitoring`, `monitoring-users`, `users`
 
 **services.yml tags:** `nvidia-licensing`, `docker`, `plex`, `plex-services`, `minio`, `homepage`, `github-runner`, `squid`, `mcp`, `lancache`
 
@@ -198,6 +200,7 @@ make ansible-services TAGS=plex,homepage  # plex + homepage plays
 - Makefile reads `bootstrap.sops.yml` via `sops -d --extract` and exports as `TF_VAR_*` env vars
 - Top-level `export` in Makefile — do NOT use `define`/`$(call)` with `$(eval export)`, it doesn't propagate
 - `terraform refresh` updates state but NOT outputs — use `terraform apply -refresh-only -auto-approve`
+- Targeted applies (`-target`) don't recompute `ansible_inventory_yaml` either — a brand-new guest never lands in `vms.yaml` from the targeted apply alone; `make build` runs a refresh-only apply before `inventory` for exactly this reason (found building apt-cache, 2026-08-11)
 
 ### VM Configuration Patterns
 - Each VM: `name`, `vm_id`, `vlans` (list), `ip_offset`, `cores`, `memory`, `disk_size`

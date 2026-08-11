@@ -1,6 +1,6 @@
 # Homelab Infrastructure-as-Code
 
-This repository manages a Proxmox-based homelab, a Vultr VPS WireGuard relay, and network segmentation across 12 VLANs. The entire stack is automated with Terraform (infrastructure provisioning, DNS, VPS), Ansible (configuration management, 32 roles), Infisical (self-hosted secret vault with per-VM machine identities), SOPS/age (bootstrap secrets only), pre-commit hooks (security scanning), and Make (operational interface).
+This repository manages a Proxmox-based homelab, a Vultr VPS WireGuard relay, and network segmentation across 12 VLANs. The entire stack is automated with Terraform (infrastructure provisioning, DNS, VPS), Ansible (configuration management, 33 roles), Infisical (self-hosted secret vault with per-VM machine identities), SOPS/age (bootstrap secrets only), pre-commit hooks (security scanning), and Make (operational interface).
 
 ## Architecture
 
@@ -233,6 +233,7 @@ All VMs are defined in `terraform/vm-configs.tf` and provisioned with cloud-init
 | github-runner | 113 | mgmt, services | 4 | 8 GB | 50 GB | -- | GitHub Actions self-hosted runner |
 | squid | 114 | mgmt, services, openclaw | 2 | 2 GB | 20 GB | -- | Squid forward proxy (SSL bump) |
 | mcp | 115 | mgmt, services | 4 | 8 GB | 200 GB | -- | MCP servers (MemPalace vector memory) |
+| apt-cache | 116 | mgmt, services | 2 | 2 GB | 100 GB | -- | apt-cacher-ng fleet package cache (ADR 0021) |
 
 **IP addressing:**
 
@@ -341,7 +342,7 @@ Self-hosted secret management platform deployed via Docker Compose:
 
 ## Ansible Roles
 
-32 roles in a single flat directory (`ansible/roles/`):
+33 roles in a single flat directory (`ansible/roles/`):
 
 ### Infrastructure
 
@@ -357,6 +358,7 @@ Self-hosted secret management platform deployed via Docker Compose:
 | unifi | UniFi Controller deployment |
 | infisical | Self-hosted Infisical secret vault deployment |
 | pfsense | pfSense DHCP scopes and RFC 2136 DNS registration |
+| apt_cacher_ng | apt-cacher-ng pull-through package cache for fleet apt + PVE repos |
 
 ### Services
 

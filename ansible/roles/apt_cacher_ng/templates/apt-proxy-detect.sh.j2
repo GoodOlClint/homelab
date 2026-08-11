@@ -1,0 +1,19 @@
+#!/bin/bash
+# {{ ansible_managed }}
+# apt Proxy-Auto-Detect (ADR 0021): use the fleet package cache when it is
+# reachable, otherwise print DIRECT so apt goes straight to the WAN.
+#
+# STAGED, NOT WIRED: no Ansible task anywhere in this repo renders or installs
+# this template today, and apt_cache_proxy_host is deliberately undefined in
+# every defaults/vars file. This is the CLIENT half of ADR 0021, parked here
+# for the WP2/WP4 wiring (guest cloud-init + proxmox_host), which supplies
+# apt_cache_proxy_host from inventory and installs the matching
+# Acquire::http::Proxy-Auto-Detect apt.conf.d drop-in. Validated live on the
+# worklab scratch guests 2026-08-11 (cache path + DIRECT fallback).
+# The DIRECT branch is load-bearing — first boot on a cold cutover must
+# work with no cache present. Never replace this with a hard proxy setting.
+if timeout 1 bash -c "exec 3<>/dev/tcp/{{ apt_cache_proxy_host }}/{{ apt_cacher_ng_port }}" 2>/dev/null; then
+  echo "http://{{ apt_cache_proxy_host }}:{{ apt_cacher_ng_port }}"
+else
+  echo "DIRECT"
+fi

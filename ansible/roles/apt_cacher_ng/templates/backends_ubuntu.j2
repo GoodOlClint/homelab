@@ -1,0 +1,6 @@
+# {{ ansible_managed }}
+# Backends for acng's built-in Remap-uburep (ADR 0021): cache misses fetch
+# from the first reachable entry, so even cold pulls avoid the flaky path.
+{% for backend in apt_cacher_ng_ubuntu_backends %}
+{{ backend }}
+{% endfor %}

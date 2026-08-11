@@ -179,12 +179,25 @@
     - phase1
     - unifi
 
+- name: "Phase 1: Configure apt-cache VM (apt-cacher-ng)"
+  hosts: apt-cache
+  become: true
+  vars_files:
+    - ../group_vars/all.yml
+  pre_tasks: *load_all_config
+  roles:
+    - dns_config
+    - apt_cacher_ng
+  tags:
+    - phase1
+    - apt-cache
+
 # ============================================================
 # Phase 2: Monitoring clients (OpenObserve is now running)
 # ============================================================
 
 - name: "Phase 2: Configure monitoring clients on all infrastructure VMs"
-  hosts: dns,adguard,infisical,openobserve,proxmox-backup,unifi
+  hosts: dns,adguard,infisical,openobserve,proxmox-backup,unifi,apt-cache
   become: true
   vars_files:
     - ../group_vars/all.yml

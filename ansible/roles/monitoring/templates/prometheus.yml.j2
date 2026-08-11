@@ -164,6 +164,12 @@ scrape_configs:
           instance: 'adguard'
           role: 'infrastructure'
 {% endif %}
+{% if hostvars['apt-cache'] is defined and hostvars['apt-cache'].ansible_host is defined %}
+      - targets: ['{{ hostvars['apt-cache'].ansible_host }}:9273']
+        labels:
+          instance: 'apt-cache'
+          role: 'infrastructure'
+{% endif %}
 {% if hostvars['plex'] is defined and hostvars['plex'].ansible_host is defined %}
       - targets: ['{{ hostvars['plex'].ansible_host }}:9273']
         labels:

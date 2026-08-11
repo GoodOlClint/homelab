@@ -14,7 +14,7 @@ Verified working 2026-07-27: stopping `axosyslog` produced `AxoSyslog — syslog
 
 ## Monitors that exist
 
-22 monitors. The original 18 were confirmed UP on 2026-07-27. Sonarr, Radarr and Sabnzbd were added in the UI at some point after that and were found live-but-unrecorded on 2026-08-10 — they are now back in the seeder's target list, because a rebuild driven by that list would otherwise have dropped them silently. Valheim — PlayFab lobby was seeded 2026-08-10 and confirmed UP on its first heartbeat (`JSON query passes (comparing playfab == playfab)`).
+22 monitors. The original 18 were confirmed UP on 2026-07-27. Sonarr, Radarr and Sabnzbd were added in the UI at some point after that and were found live-but-unrecorded on 2026-08-10 — they are now back in the seeder's target list, because a rebuild driven by that list would otherwise have dropped them silently. Valheim — PlayFab lobby was seeded 2026-08-10 and confirmed UP on its first heartbeat (`JSON query passes (comparing playfab == playfab)`). apt-cacher-ng — proxy TCP 3142 was added to the seeder target list 2026-08-11 with the apt-cache VM (ADR 0021) and is pending its UI seed / first heartbeat.
 
 Targets use services-VLAN addresses; the real values live in the gitignored `network-data/local/uptime-kuma-monitors.json` (this repo is public). **Adding a monitor in the UI without adding it here makes it invisible to a rebuild** — the drift above is the standing example.
 
@@ -34,6 +34,7 @@ Targets use services-VLAN addresses; the real values live in the gitignored `net
 | Infisical | HTTP | infisical `:8080` | 60s |
 | Proxmox Backup Server | HTTP | pbs `:8007`, TLS ignored | 60s |
 | UniFi controller | TCP port | unifi `:11443` | 60s |
+| apt-cacher-ng — proxy TCP 3142 | TCP port | apt-cache `:3142` | 60s |
 | Homepage | HTTP | homepage `:3000` | 60s |
 | VPS — public IP | Ping | VPS reserved IP | 60s |
 | VPS — WireGuard tunnel peer | Ping | VPS tunnel address | 60s |
