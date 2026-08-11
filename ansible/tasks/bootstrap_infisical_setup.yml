@@ -110,9 +110,12 @@
       no_log: true
       when: _bootstrap_fresh | bool
 
-    - name: Extract admin token and org ID from bootstrap
+    # Deliberately NOT using _bootstrap_result.identity.credentials.token:
+    # since 2026-08-02 Infisical's legacy no-exp sunset rejects the TTL-0
+    # bootstrap identity token seconds after issuance (upstream #7599; fix PR
+    # #7603 unmerged). The admin USER JWT below works on every image vintage.
+    - name: Extract org ID from bootstrap
       ansible.builtin.set_fact:
-        _admin_jwt: "{{ _bootstrap_result.identity.credentials.token }}"
         _org_id: "{{ _bootstrap_result.organization.id }}"
       no_log: true
       when: _bootstrap_fresh | bool
@@ -125,27 +128,29 @@
           {{ playbook_dir }}/../group_vars/bootstrap.sops.yml
       when: _bootstrap_fresh | bool
 
-    # --- Already bootstrapped: login via CLI to get JWT ---
-    - name: Login via infisical CLI (instance already bootstrapped)
+    - name: Set org ID from config (instance already bootstrapped)
+      ansible.builtin.set_fact:
+        _org_id: "{{ bootstrap_config.infisical_org_id }}"
+      when: not _bootstrap_fresh | bool
+
+    # --- Admin JWT via user login, BOTH paths (fresh + already-bootstrapped) ---
+    - name: Login via infisical CLI as the admin user
       ansible.builtin.command:
         cmd: >-
           infisical login
           --method=user
           --email={{ bootstrap_config.infisical_admin_email }}
           --password='{{ bootstrap.infisical_admin_password }}'
-          --organization-id={{ bootstrap_config.infisical_org_id }}
+          --organization-id={{ _org_id }}
           --domain={{ _infisical_url }}
           --plain --silent
       register: _cli_login
       no_log: true
-      when: not _bootstrap_fresh | bool
 
     - name: Set admin JWT from CLI login
       ansible.builtin.set_fact:
         _admin_jwt: "{{ (_cli_login.stdout_lines | last) | trim }}"
-        _org_id: "{{ bootstrap_config.infisical_org_id }}"
       no_log: true
-      when: not _bootstrap_fresh | bool
 
     # --- Create project ---
 
