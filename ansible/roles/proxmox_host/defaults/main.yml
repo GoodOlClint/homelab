@@ -39,3 +39,18 @@ proxmox_host_gateway: "{{ proxmox_host_node.install_gateway }}"
 proxmox_host_ring0_ip: "{{ network_data.ipv4_prefix }}.{{ proxmox_host_ring0_vlan }}.{{ proxmox_host_octet }}"
 proxmox_host_ring1_ip: "{{ network_data.ipv4_prefix }}.{{ proxmox_host_ring1_vlan }}.{{ proxmox_host_octet }}"
 proxmox_host_ceph_ip: "{{ network_data.ipv4_prefix }}.{{ proxmox_host_ceph_vlan }}.{{ proxmox_host_octet }}"
+
+# Ceph pool + storage IDs (owned by tasks/ceph.yml; the fleet root's cutover
+# tfvars consume these as its primary_disk_storage / virtual_environment_storage)
+proxmox_host_ceph_pool: "ceph-rbd"
+proxmox_host_cephfs_name: "cephfs"
+proxmox_host_mds_count: 2
+
+# Ceph health-gate waivers: check CODES (e.g. "OSDMAP_FLAGS") that are known,
+# understood, and deliberately accepted — each entry needs a reason comment.
+# Starts empty; HEALTH_WARN with any unwaived check fails the play.
+proxmox_host_ceph_health_waivers: []
+
+# netconsole raw stream port on the collector (axosyslog `netconsole` source —
+# deliberately parser-free; ordinary syslog is 5514 and the two must never mix)
+proxmox_host_netconsole_port: 5515

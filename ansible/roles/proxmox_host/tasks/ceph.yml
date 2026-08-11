@@ -1,8 +1,12 @@
 ---
 # Ceph bootstrap — install, init with the network split (ADR-0009: public on the
 # 10G storage VLAN so non-25G nodes can be clients; cluster on the switched 25G
-# ceph VLAN, ADR-0014 — set at init time, retrofit is painful), then MON/MGR/OSD
-# idempotently. The pool + storage definitions are Terraform (WP3), not this role.
+# ceph VLAN, ADR-0014 — set at init time, retrofit is painful), then MON/MGR/OSD,
+# RBD pool + CephFS + their PVE storage definitions, idempotently. This role OWNS
+# the pool/storage layer (audit 2026-08-10 gap: bpg has no storage-def resource,
+# so "Terraform will do it" pointed at code that cannot exist) — the fleet root
+# consumes the storage IDs (proxmox_host_ceph_pool / proxmox_host_cephfs_name)
+# as plain strings in its cutover tfvars.
 
 - name: Install Ceph packages
   ansible.builtin.command:
@@ -47,10 +51,125 @@
     label: "{{ item.item }}"
   when: item.rc != 0
 
-- name: Verify Ceph health
+# --- Pool + storage definitions (owned here — see header) ---
+
+- name: List existing Ceph pools
   ansible.builtin.command:
-    cmd: ceph health
+    cmd: ceph osd pool ls
+  register: _ceph_pools
+  changed_when: false
+  run_once: true
+
+- name: Create RBD pool
+  ansible.builtin.command:
+    cmd: "pveceph pool create {{ proxmox_host_ceph_pool }}"
+  run_once: true
+  changed_when: true
+  when: proxmox_host_ceph_pool not in _ceph_pools.stdout_lines
+
+# Storage definitions reconcile INDEPENDENTLY of pool/fs creation so a rerun
+# repairs partial state (pool created but storage add failed — Codex P2).
+- name: List PVE storage definitions
+  ansible.builtin.command:
+    cmd: pvesh get /storage --output-format json
+  register: _pve_storage
+  changed_when: false
+  run_once: true
+
+- name: Define RBD storage
+  ansible.builtin.command:
+    cmd: >-
+      pvesm add rbd {{ proxmox_host_ceph_pool }}
+      --pool {{ proxmox_host_ceph_pool }}
+      --content images,rootdir
+  run_once: true
+  changed_when: true
+  when: proxmox_host_ceph_pool not in (_pve_storage.stdout | from_json | map(attribute='storage') | list)
+
+- name: Create MDS (first {{ proxmox_host_mds_count }} nodes — active + standby)
+  ansible.builtin.command:
+    cmd: pveceph mds create
+    creates: "/var/lib/ceph/mds/ceph-{{ inventory_hostname }}"
+  when: groups['proxmox'].index(inventory_hostname) < proxmox_host_mds_count | int
+
+- name: List existing CephFS filesystems
+  ansible.builtin.command:
+    cmd: ceph fs ls --format json
+  register: _ceph_fs
+  changed_when: false
+  run_once: true
+
+- name: Create CephFS (cloud-init snippets datastore)
+  ansible.builtin.command:
+    cmd: "pveceph fs create --name {{ proxmox_host_cephfs_name }}"
+  run_once: true
+  changed_when: true
+  when: proxmox_host_cephfs_name not in (_ceph_fs.stdout | from_json | map(attribute='name') | list)
+
+- name: Define CephFS storage
+  ansible.builtin.command:
+    cmd: >-
+      pvesm add cephfs {{ proxmox_host_cephfs_name }}
+      --content backup,iso,vztmpl,snippets
+  run_once: true
+  changed_when: true
+  when: proxmox_host_cephfs_name not in (_pve_storage.stdout | from_json | map(attribute='storage') | list)
+
+# CephFS storage defs default to content=backup,iso,vztmpl — the fleet root
+# uploads cloud-init snippets there, so `snippets` must be in the content list.
+- name: Read CephFS storage definition
+  ansible.builtin.command:
+    cmd: "pvesh get /storage/{{ proxmox_host_cephfs_name }} --output-format json"
+  register: _cephfs_storage
+  changed_when: false
+  run_once: true
+
+- name: Ensure snippets content on the CephFS storage
+  ansible.builtin.command:
+    cmd: "pvesh set /storage/{{ proxmox_host_cephfs_name }} --content backup,iso,vztmpl,snippets"
+  run_once: true
+  changed_when: true
+  when: "'snippets' not in (_cephfs_storage.stdout | from_json).content | default('')"
+
+- name: Assert both storage IDs exist before the fleet root can reference them
+  ansible.builtin.command:
+    cmd: pvesm status
+  register: _pvesm_status
+  changed_when: false
+  run_once: true
+  failed_when: >-
+    proxmox_host_ceph_pool not in _pvesm_status.stdout or
+    proxmox_host_cephfs_name not in _pvesm_status.stdout
+
+# --- Health gate: HEALTH_OK, or HEALTH_WARN where EVERY check is explicitly
+# waived. Waivers start empty and are added deliberately, with a reason, in
+# host-bindings or group_vars — never pre-emptively (audit 2026-08-10: the old
+# gate passed any HEALTH_WARN while the plan's DoD requires HEALTH_OK). ---
+
+- name: Wait for Ceph health to converge (PG peering/MDS activation are async)
+  ansible.builtin.command:
+    cmd: ceph health detail --format json
   register: _ceph_health
   changed_when: false
   run_once: true
-  failed_when: "'HEALTH_ERR' in _ceph_health.stdout"
+  retries: 30
+  delay: 10
+  until: >-
+    (_ceph_health.stdout | from_json).status == 'HEALTH_OK' or
+    ((_ceph_health.stdout | from_json).status == 'HEALTH_WARN' and
+     ((_ceph_health.stdout | from_json).checks | default({}) | list
+      | difference(proxmox_host_ceph_health_waivers)) | length == 0)
+
+- name: Gate on HEALTH_OK (explicitly waived warnings only)
+  ansible.builtin.assert:
+    that:
+      - _h.status == 'HEALTH_OK' or (_h.status == 'HEALTH_WARN' and _unwaived | length == 0)
+    fail_msg: >-
+      Ceph is {{ _h.status }} with unwaived checks: {{ _unwaived | join(', ') }}.
+      Fix the condition, or add the check code to proxmox_host_ceph_health_waivers
+      WITH a reason comment if it is a known-acceptable state.
+    quiet: true
+  vars:
+    _h: "{{ _ceph_health.stdout | from_json }}"
+    _unwaived: "{{ _h.checks | default({}) | list | difference(proxmox_host_ceph_health_waivers) }}"
+  run_once: true

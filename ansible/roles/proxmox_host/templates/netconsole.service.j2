@@ -1,0 +1,18 @@
+# {{ ansible_managed }}
+# Loaded late deliberately: netconsole needs its egress interface up, and the
+# bridge does not exist at early boot. Cost: pre-network boot messages are not
+# captured (accepted — this lane exists for runtime disk-death capture, and a
+# real boot does not replay the ring buffer). See docs/ms01-cluster-iac-plan.md WP2.
+[Unit]
+Description=netconsole kernel log shipping to OpenObserve
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/netconsole-start.sh
+ExecStop=/usr/sbin/modprobe -r netconsole
+
+[Install]
+WantedBy=multi-user.target

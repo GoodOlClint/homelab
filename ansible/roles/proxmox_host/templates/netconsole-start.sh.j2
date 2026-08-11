@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# {{ ansible_managed }}
+# Load netconsole toward the OpenObserve collector (UDP {{ proxmox_host_netconsole_port }},
+# the parser-free raw stream — NEVER 5514, whose syslog-parser() eats the first
+# token of unframed printk). Derives egress dev/src and the next-hop MAC at
+# start: netpoll does no ARP, and a baked-in gateway MAC silently kills
+# transmission the day the gateway NIC changes. Re-deriving every boot/start
+# self-heals that. A manual restart replays the printk ring buffer — that burst
+# is correct behavior, not an incident (see docs/ms01-cluster-iac-plan.md WP2).
+set -euo pipefail
+
+TARGET_IP="{{ host_bindings.cluster.openobserve_syslog_target }}"
+TARGET_PORT="{{ proxmox_host_netconsole_port }}"
+
+ROUTE=$(ip -o route get "$TARGET_IP")
+DEV=$(sed -n 's/.* dev \([^ ]*\).*/\1/p' <<<"$ROUTE")
+SRC=$(sed -n 's/.* src \([0-9.]*\).*/\1/p' <<<"$ROUTE")
+GW=$(sed -n 's/.* via \([0-9.]*\).*/\1/p' <<<"$ROUTE")
+GW=${GW:-$TARGET_IP} # on-link: next hop is the target itself
+
+[ -n "$DEV" ] && [ -n "$SRC" ] || { echo "netconsole: cannot resolve route to $TARGET_IP" >&2; exit 1; }
+
+# Populate the neighbour table, then read the next-hop MAC.
+ping -c1 -W2 "$GW" >/dev/null 2>&1 || true
+MAC=$(ip neigh show "$GW" dev "$DEV" | awk '{for(i=1;i<=NF;i++) if($i=="lladdr") print $(i+1)}' | head -1)
+[ -n "$MAC" ] || { echo "netconsole: no neighbour MAC for $GW on $DEV" >&2; exit 1; }
+
+modprobe -r netconsole 2>/dev/null || true
+modprobe netconsole "netconsole=@${SRC}/${DEV},${TARGET_PORT}@${TARGET_IP}/${MAC}"
+echo "netconsole: @${SRC}/${DEV} -> ${TARGET_IP}:${TARGET_PORT} (nexthop ${GW} ${MAC})"

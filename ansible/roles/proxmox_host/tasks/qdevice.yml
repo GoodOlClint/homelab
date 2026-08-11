@@ -18,6 +18,22 @@
     - groups['proxmox'] | length == 2
     - proxmox_host_qdevice_addr | length > 0
 
+# Hard gate (audit 2026-08-10): a 2-node cluster without a working QDevice is
+# one node-loss away from total quorum loss, and the old "skip cleanly when
+# unbound" behavior hid exactly that. If the inventory says 2 nodes, a QDevice
+# is mandatory — no binding, no cluster build.
+- name: Require a QDevice binding for 2-node operation
+  ansible.builtin.assert:
+    that:
+      - proxmox_host_qdevice_addr | length > 0
+    fail_msg: >-
+      2-node cluster requires a QDevice: set cluster.qdevice_addr in
+      network-data/local/host-bindings.yaml (corosync-qnetd host) before
+      running the cluster build.
+    quiet: true
+  run_once: true
+  when: groups['proxmox'] | length == 2
+
 - name: Set up the QDevice (2-node cluster only)
   ansible.builtin.command:
     cmd: "pvecm qdevice setup {{ proxmox_host_qdevice_addr }} -f"
@@ -27,6 +43,15 @@
     - groups['proxmox'] | length == 2
     - proxmox_host_qdevice_addr | length > 0
     - "'Qdevice' not in _qdev_status.stdout"
+
+- name: Verify the QDevice is active (2-node cluster only)
+  ansible.builtin.command:
+    cmd: pvecm status
+  register: _qdev_verify
+  changed_when: false
+  failed_when: "'Qdevice' not in _qdev_verify.stdout"
+  run_once: true
+  when: groups['proxmox'] | length == 2
 
 - name: Remove the QDevice (3rd node has joined)
   ansible.builtin.command:

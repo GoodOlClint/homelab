@@ -23,3 +23,55 @@
         owner: root
         group: root
       notify: restart rsyslog
+
+# --- netconsole: the only log lane that survives losing the root disk (WP2).
+# Kernel printk over UDP from kernel context — no filesystem, no userspace
+# daemon. Same binding gate as rsyslog: no collector address, no lane. ---
+- name: Configure netconsole kernel log shipping
+  when: ((host_bindings.cluster | default({})).openobserve_syslog_target | default('')) | length > 0
+  tags:
+    - proxmox_host
+    - logging
+    - netconsole
+  block:
+    # Without this the whole lane is theatre: PVE ships console_loglevel 1-3,
+    # so NVMe/EXT4 errors (KERN_ERR, 3) never leave the box. Level 5 passes
+    # err+warn and filters notice/info; 7 would flood the stream AND clobber
+    # the physical console's login prompt (measured 2026-07-30, worklab).
+    - name: Raise console_loglevel for netconsole (kernel.printk 5 4 1 7)
+      ansible.builtin.copy:
+        dest: /etc/sysctl.d/90-netconsole-printk.conf
+        content: |
+          # netconsole is a console driver — it only transmits what passes
+          # console-level filtering. 5 = err+warn ship, notice/info filtered.
+          # Shared with the VT: do not raise to 7 (clobbers the login prompt).
+          kernel.printk = 5 4 1 7
+        mode: '0644'
+        owner: root
+        group: root
+      notify: apply sysctl
+
+    - name: Deploy netconsole start script
+      ansible.builtin.template:
+        src: netconsole-start.sh.j2
+        dest: /usr/local/sbin/netconsole-start.sh
+        mode: '0755'
+        owner: root
+        group: root
+      notify: restart netconsole
+
+    - name: Deploy netconsole systemd unit
+      ansible.builtin.template:
+        src: netconsole.service.j2
+        dest: /etc/systemd/system/netconsole.service
+        mode: '0644'
+        owner: root
+        group: root
+      notify: restart netconsole
+
+    - name: Enable and start netconsole
+      ansible.builtin.systemd:
+        name: netconsole
+        enabled: true
+        state: started
+        daemon_reload: true
