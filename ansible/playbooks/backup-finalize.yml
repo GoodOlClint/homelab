@@ -22,6 +22,10 @@
   vars:
     pbs_pve_storage_id: "pbs"
     pbs_pve_datastore: "synology"
+    # Optional PBS namespace for the storage entry ("" = datastore root). The
+    # namespace must already exist on PBS. W2 campaign registers worklab with
+    # storage id pbs-campaign + namespace w2-campaign via -e overrides.
+    pbs_pve_namespace: ""
     # Nodes reach PBS over the storage VLAN (PBS keeps its vlan20 leg — ADR 0017);
     # same-offset prefix translation is the repo convention.
     pbs_pve_server: "{{ hostvars['proxmox-backup'].ansible_host | replace(mgmt_vlan_prefix, storage_vlan_prefix) }}"
@@ -72,10 +76,17 @@
              (_pbs_probe.stdout_lines
               | select('search', '^' ~ pbs_pve_storage_id ~ '\s+\S+\s+active\s')
               | list | length > 0) }}
+        # server/datastore cannot be edited in place -> destructive recreate.
         _pbs_drifted: >-
           {{ _pbs_entry is not none and (
              _pbs_entry.server | default('') != pbs_pve_server or
              _pbs_entry.datastore | default('') != pbs_pve_datastore) }}
+        # namespace IS an updatable pvesm-set option -> in-place, never recreate
+        # (folding it into the destructive path would drop the cluster-wide
+        # storage entry on a namespace-only change, breaking every job briefly).
+        _pbs_namespace_drift: >-
+          {{ _pbs_entry is not none and
+             _pbs_entry.namespace | default('') != pbs_pve_namespace }}
       run_once: true
 
     # Token value rides the command line on the node for the duration of the
@@ -90,7 +101,7 @@
           --username backup@pbs!backup-token
           --password {{ secrets.pbs_backup_token }}
           --fingerprint {{ secrets.pbs_fingerprint }}
-          --content backup
+          --content backup{{ (pbs_pve_namespace | length > 0) | ternary(' --namespace ' ~ pbs_pve_namespace, '') }}
       run_once: true
       changed_when: true
       no_log: true
@@ -100,7 +111,7 @@
     - name: Recreate PBS storage (datastore/server moved)
       ansible.builtin.shell: |
         pvesm remove {{ pbs_pve_storage_id }}
-        pvesm add pbs {{ pbs_pve_storage_id }}           --server {{ pbs_pve_server }}           --datastore {{ pbs_pve_datastore }}           --username backup@pbs!backup-token           --password {{ secrets.pbs_backup_token }}           --fingerprint {{ secrets.pbs_fingerprint }}           --content backup
+        pvesm add pbs {{ pbs_pve_storage_id }}           --server {{ pbs_pve_server }}           --datastore {{ pbs_pve_datastore }}           --username backup@pbs!backup-token           --password {{ secrets.pbs_backup_token }}           --fingerprint {{ secrets.pbs_fingerprint }}           --content backup{{ (pbs_pve_namespace | length > 0) | ternary(' --namespace ' ~ pbs_pve_namespace, '') }}
       run_once: true
       changed_when: true
       no_log: true
@@ -124,6 +135,21 @@
         - _pbs_entry is not none
         - not (_pbs_drifted | bool)
         - not (_pbs_active | bool)
+
+    # Namespace changed but endpoint/datastore did not: update in place. A
+    # recreated entry (server/datastore drift) already carries the new namespace,
+    # so this only fires when that destructive path did not.
+    - name: Reconcile PBS namespace in place
+      ansible.builtin.command:
+        cmd: >-
+          pvesm set {{ pbs_pve_storage_id }}
+          {{ (pbs_pve_namespace | length > 0) | ternary('--namespace ' ~ pbs_pve_namespace, '--delete namespace') }}
+      run_once: true
+      changed_when: true
+      when:
+        - _pbs_entry is not none
+        - not (_pbs_drifted | bool)
+        - _pbs_namespace_drift | bool
 
     - name: Verify PBS storage is active (contacts PBS)
       ansible.builtin.command:
