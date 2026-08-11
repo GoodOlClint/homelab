@@ -1,7 +1,17 @@
 #!/usr/bin/env bash
-# Disaster recovery restore: SOPS backup → Infisical
-# Restores secrets from `make infisical-backup` output to Infisical.
-# NOT used during normal operation — only for DR scenarios.
+# Disaster recovery restore: SOPS backup → Infisical (make infisical-seed).
+# Rewritten 2026-08-10 (cutover-week plan 1.4): the old version defaulted its
+# API to localhost, required an unpopulated INFISICAL_TOKEN, wrote folders and
+# secrets to two DIFFERENT endpoints (API vs unscoped `infisical` CLI), put
+# secret values on argv, and reported every failure as a warning while exiting
+# 0. This version is pure-API, single-endpoint, argv-clean, and fails hard.
+#
+# Auth/endpoint resolution (env overrides exist for rehearsal against a
+# disposable instance — see scripts/rehearse_infisical_seed.sh):
+#   INFISICAL_API_URL    override; else bootstrap_config.infisical_url
+#   INFISICAL_PROJECT_ID override; else bootstrap_config.infisical_project_id
+#   INFISICAL_TOKEN      override (direct bearer); else universal-auth login
+#                        with bootstrap.infisical_client_id/_client_secret
 #
 # Usage: make infisical-seed
 
@@ -10,143 +20,164 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 VENV_PYTHON="$REPO_ROOT/.venv/bin/python3"
-SOPS_FILE="ansible/group_vars/secrets.sops.yml"
+SOPS_FILE="$REPO_ROOT/ansible/group_vars/secrets.sops.yml"
+BOOTSTRAP_FILE="$REPO_ROOT/ansible/group_vars/bootstrap.sops.yml"
 INFISICAL_ENV="prod"
 
-if [ ! -x "$VENV_PYTHON" ]; then
-    echo "ERROR: .venv not found. Run: make bootstrap-local"
+[ -x "$VENV_PYTHON" ] || { echo "ERROR: .venv not found. Run: make init"; exit 1; }
+command -v sops >/dev/null || { echo "ERROR: sops CLI not found"; exit 1; }
+[ -f "$SOPS_FILE" ] || { echo "ERROR: $SOPS_FILE not found. Nothing to restore."; exit 1; }
+[ -f "$BOOTSTRAP_FILE" ] || { echo "ERROR: $BOOTSTRAP_FILE not found."; exit 1; }
+
+# The DR artifact must be encrypted — a plaintext secrets.sops.yml is a leak,
+# not an input format. (The old plaintext fallback is deliberately gone.)
+sops -d "$SOPS_FILE" >/dev/null 2>&1 || {
+    echo "ERROR: $SOPS_FILE is not SOPS-decryptable. Refusing a plaintext fallback."
     exit 1
+}
+
+sops_extract() {
+    sops -d --extract "$1" "$BOOTSTRAP_FILE" 2>/dev/null || true
+}
+
+API_URL="${INFISICAL_API_URL:-$(sops_extract '["bootstrap_config"]["infisical_url"]')}"
+PROJECT_ID="${INFISICAL_PROJECT_ID:-$(sops_extract '["bootstrap_config"]["infisical_project_id"]')}"
+
+for v in API_URL PROJECT_ID; do
+    val="${!v}"
+    if [ -z "$val" ] || [ "$val" = "REPLACE_ME" ]; then
+        echo "ERROR: $v unresolved (set the env override or fill bootstrap.sops.yml)"
+        exit 1
+    fi
+done
+
+echo "Restoring $SOPS_FILE → $API_URL (env: $INFISICAL_ENV, project: $PROJECT_ID)"
+
+CLIENT_ID=""
+CLIENT_SECRET=""
+if [ -z "${INFISICAL_TOKEN:-}" ]; then
+    CLIENT_ID=$(sops_extract '["bootstrap"]["infisical_client_id"]')
+    CLIENT_SECRET=$(sops_extract '["bootstrap"]["infisical_client_secret"]')
 fi
 
-if [ ! -f "$SOPS_FILE" ]; then
-    echo "ERROR: $SOPS_FILE not found. Nothing to migrate."
-    exit 1
-fi
-
-if ! command -v infisical &> /dev/null; then
-    echo "ERROR: infisical CLI not found. Install from https://infisical.com/docs/cli/overview"
-    exit 1
-fi
-
-if ! command -v sops &> /dev/null; then
-    echo "ERROR: sops CLI not found. Install from https://github.com/getsops/sops"
-    exit 1
-fi
-
-# Read Infisical project ID from bootstrap.sops.yml
-BOOTSTRAP_FILE="ansible/group_vars/bootstrap.sops.yml"
-PROJECT_ID=$("$VENV_PYTHON" -c "
+# Everything secret-bearing rides fd 3 / env into python — never argv. The
+# decrypted YAML arrives on fd 3 because stdin already carries the program
+# (heredoc); piping both through stdin silently drops the data.
+INFISICAL_SEED_API_URL="$API_URL" \
+    INFISICAL_SEED_PROJECT_ID="$PROJECT_ID" \
+    INFISICAL_SEED_ENV="$INFISICAL_ENV" \
+    INFISICAL_SEED_TOKEN="${INFISICAL_TOKEN:-}" \
+    INFISICAL_SEED_CLIENT_ID="$CLIENT_ID" \
+    INFISICAL_SEED_CLIENT_SECRET="$CLIENT_SECRET" \
+    "$VENV_PYTHON" - 3< <(sops -d "$SOPS_FILE") <<'PY'
+import json, os, sys, urllib.request, urllib.error, urllib.parse
 import yaml
-data = yaml.safe_load(open('$BOOTSTRAP_FILE'))
-pid = data.get('bootstrap_config', {}).get('infisical_project_id', 'REPLACE_ME')
-if pid == 'REPLACE_ME':
-    print('')
-else:
-    print(pid)
-")
 
-if [ -z "$PROJECT_ID" ]; then
-    echo "ERROR: infisical_project_id not set in $BOOTSTRAP_FILE"
-    echo "       Fill it in from the Infisical UI (Project Settings > Project ID)"
-    exit 1
-fi
+api = os.environ["INFISICAL_SEED_API_URL"].rstrip("/")
+project = os.environ["INFISICAL_SEED_PROJECT_ID"]
+env_slug = os.environ["INFISICAL_SEED_ENV"]
 
-echo "Migrating secrets from $SOPS_FILE to Infisical (env: $INFISICAL_ENV, project: $PROJECT_ID)..."
-echo ""
-
-# Decrypt SOPS file (or read plaintext if not encrypted)
-if sops -d "$SOPS_FILE" > /dev/null 2>&1; then
-    DECRYPT_CMD="sops -d $SOPS_FILE"
-else
-    echo "WARNING: $SOPS_FILE is not SOPS-encrypted, reading as plaintext"
-    DECRYPT_CMD="cat $SOPS_FILE"
-fi
-
-# Walk the secrets structure:
-#   - Flat string keys → seed to Infisical path /
-#   - Nested dicts (keys starting with /) → seed each sub-key to that Infisical path
-$DECRYPT_CMD | "$VENV_PYTHON" -c "
-import yaml, sys, subprocess
-
-data = yaml.safe_load(sys.stdin)
-secrets = data.get('secrets', {})
-
-if not secrets:
-    print('No secrets found under secrets: key')
-    sys.exit(1)
-
-migrated = 0
-skipped = 0
-
-import json, urllib.request, os
-
-api_url = os.environ.get('INFISICAL_API_URL', 'http://localhost:8080')
-api_token = os.environ.get('INFISICAL_TOKEN', '')
-created_folders = set()
-
-def ensure_folder(folder_name):
-    if folder_name in created_folders:
-        return
-    print(f'  Creating folder: /{folder_name}')
-    body = json.dumps({
-        'projectId': '$PROJECT_ID',
-        'environment': '$INFISICAL_ENV',
-        'name': folder_name,
-        'path': '/'
-    }).encode()
+def call(method, path, body, token=None):
     req = urllib.request.Request(
-        f'{api_url}/api/v2/folders',
-        data=body,
-        headers={
-            'Authorization': f'Bearer {api_token}',
-            'Content-Type': 'application/json'
-        },
-        method='POST'
-    )
+        f"{api}/api{path}", method=method,
+        data=json.dumps(body).encode(),
+        headers={"Content-Type": "application/json",
+                 **({"Authorization": f"Bearer {token}"} if token else {})})
     try:
-        urllib.request.urlopen(req)
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return json.load(r), None
     except urllib.error.HTTPError as e:
-        err_body = e.read().decode()
-        if 'already exists' not in err_body.lower() and e.code != 409:
-            print(f'    WARNING: Failed to create folder /{folder_name}: {err_body}')
-    created_folders.add(folder_name)
+        return None, (e.code, e.read()[:300].decode(errors="replace"))
+    except urllib.error.URLError as e:
+        return None, (0, str(e))
 
-def seed(name, value, path):
+token = os.environ.get("INFISICAL_SEED_TOKEN") or None
+if not token:
+    cid = os.environ.get("INFISICAL_SEED_CLIENT_ID", "")
+    csec = os.environ.get("INFISICAL_SEED_CLIENT_SECRET", "")
+    if not cid or not csec or cid == "REPLACE_ME":
+        sys.exit("ERROR: no INFISICAL_TOKEN and no universal-auth credentials in bootstrap.sops.yml")
+    login, err = call("POST", "/v1/auth/universal-auth/login",
+                      {"clientId": cid, "clientSecret": csec})
+    if err:
+        sys.exit(f"ERROR: universal-auth login failed against {api}: {err}")
+    token = login["accessToken"]
+
+with os.fdopen(3) as _data_fd:
+    data = yaml.safe_load(_data_fd)
+secrets = (data or {}).get("secrets") or {}
+if not secrets:
+    sys.exit("ERROR: no secrets found under the 'secrets:' key")
+
+failures, migrated, skipped, verified = [], 0, 0, 0
+
+def ensure_folder(name):
+    _, err = call("POST", "/v2/folders",
+                  {"projectId": project, "environment": env_slug,
+                   "name": name, "path": "/"}, token)
+    if err and err[0] not in (400, 409):
+        failures.append(f"folder /{name}: {err}")
+
+def upsert(name, value, path):
     global migrated, skipped
-    if value and str(value) != 'REPLACE_ME':
-        print(f'  Seeding: {name} → {path}')
-        result = subprocess.run([
-            'infisical', 'secrets', 'set',
-            f'{name}={value}',
-            '--env', '$INFISICAL_ENV',
-            '--path', path,
-            '--projectId', '$PROJECT_ID'
-        ], capture_output=True, text=True)
-        if result.returncode == 0:
-            migrated += 1
-        else:
-            print(f'    WARNING: Failed to set {name}: {result.stderr.strip()}')
-    else:
+    if not value or str(value) == "REPLACE_ME":
         skipped += 1
-        print(f'  Skipping: {name} (empty or REPLACE_ME)')
+        return
+    body = {"workspaceId": project, "environment": env_slug,
+            "secretPath": path, "secretValue": str(value),
+            "secretComment": "Restored by make infisical-seed"}
+    _, err = call("POST", f"/v3/secrets/raw/{name}", body, token)
+    if err and err[0] == 400:
+        _, err = call("PATCH", f"/v3/secrets/raw/{name}", body, token)
+    if err:
+        failures.append(f"{path}/{name}: {err}")
+    else:
+        migrated += 1
 
-# Flat keys → path /
-print('=== Root secrets (/) ===')
-for key, value in secrets.items():
-    if isinstance(value, dict):
-        continue  # handled below
-    seed(key, value, '/')
+flat = {k: v for k, v in secrets.items() if not isinstance(v, dict)}
+nested = {k: v for k, v in secrets.items() if isinstance(v, dict)}
 
-# Nested dicts → Infisical path (underscores become hyphens, prefixed with /)
-for key, nested in secrets.items():
-    if not isinstance(nested, dict):
+for k, v in flat.items():
+    upsert(k, v, "/")
+
+for key, sub in nested.items():
+    folder = key.replace("_", "-")
+    print(f"  /{folder}: {len(sub)} secrets")
+    ensure_folder(folder)
+    for k, v in (sub or {}).items():
+        upsert(k, v, f"/{folder}")
+
+# Verify: every non-skipped key must read back at its path.
+def list_names(path):
+    req = urllib.request.Request(
+        f"{api}/api/v3/secrets/raw?workspaceId={project}&environment={env_slug}"
+        f"&secretPath={urllib.parse.quote(path, safe='')}",
+        headers={"Authorization": f"Bearer {token}"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return {s["secretKey"] for s in json.load(r).get("secrets", [])}
+    except Exception as e:
+        failures.append(f"verify-list {path}: {e}")
+        return set()
+
+expected = {"/": {k for k, v in flat.items() if v and str(v) != "REPLACE_ME"}}
+for key, sub in nested.items():
+    expected[f"/{key.replace('_', '-')}"] = {
+        k for k, v in (sub or {}).items() if v and str(v) != "REPLACE_ME"}
+for path, names in expected.items():
+    if not names:
         continue
-    folder_name = key.replace('_', '-')
-    infisical_path = '/' + folder_name
-    print(f'\n=== Path: {infisical_path} ===')
-    ensure_folder(folder_name)
-    for sub_key, sub_value in nested.items():
-        seed(sub_key, sub_value, infisical_path)
+    present = list_names(path)
+    missing = names - present
+    verified += len(names - missing)
+    for m in missing:
+        failures.append(f"verify: {path}/{m} not present after seed")
 
-print(f'\nDone! Migrated: {migrated}, Skipped: {skipped}')
-"
+print(f"\nSeeded: {migrated}, Skipped (empty/REPLACE_ME): {skipped}, Verified: {verified}")
+if failures:
+    print(f"\nFAILED ({len(failures)}):", file=sys.stderr)
+    for f in failures:
+        print(f"  - {f}", file=sys.stderr)
+    sys.exit(1)
+print("All seeded secrets verified present.")
+PY
