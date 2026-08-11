@@ -16,7 +16,3 @@ resource "unifi_network" "l2" {
 data "unifi_network" "storage" {
   name = local.network_data.vlans.storage.name
 }
-
-data "unifi_network" "infrastructure" {
-  name = local.network_data.vlans.infrastructure.name
-}

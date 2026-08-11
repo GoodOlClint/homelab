@@ -61,3 +61,8 @@ had incompatible attribute names.
   successful writes with a broken read-back.
 - The `terraform` UniFi user needs full Network **Administrator** — Viewer
   passes plan (reads) and 403s only at apply.
+- **The provider cannot set native "None"** — empty string is dropped from the
+  write payload and read back as unset. The trunk profile's None native is
+  hand-set via `PUT rest/portconf/<id> {"native_networkconf_id":""}` and the
+  attribute left unmanaged in config (see profiles.tf). Re-run the PUT if the
+  profile is ever recreated.

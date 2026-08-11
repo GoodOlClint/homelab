@@ -10,12 +10,20 @@ resource "unifi_port_profile" "trunk_all" {
   # set, and the provider fails post-apply verification on the echo.
   forward = "customize"
   autoneg = true
-  # Native = Infrastructure (VLAN 30), NOT the controller-default VLAN 1 and
-  # NOT None: UniFi switch management and factory-default adoption both ride
-  # the trunk's untagged path (the Pro-Agg itself DHCPs untagged on VLAN 30),
-  # so a tagged-only trunk would orphan downstream switches. Node bonds only
-  # use tagged subifs and ignore the native either way.
-  native_networkconf_id = data.unifi_network.infrastructure.id
+  # Native = None (operator decision 2026-08-11): trunk ports carry TAGGED
+  # traffic only — untagged frames are dropped. Operational consequence,
+  # accepted: UniFi switch management and factory-default adoption ride the
+  # untagged path, so a downstream switch on a tf-trunk-all port must have a
+  # tagged management VLAN configured (or be adopted before the port moves to
+  # this profile).
+  #
+  # native_networkconf_id is DELIBERATELY ABSENT: the 0.55 provider cannot
+  # express "None" (an empty string is dropped from the write payload and
+  # read back as unset, so "" here diffs forever). The None was set once via
+  # the controller API (PUT rest/portconf/<id> {"native_networkconf_id":""})
+  # and Terraform leaves the attribute unmanaged. If the profile is ever
+  # recreated, re-run that PUT — a fresh create defaults to the VLAN 1
+  # Default network.
 }
 
 # Access profiles — native-only ports: the ceph SFP28 node links (ADR 0014),
