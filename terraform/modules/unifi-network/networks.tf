@@ -6,6 +6,10 @@ resource "unifi_network" "l2" {
   name    = each.value.name
   purpose = "vlan-only"
   vlan    = each.value.id
+  # The site's gateway is pfSense (ADR 0005) — the controller pins this true
+  # on every network; the provider default of false otherwise fights it on
+  # every apply and fails post-apply verification.
+  third_party_gateway = true
 }
 
 # Pre-existing hand-managed networks referenced by port profiles (read-only).

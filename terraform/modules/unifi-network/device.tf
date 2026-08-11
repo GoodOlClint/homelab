@@ -4,7 +4,11 @@
 resource "unifi_device" "aggregation" {
   mac                = local.switch.mac
   name               = try(local.switch.name, "USW-Pro-Aggregation")
-  jumboframe_enabled = try(local.switch.jumbo_frames, true)
+  # null = leave the device default. The Pro-Aggregation REFUSES this toggle
+  # (api.err.JumboFrameChangeNotAllowed — jumbo is always-on for aggregation
+  # models, the field just reads false); set jumbo_frames in the bindings only
+  # for switches that actually expose the toggle (e.g. the 48-port PoE).
+  jumboframe_enabled = try(local.switch.jumbo_frames, null)
   allow_adoption     = true
   forget_on_destroy  = false
 

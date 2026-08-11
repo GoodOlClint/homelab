@@ -19,7 +19,10 @@ resource "unifi_port_profile" "access" {
   )
 
   name                  = "tf-${replace(each.key, "_", "-")}-access"
-  forward               = "native"
+  # "customize" + native network + no tagged networks = an access port. The
+  # controller normalizes "native" to this on write, which fails the
+  # provider's post-apply verification if we say "native" here.
+  forward               = "customize"
   native_networkconf_id = each.value
   autoneg               = true
 }
