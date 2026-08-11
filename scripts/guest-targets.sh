@@ -26,25 +26,53 @@ set -euo pipefail
 NAME="${1:?usage: guest-targets.sh <guest-name> <address|targets|replace|group-targets>}"
 MODE="${2:-address}"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-TF_DIR="$REPO_ROOT/terraform"
+TF_DIR="${GUEST_TARGETS_TF_DIR:-$REPO_ROOT/terraform}" # override: validation-campaign scratch roots
 
 # Parse vm-configs.tf: emit "name type ha" for every guest block.
 config_guests() {
   python3 - "$TF_DIR/vm-configs.tf" <<'PY'
 import re, sys
 src = open(sys.argv[1]).read()
-for m in re.finditer(r'\{[^{}]*?name\s*=\s*"([a-z0-9-]+)"', src):
+seen = set()
+# Anchor on each name attribute, then find its ENCLOSING block by brace-scanning
+# outward. Order-independent: a guest whose block opens with a nested object
+# (e.g. extra_config = {...}) before `name` is still resolved (the old
+# `{[^{}]*?name` anchor could not cross that nested brace and silently skipped
+# such guests — HCL attribute order is semantically irrelevant).
+for m in re.finditer(r'\bname\s*=\s*"([a-z0-9-]+)"', src):
     name = m.group(1)
-    depth, i = 0, m.start()
-    for j, ch in enumerate(src[i:], start=i):
-        if ch == '{': depth += 1
-        elif ch == '}':
+    # backward: first '{' at depth 0 (balanced nested blocks are skipped)
+    depth, start = 0, None
+    for k in range(m.start() - 1, -1, -1):
+        c = src[k]
+        if c == '}':
+            depth += 1
+        elif c == '{':
+            if depth == 0:
+                start = k
+                break
+            depth -= 1
+    if start is None or start in seen:
+        continue
+    # forward brace-match to the block end
+    depth, end = 0, None
+    for j in range(start, len(src)):
+        c = src[j]
+        if c == '{':
+            depth += 1
+        elif c == '}':
             depth -= 1
             if depth == 0:
-                block = src[i:j]
+                end = j
                 break
-    else:
+    if end is None:
         sys.exit("unbalanced braces parsing vm-configs.tf")
+    seen.add(start)
+    block = src[start:end]
+    # Only guest blocks carry vlans; skip nested named sub-blocks such as
+    # data_volume { name = ... } (W1 worklab finding: they parsed as VM guests)
+    if not re.search(r'\bvlans\s*=', block):
+        continue
     t = re.search(r'\btype\s*=\s*"(vm|lxc)"', block)
     ha = re.search(r'\bha\s*=\s*true\b', block)
     print(name, t.group(1) if t else "vm", "ha" if ha else "-")
