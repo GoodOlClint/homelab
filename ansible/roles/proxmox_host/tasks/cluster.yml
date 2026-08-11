@@ -1,52 +1,121 @@
 ---
-# Idempotent pvecm create/add. The FIRST host in the proxmox group creates the
-# cluster; the rest join it over ring0. Membership check = corosync.conf exists
-# in pmxcfs (a joined node always has it).
+# Cluster create + join over the PVE API (ADR 0023), orchestrated once from the
+# control node. Two facts drive the shape of this file (root-caused live
+# 2026-08-11 from the nested nodes' PVE task logs, W4):
+#   1. PVE's create and join are ASYNC background workers, and the modules
+#      return as soon as the POST is accepted — module "changed" does NOT mean
+#      the step finished (a join can still abort afterwards).
+#   2. A join transiently drops master quorum while corosync reconfigures, so
+#      a join submitted while the previous one is in flight is rejected with
+#      "cluster not ready - no quorum?". Joins MUST be strictly serial with a
+#      completion gate between them — `throttle: 1` on the module task is NOT
+#      enough (it serializes the POSTs, not the workers).
+# Hence: every step gates on observed cluster state, and the join+gate pair is
+# a per-node include looped run_once so no join starts before the previous one
+# is a quorate member. delegate_to: localhost keeps proxmoxer in the control
+# venv (PVE nodes are PEP-668 externally-managed python).
 
-- name: Check cluster membership
-  ansible.builtin.stat:
-    path: /etc/pve/corosync.conf
-  register: _corosync_conf
+- name: Create the cluster and join all nodes (orchestrated, strictly serial)
+  run_once: true
+  vars:
+    _master: "{{ groups['proxmox'][0] }}"
+    _master_api: "{{ hostvars[_master].proxmox_host_mgmt_ip }}"
+    # master_ip doubles as the module's idempotency key: on a re-run it is
+    # compared against /cluster/status node `ip` fields, which are the corosync
+    # ring0 addresses — so it must be the master's RING0 IP, not its mgmt IP,
+    # or every re-run fails "already part of a cluster" (mgmt==ring0 on the
+    # nested harness masked this; ADR 0023 amended). pveproxy binds ::, so the
+    # join reaches the master's API on the ring0 VLAN fine.
+    _master_ring0: "{{ hostvars[_master].proxmox_host_ring0_ip }}"
+    # The fingerprint must be the MASTER's cert — select its nodelist entry,
+    # never [0]: the list is unordered once the cluster has joined members.
+    _join_fp: >-
+      {{ (_join_info.cluster_join.nodelist
+          | selectattr('name', 'equalto', _master) | first).pve_fp }}
+  block:
+    - name: Refuse to orchestrate the cluster under a partial --limit
+      ansible.builtin.assert:
+        that:
+          - ansible_play_hosts_all | sort == groups['proxmox'] | sort
+        fail_msg: >-
+          cluster.yml orchestrates create/join for the WHOLE proxmox group;
+          a partial --limit would still loop excluded hosts (or fail resolving
+          their vars). Author the inventory to the hosts that exist at this
+          stage (e.g. Day-1's two nodes) instead of limiting.
+        quiet: true
 
-- name: Create the cluster on the first node
-  ansible.builtin.command:
-    cmd: >-
-      pvecm create {{ proxmox_host_cluster_name }}
-      --link0 {{ proxmox_host_ring0_ip }}
-      --link1 {{ proxmox_host_ring1_ip }}
-  changed_when: true
-  when:
-    - inventory_hostname == groups['proxmox'][0]
-    - not _corosync_conf.stat.exists
+    - name: Require the root@pam API password before touching the API
+      ansible.builtin.assert:
+        that:
+          - proxmox_host_api_password | length > 0
+        fail_msg: >-
+          proxmox_host_api_password is empty — the playbook must load
+          bootstrap.sops.yml (bootstrap.proxmox_password) or supply it
+          explicitly. An empty password would just 401 against every node.
+        quiet: true
 
-- name: Wait for pmxcfs quorum on the first node
-  ansible.builtin.command:
-    cmd: pvecm status
-  register: _pvecm_status
-  until: _pvecm_status.rc == 0
-  retries: 12
-  delay: 5
-  changed_when: false
-  when: inventory_hostname == groups['proxmox'][0]
+    - name: Create the cluster on the first node
+      community.proxmox.proxmox_cluster:
+        state: present
+        api_host: "{{ _master_api }}"
+        api_user: root@pam
+        api_password: "{{ proxmox_host_api_password }}"
+        validate_certs: false
+        cluster_name: "{{ proxmox_host_cluster_name }}"
+        link0: "{{ hostvars[_master].proxmox_host_ring0_ip }}"
+        link1: "{{ hostvars[_master].proxmox_host_ring1_ip }}"
+      delegate_to: localhost
+      become: false
 
-# Joining reconfigures pmxcfs and needs the creator reachable — join serially
-# (throttle 1) so two nodes never race the join.
-- name: Join the cluster
-  ansible.builtin.command:
-    cmd: >-
-      pvecm add {{ hostvars[groups['proxmox'][0]].proxmox_host_ring0_ip }}
-      --link0 {{ proxmox_host_ring0_ip }}
-      --link1 {{ proxmox_host_ring1_ip }}
-      --use_ssh
-  changed_when: true
-  throttle: 1
-  when:
-    - inventory_hostname != groups['proxmox'][0]
-    - not _corosync_conf.stat.exists
+    - name: Wait for the new cluster to be quorate (create is async)
+      community.proxmox.proxmox_cluster_status_info:
+        api_host: "{{ _master_api }}"
+        api_user: root@pam
+        api_password: "{{ proxmox_host_api_password }}"
+        validate_certs: false
+      delegate_to: localhost
+      become: false
+      register: _create_status
+      retries: 12
+      delay: 5
+      until: >-
+        _create_status.cluster_status | default([])
+        | selectattr('quorate', 'defined') | selectattr('quorate')
+        | list | length > 0
 
-- name: Verify quorum
-  ansible.builtin.command:
-    cmd: pvecm status
-  register: _quorum
-  changed_when: false
-  failed_when: _quorum.stdout is not search('Quorate:\\s+Yes')
+    - name: Read the join fingerprint from the first node
+      community.proxmox.proxmox_cluster_join_info:
+        api_host: "{{ _master_api }}"
+        api_user: root@pam
+        api_password: "{{ proxmox_host_api_password }}"
+        validate_certs: false
+      delegate_to: localhost
+      become: false
+      register: _join_info
+
+    - name: Join the remaining nodes (one at a time, gated on membership)
+      ansible.builtin.include_tasks: cluster_join_node.yml
+      loop: "{{ groups['proxmox'][1:] }}"
+      loop_control:
+        loop_var: _joiner
+
+    - name: Verify quorum and full membership
+      community.proxmox.proxmox_cluster_status_info:
+        api_host: "{{ _master_api }}"
+        api_user: root@pam
+        api_password: "{{ proxmox_host_api_password }}"
+        validate_certs: false
+      delegate_to: localhost
+      become: false
+      register: _cluster_status
+      retries: 12
+      delay: 5
+      until: >-
+        (_cluster_status.cluster_status | default([])
+         | selectattr('quorate', 'defined') | selectattr('quorate')
+         | list | length > 0)
+        and
+        (_cluster_status.cluster_status | default([])
+         | selectattr('type', 'equalto', 'node') | selectattr('online')
+         | map(attribute='name') | list | sort
+         == groups['proxmox'] | sort)

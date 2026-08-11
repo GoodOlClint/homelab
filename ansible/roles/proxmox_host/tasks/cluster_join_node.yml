@@ -1,0 +1,46 @@
+---
+# One node's join + completion gate. Included serially (looped run_once from
+# cluster.yml) — the gate below is what makes the NEXT join safe to submit:
+# PVE processes the join async and the master is transiently non-quorate while
+# corosync reconfigures, so overlapping joins abort (see cluster.yml header).
+
+- name: "Join {{ _joiner }} to the cluster"
+  community.proxmox.proxmox_cluster:
+    state: present
+    api_host: "{{ hostvars[_joiner].proxmox_host_mgmt_ip }}"
+    api_user: root@pam
+    api_password: "{{ proxmox_host_api_password }}"
+    validate_certs: false
+    master_ip: "{{ _master_ring0 }}"
+    fingerprint: "{{ _join_fp }}"
+    link0: "{{ hostvars[_joiner].proxmox_host_ring0_ip }}"
+    link1: "{{ hostvars[_joiner].proxmox_host_ring1_ip }}"
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+# Module success only means the POST was accepted — poll the MASTER until this
+# node is an online member and the cluster is quorate again. A join that
+# aborted (fingerprint mismatch, quorum race) fails here, loudly, instead of
+# surfacing three tasks later.
+- name: "Wait for {{ _joiner }} to be an online, quorate cluster member"
+  community.proxmox.proxmox_cluster_status_info:
+    api_host: "{{ _master_api }}"
+    api_user: root@pam
+    api_password: "{{ proxmox_host_api_password }}"
+    validate_certs: false
+  delegate_to: localhost
+  become: false
+  run_once: true
+  register: _member_status
+  retries: 24
+  delay: 5
+  until: >-
+    (_member_status.cluster_status | default([])
+     | selectattr('type', 'equalto', 'node')
+     | selectattr('name', 'equalto', _joiner)
+     | selectattr('online') | list | length > 0)
+    and
+    (_member_status.cluster_status | default([])
+     | selectattr('quorate', 'defined') | selectattr('quorate')
+     | list | length > 0)

@@ -24,6 +24,11 @@ proxmox_host_mgr_count: 2
 
 # Cluster-wide bindings
 proxmox_host_vip_cidr: "{{ host_bindings.cluster.vip_cidr }}"
+# PVE API password for root@pam — the tier-1 bootstrap root password (same one
+# the answer file hashes). Cluster create/join use the community.proxmox API
+# modules (ADR 0023); proxmox-hosts.yml loads bootstrap.sops.yml to supply it,
+# and cluster.yml asserts it is non-empty before touching the API.
+proxmox_host_api_password: "{{ bootstrap.proxmox_password | default('') }}"
 proxmox_host_qdevice_addr: "{{ host_bindings.cluster.qdevice_addr | default('') }}"
 
 # keepalived

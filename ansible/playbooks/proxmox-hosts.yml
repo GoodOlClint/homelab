@@ -10,6 +10,15 @@
   hosts: proxmox
   become: true
   pre_tasks:
+    # Tier-1 bootstrap creds (SOPS, not Infisical — no guest dependency):
+    # the cluster create/join API modules authenticate as root@pam with
+    # bootstrap.proxmox_password (ADR 0023).
+    - name: Load bootstrap credentials (SOPS Tier 1)
+      community.sops.load_vars:
+        file: "{{ playbook_dir }}/../group_vars/bootstrap.sops.yml"
+        expressions: evaluate-on-load
+      tags: [always]
+
     - name: Load VLAN definitions
       ansible.builtin.include_vars:
         file: "{{ playbook_dir }}/../../network-data/vlans.yaml"

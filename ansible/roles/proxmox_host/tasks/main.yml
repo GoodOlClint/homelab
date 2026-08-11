@@ -6,7 +6,11 @@
 - ansible.builtin.import_tasks: network.yml
 - ansible.builtin.import_tasks: cluster.yml
 - ansible.builtin.import_tasks: qdevice.yml
+# Ceph waits for the full 3-node cluster (plan Day 2; ADR 0024): a 2-node
+# bootstrap would build a degraded size=3 pool and fail the HEALTH_OK gate.
+# Mirrors the QDevice branches, which key off the same node count.
 - ansible.builtin.import_tasks: ceph.yml
+  when: groups['proxmox'] | length >= 3
 - ansible.builtin.import_tasks: keepalived.yml
 - ansible.builtin.import_tasks: logging.yml
 - ansible.builtin.import_tasks: mounts.yml

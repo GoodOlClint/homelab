@@ -58,9 +58,14 @@ else
 	@cd terraform && terraform init && terraform plan -no-color
 endif
 
+# Prefer the repo venv's ansible/python for every bare ansible-* invocation —
+# proxmoxer (ADR 0023 delegated modules) lives there, and a system ansible's
+# interpreter can't see it. Falls through to PATH when .venv doesn't exist.
+export PATH := $(CURDIR)/.venv/bin:$(PATH)
+
 init:
 	@python3 -m venv .venv
-	@. .venv/bin/activate && pip install pyyaml infisicalsdk
+	@. .venv/bin/activate && pip install pyyaml infisicalsdk ansible 'proxmoxer>=2.3' requests
 	@cd terraform && terraform init
 	@cd ansible && ansible-galaxy install -r requirements.yml --force
 

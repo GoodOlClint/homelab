@@ -186,3 +186,6 @@ terraform/hosts/*.iso
 
 # Worklab validation campaign scratch root (carries internal IPs; delete at teardown)
 terraform/worklab-campaign/
+
+# Galaxy-installed role trees (dotted names) land in ansible/roles/ via make init
+ansible/roles/*.*/

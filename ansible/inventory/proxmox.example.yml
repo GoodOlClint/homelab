@@ -1,8 +1,10 @@
 # Static inventory for the Proxmox cluster nodes (WP2).
 # Copy to ansible/inventory/proxmox.yaml (gitignored) with real VLAN 30 mgmt IPs
 # (they match each node's install_cidr in network-data/local/host-bindings.yaml).
-# Group order matters for cluster bootstrap: the FIRST host runs `pvecm create`;
-# the rest join it. Keep crete first.
+# Group order matters for cluster bootstrap: the FIRST host creates the cluster
+# (community.proxmox API modules, ADR 0023); the rest join it serially. Keep the
+# bootstrap node first, and hostnames MUST equal the PVE node names (the join
+# fingerprint + membership gates match on them).
 #
 # The legacy single-host `hosts:` group (old proxmox.yaml) stays until the Day-1
 # cutover; replace the file with this shape when the cluster goes live.
