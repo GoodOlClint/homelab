@@ -4,9 +4,18 @@
 # network tagged, controller-default native. Jumbo is a device-level toggle
 # (jumboframe_enabled on the switch), not a profile property.
 resource "unifi_port_profile" "trunk_all" {
-  name    = "tf-trunk-all"
-  forward = "all"
+  name = "tf-trunk-all"
+  # "customize" with no tagged/excluded lists = all VLANs tagged. The
+  # controller normalizes "all" to this the moment a non-default native is
+  # set, and the provider fails post-apply verification on the echo.
+  forward = "customize"
   autoneg = true
+  # Native = Infrastructure (VLAN 30), NOT the controller-default VLAN 1 and
+  # NOT None: UniFi switch management and factory-default adoption both ride
+  # the trunk's untagged path (the Pro-Agg itself DHCPs untagged on VLAN 30),
+  # so a tagged-only trunk would orphan downstream switches. Node bonds only
+  # use tagged subifs and ignore the native either way.
+  native_networkconf_id = data.unifi_network.infrastructure.id
 }
 
 # Access profiles — native-only ports: the ceph SFP28 node links (ADR 0014),
