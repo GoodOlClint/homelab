@@ -29,6 +29,10 @@ proxmox_host_qdevice_addr: "{{ host_bindings.cluster.qdevice_addr | default('') 
 # keepalived
 proxmox_host_vrrp_router_id: 51
 proxmox_host_vrrp_base_priority: 150
+# VRRP interface — the re-homed mgmt subif in production (network.yml). Overridable
+# so a nonstandard/test topology (e.g. the W4 nested single-NIC plane, mgmt on bare
+# vmbr0) can point VRRP at its actual mgmt interface.
+proxmox_host_vip_interface: "vmbr0.{{ proxmox_host_mgmt_vlan }}"
 
 # Per-node derived facts (bindings + install-octet scheme)
 proxmox_host_node: "{{ host_bindings.nodes[inventory_hostname] }}"

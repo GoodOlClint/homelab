@@ -8,7 +8,7 @@ vrrp_script chk_pveproxy {
 
 vrrp_instance PVE_VIP {
     state {{ 'MASTER' if inventory_hostname == groups['proxmox'][0] else 'BACKUP' }}
-    interface vmbr0.{{ proxmox_host_mgmt_vlan }}
+    interface {{ proxmox_host_vip_interface }}
     virtual_router_id {{ proxmox_host_vrrp_router_id }}
     priority {{ proxmox_host_vrrp_base_priority - (groups['proxmox'].index(inventory_hostname) * 10) }}
     advert_int 1

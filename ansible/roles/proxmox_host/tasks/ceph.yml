@@ -8,10 +8,29 @@
 # consumes the storage IDs (proxmox_host_ceph_pool / proxmox_host_cephfs_name)
 # as plain strings in its cutover tfvars.
 
+# `pveceph install` shells out to `apt-get install` WITHOUT -y and exposes no
+# non-interactive flag of its own, so under Ansible (no human at the [Y/n]) it
+# hangs forever on a pty or aborts on a closed stdin — either way the cluster
+# build stalls invisibly (W4 nested rehearsal, 2026-08-11: 57 min hung before
+# diagnosis). pveceph forwards no apt option, so assume-yes has to come from
+# config — but scoped to THIS invocation via APT_CONFIG (a file OUTSIDE
+# apt.conf.d, inert unless referenced), NOT a persistent global drop-in that
+# would strip the confirmation prompt from every later apt op on the node.
+# apt.conf.d still layers under APT_CONFIG (verified); no /etc/apt/apt.conf
+# exists on a fresh PVE node to shadow.
+- name: Stage the scoped assume-yes apt config for pveceph install
+  ansible.builtin.copy:
+    dest: /etc/apt/pve-ceph-install.conf
+    content: |
+      APT::Get::Assume-Yes "true";
+    mode: "0644"
+
 - name: Install Ceph packages
   ansible.builtin.command:
     cmd: pveceph install --repository no-subscription
     creates: /usr/bin/ceph-mon
+  environment:
+    APT_CONFIG: /etc/apt/pve-ceph-install.conf
 
 - name: Initialize Ceph with the public/cluster network split
   ansible.builtin.command:
