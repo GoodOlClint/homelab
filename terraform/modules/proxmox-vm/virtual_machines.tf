@@ -224,14 +224,14 @@ resource "proxmox_virtual_environment_vm" "vms" {
     }
   }
 
-  # Detached data volume attach (ADR 0015): existing holder-owned volume by
+  # Detached data volume attach (ADR 0015/0020): existing holder-VM volume by
   # in-datastore path — this VM never owns it, so rebuilds leave the data intact.
-  # The volume arrives ext4-formatted (CT volume); the role mounts it directly.
+  # Formatted+chowned once out-of-band (ADR 0020); the role mounts it directly.
   dynamic "disk" {
     for_each = each.value.data_volume != null ? [each.value.data_volume] : []
     content {
-      datastore_id      = split(":", local.data_volume_ids[disk.value.name])[0]
-      path_in_datastore = split(":", local.data_volume_ids[disk.value.name])[1]
+      datastore_id      = local.data_volume_refs[disk.value.name].datastore_id
+      path_in_datastore = local.data_volume_refs[disk.value.name].path_in_datastore
       interface         = "virtio${1 + length(each.value.extra_disks)}"
       size              = var.data_volumes[disk.value.name].size_gb
       backup            = false # The holder's PBS job owns volume backup
@@ -251,6 +251,16 @@ resource "proxmox_virtual_environment_vm" "vms" {
   # No lifecycle.ignore_changes on cloud-init file IDs (ADR 0016): a changed
   # snippet or image pin SHOWS as guest replacement in plan — that visibility is
   # the point. Rolls are deliberate, per-guest, via `make rebuild <guest>`.
+  # The precondition mirrors containers.tf: fails closed on a genuinely-null
+  # volid, but cannot enforce the out-of-band format for a same-apply new
+  # volume (id is unknown, not null, at plan). Procedural gate: holder →
+  # format+chown → consumer, never one apply (see data-volumes.tf).
+  lifecycle {
+    precondition {
+      condition     = each.value.data_volume == null || local.data_volume_ids[each.value.data_volume.name] != null
+      error_message = "Data volume for '${each.value.name}' is not materialized — apply the holder, format+chown it (ADR 0020), then build this guest."
+    }
+  }
 
   dynamic "network_device" {
     for_each = local.build_vm_interfaces[each.value.name]

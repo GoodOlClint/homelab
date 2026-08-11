@@ -1,6 +1,6 @@
 # ADR 0015 — Durable state rides detached Ceph data volumes; the guest rootfs is disposable
 
-- **Status:** Accepted
+- **Status:** Accepted; holder mechanism amended by [ADR 0020](0020-detached-data-volumes-ride-a-single-never-started-holder-vm-not-a-holder-ct.md) (holder is a never-started VM, not a CT)
 - **Date:** 2026-07-28
 - **Deciders:** operator (interview 2026-07-28)
 - **Context source:** docs/rebuild-as-routine-design.md · docs/ms01-cluster-iac-plan.md stateful-data checklist

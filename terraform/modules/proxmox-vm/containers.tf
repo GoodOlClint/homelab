@@ -1,77 +1,13 @@
-# LXC containers + detached data volumes (WP3 — ADR 0003, ADR 0015)
+# LXC containers (WP3 — ADR 0003)
 #
 # Guests with type = "lxc" become proxmox_virtual_environment_container resources,
 # sharing the interface/IP/MAC builder in virtual_machines.tf so VMs and LXCs are
-# configured identically at the network layer.
-#
-# Detached data volumes: a never-started "holder" container owns every data volume
-# as a formatted CT mount-point volume. PVE guest destroy only deletes volumes owned
-# by the destroyed VMID, so consuming guests rebuild freely while the data survives.
-# (A CT holder — not a VM — because PVE formats CT volumes at creation; a VM-owned
-# raw disk would arrive unformatted at an LXC mount point.)
+# configured identically at the network layer. Detached data volumes live in
+# data-volumes.tf (holder VM — ADR 0020).
 
 locals {
   lxc_guests = { for vm in var.vm_configurations : vm.name => vm if vm.type == "lxc" }
   vm_guests  = { for vm in var.vm_configurations : vm.name => vm if vm.type == "vm" }
-
-  # Stable slot order: sorted by the operator-assigned index (never renumber — see
-  # variables.tf). NOT sorted by name: a later volume that sorts alphabetically
-  # earlier would shift every existing mount_point slot and remap live data disks.
-  # format("%08d") gives a fixed-width key so lexicographic sort == numeric sort.
-  # State-migration note: if volumes ever existed under the old name-sorted code,
-  # their indices must first be assigned to match the existing slot order.
-  _data_volumes_by_index = {
-    for name, v in var.data_volumes : format("%08d", v.index) => merge(v, { name = name })
-  }
-  data_volumes_ordered = [
-    for k in sort(keys(local._data_volumes_by_index)) : local._data_volumes_by_index[k]
-  ]
-  # name => full volume ID ("<storage>:vm-<holder>-disk-<n>") read back from the holder.
-  # bpg stores the PVE-resolved volume ID in state after create; if live testing at
-  # Day-1 bring-up shows the config value echoed instead, switch to the deterministic
-  # construction "<storage>:vm-${var.data_volume_holder_vmid}-disk-${slot+1}".
-  data_volume_ids = length(var.data_volumes) > 0 ? {
-    for i, v in local.data_volumes_ordered :
-    v.name => proxmox_virtual_environment_container.data_volume_holder[0].mount_point[i].volume
-  } : {}
-}
-
-# Never-started holder container that owns all detached data volumes (ADR 0015).
-# Rebuilding any consuming guest never touches these volumes; destroying THIS
-# resource destroys all fleet data — hence protection unless FORCE-unprotected.
-resource "proxmox_virtual_environment_container" "data_volume_holder" {
-  count = length(var.data_volumes) > 0 ? 1 : 0
-
-  node_name     = var.virtual_environment_node
-  vm_id         = var.data_volume_holder_vmid
-  description   = "Detached data-volume holder (ADR 0015) — never started; guests attach these volumes by ID"
-  started       = false
-  start_on_boot = false
-  protection    = var.unprotect ? false : true
-  unprivileged  = true
-
-  operating_system {
-    template_file_id = local.lxc_template_id
-    type             = "ubuntu"
-  }
-
-  # Minimal rootfs — exists only because a container must have one
-  disk {
-    datastore_id = var.primary_disk_storage
-    size         = 2
-  }
-
-  # One formatted volume per entry, slot-stable by operator-assigned index.
-  # backup=true puts every data volume in the holder's PBS job (crash-consistent DR).
-  dynamic "mount_point" {
-    for_each = local.data_volumes_ordered
-    content {
-      path   = "/vol/${mount_point.value.name}"
-      volume = coalesce(mount_point.value.storage, var.primary_disk_storage)
-      size   = "${mount_point.value.size_gb}G"
-      backup = true
-    }
-  }
 }
 
 # media_idmap entries: PVE requires the id map to cover 0..65535 contiguously,
@@ -86,8 +22,9 @@ locals {
       size         = 65536 - var.media_idmap_uid - var.media_idmap_size
     },
   ]
+  # bpg schema takes "uid"/"gid" (not PVE's on-disk "u"/"g" — W1 worklab finding)
   media_idmap_entries = flatten([
-    for t in ["u", "g"] : [for seg in local._media_idmap_segments : merge(seg, { type = t })]
+    for t in ["uid", "gid"] : [for seg in local._media_idmap_segments : merge(seg, { type = t })]
   ])
 }
 
@@ -147,7 +84,9 @@ resource "proxmox_virtual_environment_container" "containers" {
     }
   }
 
-  # Detached data volume attach (ADR 0015): existing volume ID, no size = attach not create
+  # Detached data volume attach (ADR 0015/0020): existing holder-VM volume by ID,
+  # no size = attach not create. The holder reference is also the create-order
+  # dependency. Volume must be formatted+chowned once before first start (ADR 0020).
   dynamic "mount_point" {
     for_each = each.value.data_volume != null ? [each.value.data_volume] : []
     content {
@@ -167,6 +106,20 @@ resource "proxmox_virtual_environment_container" "containers" {
       read_only = mount_point.value.read_only
       shared    = mount_point.value.shared
       backup    = false
+    }
+  }
+
+  # Fails CLOSED on a genuinely-null volid (consumer references a volume whose
+  # holder disk is absent/removed) — never let the provider silently allocate a
+  # NEW disk (the ADR 0015 failure class). Caveat: for a same-apply new volume
+  # the id is UNKNOWN (not null), so this defers to apply and passes once the
+  # disk exists — it does NOT guarantee the out-of-band format ran. Procedural
+  # gate stands: holder → format+chown → consumer, never in one apply (see
+  # data-volumes.tf).
+  lifecycle {
+    precondition {
+      condition     = each.value.data_volume == null || local.data_volume_ids[each.value.data_volume.name] != null
+      error_message = "Data volume for '${each.value.name}' is not materialized — apply the holder, format+chown it (ADR 0020), then build this guest."
     }
   }
 

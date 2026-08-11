@@ -183,3 +183,6 @@ docs/pre-migration-state/
 # WP1: baked answer files (injected MAC/IP/root-hash) + auto-install ISOs — never commit
 terraform/hosts/answer-*.toml
 terraform/hosts/*.iso
+
+# Worklab validation campaign scratch root (carries internal IPs; delete at teardown)
+terraform/worklab-campaign/

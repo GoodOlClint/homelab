@@ -42,7 +42,8 @@ resource "proxmox_virtual_environment_download_file" "lxc_template" {
 
 # Static VLAN configuration
 locals {
-  lxc_guest_count = length([for vm in var.vm_configurations : vm.name if vm.type == "lxc"]) + length(var.data_volumes)
+  # Data-volume holder is a VM (ADR 0020) — only real LXC guests need the template
+  lxc_guest_count = length([for vm in var.vm_configurations : vm.name if vm.type == "lxc"])
 
   # Use downloaded image if created, otherwise use existing image
   ubuntu_cloud_image_id = var.create_cloud_image ? proxmox_virtual_environment_download_file.ubuntu_cloud_image[0].id : "${var.virtual_environment_storage}:iso/${var.cloud_image.file_name}"

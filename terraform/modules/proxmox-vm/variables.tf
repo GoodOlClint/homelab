@@ -88,10 +88,10 @@ variable "vm_configurations" {
     # bind_mounts in LIST ORDER — append-only, same never-reorder contract as
     # data_volumes indices. LXC only.
     bind_mounts = optional(list(object({
-      source    = string                 # host path (e.g. /mnt/nas/media)
-      path      = string                 # path inside the container
+      source    = string # host path (e.g. /mnt/nas/media)
+      path      = string # path inside the container
       read_only = optional(bool, false)
-      shared    = optional(bool, true)   # mark shared so migration checks pass (host role mounts it on every node)
+      shared    = optional(bool, true) # mark shared so migration checks pass (host role mounts it on every node)
     })), [])
     # Map the fleet media UID/GID range 1:1 into this unprivileged LXC so
     # bind-mounted NAS content stays writable under the ADR 0017 ownership
@@ -129,12 +129,14 @@ variable "lxc_template" {
   })
 }
 
-# Detached data volumes (ADR 0015): formatted CT volumes owned by a never-started
-# holder container, so destroying any consuming guest never deletes the data.
-# `index` fixes the mount-point slot on the holder — NEVER renumber an existing
-# volume's index; that would remap live data volumes across mount slots.
+# Detached data volumes (ADR 0015, holder VM per ADR 0020): raw disks owned by a
+# never-started holder VM, so destroying any consuming guest never deletes the
+# data. `index` pins the holder disk slot (scsi<index-1>) — NEVER renumber an
+# existing volume's index. Gaps are allowed (retired volumes may leave one);
+# consumers resolve volumes from holder state, not list position. Each new
+# volume needs a one-time mkfs.ext4 + chown before its first consumer starts.
 variable "data_volumes" {
-  description = "Map of detached data volumes: name => { index (stable slot, never renumber), size_gb, storage }"
+  description = "Map of detached data volumes: name => { index (stable scsi slot, never renumber), size_gb, storage }"
   type = map(object({
     index   = number
     size_gb = number
@@ -144,20 +146,14 @@ variable "data_volumes" {
 
   validation {
     condition     = length(distinct([for v in var.data_volumes : v.index])) == length(var.data_volumes)
-    error_message = "data_volumes indices must be unique — they are stable mount-point slots on the holder container."
+    error_message = "data_volumes indices must be unique — they are stable disk slots on the holder VM."
   }
 
-  # Slot = list POSITION after index-sort, so a gap is as dangerous as a
-  # duplicate: with indices {1,3}, adding 2 shifts index-3 from mount_point[1]
-  # to [2] and remaps its live data. Contiguous-from-1 makes index == slot+1
-  # forever. Retire a volume by keeping its entry (or renumbering EVERYTHING in
-  # a deliberate, data-migrating change) — never by leaving a hole.
+  # scsi0..scsi30 is PVE's SCSI slot range; index must be a whole number or the
+  # derived interface name is garbage ("scsi0.5" — Codex review of W1)
   validation {
-    condition = length(var.data_volumes) == 0 || (
-      join(",", sort([for v in var.data_volumes : format("%08d", v.index)])) ==
-      join(",", [for i in range(1, length(var.data_volumes) + 1) : format("%08d", i)])
-    )
-    error_message = "data_volumes indices must be contiguous starting at 1 — a gap shifts every later volume's mount slot."
+    condition     = alltrue([for v in var.data_volumes : v.index >= 1 && v.index <= 31 && v.index == floor(v.index)])
+    error_message = "data_volumes indices must be integers between 1 and 31 (holder VM scsi slots)."
   }
 }
 
