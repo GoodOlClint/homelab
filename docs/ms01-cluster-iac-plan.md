@@ -11,13 +11,13 @@ Repoints this repo from the single-node `pve` hypervisor to a 3-node PVE 9 clust
 | Decision | Choice |
 |---|---|
 | Host OS install | Wipe + committed `proxmox-auto-install` answer file per node; unattended PVE 9 install; Terraform takes over at first boot |
-| Migration mechanism | **Greenfield rebuild everything** — Infisical re-seeded from the SOPS DR export, DNS ephemeral, UniFi re-imported from cloud backup (accept re-adoption blip). vzdump backups are rollback insurance only |
+| Migration mechanism | **Greenfield rebuild everything**, carried across the cutover by a **restore-bridge** ([ADR 0024](decisions/0024-cutover-rides-a-restore-bridge-restore-the-old-fleet-onto-the-2-node-pve-9-cluster-rebuild-pve-early.md)): the old fleet is PBS-restored onto the 2-node cluster as the production bridge so pve rebuilds early; greenfield replacement then proceeds per service. Infisical re-seeded from the SOPS DR export remains the DR fallback; UniFi re-imported from cloud backup (accept re-adoption blip) |
 | PBS placement | VM on the cluster, datastore on the Synology NAS (portable datastore = the asset) |
 | Infisical isolation | Stays a VM (crown jewel), `protected = true`, Ceph-backed |
 | Storage | Ceph `size=3, min_size=2` on local NVMe day one; cluster network on **switched 25G** — one CX-4 Lx port per node to the Pro-Aggregation's SFP28 ports, VLAN 21 access/jumbo (ADR 0014 — supersedes the switchless FRR mesh); Synology = media + PBS datastore + ISO/templates only |
 | GPU | vGPU retired entirely; LLM VM on `pve` with full passthrough (driver in guest); Plex uses MS-01 iGPU QuickSync via LXC `/dev/dri` bind-mount; `nvidia-licensing` VM retired |
 | Endpoint | keepalived VRRP VIP on VLAN 30 (with host mgmt; DNS name in the gitignored bindings) is the Terraform/Ansible endpoint (ADR-0008; was VLAN 40) |
-| Management pane | PDM VM for human single-pane (cluster + standalone worklab); worklab never joins the cluster |
+| Management pane | PDM VM for human single-pane (cluster + standalone worklab); worklab stays standalone through the migration (amended: it later folds in as a non-voting compute-only member — see Longer-term) |
 | LXC rule | Static IPs only — **never DHCP an LXC**. Verified 2026-07-10: bpg reads DHCP LXC IPs since v0.88, so this is convention (deterministic plan-time inventory), not workaround |
 | DNS availability | Redundancy over migration: 2× AdGuard LXCs + BIND9 primary/secondary on different nodes, both resolvers handed out (LXC restart-migration verified: no live migration, blip is stop+start on Ceph) |
 | UniFi | New aggregation switch configured via Terraform from first adoption (`modules/unifi-network/`, provider already in project); pfSense IaC deferred to future work (ADR 0005) |
@@ -36,11 +36,11 @@ Terraform (bpg `~> 0.111`, bumped from `~> 0.78`) manages everything the PVE API
 | PVE install | answer file | `answer-<node>.toml` committed; `proxmox-auto-install-assistant` bakes the ISO (checklist in repo) |
 | First-boot API token for Terraform | bootstrap script | one small first-boot hook (or `make node-bootstrap <node>`) creates the `terraform@pve` user + token; the only hand-off step |
 | Host networking (bond0 LACP on X710s, VLAN-aware vmbr0, VLAN interfaces, MTU 9000 on storage VLAN) | **Terraform** | `network_linux_bond` / `network_linux_bridge` / `network_linux_vlan`, applied over the stable 2.5G mgmt link so the API path is never the link being reconfigured |
-| Cluster create/join (`pvecm`), Ceph bootstrap (`pveceph install`, MON/MGR/OSD), mgmt re-home + ring/ceph interfaces, keepalived VIP | **Ansible** (new `proxmox_host` role) | not exposed usefully via the API/provider |
-| Ceph pool, storage definitions, SDN zones/VNETs (all nodes), cluster options, HA groups/resources, ACME, users/tokens | **Terraform** | `proxmox_ceph_pool`, storage resources, existing network module extended |
+| Cluster create/join (**community.proxmox API modules** — ADR 0023, not `pvecm`-over-SSH), Ceph bootstrap (`pveceph install`, MON/MGR/OSD), mgmt re-home + ring/ceph interfaces, keepalived VIP | **Ansible** (new `proxmox_host` role) | create/join is API-driven; the rest is not exposed usefully via the API/provider |
+| SDN zones/VNETs (all nodes), cluster options, HA groups/resources, ACME, users/tokens | **Terraform** | existing network module extended. Ceph pool + storage definitions are **Ansible-owned** (B3 boundary — bpg has no storage-definition resource; `proxmox_host` ceph.yml creates pool/CephFS + `pvesm` defs, fleet root consumes the IDs as strings) |
 | VMs + LXCs | **Terraform** | existing `proxmox-vm` module + new container support |
 
-New Terraform root **`terraform/hosts/`** with its own state for the host/cluster plane (networking, cluster options, Ceph pool, SDN). Rationale: it must exist before the VM fleet, changes rarely, and a host-networking apply that drops connectivity must not hold the VM project's state hostage. The main `terraform/` project keeps the fleet. (ADR-0002.)
+New Terraform root **`terraform/hosts/`** with its own state for the host/cluster plane (networking, cluster options, SDN — the Ceph pool moved to the WP2 Ansible role, B3 boundary). Rationale: it must exist before the VM fleet, changes rarely, and a host-networking apply that drops connectivity must not hold the VM project's state hostage. The main `terraform/` project keeps the fleet. (ADR-0002.)
 
 ## Repo work packages
 
@@ -60,7 +60,7 @@ New Terraform root **`terraform/hosts/`** with its own state for the host/cluste
 - **DoD:** fresh answer-file install of crete → `terraform apply` in `hosts/` converges with zero manual host edits; re-apply is a no-op; host reboot comes up with all planes (bond, VLANs, jumbo `ping -M do -s 8972` to the NAS).
 
 ### WP2 — Ansible `proxmox_host` role
-- Idempotent `pvecm create`/`add` (skip when already a member), temporary QDevice while 2-node (drop when pve joins).
+- Idempotent cluster create/join via `community.proxmox.proxmox_cluster` over the PVE API (ADR 0023 — `pvecm add --use_ssh` proved unreliable under Ansible in W4), temporary QDevice while 2-node (drop when pve joins).
 - `pveceph install` + MON/MGR/OSD creation (idempotent: check before create), keepalived VIP with `pveproxy` track_script + unicast peers.
 - **Ceph network split (decide at bootstrap — ADR-0009):** `cluster` network (OSD replication) on the **switched 25G Ceph VLAN 21** (one SFP28 port per node on the Pro-Aggregation — ADR 0014, replaces the FRR mesh); `public` network (client access) on the **10G fabric** so a non-25G node (worklab, later) can be a Ceph *client*. Retrofitting this onto a live cluster is painful — set it at `pveceph init` time.
 - New `proxmox` inventory group: `crete`, `crete2`, `pve` (replaces the single-host `inventory/proxmox.yaml`); `update-all.yml` and `monitoring_users` (currently hardcoding a single `proxmox_host` IP in `group_vars/all.yml:34`) go per-node.
@@ -130,9 +130,9 @@ Placement per the okf doc: **VMs** — infisical (protected), pfsense-test, gith
 |---|---|
 | Day 0 (today) | WP0 backups (incl. credential-gap verification). Rack + adopt the new SFP+ switch (USW-Pro-Aggregation — purchased, awaiting install), then **WP5 UniFi apply** configures it (VLANs incl. Ceph 21, port profiles, LACP, jumbo) before cabling. Install 25G NICs + cable each node's 25G port to an SFP28 switch port (ADR 0014) + 10G links on the MS-01s (their VMs are disposable — power off freely). Write WP1+WP2 code against the docs. |
 | Day 1 | Wipe crete/crete2 → answer-file install → `hosts/` apply → `proxmox_host` role → 2-node cluster (+ temp QDevice). Verify DoD gates. |
-| Day 1–2 | `make bootstrap` at the new cluster (adguard + infisical on MS-01 local ZFS interim), `make infisical-seed` from the SOPS export, dns LXC, unifi VM + cloud re-import. Per-service cutover: stop the old VM on pve as each replacement goes live (avoids static-IP conflicts). |
+| Day 1–2 | **Restore-bridge ([ADR 0024](decisions/0024-cutover-rides-a-restore-bridge-restore-the-old-fleet-onto-the-2-node-pve-9-cluster-rebuild-pve-early.md), replaces the greenfield-backbone-first order):** final PBS backup pass on pve, then restore the old fleet as-is onto MS-01 local ZFS (retiring VMs excluded — lancache etc.), stopping each old VM as its restored copy comes up. Verify the restored fleet runs. Prereqs: vlan10/40 live on the MS-01 trunks (WP5); actual-usage capacity check vs MS-01 free ZFS. |
 | Day 2 | Nothing left needed on pve → wipe pve (25G NIC installed, GPU stays), answer-file install, join cluster, drop QDevice, Ceph bootstrap + pool, validate the 25G ceph VLAN/`HEALTH_OK`. Keepalived VIP up; repoint endpoint at it. |
-| Day 2–3 | Move interim guests' disks → Ceph. Deploy the rest of the fleet greenfield in final form (WP3/WP4). Stateful restores per checklist. |
+| Day 2–3 | Move interim/restored guests' disks → Ceph. Then greenfield-replace at leisure: `make bootstrap` (adguard + infisical), `make infisical-seed`, dns LXC, unifi VM + cloud re-import, rest of the fleet in final form (WP3/WP4). Stateful restores per checklist. |
 | Day 3+ | LLM VM (vfio passthrough, pinned), HA resources, PDM VM, monitoring per-node, PKI + certs (WP8), repo scrub + guard (WP6), docs (WP7), decommission sweep. |
 
 ## Stateful-data checklist (decide per service before its rebuild)
@@ -163,7 +163,7 @@ Decisions below are the **cutover** carries; the **end-state** home of each serv
 - **pfSense IaC** (ADR 0005): evaluate pfsensible Ansible collection vs a REST-API Terraform provider (needs the pfSense-API package); targets firewall rules, DHCP/resolver options, WireGuard peers. The redundant-DNS DHCP change and any migration-driven rule edits are documented manual steps until then.
 - **Full UniFi fabric under Terraform**: import the Pro-24, Flex, APs, and remaining port profiles (WP6 covers only the new switch + touched ports).
 - **Re-publicizing history**: operator accepted history exposure; if that changes, a git-filter-repo rewrite is the path.
-- **Fold worklab into the cluster** (ADR-0009, amends 0001): at the worklab rebuild, join the NUC 15 Pro as a **non-voting (`quorum_votes: 0`), compute-only** member — corosync on its native I226-V 2.5G (never the Thunderbolt 10G), no Ceph OSDs (Ceph *client* via the WP2 public network), and homelab HA resources restricted to `crete/crete2/pve` so nothing homelab fails over onto it. Driver: pooled capacity + one IaC endpoint for scaling multi-version work labs. Needs, above the cluster: an IaC lab-environment module per product version, SDN-isolated VNets per lab, and templates/linked clones.
+- **Fold worklab into the cluster** (ADR-0009, amends 0001): at the worklab rebuild, join the NUC 15 Pro as a **non-voting (`quorum_votes: 0`), compute-only** member — corosync on its native I226-V 2.5G (never the Thunderbolt 10G), no Ceph OSDs (Ceph *client* via the WP2 public network), and homelab HA resources restricted to `crete/crete2/pve` so nothing homelab fails over onto it. **Prereq (Codex review 2026-08-11): `proxmox_host` needs an explicit Ceph-server eligibility gate first** — today ceph.yml runs MON create on every group member once the group is ≥3 nodes, which is correct for the three storage nodes and wrong for a compute-only member (OSD avoidance alone rides the empty `osd_disks` binding). Driver: pooled capacity + one IaC endpoint for scaling multi-version work labs. Needs, above the cluster: an IaC lab-environment module per product version, SDN-isolated VNets per lab, and templates/linked clones.
 
 ## Open items (not blocking approval)
 
