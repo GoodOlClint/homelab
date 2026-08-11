@@ -1,0 +1,74 @@
+---
+# Host NAS mounts (ADR 0017 / 1.9): guests are single-homed on the services
+# VLAN and reach bulk storage via HOST bind mounts, so every node mounts the
+# NAS exports itself. Gated on the site binding (like the syslog target) — a
+# site without NAS bindings skips cleanly.
+#
+# Boot-race protection: the DS1821+ comes up slower than the nodes. Plain fstab
+# entries would fail at boot and containers would start against EMPTY bind-mount
+# directories — arr stacks then happily write into the empty tree (design
+# review 2026-08-10). x-systemd.automount defers the actual NFS mount until
+# first access and retries, so a slow NAS delays I/O instead of serving an
+# empty directory. _netdev orders after network-online.
+#
+# Binding shape (network-data/local/host-bindings.yaml):
+#   cluster:
+#     nas_mounts:
+#       - name: media
+#         src: "<nas-storage-vlan-addr>:/volume1/media"
+#         path: /mnt/nas/media
+
+# Unprivileged-LXC media idmap precondition (review P1): guests that bind-mount
+# NAS paths map their media UID/GID range 1:1 (module `media_idmap` flag);
+# the kernel only permits that if root may delegate those IDs.
+- name: Allow root to map the fleet media UID/GID range into containers
+  ansible.builtin.lineinfile:
+    path: "{{ item }}"
+    line: "root:{{ proxmox_host_media_idmap_start }}:{{ proxmox_host_media_idmap_size }}"
+    create: true
+    mode: '0644'
+  loop:
+    - /etc/subuid
+    - /etc/subgid
+  tags:
+    - proxmox_host
+    - mounts
+
+- name: Configure host NAS mounts
+  when: ((host_bindings.cluster | default({})).nas_mounts | default([])) | length > 0
+  tags:
+    - proxmox_host
+    - mounts
+  block:
+    - name: Create NAS mount points
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        mode: '0755'
+      loop: "{{ host_bindings.cluster.nas_mounts }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Mount NAS exports (systemd automount — survives a slow NAS at boot)
+      ansible.posix.mount:
+        src: "{{ item.src }}"
+        path: "{{ item.path }}"
+        fstype: nfs
+        opts: "{{ nfs_mount_options | default('nfsvers=4.1,hard,noatime') }},_netdev,x-systemd.automount,x-systemd.mount-timeout=60"
+        state: mounted
+      loop: "{{ host_bindings.cluster.nas_mounts }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    # Hard gate: the export must actually be reachable and non-empty NOW —
+    # provisioning against an absent NAS must fail loudly, not bind empty dirs
+    # into guests. (ls through the automount triggers the real mount.)
+    - name: Verify NAS mounts are live and non-empty
+      ansible.builtin.shell: |
+        timeout 20 ls -A "{{ item.path }}" | head -1 | grep -q . && timeout 5 mountpoint -q "{{ item.path }}"
+      loop: "{{ host_bindings.cluster.nas_mounts }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: _nas_verify
+      changed_when: false
+      failed_when: _nas_verify.rc != 0

@@ -54,3 +54,8 @@ proxmox_host_ceph_health_waivers: []
 # netconsole raw stream port on the collector (axosyslog `netconsole` source —
 # deliberately parser-free; ordinary syslog is 5514 and the two must never mix)
 proxmox_host_netconsole_port: 5515
+
+# Fleet media UID/GID range mapped 1:1 into media LXCs (ADR 0017 convention;
+# must match the module's media_idmap_uid/media_idmap_size)
+proxmox_host_media_idmap_start: 2000
+proxmox_host_media_idmap_size: 11

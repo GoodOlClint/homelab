@@ -82,6 +82,22 @@ variable "vm_configurations" {
       name = string
       path = optional(string, "/data") # Mount path inside the guest (LXC only)
     }), null)
+    # Host-path bind mounts (ADR 0017: bulk storage reaches LXCs via host
+    # mounts — the proxmox_host role mounts the NAS exports on every node).
+    # Slot ordering: data_volume takes the first mount slot when present, then
+    # bind_mounts in LIST ORDER — append-only, same never-reorder contract as
+    # data_volumes indices. LXC only.
+    bind_mounts = optional(list(object({
+      source    = string                 # host path (e.g. /mnt/nas/media)
+      path      = string                 # path inside the container
+      read_only = optional(bool, false)
+      shared    = optional(bool, true)   # mark shared so migration checks pass (host role mounts it on every node)
+    })), [])
+    # Map the fleet media UID/GID range 1:1 into this unprivileged LXC so
+    # bind-mounted NAS content stays writable under the ADR 0017 ownership
+    # convention (without this, guest UID 2000 lands on host 102000). Requires
+    # the node subuid/subgid delegation the proxmox_host role installs.
+    media_idmap = optional(bool, false)
     # Additional disks (beyond the primary OS disk; VM only)
     extra_disks = optional(list(object({
       size_gb = number                 # Disk size in GB
@@ -143,6 +159,20 @@ variable "data_volumes" {
     )
     error_message = "data_volumes indices must be contiguous starting at 1 — a gap shifts every later volume's mount slot."
   }
+}
+
+# Fleet media ownership range mapped by media_idmap guests (ADR 0017). Must
+# match proxmox_host_media_idmap_start/size on the nodes.
+variable "media_idmap_uid" {
+  type        = number
+  description = "First UID/GID of the fleet media range mapped 1:1 into media_idmap LXCs"
+  default     = 2000
+}
+
+variable "media_idmap_size" {
+  type        = number
+  description = "Length of the fleet media UID/GID range"
+  default     = 11
 }
 
 variable "data_volume_holder_vmid" {

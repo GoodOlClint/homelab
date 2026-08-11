@@ -74,6 +74,23 @@ resource "proxmox_virtual_environment_container" "data_volume_holder" {
   }
 }
 
+# media_idmap entries: PVE requires the id map to cover 0..65535 contiguously,
+# so the 1:1 media range sits between two shifted segments (for both u and g).
+locals {
+  _media_idmap_segments = [
+    { container_id = 0, host_id = 100000, size = var.media_idmap_uid },
+    { container_id = var.media_idmap_uid, host_id = var.media_idmap_uid, size = var.media_idmap_size },
+    {
+      container_id = var.media_idmap_uid + var.media_idmap_size
+      host_id      = 100000 + var.media_idmap_uid + var.media_idmap_size
+      size         = 65536 - var.media_idmap_uid - var.media_idmap_size
+    },
+  ]
+  media_idmap_entries = flatten([
+    for t in ["u", "g"] : [for seg in local._media_idmap_segments : merge(seg, { type = t })]
+  ])
+}
+
 # LXC guests (ADR 0003: static IPs only — never DHCP an LXC)
 resource "proxmox_virtual_environment_container" "containers" {
   for_each = local.lxc_guests
@@ -108,6 +125,17 @@ resource "proxmox_virtual_environment_container" "containers" {
     keyctl  = each.value.keyctl
   }
 
+  # 1:1 media-range ownership for NAS bind mounts (ADR 0017; review P1)
+  dynamic "idmap" {
+    for_each = each.value.media_idmap ? local.media_idmap_entries : []
+    content {
+      type         = idmap.value.type
+      container_id = idmap.value.container_id
+      host_id      = idmap.value.host_id
+      size         = idmap.value.size
+    }
+  }
+
   # Host device passthrough (e.g. /dev/dri/renderD128 for Plex QuickSync)
   dynamic "device_passthrough" {
     for_each = each.value.devices
@@ -126,6 +154,19 @@ resource "proxmox_virtual_environment_container" "containers" {
       path   = mount_point.value.path
       volume = local.data_volume_ids[mount_point.value.name]
       backup = false # The holder's PBS job owns volume backup — never double-back-up
+    }
+  }
+
+  # Host-path bind mounts (ADR 0017) — after data_volume, list order = slot
+  # order, append-only. backup=false always: content lives on the NAS.
+  dynamic "mount_point" {
+    for_each = each.value.bind_mounts
+    content {
+      path      = mount_point.value.path
+      volume    = mount_point.value.source
+      read_only = mount_point.value.read_only
+      shared    = mount_point.value.shared
+      backup    = false
     }
   }
 

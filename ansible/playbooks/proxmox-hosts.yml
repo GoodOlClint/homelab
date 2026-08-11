@@ -21,5 +21,13 @@
         file: "{{ playbook_dir }}/../../network-data/local/host-bindings.yaml"
         name: host_bindings
       tags: [always]
+
+    # Centralized NFS tuning (nfs_mount_options) lives in the gitignored
+    # group_vars/all.yml; the hosts plane must not hard-depend on it existing.
+    - name: Load global vars (NFS tuning etc.)
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../group_vars/all.yml"
+      failed_when: false
+      tags: [always]
   roles:
     - proxmox_host

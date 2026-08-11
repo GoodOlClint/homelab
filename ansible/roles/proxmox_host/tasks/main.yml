@@ -9,3 +9,4 @@
 - ansible.builtin.import_tasks: ceph.yml
 - ansible.builtin.import_tasks: keepalived.yml
 - ansible.builtin.import_tasks: logging.yml
+- ansible.builtin.import_tasks: mounts.yml
