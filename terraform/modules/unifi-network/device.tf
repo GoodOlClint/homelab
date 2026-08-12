@@ -1,19 +1,23 @@
-# The aggregation switch itself: adoption, jumbo (device-level — covers the
-# storage VLAN end-to-end), and every port override incl. LACP aggregates.
-# Port assignments are site bindings — they live in the gitignored ports file.
-resource "unifi_device" "aggregation" {
-  mac                = local.switch.mac
-  name               = try(local.switch.name, "USW-Pro-Aggregation")
+# Managed switches: adoption, jumbo, and every port override incl. LACP
+# aggregates. Port assignments are site bindings — they live in the gitignored
+# ports file. Every top-level key in that file with a `ports:` list is a
+# switch; a stanza with `adopted: false` is pre-populated config that stays
+# inert until the device is adopted and its real MAC filled in.
+resource "unifi_device" "switches" {
+  for_each = local.switches
+
+  mac  = each.value.mac
+  name = try(each.value.name, each.key)
   # null = leave the device default. The Pro-Aggregation REFUSES this toggle
   # (api.err.JumboFrameChangeNotAllowed — jumbo is always-on for aggregation
   # models, the field just reads false); set jumbo_frames in the bindings only
   # for switches that actually expose the toggle (e.g. the 48-port PoE).
-  jumboframe_enabled = try(local.switch.jumbo_frames, null)
+  jumboframe_enabled = try(each.value.jumbo_frames, null)
   allow_adoption     = true
   forget_on_destroy  = false
 
   dynamic "port_override" {
-    for_each = local.switch.ports
+    for_each = each.value.ports
     content {
       index             = port_override.value.index
       name              = try(port_override.value.name, null)
@@ -22,4 +26,9 @@ resource "unifi_device" "aggregation" {
       aggregate_members = try(port_override.value.aggregate_members, null)
     }
   }
+}
+
+moved {
+  from = unifi_device.aggregation
+  to   = unifi_device.switches["aggregation_switch"]
 }

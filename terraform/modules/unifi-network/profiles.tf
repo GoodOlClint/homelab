@@ -26,6 +26,22 @@ resource "unifi_port_profile" "trunk_all" {
   # Default network.
 }
 
+# Node install-link ports on the 48-port switch (ADR 0019): the i226-V that
+# carries the untagged VLAN 30 install/mgmt plane PLUS corosync ring0 tagged
+# (network.yml leaves ring0 tagged on the install NIC after the mgmt re-home).
+resource "unifi_port_profile" "node_install" {
+  name    = "tf-node-install"
+  forward = "customize"
+  # Native 30 untagged + all VLANs tagged: the node's i226-V only opens a
+  # ring0 (VLAN 31) subif, so allow-all-tagged is functionally equivalent to
+  # a corosync-only tag list — which the controller cannot store in the
+  # legacy tagged_networkconf_ids field anyway (it silently drops it when
+  # tagged_vlan_mgmt is custom; the modern model wants exclusion lists).
+  native_networkconf_id = data.unifi_network.infrastructure.id
+  tagged_vlan_mgmt      = "auto"
+  autoneg               = true
+}
+
 # Access profiles — native-only ports: the ceph SFP28 node links (ADR 0014),
 # the corosync ports (used on the 2.5G switch later; profiles are site-wide),
 # and the NAS LAG members (storage VLAN).

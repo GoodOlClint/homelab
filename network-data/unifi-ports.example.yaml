@@ -32,3 +32,18 @@ aggregation_switch:
     - { index: 29, name: "crete ceph 25g", profile: "ceph" }
     - { index: 30, name: "crete2 ceph 25g", profile: "ceph" }
     - { index: 31, name: "pve ceph 25g", profile: "ceph" }
+
+# Additional switches: every top-level stanza with a `ports:` list is a
+# managed switch. `adopted: false` keeps a pre-populated stanza (device not
+# yet adopted, MAC unknown) out of the terraform graph until flipped true.
+# Extra profile: `node_install` = native Infrastructure + all VLANs tagged
+# (node i226-V install/mgmt links that also carry corosync ring0 tagged).
+#access_switch_48:
+#  adopted: false
+#  mac: "aa:bb:cc:dd:ee:ff"
+#  name: "USW-Pro-Max-48"
+#  jumbo_frames: true
+#  ports:
+#    - { index: 49, name: "pro-agg downlink", profile: "trunk" }
+#    - { index: 34, name: "node1 install+ring0", profile: "node_install" }
+#    - { index: 36, name: "node1 ring1", profile: "corosync_ring1" }

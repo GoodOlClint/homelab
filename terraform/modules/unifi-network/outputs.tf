@@ -3,7 +3,7 @@ output "l2_network_ids" {
   value       = { for k, n in unifi_network.l2 : k => n.id }
 }
 
-output "switch_id" {
-  description = "UniFi device id of the aggregation switch."
-  value       = unifi_device.aggregation.id
+output "switch_ids" {
+  description = "UniFi device ids of the managed switches, keyed by bindings stanza."
+  value       = { for k, d in unifi_device.switches : k => d.id }
 }
