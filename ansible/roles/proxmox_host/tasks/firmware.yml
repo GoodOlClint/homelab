@@ -5,12 +5,37 @@
 # fwupd covers LVFS-published device firmware (NVMe, UEFI dbx). Relies on the
 # PVE 9 installer's default non-free-firmware component — if a host lacks it,
 # this fails loudly rather than silently pinning 2023-era microcode.
-- name: Install microcode and firmware update tooling
+- name: Install microcode, firmware update, and hardware-fault capture tooling
   ansible.builtin.apt:
     name:
       - intel-microcode
       - fwupd
+      - rasdaemon
+      - systemd-coredump
     state: present
+  tags:
+    - proxmox_host
+    - firmware
+
+# Hardware-fault capture (added with the 14900K Vmin-shift investigation):
+# rasdaemon persists+decodes MCE/RAS events; systemd-coredump keeps crash
+# dumps of the next mystery segfault (coredumpctl); print-fatal-signals logs
+# every fatal signal with CPU attribution.
+- name: Enable rasdaemon
+  ansible.builtin.systemd:
+    name: rasdaemon
+    enabled: true
+    state: started
+  tags:
+    - proxmox_host
+    - firmware
+
+- name: Log fatal signals with CPU attribution
+  ansible.builtin.copy:
+    content: "kernel.print-fatal-signals = 1\n"
+    dest: /etc/sysctl.d/98-fatal-signals.conf
+    mode: '0644'
+  notify: apply sysctl
   tags:
     - proxmox_host
     - firmware

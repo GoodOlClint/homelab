@@ -12,6 +12,12 @@ Wants=network-online.target
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=/usr/local/sbin/netconsole-start.sh
+# Console loglevel 5 (err+warn pass) must be asserted HERE, not only in
+# sysctl.d: systemd PID 1 captures the console level before systemd-sysctl
+# runs and restores it late in boot, silently undoing the drop-in (observed
+# on pve 2026-08-12: drop-in said 5, running value was 1 — netconsole shipped
+# only EMERG..CRIT). Coupling it to the consumer that needs it wins the war.
+ExecStartPost=/usr/bin/dmesg -n 5
 ExecStop=/usr/sbin/modprobe -r netconsole
 
 [Install]
