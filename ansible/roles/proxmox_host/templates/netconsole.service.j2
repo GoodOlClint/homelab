@@ -7,6 +7,12 @@
 Description=netconsole kernel log shipping to OpenObserve
 After=network-online.target
 Wants=network-online.target
+# Inert as written and deliberately kept: with RestartSec=10 the default limit
+# (5 starts per 10 s) is unreachable, so nothing today depends on this. It is a
+# guard on the retry interval — drop RestartSec low enough and the default limit
+# starts tripping, which would silently restore the permanent failure Restart=
+# exists to fix. Verified 2026-08-12: DefaultStartLimitIntervalUSec=10s, burst 5.
+StartLimitIntervalSec=0
 
 [Service]
 Type=oneshot
@@ -19,6 +25,17 @@ ExecStart=/usr/local/sbin/netconsole-start.sh
 # only EMERG..CRIT). Coupling it to the consumer that needs it wins the war.
 ExecStartPost=/usr/bin/dmesg -n 5
 ExecStop=/usr/sbin/modprobe -r netconsole
+# network-online.target fires before vmbr0 actually forwards, so the start
+# script's 2 s ARP probe for the gateway comes back empty and the unit dies
+# PERMANENTLY — Type=oneshot has no self-heal (worklab 2026-08-12: failed at
+# boot+2 s, gateway REACHABLE seconds later, lane dead until hand-restarted).
+# rsyslog survives the same race only because omfwd retries forever; give
+# netconsole the same — a retry is one ping plus a modprobe, and a lane that
+# quits is worse. Never "upgrade" this to Restart=always: systemd REFUSES to
+# load a Type=oneshot unit with always/on-success, so the lane would die
+# outright. on-failure is the only restart mode oneshot accepts.
+Restart=on-failure
+RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
