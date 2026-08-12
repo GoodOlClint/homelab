@@ -10,6 +10,10 @@
     name:
       - intel-microcode
       - fwupd
+      # Explicit, not left to fwupd's Recommends: without udisks2, fwupd can't
+      # discover the unmounted proxmox-boot ESPs and UEFI-capsule updates (dbx)
+      # report "ESP partition not detected". EspLocation config is deprecated.
+      - udisks2
       - rasdaemon
       - systemd-coredump
     state: present
