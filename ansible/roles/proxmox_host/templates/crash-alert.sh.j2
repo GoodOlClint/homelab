@@ -1,0 +1,18 @@
+#!/bin/bash
+# {{ ansible_managed }}
+# Crash-signature watcher (14900K Vmin-shift investigation): pushes kernel
+# crash lines straight to ntfy.sh. Deliberately independent of the whole
+# observability stack — this host RUNS OpenObserve, so any lane through it
+# fails exactly when the host is sick. Only dependency: WAN.
+# 60 s sleep per send throttles a crash cascade to ~1 msg/min (pipe buffers).
+journalctl -kf -n 0 --no-pager \
+  | grep --line-buffered -iE "segfault|general protection|kernel BUG|machine check|invalid opcode|mce:" \
+  | while IFS= read -r line; do
+      curl -sf -m 10 \
+        -H "Title: {{ inventory_hostname }} crash signature" \
+        -H "Priority: high" \
+        -H "Tags: warning,cpu" \
+        -d "$line" \
+        "https://ntfy.sh/{{ host_bindings.cluster.alert_ntfy_topic }}" >/dev/null
+      sleep 60
+    done

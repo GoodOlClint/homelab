@@ -40,6 +40,38 @@
     - proxmox_host
     - firmware
 
+# Crash-signature push alert — gated on the binding like the syslog target:
+# the hosts plane must not hard-depend on Infisical or any guest (ADR 0011's
+# ntfy topic is delivered via gitignored host-bindings.yaml, not the agent).
+- name: Configure crash-signature ntfy alert
+  when: ((host_bindings.cluster | default({})).alert_ntfy_topic | default('')) | length > 0
+  tags:
+    - proxmox_host
+    - firmware
+  block:
+    - name: Deploy crash-alert watcher script
+      ansible.builtin.template:
+        src: crash-alert.sh.j2
+        dest: /usr/local/sbin/crash-alert.sh
+        mode: '0700'
+        owner: root
+        group: root
+      notify: restart crash-alert
+
+    - name: Deploy crash-alert service unit
+      ansible.builtin.template:
+        src: crash-alert.service.j2
+        dest: /etc/systemd/system/crash-alert.service
+        mode: '0644'
+      notify: restart crash-alert
+
+    - name: Enable crash-alert service
+      ansible.builtin.systemd:
+        name: crash-alert
+        enabled: true
+        state: started
+        daemon_reload: true
+
 - name: Enable fwupd metadata refresh timer
   ansible.builtin.systemd:
     name: fwupd-refresh.timer

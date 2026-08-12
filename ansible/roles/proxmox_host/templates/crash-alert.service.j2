@@ -1,0 +1,13 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Push kernel crash signatures (segfault/GPF/BUG/MCE) to ntfy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/sbin/crash-alert.sh
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
