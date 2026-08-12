@@ -20,3 +20,7 @@ data "unifi_network" "storage" {
 data "unifi_network" "infrastructure" {
   name = local.network_data.vlans.infrastructure.name
 }
+
+data "unifi_network" "core" {
+  name = local.network_data.vlans.core.name
+}

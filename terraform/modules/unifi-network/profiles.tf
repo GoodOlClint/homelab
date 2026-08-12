@@ -49,6 +49,9 @@ resource "unifi_port_profile" "access" {
   for_each = merge(
     { for k, v in local.unifi_only_vlans : k => unifi_network.l2[k].id },
     { storage = data.unifi_network.storage.id },
+    # Core access: untagged client ports on the aggregation switch (Mac
+    # Studio 10G via the patch loop — no VLAN config needed on macOS).
+    { core = data.unifi_network.core.id },
   )
 
   name                  = "tf-${replace(each.key, "_", "-")}-access"
