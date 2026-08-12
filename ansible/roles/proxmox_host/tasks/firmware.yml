@@ -1,0 +1,25 @@
+---
+# CPU microcode + device firmware currency (added 2026-08-12 after the pve
+# 14900K Vmin-shift diagnosis). The kernel early-loads intel-microcode at every
+# boot, so CPU fixes arrive via apt instead of waiting on a vendor BIOS flash;
+# fwupd covers LVFS-published device firmware (NVMe, UEFI dbx). Relies on the
+# PVE 9 installer's default non-free-firmware component — if a host lacks it,
+# this fails loudly rather than silently pinning 2023-era microcode.
+- name: Install microcode and firmware update tooling
+  ansible.builtin.apt:
+    name:
+      - intel-microcode
+      - fwupd
+    state: present
+  tags:
+    - proxmox_host
+    - firmware
+
+- name: Enable fwupd metadata refresh timer
+  ansible.builtin.systemd:
+    name: fwupd-refresh.timer
+    enabled: true
+    state: started
+  tags:
+    - proxmox_host
+    - firmware
