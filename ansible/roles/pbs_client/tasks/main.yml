@@ -9,9 +9,23 @@
     fail_msg: "Required facts not available. This role must run from a playbook that includes full_pre_tasks.yml."
     quiet: true
 
-- name: Check if PBS GPG key exists
+# get_url, not `shell: wget -O`. wget creates the destination file before the
+# transfer succeeds, so a 404 or a blip leaves a ZERO-BYTE keyring behind — and
+# a bare `stat.exists` guard then considers the key present forever, skipping
+# the download on every later run while apt fails against the repo with no
+# self-heal. That was dormant while the filename was constant; templating it on
+# pbs_client_repo_suite arms it, because the first bookworm→trixie flip
+# re-downloads on every fleet guest at once (this role runs in infrastructure.yml
+# plus eight service plays). get_url is atomic — it cannot leave a partial file.
+#
+# The guard stays, with a size test. get_url only skips the network when a
+# `checksum:` is given (get_url.py gates its early exit on `not force and
+# checksum`); unguarded, this would make enterprise.proxmox.com a hard per-run
+# dependency of every fleet Ansible run. `size == 0` also heals a zero-byte
+# keyring left by the previous wget implementation.
+- name: Check PBS repository key
   ansible.builtin.stat:
-    path: /etc/apt/trusted.gpg.d/proxmox-release-bookworm.gpg
+    path: /etc/apt/trusted.gpg.d/proxmox-release-{{ pbs_client_repo_suite }}.gpg
   register: pbs_gpg_key
   tags:
     - pbs_client
@@ -20,35 +34,30 @@
     - packages
 
 - name: Install Proxmox Backup Server repository key
-  ansible.builtin.shell: |
-    wget https://enterprise.proxmox.com/debian/proxmox-release-bookworm.gpg \
-      -O /etc/apt/trusted.gpg.d/proxmox-release-bookworm.gpg
-  when: not pbs_gpg_key.stat.exists
+  ansible.builtin.get_url:
+    url: https://enterprise.proxmox.com/debian/proxmox-release-{{ pbs_client_repo_suite }}.gpg
+    dest: /etc/apt/trusted.gpg.d/proxmox-release-{{ pbs_client_repo_suite }}.gpg
+    mode: '0644'
+  when: not pbs_gpg_key.stat.exists or pbs_gpg_key.stat.size == 0
   tags:
     - pbs_client
     - pbs
     - backup
     - packages
 
-- name: Check if Proxmox repo is present
-  ansible.builtin.shell: grep -q "pbs-client" /etc/apt/sources.list.d/pbs-client.list
-  register: pbs_repo_check
-  failed_when: false
-  changed_when: false
-  tags:
-    - pbs_client
-    - pbs
-    - backup
-    - packages
-
+# No "is the repo already there?" probe: `copy` is already content-idempotent,
+# and the old grep only asked whether the file mentioned pbs-client AT ALL — so
+# once a bookworm line existed, changing pbs_client_repo_suite was skipped and
+# the stale suite stayed active while the play reported success. The suite has
+# to move with the guest's image roll (libfuse3-3 vs libfuse3-4), so a silent
+# non-convergence here would strand every guest on an uninstallable client.
 - name: Add Proxmox Backup Client repository
   ansible.builtin.copy:
     content: |
       # Proxmox Backup Client repository
-      deb http://download.proxmox.com/debian/pbs-client bookworm main
+      deb http://download.proxmox.com/debian/pbs-client {{ pbs_client_repo_suite }} main
     dest: /etc/apt/sources.list.d/pbs-client.list
     mode: '0644'
-  when: pbs_repo_check.rc != 0
   register: pbs_repo_added
   tags:
     - pbs_client

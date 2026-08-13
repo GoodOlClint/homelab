@@ -60,7 +60,7 @@
     url: https://nvidia.github.io/libnvidia-container/gpgkey
     dest: /etc/apt/keyrings/libnvidia-container.asc
     mode: '0644'
-  when: not nvidia_gpg_key.stat.exists
+  when: not nvidia_gpg_key.stat.exists or nvidia_gpg_key.stat.size == 0
   tags:
     - docker
     - nvidia
@@ -68,9 +68,10 @@
 
 - name: Dearmor nvidia-container-toolkit GPG key
   ansible.builtin.command:
-    cmd: gpg --dearmor -o /etc/apt/trusted.gpg.d/libnvidia-container.gpg /etc/apt/keyrings/libnvidia-container.asc
-    creates: /etc/apt/trusted.gpg.d/libnvidia-container.gpg
-  when: not nvidia_gpg_key.stat.exists
+    # No `creates:` — see the plex role: it skips on an existing 0-byte file and
+    # would defeat the size guard below. `when:` provides idempotency.
+    cmd: gpg --batch --dearmor --yes -o /etc/apt/trusted.gpg.d/libnvidia-container.gpg /etc/apt/keyrings/libnvidia-container.asc
+  when: not nvidia_gpg_key.stat.exists or nvidia_gpg_key.stat.size == 0
   tags:
     - docker
     - nvidia

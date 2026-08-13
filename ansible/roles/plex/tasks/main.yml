@@ -212,17 +212,18 @@
     url: https://downloads.plex.tv/plex-keys/PlexSign.v2.key
     dest: /tmp/plex.gpg.key
     mode: '0644'
-  when: not plex_gpg_key.stat.exists
+  when: not plex_gpg_key.stat.exists or plex_gpg_key.stat.size == 0
   tags:
     - plex
     - packages
 
 - name: Convert Plex GPG key to dearmored format
   ansible.builtin.command:
-    cmd: gpg --batch --dearmor -o /usr/share/keyrings/plexmediaserver.v2.gpg /tmp/plex.gpg.key
-  args:
-    creates: /usr/share/keyrings/plexmediaserver.v2.gpg
-  when: not plex_gpg_key.stat.exists
+    # No `creates:` — it skips whenever the path exists, including the 0-byte
+    # file a killed `gpg -o` leaves behind, which would defeat the size guard
+    # below. The `when:` provides idempotency instead.
+    cmd: gpg --batch --dearmor --yes -o /usr/share/keyrings/plexmediaserver.v2.gpg /tmp/plex.gpg.key
+  when: not plex_gpg_key.stat.exists or plex_gpg_key.stat.size == 0
   tags:
     - plex
     - packages

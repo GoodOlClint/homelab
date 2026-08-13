@@ -1,49 +1,95 @@
 ---
 # Telegraf installation for Debian/Ubuntu (apt)
 
-- name: Check if InfluxData GPG key exists
-  ansible.builtin.stat:
-    path: /usr/share/keyrings/influxdata.gpg
-  register: influxdata_gpg_key
+# Fetch the key to a PATH and hand deb822 the path, never the URL. Given a URL,
+# deb822_repository re-fetches on EVERY run (its write_signed_by_key early-exits
+# only for os.path.isfile) and raises an unhandled RuntimeError if the fetch
+# fails. Fetching BEFORE the removal below also shrinks the no-source window to
+# a single file write.
+- name: Ensure apt keyrings directory exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
   tags:
     - telegraf
     - packages
 
-- name: Download InfluxData GPG key to temp file
+# The stat guard is load-bearing, NOT redundant with get_url's idempotency:
+# get_url only skips the network when a `checksum:` is supplied (see get_url.py
+# — the "file already exists" early exit is gated on `not force and checksum`).
+# Without one it always reaches url_get(), so an unguarded fetch would make
+# repos.influxdata.com a hard per-run dependency of every fleet Ansible run —
+# the bootstrap dependency ADR 0021 explicitly refuses for the apt cache.
+# Pinning a checksum instead was rejected: vendor keys rotate, and a stale pin
+# would break the fleet on the vendor's schedule. `size == 0` heals a zero-byte
+# keyring left behind by the old `wget -O` implementation.
+- name: Check InfluxData archive key
+  ansible.builtin.stat:
+    path: /etc/apt/keyrings/influxdata.asc
+  register: influxdata_key
+  tags:
+    - telegraf
+    - packages
+
+- name: Fetch InfluxData archive key
   ansible.builtin.get_url:
     url: https://repos.influxdata.com/influxdata-archive.key
-    dest: /tmp/influxdata.gpg.key
+    dest: /etc/apt/keyrings/influxdata.asc
     mode: '0644'
-  when: not influxdata_gpg_key.stat.exists
+  when: not influxdata_key.stat.exists or influxdata_key.stat.size == 0
   tags:
     - telegraf
     - packages
 
-- name: Convert InfluxData GPG key to dearmored format
-  ansible.builtin.command:
-    cmd: gpg --batch --dearmor -o /usr/share/keyrings/influxdata.gpg /tmp/influxdata.gpg.key
-  args:
-    creates: /usr/share/keyrings/influxdata.gpg
-  when: not influxdata_gpg_key.stat.exists
+# The superseded one-line source MUST go before the deb822 one is added, not
+# after: it names the same URI+suite with a DIFFERENT Signed-By path, and apt
+# refuses that outright ("conflicting values set for option Signed-By"). Every
+# fleet guest carries the old file today, so leaving it would break apt on all
+# of them the next time this role runs — the fresh-guest W6 run never saw it.
+# Declaring absence is the same pattern dns_config uses for its obsolete
+# netplan override; it is a no-op on a fresh guest, not migration logic.
+- name: Remove superseded InfluxData one-line APT source
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/influxdata.list
+    state: absent
   tags:
     - telegraf
     - packages
 
-- name: Check if InfluxData APT repo is present
-  ansible.builtin.shell: grep -q '^deb .*/influxdata' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null
-  register: influxdata_repo_present
-  changed_when: false
-  failed_when: false
-  tags:
-    - telegraf
-    - packages
-
+# One deb822 task replaces the old stat → download → `gpg --dearmor` →
+# grep-for-repo → apt_repository chain. Both of the old mechanisms need a gpg
+# binary, and the Debian 13 cloud image ships none (trixie also dropped
+# apt-key), so telegraf could not install on the PBS guest at all. deb822
+# fetches and stores the armored key itself. Verified W6, 2026-08-12.
 - name: Add InfluxData official APT repository
-  ansible.builtin.apt_repository:
-    repo: "deb [signed-by=/usr/share/keyrings/influxdata.gpg] https://repos.influxdata.com/debian stable main"
+  ansible.builtin.deb822_repository:
+    name: influxdata
+    types: [deb]
+    uris: https://repos.influxdata.com/debian
+    suites: stable
+    components: [main]
+    signed_by: /etc/apt/keyrings/influxdata.asc
+    enabled: true
     state: present
-    filename: influxdata
-  when: influxdata_repo_present.rc != 0
+    # The cloud images ship python3-debian; the LXC templates do not, and this
+    # role runs on every guest. Let the module bootstrap its own requirement.
+    install_python_debian: true
+  tags:
+    - telegraf
+    - packages
+
+# Ungated on purpose. The install task below carries update_cache but only runs
+# when telegraf is ABSENT — which is false on the whole existing fleet, so the
+# role would swap the source file and exit green without ever asking apt whether
+# the result parses. A malformed .sources would then surface at some unrelated
+# apt call on a different play, which is the hardest class of failure to trace.
+# Refresh here so the role proves its own change; `changed_when: false` because
+# a cache refresh is not a state change worth reporting.
+- name: Refresh apt cache so the source swap is validated here, not later
+  ansible.builtin.apt:
+    update_cache: true
+  changed_when: false
   tags:
     - telegraf
     - packages

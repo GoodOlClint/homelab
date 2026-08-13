@@ -1,6 +1,29 @@
 ---
 # Proxmox Backup Server Configuration
 
+# Debian suite for the Proxmox repository, DERIVED per host from the guest OS.
+# `make rebuild <guest>` rolls guests one at a time, so the fleet is MIXED for
+# the whole image roll and no fixed value is right for all of it: bookworm
+# breaks a resolute guest, trixie breaks every host still on noble. The binding
+# constraint is libfuse (bookworm client needs libfuse3-3, trixie libfuse3-4),
+# which tracks the guest OS. Measured on the W6 spike guests 2026-08-12:
+# Ubuntu 24.04 -> bookworm; Ubuntu 26.04 and Debian 13 -> trixie. Intermediate
+# Ubuntu releases are untested and this repo does not run them.
+# A Debian 13 guest therefore gets PBS 4 and the Ubuntu noble guest keeps PBS 3,
+# which is ADR 0025's rule expressed as a derivation, not a hand-flip.
+# Deliberately duplicated in proxmox_backup/defaults and pbs_client/defaults
+# rather than hoisted into group_vars/all.yml. Hoisting was tried and reverted:
+# a role default referencing a group_var makes the role unusable outside the
+# main playbook root — the W6 campaign plays (and any standalone/molecule run)
+# do not load ansible/group_vars/, so every task templating the suite failed
+# with "'proxmox_repo_suite' is undefined". Two copies of one expression is a
+# drift hazard; a role that only works from one directory is a live defect.
+pbs_repo_suite: >-
+  {{ 'trixie'
+       if (ansible_distribution == 'Debian' and ansible_distribution_major_version | int >= 13)
+       or (ansible_distribution == 'Ubuntu' and ansible_distribution_version is version('25.10', '>='))
+       else 'bookworm' }}
+
 # Storage backend: 'nfs' or 'iscsi'
 pbs_storage_backend: iscsi
 

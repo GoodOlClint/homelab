@@ -11,6 +11,48 @@
 # Not resolvectl (runtime-only, lost on reboot) and not a netplan override
 # file (netplan merges nameserver lists across files, so it cannot remove
 # the 1.1.1.1 bootstrap failover from the cloud-init base).
+#
+# VM-ONLY (W6, 2026-08-12). This whole mechanism assumes a netplan/cloud-init
+# guest: the drop-in targets `10-netplan-<iface>`, which only exists on VMs
+# (netplan emits it into /run). An LXC's link is configured by PVE as
+# `eth_vlan<n>.network`, so the drop-in overrides nothing — and the handler
+# then hard-fails, because `netplan apply` shells out to `udevadm control
+# --reload`, which cannot work in a container. Running this unguarded on an
+# LXC fails the play outright.
+#
+# NOTE: skipping is correct but NOT sufficient. An LXC's /etc/resolv.conf is a
+# static file PVE writes from the container's `nameserver` setting, which
+# Terraform fills from the full `dns_servers` list — public bootstrap resolver
+# included. Nothing currently strips it there. See the WP4 open item in
+# docs/ms01-cluster-iac-plan.md.
+- name: Check for a DNS apply left pending by an earlier failed run
+  ansible.builtin.stat:
+    path: /run/dns-config-apply-pending
+  register: _dns_apply_pending
+  when: ansible_virtualization_type != 'lxc'
+  tags:
+    - dns_config
+    - dns
+    - config
+
+# Planted BEFORE anything is written, unconditionally. If it were planted after
+# the writes (as it first was), an abort in between — Ctrl-C on a long
+# make ansible-all, or the host dropping — would leave converged files with no
+# marker, so the next run would compute "nothing changed" and skip the apply.
+# That is the same latch the marker exists to close, just moved earlier.
+- name: Mark a DNS apply pending before touching any config
+  ansible.builtin.file:
+    path: /run/dns-config-apply-pending
+    state: touch
+    mode: '0644'
+  become: true
+  changed_when: false
+  when: ansible_virtualization_type != 'lxc'
+  tags:
+    - dns_config
+    - dns
+    - config
+
 - name: Create networkd drop-in directories
   ansible.builtin.file:
     path: "/etc/systemd/network/10-netplan-{{ item }}.network.d"
@@ -18,6 +60,7 @@
     mode: '0755'
   become: true
   loop: "{{ ansible_facts.interfaces | select('match', '^eth_vlan') | sort }}"
+  when: ansible_virtualization_type != 'lxc'
   tags:
     - dns_config
     - dns
@@ -32,7 +75,8 @@
   loop: "{{ ansible_facts.interfaces | select('match', '^eth_vlan') | sort }}"
   vars:
     dns_override_iface: "{{ item }}"
-  notify: netplan apply
+  register: _dns_dropin
+  when: ansible_virtualization_type != 'lxc'
   tags:
     - dns_config
     - dns
@@ -43,7 +87,66 @@
     path: /etc/netplan/90-dns-override.yaml
     state: absent
   become: true
-  notify: netplan apply
+  register: _dns_obsolete_override
+  when: ansible_virtualization_type != 'lxc'
+  tags:
+    - dns_config
+    - dns
+    - config
+
+# Apply here, in the role — NOT via a handler. Two reasons:
+#   1. Handlers flush at end-of-play, so every later role would run against the
+#      OLD resolver. And it latches: a run that leaves a bad resolver means the
+#      next run writes the corrected file, dies at the first network-touching
+#      task, and never reaches the handler — the fix stays pending until someone
+#      runs `netplan apply` by hand. Observed on the W6 spike guest 2026-08-12.
+#   2. `meta: flush_handlers` was the obvious fix and is WRONG here: it flushes
+#      EVERY pending handler, and `infisical_client` precedes dns_config in
+#      seven plays (openobserve, docker, plex, plex-services, homepage, minio,
+#      github-runner). Flushing would fire `restart infisical-agent` before the
+#      service role writes its docker-compose.yml, so the agent's
+#      `post_command` container restarts would fire against a nonexistent file.
+# A direct command keeps the barrier local to this role.
+#
+# The apply is NOT gated on this run's file changes alone. Doing that reproduces
+# the very latch described above one level down: if `netplan apply` fails after
+# the files were written, the next run finds them already converged, skips the
+# apply, and the corrected resolver stays unapplied until a reboot or a hand-run.
+# So a pending-marker in /run survives a failed apply and forces a retry. /run is
+# tmpfs, which is the right lifetime — a reboot applies the on-disk config anyway.
+- name: Decide whether netplan must be applied
+  ansible.builtin.set_fact:
+    _dns_needs_apply: >-
+      {{ (_dns_dropin is changed)
+         or (_dns_obsolete_override is changed)
+         or (_dns_apply_pending.stat.exists | default(false)) }}
+  when: ansible_virtualization_type != 'lxc'
+  tags:
+    - dns_config
+    - dns
+    - config
+
+- name: Apply DNS config now so dependent roles see the new resolver
+  ansible.builtin.command: netplan apply
+  become: true
+  when:
+    - ansible_virtualization_type != 'lxc'
+    - _dns_needs_apply | bool
+  tags:
+    - dns_config
+    - dns
+    - config
+
+# Unconditional: reaching this task means the apply either succeeded or was
+# never needed. Gating it on _dns_needs_apply would strand the marker on hosts
+# that were already converged.
+- name: Clear the pending marker
+  ansible.builtin.file:
+    path: /run/dns-config-apply-pending
+    state: absent
+  become: true
+  changed_when: false
+  when: ansible_virtualization_type != 'lxc'
   tags:
     - dns_config
     - dns

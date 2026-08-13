@@ -34,16 +34,6 @@
     pbs_backup_user_password: "{{ secrets.pbs.pbs_backup_user_password }}"
   tags: [proxmox_backup, pbs, secrets]
 
-- name: Check if Proxmox Backup Server GPG key exists
-  ansible.builtin.stat:
-    path: /etc/apt/trusted.gpg.d/proxmox-release-bookworm.gpg
-  register: proxmox_gpg_key
-  tags:
-    - proxmox_backup
-    - pbs
-    - backup
-    - packages
-
 - name: Ensure apt keyrings directory exists
   ansible.builtin.file:
     path: /etc/apt/keyrings
@@ -55,23 +45,67 @@
     - backup
     - packages
 
-- name: Download Proxmox Backup Server repository key
-  ansible.builtin.get_url:
-    url: https://enterprise.proxmox.com/debian/proxmox-release-bookworm.gpg
-    dest: /etc/apt/keyrings/proxmox-release-bookworm.gpg
-    mode: '0644'
-  when: not proxmox_gpg_key.stat.exists
+# The guard stats the SAME path this writes and signed_by references. The old
+# one checked /etc/apt/trusted.gpg.d/ instead, so a host carrying the key there
+# — proxmox-archive-keyring puts one there — skipped the download and got a
+# .sources naming a file that does not exist, failing apt with NO_PUBKEY.
+# Keeping a guard (rather than an unguarded get_url) matters because get_url
+# only skips the network when a `checksum:` is supplied; without one, this would
+# make enterprise.proxmox.com a hard per-run dependency. `size == 0` heals a
+# zero-byte keyring from any earlier wget-based run.
+- name: Check Proxmox Backup Server repository key
+  ansible.builtin.stat:
+    path: /etc/apt/keyrings/proxmox-release-{{ pbs_repo_suite }}.gpg
+  register: proxmox_gpg_key
   tags:
     - proxmox_backup
     - pbs
     - backup
     - packages
 
+- name: Download Proxmox Backup Server repository key
+  ansible.builtin.get_url:
+    url: https://enterprise.proxmox.com/debian/proxmox-release-{{ pbs_repo_suite }}.gpg
+    dest: /etc/apt/keyrings/proxmox-release-{{ pbs_repo_suite }}.gpg
+    mode: '0644'
+  when: not proxmox_gpg_key.stat.exists or proxmox_gpg_key.stat.size == 0
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - packages
+
+# Same reasoning as telegraf's: drop the superseded one-line source before
+# adding the deb822 one. Here both point at the same keyring path, so apt only
+# warns about a duplicate rather than erroring — but a live PBS host would
+# still carry both files until its rebuild.
+- name: Remove superseded Proxmox Backup one-line APT source
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/proxmox-backup.list
+    state: absent
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - packages
+
+# deb822, not apt_repository: Debian 13 removed apt-key and the genericcloud
+# image ships no gpg binary, so apt_repository aborts before it ever looks at
+# the repo line — even though signed-by means no key import is needed. Verified
+# on the W6 spike guest 2026-08-12.
 - name: Add Proxmox Backup Server no-subscription repository
-  ansible.builtin.apt_repository:
-    repo: "deb [signed-by=/etc/apt/keyrings/proxmox-release-bookworm.gpg] http://download.proxmox.com/debian/pbs bookworm pbs-no-subscription"
+  ansible.builtin.deb822_repository:
+    name: proxmox-backup
+    types: [deb]
+    uris: "http://download.proxmox.com/debian/pbs"
+    suites: "{{ pbs_repo_suite }}"
+    components: [pbs-no-subscription]
+    signed_by: "/etc/apt/keyrings/proxmox-release-{{ pbs_repo_suite }}.gpg"
+    enabled: true
     state: present
-    filename: proxmox-backup
+    # deb822_repository needs python3-debian. The cloud images ship it, but
+    # don't rely on that holding for whatever image PBS rides next.
+    install_python_debian: true
   tags:
     - proxmox_backup
     - pbs
