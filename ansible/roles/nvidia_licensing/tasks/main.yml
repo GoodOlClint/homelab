@@ -114,7 +114,7 @@
     content: |
       DLS_URL={{ hostvars[inventory_hostname].ansible_host | replace(mgmt_vlan_prefix, services_vlan_prefix) }}
       DLS_PORT=443
-      LEASE_EXPIRE_DAYS=90
+      LEASE_EXPIRE_DAYS={{ dls_lease_expire_days }}
       DATABASE=sqlite:////opt/fastapi-dls/app/db.sqlite
     owner: www-data
     group: www-data

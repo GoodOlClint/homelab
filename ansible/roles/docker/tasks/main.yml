@@ -224,7 +224,7 @@
 
 - name: Set reboot required flag
   ansible.builtin.set_fact:
-    reboot_required: "{{ (nvidia_ctk_result is defined and nvidia_ctk_result is changed) or (docker_role_result is defined and docker_role_result is changed) }}"
+    reboot_required: "{{ nvidia_ctk_result is defined and nvidia_ctk_result is changed }}"
   tags:
     - docker
 
