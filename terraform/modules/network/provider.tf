@@ -1,6 +1,3 @@
-# Terraform Provider Requirements for Network Module
-# This module requires the Proxmox provider for SDN management
-
 terraform {
   required_providers {
     proxmox = {

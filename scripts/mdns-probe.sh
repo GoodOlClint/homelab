@@ -83,7 +83,7 @@ fi
 HOST=$(hostname -s)
 # Timestamp is load-bearing for forensics: without it the log is an undated
 # sequence and blips can't be correlated against AP events, client roams, or
-# each other across hosts. Learned the hard way.
+# each other across hosts.
 TS=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 PAYLOAD="[{\"ts\":\"$TS\",\"host\":\"$HOST\",\"status\":\"$STATUS\",\"wired_pkts\":$WIRED_N,\"wifi_pkts\":$WIFI_N,\"wifi_ip\":\"$SSID\",\"reflector\":\"$REFLECTOR\"}]"
 

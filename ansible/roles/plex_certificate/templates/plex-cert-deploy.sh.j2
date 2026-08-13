@@ -14,7 +14,6 @@ CERT_DIR="{{ plex_cert_dir }}"
 PFX_PATH="{{ plex_pfx_path }}"
 PFX_PASS="${PLEX_CERT_PFX_PASSWORD:-{{ secrets.plex.plex_cert_pfx_password }}}"
 
-# Convert PEM to PKCS#12
 openssl pkcs12 -export \
   -out "${PFX_PATH}" \
   -inkey "${CERT_DIR}/privkey.pem" \
@@ -22,11 +21,9 @@ openssl pkcs12 -export \
   -certfile "${CERT_DIR}/chain.pem" \
   -passout "pass:${PFX_PASS}"
 
-# Set ownership so Plex can read it
 chown plex:plex "${PFX_PATH}"
 chmod 0600 "${PFX_PATH}"
 
-# Restart Plex to pick up the new certificate
 systemctl restart plexmediaserver
 
 logger -t plex-cert-deploy "Plex certificate renewed and converted to PKCS#12"

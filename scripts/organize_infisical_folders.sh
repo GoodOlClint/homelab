@@ -23,7 +23,6 @@ if ! command -v infisical &> /dev/null; then
     exit 1
 fi
 
-# Read project ID and API URL from bootstrap config
 PROJECT_ID=$("$VENV_PYTHON" -c "
 import yaml
 data = yaml.safe_load(open('$BOOTSTRAP_FILE'))
@@ -48,7 +47,6 @@ if [ -z "$INFISICAL_URL" ]; then
     exit 1
 fi
 
-# Common CLI flags
 CLI_FLAGS="--env $INFISICAL_ENV --projectId $PROJECT_ID --domain $INFISICAL_URL/api"
 
 # Helper: create a folder if it doesn't exist
@@ -76,7 +74,6 @@ copy_secret() {
     local lower_name
     lower_name=$(echo "$secret_name" | tr '[:upper:]' '[:lower:]')
 
-    # Try exact name first, then lowercase variant
     local value=""
     local found_name=""
     value=$(infisical secrets get "$secret_name" --path "/" \
@@ -97,7 +94,6 @@ copy_secret() {
         return
     fi
 
-    # Set in destination folder with the uppercase name (for Go template consistency)
     if infisical secrets set "${secret_name}=${value}" \
         --path "$dest_path" $CLI_FLAGS > /dev/null 2>&1; then
         if [ "$found_name" != "$secret_name" ]; then
@@ -114,7 +110,6 @@ echo "Organizing Infisical secrets into folders (project: $PROJECT_ID)..."
 echo "Secrets at / are preserved for deploy-time backward compatibility."
 echo ""
 
-# Step 1: Create all folders first
 echo "Creating folders..."
 create_folder "shared"
 create_folder "monitoring"

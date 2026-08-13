@@ -11,9 +11,9 @@ locals {
   )
 
   # Detached data volumes (ADR 0015): the WP4 fleet rebuild populates this map.
-  # `index` is the volume's permanent mount slot on the holder container —
-  # assign the next free number and NEVER renumber an existing volume.
-  # Example: plex = { index = 0, size_gb = 100 }
+  # `index` is the volume's permanent disk slot on the holder VM (ADR 0020) —
+  # assign the next free number (1..31) and NEVER renumber an existing volume.
+  # Example: plex = { index = 1, size_gb = 100 }
   data_volumes = {}
 
   # --- Infrastructure VMs ---

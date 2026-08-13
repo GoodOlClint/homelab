@@ -1,10 +1,4 @@
 ---
-# GitHub Actions self-hosted runner
-#
-# Installs multiple GitHub Actions runner instances as systemd services with
-# Docker for container-based CI workflows. Runner count is configurable via
-# github_runner_count (default: 2).
-#
 # Authentication uses a GitHub App (no expiring PATs). The App's private key
 # and ID are stored in Infisical /github-runner. At registration time, we
 # generate a short-lived JWT, exchange it for an installation token, then

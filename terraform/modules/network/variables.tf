@@ -1,5 +1,3 @@
-# Input variables for the network module
-
 variable "vlans_file_path" {
   description = "Absolute path to the canonical vlans.yaml file"
   type        = string

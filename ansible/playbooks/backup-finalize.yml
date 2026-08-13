@@ -1,6 +1,6 @@
 ---
-# B3 backup control plane, step 1 (audit 2026-08-10): register the PBS datastore
-# as a PVE storage entry so backup jobs can reference it. Runs AFTER the PBS VM
+# Register the PBS datastore as a PVE storage entry so backup jobs can
+# reference it (B3 backup control plane). Runs AFTER the PBS VM
 # is provisioned (its role generates the backup@pbs!backup-token and fingerprint
 # into Infisical /shared) and BEFORE the fleet root applies proxmox_backup_job
 # resources — job resources referencing an unregistered storage fail the apply.
@@ -59,8 +59,8 @@
 
     # Soft probe BEFORE deciding: an entry with rotated/stale credentials (PBS
     # rebuild is a routine scenario — rebuild-as-routine matrix) reports
-    # inactive and must be reconciled, not skipped (Codex P1). Status parsed by
-    # exact column token — 'inactive' contains the substring 'active' (Codex P2).
+    # inactive and must be reconciled, not skipped. Status parsed by exact
+    # column token — 'inactive' contains the substring 'active'.
     - name: Probe PBS storage status
       ansible.builtin.command:
         cmd: "pvesm status --storage {{ pbs_pve_storage_id }}"
@@ -107,7 +107,6 @@
       no_log: true
       when: _pbs_entry is none
 
-    # Existing entry with a moved datastore cannot be edited in place.
     - name: Recreate PBS storage (datastore/server moved)
       ansible.builtin.shell: |
         pvesm remove {{ pbs_pve_storage_id }}

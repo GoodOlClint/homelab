@@ -1,5 +1,4 @@
 ---
-# Telegraf installation for Alpine Linux (apk)
 
 - name: Enable community repository for Telegraf
   ansible.builtin.lineinfile:

@@ -1,5 +1,4 @@
 ---
-# Install and configure Proxmox Backup Client
 
 - name: Verify required pre_tasks facts
   ansible.builtin.assert:

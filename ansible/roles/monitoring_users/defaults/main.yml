@@ -1,5 +1,4 @@
 ---
-# Default variables for monitoring-users role
 
 # Proxmox monitoring user configuration
 proxmox_monitoring_user: "monitoring@pve"

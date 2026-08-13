@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# Resolve a guest's Terraform resource address(es) by name, VM-or-LXC aware (B2,
-# audit 2026-08-10). The per-guest make targets previously hardcoded the VM
-# resource path, so they could not build/rebuild the mostly-LXC target fleet.
+# Resolve a guest's Terraform resource address(es) by name, VM-or-LXC aware.
 #
 # Usage: guest-targets.sh <guest-name> <mode>
 #   address        -> the guest's resource address (vm OR container)
@@ -35,10 +33,8 @@ import re, sys
 src = open(sys.argv[1]).read()
 seen = set()
 # Anchor on each name attribute, then find its ENCLOSING block by brace-scanning
-# outward. Order-independent: a guest whose block opens with a nested object
-# (e.g. extra_config = {...}) before `name` is still resolved (the old
-# `{[^{}]*?name` anchor could not cross that nested brace and silently skipped
-# such guests — HCL attribute order is semantically irrelevant).
+# outward. Must be order-independent: HCL attribute order is semantically
+# irrelevant, so a nested object (e.g. extra_config = {...}) may precede `name`.
 for m in re.finditer(r'\bname\s*=\s*"([a-z0-9-]+)"', src):
     name = m.group(1)
     # backward: first '{' at depth 0 (balanced nested blocks are skipped)
@@ -70,7 +66,7 @@ for m in re.finditer(r'\bname\s*=\s*"([a-z0-9-]+)"', src):
     seen.add(start)
     block = src[start:end]
     # Only guest blocks carry vlans; skip nested named sub-blocks such as
-    # data_volume { name = ... } (W1 worklab finding: they parsed as VM guests)
+    # data_volume { name = ... }, which would otherwise parse as VM guests
     if not re.search(r'\bvlans\s*=', block):
         continue
     t = re.search(r'\btype\s*=\s*"(vm|lxc)"', block)
@@ -115,7 +111,7 @@ emit_targets() {
     echo "-target=module.vms.proxmox_virtual_environment_file.network_data[\"$name\"]"
   fi
   # -target pulls dependencies but NOT dependents — the HA registration must be
-  # targeted explicitly or an ha=true guest builds unregistered (Codex P1).
+  # targeted explicitly or an ha=true guest builds unregistered.
   if [[ "$ha" == "ha" ]]; then
     echo "-target=module.vms.proxmox_virtual_environment_haresource.guests[\"$name\"]"
   fi
@@ -123,7 +119,7 @@ emit_targets() {
   # state still holds the OPPOSITE-type resource (VM->LXC conversion) or an HA
   # registration the config no longer declares, target them too so they are
   # destroyed in the same run — otherwise the old VM squats on the VMID and the
-  # LXC create fails (Codex P1, second review).
+  # LXC create fails.
   local state_list
   if state_list=$(cd "$TF_DIR" && terraform state list 2>/dev/null); then
     if [[ "$type" == "lxc" ]] && grep -qF "$(vm_addr "$name")" <<<"$state_list"; then

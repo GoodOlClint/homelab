@@ -1,5 +1,4 @@
 ---
-# mcp role defaults
 
 # MemPalace MCP server
 mempalace_base_dir: /opt/mempalace

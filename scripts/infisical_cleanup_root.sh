@@ -10,7 +10,6 @@ set -euo pipefail
 echo "=== Phase 15: Infisical Cleanup ==="
 echo ""
 
-# Step 1: Delete all keys from root /
 echo "--- Step 1: Purging root / ---"
 root_keys=$(infisical secrets list --env prod --path / --format json | \
   python3 -c "import json,sys; [print(s['secretKey']) for s in json.load(sys.stdin)]" 2>/dev/null || true)
@@ -26,7 +25,6 @@ fi
 
 echo ""
 
-# Step 2: Remove orphan copies from wrong folders
 echo "--- Step 2: Removing orphan copies ---"
 
 delete_if_exists() {
@@ -45,7 +43,6 @@ delete_if_exists "wg_public_key" "/pfsense"
 
 echo ""
 
-# Step 3: Remove cross-reference copies from /homepage
 echo "--- Step 3: Removing /homepage orphan copies ---"
 for key in SONARR_API_KEY RADARR_API_KEY LIDARR_API_KEY PROWLARR_API_KEY \
            BAZARR_API_KEY TAUTULLI_API_KEY SABNZBD_API_KEY SEERR_API_KEY \
@@ -57,14 +54,12 @@ done
 
 echo ""
 
-# Step 4: Verify final state
 echo "--- Step 4: Verification ---"
 python3 -c "
 import json, subprocess, sys
 
 folders = ['shared', 'monitoring', 'plex', 'plex-services', 'docker', 'vps', 'pfsense', 'pbs', 'infrastructure', 'homepage']
 
-# Check root
 result = subprocess.run(['infisical', 'secrets', 'list', '--env', 'prod', '--path', '/', '--format', 'json'],
                        capture_output=True, text=True)
 root_keys = json.loads(result.stdout) if result.returncode == 0 else []
@@ -75,7 +70,6 @@ if root_keys:
 else:
     print('OK: root is empty')
 
-# Check each folder
 print()
 for folder in folders:
     result = subprocess.run(['infisical', 'secrets', 'list', '--env', 'prod', '--path', f'/{folder}', '--format', 'json'],

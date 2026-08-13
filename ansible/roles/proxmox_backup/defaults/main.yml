@@ -1,5 +1,4 @@
 ---
-# Proxmox Backup Server Configuration
 
 # Debian suite for the Proxmox repository, DERIVED per host from the guest OS.
 # `make rebuild <guest>` rolls guests one at a time, so the fleet is MIXED for
@@ -60,7 +59,7 @@ pbs_users:
   - username: backup
     realm: pbs
     comment: "Backup user for Proxmox Backup Client"
-    # Password will be set from vault
+    # Password comes from secrets.pbs (Infisical)
     # API token will be auto-generated
   - username: monitoring
     realm: pbs

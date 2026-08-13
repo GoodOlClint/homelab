@@ -1,7 +1,4 @@
-# B3 backup control plane, step 2 (audit 2026-08-10): PVE backup jobs → PBS.
-# The audit found backup=true flags with NO job scheduling anything anywhere —
-# the data-volume holder (VMID 900, owner of ALL fleet durable state) was in no
-# backup. Jobs are defined here; the PBS storage entry they reference is
+# PVE backup jobs → PBS (B3). The PBS storage entry the jobs reference is
 # registered by `make backup-finalize` (ansible/playbooks/backup-finalize.yml),
 # which must run once before the first apply that populates backup_jobs.
 #
@@ -20,7 +17,7 @@ resource "proxmox_backup_job" "jobs" {
   schedule = each.value.schedule
   storage  = each.value.storage
   # bpg declares all/vmid as conflicting attributes regardless of value —
-  # emit exactly one of them (Codex P1).
+  # emit exactly one of them.
   vmid = each.value.all ? null : each.value.vmids
   all  = each.value.all ? true : null
 

@@ -17,13 +17,9 @@ resource "unifi_port_profile" "trunk_all" {
   # tagged management VLAN configured (or be adopted before the port moves to
   # this profile).
   #
-  # native_networkconf_id is DELIBERATELY ABSENT: the 0.55 provider cannot
-  # express "None" (an empty string is dropped from the write payload and
-  # read back as unset, so "" here diffs forever). The None was set once via
-  # the controller API (PUT rest/portconf/<id> {"native_networkconf_id":""})
-  # and Terraform leaves the attribute unmanaged. If the profile is ever
-  # recreated, re-run that PUT — a fresh create defaults to the VLAN 1
-  # Default network.
+  # native_networkconf_id is DELIBERATELY ABSENT — the provider cannot express
+  # native "None"; it was hand-set via controller PUT and the PUT must be
+  # re-run if this profile is ever recreated (README, "Provider quirks").
 }
 
 # Node install-link ports on the 48-port switch (ADR 0019): the i226-V that

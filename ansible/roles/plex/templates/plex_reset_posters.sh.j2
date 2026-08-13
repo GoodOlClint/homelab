@@ -34,7 +34,6 @@ if [ -z "$PLEX_TOKEN" ]; then
     exit 1
 fi
 
-# Wait for Plex API to be available
 log "Waiting for Plex API..."
 for i in $(seq 1 60); do
     if curl -sf -H "X-Plex-Token: $PLEX_TOKEN" http://127.0.0.1:{{ plex_port | default(32400) }}/identity >/dev/null 2>&1; then
@@ -50,7 +49,6 @@ done
 
 cd "$SCRIPT_DIR"
 
-# Activate venv
 if [ -f "$VENV_DIR/bin/activate" ]; then
     . "$VENV_DIR/bin/activate"
 else
@@ -60,7 +58,6 @@ fi
 
 log "Starting Plex poster reset..."
 
-# Run the reset script
 # PLEX_TOKEN is exported; the .env file references ${PLEX_TOKEN} for the API token
 # Redirect all output to the log file (script uses print() and alive-progress)
 set +e

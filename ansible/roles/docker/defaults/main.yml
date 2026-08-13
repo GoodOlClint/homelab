@@ -1,7 +1,6 @@
 ---
 # timezone is defined in group_vars/all.yml
 
-# Docker compose base directory
 docker_base_dir: /opt/docker
 
 # Valheim Server Configuration

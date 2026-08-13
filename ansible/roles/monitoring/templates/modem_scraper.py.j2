@@ -191,7 +191,6 @@ def parse_events(html: str) -> dict:
 
     counts = {"t3": 0, "t4": 0, "critical": 0, "warning": 0, "notice": 0}
 
-    # Case-insensitive search for T3/T4 patterns
     counts["t3"] = len(re.findall(r"T3\s+time-?out", html, re.IGNORECASE))
     counts["t4"] = len(re.findall(r"T4\s+time-?out", html, re.IGNORECASE))
 
@@ -275,7 +274,6 @@ def main():
     try:
         import requests
 
-        # Quick reachability check (TCP connect with short timeout)
         try:
             requests.head(
                 f"{MODEM_PROTO}://{MODEM_HOST}",
@@ -293,7 +291,6 @@ def main():
                 html = fetch_event_log(session)
                 if html:
                     events = parse_events(html)
-                    # Update severity counters
                     for sev in ("critical", "warning", "notice"):
                         if events[sev] > 0:
                             inc_counter(f"{sev}_total", events[sev])

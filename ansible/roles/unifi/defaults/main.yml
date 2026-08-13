@@ -1,5 +1,4 @@
 ---
-# UniFi OS Server Role Default Variables
 
 # Installer URL — required for fresh installs only
 # Get from: https://community.ui.com/releases/r/uosserver

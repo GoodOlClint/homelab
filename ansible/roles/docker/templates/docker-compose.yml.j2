@@ -1,41 +1,4 @@
 services:
-{# Radarr/Sonarr — migrated to plex-services VM #}
-{#
-  radarr:
-    container_name: radarr
-    image: ghcr.io/hotio/radarr:latest
-    restart: unless-stopped
-    logging:
-      driver: json-file
-    ports:
-      - 7878:7878
-    environment:
-      - PUID=2001
-      - PGID=2000
-      - UMASK=002
-      - TZ=America/Chicago
-    volumes:
-      - /etc/localtime:/etc/localtime:ro
-      - radarr_config:/config
-      - plex_media:/data
-  sonarr:
-    container_name: sonarr
-    image: ghcr.io/hotio/sonarr:latest
-    restart: unless-stopped
-    logging:
-      driver: json-file
-    ports:
-      - 8989:8989
-    environment:
-      - PUID=2002
-      - PGID=2000
-      - UMASK=002
-      - TZ=America/Chicago
-    volumes:
-      - /etc/localtime:/etc/localtime:ro
-      - sonarr_config:/config
-      - plex_media:/data
-#}
   kiwix:
     image: ghcr.io/kiwix/kiwix-serve:latest
     container_name: kiwix
@@ -59,7 +22,7 @@ services:
       - 7081:8181
       - 31416:31416
     security_opt:
-      - seccomp:unconfined #optional
+      - seccomp:unconfined
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=all
@@ -93,7 +56,6 @@ services:
 {# responder never starts under crossplay). status.json is the direct signal: valheim-status #}
 {# rewrites it every 10s and `error` goes non-null the moment the PlayFab query fails. #}
 {# The mtime clause catches valheim-status itself dying with a stale-but-valid file. #}
-{# Replaced a log-lifecycle grep — same failure, but read from the purpose-built endpoint. #}
 {# Every failure mode here is repaired by the container restart autoheal will perform; #}
 {# a sustained PlayFab outage will restart-loop, as it would have with the log check. #}
     healthcheck:

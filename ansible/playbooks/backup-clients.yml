@@ -1,5 +1,4 @@
 ---
-# Deploy Proxmox Backup Client to VMs that need backups
 - name: Configure backup clients
   hosts: plex,plex-services,docker
   become: true

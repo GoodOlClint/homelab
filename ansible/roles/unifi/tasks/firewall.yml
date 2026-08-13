@@ -1,5 +1,4 @@
 ---
-# UniFi OS Server Firewall Configuration
 
 - name: Allow UniFi OS Server ports
   community.general.ufw:

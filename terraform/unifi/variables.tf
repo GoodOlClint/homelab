@@ -1,7 +1,6 @@
 # TF_VAR_unifi_password is exported by the Makefile from bootstrap.sops.yml
-# (unifi_admin_password — seed it before the first apply; it is currently
-# unfilled). The non-secret values live in the gitignored vars.auto.tfvars
-# (copy vars.auto.tfvars.example).
+# (unifi_admin_password). The non-secret values live in the gitignored
+# vars.auto.tfvars (copy vars.auto.tfvars.example).
 variable "unifi_username" {
   type        = string
   description = "Username for Unifi Controller API access"

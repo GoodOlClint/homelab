@@ -10,6 +10,3 @@ local_services:
 
 # Override default timezone for Docker containers (default: America/Chicago)
 # timezone: "America/New_York"
-
-# If not using sops immediately, keep temporary plain values only in this local file.
-# Prefer moving credentials into ansible/group_vars/secrets.sops.yml.

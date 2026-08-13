@@ -1,6 +1,5 @@
 ---
 # VPS Hardening — Alpine Linux
-# Orchestrates all hardening subtasks
 
 - name: Configure SSH hardening
   ansible.builtin.include_tasks: ssh.yml

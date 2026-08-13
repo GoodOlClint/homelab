@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 # Disaster recovery restore: SOPS backup → Infisical (make infisical-seed).
-# Rewritten 2026-08-10 (cutover-week plan 1.4): the old version defaulted its
-# API to localhost, required an unpopulated INFISICAL_TOKEN, wrote folders and
-# secrets to two DIFFERENT endpoints (API vs unscoped `infisical` CLI), put
-# secret values on argv, and reported every failure as a warning while exiting
-# 0. This version is pure-API, single-endpoint, argv-clean, and fails hard.
+# Invariants: pure-API against a single endpoint (folders and secrets must
+# never target different endpoints), secret values never on argv, and any
+# failure exits non-zero — never warn-and-exit-0.
 #
 # Auth/endpoint resolution (env overrides exist for rehearsal against a
 # disposable instance — see scripts/rehearse_infisical_seed.sh):

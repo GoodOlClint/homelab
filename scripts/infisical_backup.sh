@@ -39,7 +39,6 @@ for cmd in infisical sops; do
     fi
 done
 
-# Read config from SOPS
 PROJECT_ID=$(sops -d --extract '["bootstrap_config"]["infisical_project_id"]' "$BOOTSTRAP_FILE" 2>/dev/null)
 INFISICAL_URL=$(sops -d --extract '["bootstrap_config"]["infisical_url"]' "$BOOTSTRAP_FILE" 2>/dev/null)
 CLIENT_ID=$(sops -d --extract '["bootstrap"]["infisical_client_id"]' "$BOOTSTRAP_FILE" 2>/dev/null)
@@ -57,7 +56,6 @@ DOMAIN="${INFISICAL_URL}/api"
 
 echo "Backing up Infisical secrets..."
 
-# Authenticate with universal auth
 TOKEN=$(infisical login \
     --method=universal-auth \
     --client-id="$CLIENT_ID" \

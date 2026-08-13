@@ -170,8 +170,6 @@ squid_allowed_domains:
   - ".telegram.org"
   # OpenRouter (model pricing reference data for gateway bootstrap)
   - ".openrouter.ai"
-  # (Ollama domains moved to squid_pinned_domains — spliced to avoid
-  # SSL-bump overhead on multi-GB model blob downloads.)
   # Hugging Face (pyannote, embedding models)
   - ".huggingface.co"
   - ".hf.co"
@@ -184,8 +182,6 @@ squid_allowed_domains:
   - ".icsahome.com"
   - "law.justia.com"
   - ".courtlistener.com"
-  # (Apple SU CDN domains moved to squid_pinned_domains below — spliced
-  # so macOS sees Apple's real cert chain for OCSP AIA lookups.)
   # Homebrew (formulae.brew.sh JSON API for `brew update`; bottles via ghcr.io)
   - ".brew.sh"
 

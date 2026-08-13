@@ -48,12 +48,10 @@ output "ansible_inventory_yaml" {
   })
 }
 
-# Output VM management IPs for reference
 output "vm_management_ips" {
   value = module.vms.vm_management_ips
 }
 
-# Output detailed VM information
 output "vm_details" {
   value = {
     vm_ids            = module.vms.vm_ids

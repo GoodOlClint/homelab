@@ -4,9 +4,9 @@ set -euo pipefail
 MODE="staged"
 RANGE=""
 
-# Paths match the CONSOLIDATED terraform layout (single root + hosts/ + unifi/);
-# the pre-2026-02 infrastructure/services split is gone. nodes.auto.tfvars carries
-# per-node MAC/IP/root-hash bindings and is protected like state.
+# Paths match the CONSOLIDATED terraform layout (single root + hosts/ + unifi/).
+# nodes.auto.tfvars carries per-node MAC/IP/root-hash bindings and is protected
+# like state.
 PROTECTED_CORE_PATH_REGEX='(^|/)(ansible/group_vars/all\.yml|terraform/(hosts/|unifi/)?terraform\.tfstate(\.backup)?|ansible/inventory/vms\.yaml)$'
 PROTECTED_TFVARS_REGEX='(^|/)terraform/((hosts/|unifi/)?vars\.auto\.tfvars|hosts/nodes\.auto\.tfvars)$'
 ALLOW_TFVARS_MIGRATION="${GUARDRAILS_ALLOW_TFVARS_EDIT:-0}"

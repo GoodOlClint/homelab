@@ -1,5 +1,3 @@
-# Network module outputs
-
 output "vlans" {
   description = "VLAN map in the format expected by the proxmox-vm module (excludes WireGuard-only VLANs)"
   value       = local.vlans

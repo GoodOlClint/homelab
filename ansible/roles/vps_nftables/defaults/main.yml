@@ -1,5 +1,4 @@
 ---
-# VPS nftables Configuration
 
 nft_wg_interface: wg0
 nft_public_interface: eth0

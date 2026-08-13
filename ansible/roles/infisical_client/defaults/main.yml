@@ -1,6 +1,4 @@
 ---
-# Infisical Client/Agent role defaults
-
 # Enable/disable the entire role
 infisical_client_enabled: true
 

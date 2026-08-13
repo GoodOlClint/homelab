@@ -1,6 +1,4 @@
 ---
-# adguard role defaults
-
 # Bootstrap mode flag (skips local zone DNS test during bootstrap)
 bootstrap_mode: false
 

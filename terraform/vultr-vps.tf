@@ -87,7 +87,7 @@ resource "vultr_firewall_rule" "plex" {
   notes             = "Plex media streaming"
 }
 
-# Valheim game server (Phase 2)
+# Valheim game server
 resource "vultr_firewall_rule" "valheim" {
   firewall_group_id = vultr_firewall_group.vps.id
   protocol          = "udp"

@@ -2,8 +2,8 @@
 # migration-touched config only. Full-fabric import is future work.
 #
 # Ownership split:
-#   - UniFi-ONLY L2 VLANs (managed_by == ["unifi"]: corosync 31/32, ceph 33 —
-#     ADR-0008/0014) exist nowhere else, so this module CREATES them.
+#   - UniFi-ONLY L2 VLANs (managed_by == ["unifi"]: corosync 31/32, ceph 21 —
+#     ADR-0019/0014) exist nowhere else, so this module CREATES them.
 #   - Dual-managed VLANs (pfsense+unifi: mgmt, storage, services, …) already
 #     live in the hand-managed controller config; they are referenced read-only
 #     via data sources, never created (a duplicate VLAN id would conflict).

@@ -29,7 +29,6 @@ PBS_ENV_FILE="/etc/proxmox-backup/pbs-client.env"
 PBS_NAMESPACE="{{ postgres_pbs_namespace | default('databases') }}"
 PBS_ENABLED=true
 
-# Source PBS environment file for credentials
 if [ -f "$PBS_ENV_FILE" ]; then
     source "$PBS_ENV_FILE"
 else
@@ -43,43 +42,36 @@ PBS_ENABLED=false
 # Backup hostname for PBS (defaults to actual hostname)
 BACKUP_HOSTNAME="{{ inventory_hostname | default(ansible_facts['hostname']) }}"
 
-# Logging function
 log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG_FILE"
 }
 
-# Error handling
 error_exit() {
     log "ERROR: $1"
-    # Cleanup temp directory on error
     rm -rf "$BACKUP_DIR"
     exit 1
 }
 
-# Cleanup function
 cleanup() {
     log "Cleaning up temporary files..."
     rm -rf "$BACKUP_DIR"
 }
 trap cleanup EXIT
 
-# Create temp backup directory
 mkdir -p "$BACKUP_DIR"
 
 log "Starting PostgreSQL PBS backup process"
 
-# Check if PBS is available
 if [ "$PBS_ENABLED" = true ]; then
     if ! command -v proxmox-backup-client &> /dev/null; then
         error_exit "proxmox-backup-client not found. Install with: apt install proxmox-backup-client"
     fi
 
-    # Test PBS connection and create namespace if needed
     log "Testing PBS connection..."
-    set +e  # Temporarily disable exit on error for PBS test
+    set +e
     proxmox-backup-client snapshot list --ns "$PBS_NAMESPACE" &>/dev/null
     PBS_TEST_EXIT=$?
-    set -e  # Re-enable exit on error
+    set -e
 
     if [ $PBS_TEST_EXIT -ne 0 ] && [ $PBS_TEST_EXIT -ne 255 ]; then
         log "WARNING: Cannot connect to PBS (exit code: $PBS_TEST_EXIT), falling back to local backup only"
@@ -102,7 +94,6 @@ if [ "$PBS_ENABLED" = true ]; then
     fi
 fi
 
-# First, backup global objects (roles, tablespaces, etc.)
 log "Backing up global objects (roles, tablespaces, etc.)"
 GLOBALS_FILE="$BACKUP_DIR/postgres_globals_${TIMESTAMP}.sql"
 docker exec postgres pg_dumpall -U "$POSTGRES_USER" --globals-only > "$GLOBALS_FILE"
@@ -114,7 +105,6 @@ else
     error_exit "Failed to backup global objects"
 fi
 
-# Get list of databases (excluding system databases)
 DATABASES=$(docker exec postgres psql -U "$POSTGRES_USER" -d "{{ postgres_default_db | default('radarr-main') }}" -t -c "SELECT datname FROM pg_database WHERE datistemplate = false AND datname NOT IN ('postgres', 'template0', 'template1');" | grep -v '^$' | tr -d ' ')
 
 if [ -z "$DATABASES" ]; then
@@ -122,7 +112,6 @@ if [ -z "$DATABASES" ]; then
     exit 0
 fi
 
-# Backup each database using custom format
 for DB in $DATABASES; do
     log "Backing up database: $DB"
     BACKUP_FILE="$BACKUP_DIR/${DB}_${TIMESTAMP}.dump"
@@ -139,7 +128,6 @@ for DB in $DATABASES; do
     log "Successfully created backup: $BACKUP_FILE"
 done
 
-# Upload to PBS if enabled
 if [ "$PBS_ENABLED" = true ]; then
     log "Uploading backups to Proxmox Backup Server..."
 
@@ -148,7 +136,6 @@ if [ "$PBS_ENABLED" = true ]; then
 
     log "Backing up to PBS repository: $PBS_REPOSITORY"
 
-    # Execute PBS backup - backup the entire directory
     # The .pxar format archives directories, so we backup the whole backup dir
     proxmox-backup-client backup \
         "postgres-backups.pxar:$BACKUP_DIR" \
@@ -159,7 +146,6 @@ if [ "$PBS_ENABLED" = true ]; then
     if [ $? -eq 0 ]; then
         log "Successfully uploaded backups to PBS"
 
-        # List recent backups
         log "Recent PBS backups:"
         proxmox-backup-client snapshot list --ns "$PBS_NAMESPACE" | tail -n 5
     else

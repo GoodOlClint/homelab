@@ -117,8 +117,6 @@ source s_network_tcp {
 # them. Bare printk loses its first token to the tag field; a real RFC 3164
 # message parses fine but its timestamp carries no timezone and is read as
 # receiver-local, so a UTC sender lands hours in the future (see CLAUDE.md).
-# The earlier "non-conforming messages are dropped" comment here was wrong and
-# led to a netconsole design that routed on parse failure — which never fires.
 # Senders we control must emit RFC 5424; it is the only format that carries a
 # timezone and survives this parser unambiguously.
 parser p_rfc5424 {

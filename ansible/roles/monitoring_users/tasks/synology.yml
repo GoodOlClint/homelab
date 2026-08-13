@@ -1,5 +1,4 @@
 ---
-# Synology NAS SNMP configuration tasks
 
 - name: Login to Synology DSM API
   ansible.builtin.uri:

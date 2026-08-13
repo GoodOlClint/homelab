@@ -4,16 +4,13 @@ DB_DIR="$PLEX_DIR/Plug-in Support/Databases"
 PLEX_SQLITE="/usr/lib/plexmediaserver/Plex SQLite"
 LOG_FILE="/var/log/plex_config_restore.log"
 
-# Error handling function
 error_exit() {
     echo "[$(date)] ERROR: $1" >&2
-    # Cleanup on error
     [ -n "$TMP_RESTORE_DIR" ] && rm -rf "$TMP_RESTORE_DIR"
     [ -n "$PLEX_SMB_MOUNT" ] && mountpoint -q "$PLEX_SMB_MOUNT" && umount "$PLEX_SMB_MOUNT" 2>/dev/null
     exit 1
 }
 
-# Set up logging
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 echo "[$(date)] Starting Plex config restore..."
@@ -29,7 +26,6 @@ PLEX_SMB_SHARE="{{ plex_smb_share }}"
 PLEX_SMB_USER="{{ plex_smb_user }}"
 PLEX_SMB_SERVER="{{ plex_smb_server }}"
 
-# Mount SMB share if not already mounted
 echo "[$(date)] Mounting SMB share if needed..."
 if ! mountpoint -q "$PLEX_SMB_MOUNT"; then
   mkdir -p "$PLEX_SMB_MOUNT" || error_exit "Failed to create SMB mount directory"
@@ -41,18 +37,15 @@ fi
 
 echo "[$(date)] Looking for backup archives..."
 
-# Function to test archive integrity
 test_archive_integrity() {
     local archive_path="$1"
     echo "[$(date)] Testing archive integrity: $(basename "$archive_path")"
 
-    # Test if archive can be listed
     if ! tar -tzf "$archive_path" >/dev/null 2>&1; then
         echo "[$(date)] Archive integrity test failed: tar listing failed"
         return 1
     fi
 
-    # Create temp directory for extraction test
     local test_dir=$(mktemp -d)
     if ! tar -xzf "$archive_path" -C "$test_dir" 2>/dev/null; then
         echo "[$(date)] Archive integrity test failed: extraction failed"
@@ -60,7 +53,6 @@ test_archive_integrity() {
         return 1
     fi
 
-    # Test database integrity if databases exist
     if [ -f "$test_dir/com.plexapp.plugins.library.db" ]; then
         local integrity=$("$PLEX_SQLITE" "$test_dir/com.plexapp.plugins.library.db" "PRAGMA integrity_check;" 2>/dev/null | tail -n 1)
         if [ "$integrity" != "ok" ]; then
@@ -84,10 +76,8 @@ test_archive_integrity() {
     return 0
 }
 
-# Try to find a working backup, starting with current, then recent timestamped backups
 latest_backup=""
 
-# First try the current backup
 if [ -f "$PLEX_SMB_MOUNT/plex-backup.tar.gz" ]; then
     echo "[$(date)] Testing current backup: plex-backup.tar.gz"
     if test_archive_integrity "$PLEX_SMB_MOUNT/plex-backup.tar.gz"; then
@@ -98,7 +88,6 @@ if [ -f "$PLEX_SMB_MOUNT/plex-backup.tar.gz" ]; then
     fi
 fi
 
-# If current backup failed, try timestamped backups (newest first)
 if [ -z "$latest_backup" ]; then
     echo "[$(date)] Searching for timestamped backups..."
     for backup_file in $(ls -1t "$PLEX_SMB_MOUNT"/plex-backup-*.tar.gz 2>/dev/null); do
@@ -123,14 +112,12 @@ echo "[$(date)] Extracting backup archive..."
 TMP_RESTORE_DIR=$(mktemp -d) || error_exit "Failed to create temporary directory"
 echo "[$(date)] Created temporary directory: $TMP_RESTORE_DIR"
 
-# Extract with verbose error reporting
 echo "[$(date)] Running tar extraction..."
 if ! tar -xzf "$latest_backup" -C "$TMP_RESTORE_DIR" 2>&1; then
     error_exit "Failed to extract backup archive - archive appears corrupted"
 fi
 echo "[$(date)] Extraction complete."
 
-# Final validation of extracted files (redundant but extra safety)
 echo "[$(date)] Final validation of extracted databases..."
 VALID=true
 if [ -f "$TMP_RESTORE_DIR/com.plexapp.plugins.library.db" ]; then
@@ -201,7 +188,6 @@ for i in {1..30}; do
   sleep 5
 done
 
-# Wait for Plex API to become available
 PLEX_TOKEN="${PLEX_TOKEN:-{{ (secrets.plex | default({})).plex_token | default('') }}}"
 PLEX_API="http://localhost:32400"
 echo "[$(date)] Waiting for Plex API to become available..."
@@ -213,7 +199,6 @@ for i in {1..30}; do
   sleep 5
 done
 
-# Kick off a metadata scan for all libraries
 echo "[$(date)] Triggering metadata refresh libraries..."
 sections=$(curl -s -H "X-Plex-Token: $PLEX_TOKEN" "$PLEX_API/library/sections" | grep -o 'key="[0-9]*"' | grep -o '[0-9]*')
 for section in $sections; do
@@ -222,7 +207,6 @@ for section in $sections; do
 done
 echo "[$(date)] Plex config restore complete."
 
-# Unmount SMB share (with error handling)
 echo "[$(date)] Unmounting SMB share..."
 if mountpoint -q "$PLEX_SMB_MOUNT"; then
   umount "$PLEX_SMB_MOUNT" || echo "[$(date)] Warning: Failed to unmount SMB share cleanly"

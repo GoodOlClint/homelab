@@ -1,5 +1,4 @@
 ---
-# Main tasks for monitoring-users role
 # This role provisions monitoring users for Proxmox, UniFi, and Synology
 
 - name: Verify required pre_tasks facts

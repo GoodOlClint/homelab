@@ -1,6 +1,4 @@
 ---
-# hardening role defaults
-
 # UFW default policies (list of {direction, policy} dicts)
 # Example:
 #   - { direction: incoming, policy: deny }

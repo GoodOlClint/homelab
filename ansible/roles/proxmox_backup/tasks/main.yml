@@ -171,7 +171,6 @@
     - backup
     - service
 
-# Retrieve PBS server certificate fingerprint
 - name: Get PBS server certificate fingerprint
   ansible.builtin.shell: >
     proxmox-backup-manager cert info 2>/dev/null |
@@ -539,32 +538,8 @@
     - backup
     - users
 
-# Namespace Configuration
-# Note: Namespaces are now created automatically by backup scripts on first run
-#- name: Create PBS namespaces using proxmox-backup-client (delegated)
-#  shell: >
-#    set +e;
-#    proxmox-backup-client namespace create "{{ item.namespace }}" --repo "$PBS_REPOSITORY" --fingerprint "$PBS_FINGERPRINT" --password "$PBS_PASSWORD";
-#    RC=$?;
-#    set -e;
-#    if [ $RC -eq 0 ]; then
-#      echo "created";
-#      exit 0;
-#    else
-#      echo "namespace create exit code: $RC";
-#      exit 0;
-#    fi
-#  loop: "{{ pbs_namespaces }}"
-#  delegate_to: plex-services
-#  args:
-#    executable: /bin/bash
-#  register: namespace_created
-#  failed_when: false
-#  changed_when: namespace_created is defined
-#  environment:
-#    PBS_REPOSITORY: "{{ pbs_username }}!{{ pbs_token_name }}@{{ pbs_server_host }}:{{ item.datastore }}"
-#    PBS_PASSWORD: "{{ pbs_token_value }}"
-#    PBS_FINGERPRINT: "{{ pbs_fingerprint }}"
+# Namespaces (pbs_namespaces) are created by the backup scripts on first run,
+# not here — the DatastoreAdmin ACLs below are what makes that possible.
 
 # ACL Configuration
 - name: Read current ACL list
@@ -685,7 +660,6 @@
     - backup
     - acl
 
-# Grant monitoring user Audit (read-only) permissions
 - name: Grant monitoring user Audit permissions on datastores
   ansible.builtin.shell: |
     proxmox-backup-manager acl update /datastore/{{ item.name }} Audit \

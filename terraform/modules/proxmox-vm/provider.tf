@@ -1,14 +1,13 @@
-# Terraform Provider Requirements for Proxmox VM Module
 # This module requires these providers to be configured by the calling module
 
 terraform {
   required_providers {
     proxmox = {
-      source  = "bpg/proxmox" # Proxmox VE provider for VM management
-      version = ">= 0.111"    # WP3 floor: LXC container support + cluster features
+      source  = "bpg/proxmox"
+      version = ">= 0.111" # WP3 floor: LXC container support + cluster features
     }
     local = {
-      source = "hashicorp/local" # Local file provider for SSH keys and outputs
+      source = "hashicorp/local"
     }
   }
   required_version = ">= 1.0"

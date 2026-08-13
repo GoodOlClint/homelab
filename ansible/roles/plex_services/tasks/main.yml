@@ -1,6 +1,5 @@
 ---
 
-# Plex Services Role Tasks
 # This role uses global variables from group_vars/all.yml
 
 - name: Verify required pre_tasks facts
@@ -527,11 +526,9 @@
 
 - name: Attempt to restore databases from remote backup on first deployment
   ansible.builtin.shell: |
-    # Check if remote backups exist and restore the latest ones
     if /usr/local/bin/postgres_restore.sh --list-remote | grep -q "\.sql\.gz$"; then
       echo "Remote backups found, attempting to restore..."
 
-      # Get list of databases from remote backups
       databases=$(/usr/local/bin/postgres_restore.sh --list-remote | grep -o '^[^_]*' | sort -u)
 
       for db in $databases; do
@@ -1607,9 +1604,9 @@
       failed_when: false
       changed_when: recyclarr_sync.rc == 0
 
-# Configure Bazarr language profile and providers BEFORE Sonarr/Radarr integration.
-# On greenfield builds, this ensures the default profile is set before Bazarr's
-# initial sync, so all series/movies get the English profile automatically.
+# Ordering: language profile/providers must exist BEFORE the Sonarr/Radarr
+# integration below — Bazarr's initial sync only applies the default profile
+# to series/movies if it is already set.
 - name: Configure Bazarr language profile and providers
   when:
     - arr_api_keys is defined
@@ -2529,25 +2526,3 @@
     backup_cron_minute: "30"
   when: pbs_backup_enabled | default(true)
   tags: [plex_services, backup, pbs, cron]
-
-# === Manual Configuration Required After First Deployment ===
-#
-# Prowlarr indexers and SABnzbd news servers are now automated via
-# plex_services_indexers and plex_services_usenet_servers variables.
-# Add credentials to Infisical at /plex-services/ before deploying.
-#
-# 1. BAZARR:
-#    - Open http://<host>:6767 -> Settings -> Languages
-#    - Set subtitle languages, providers, and anti-captcha keys
-#    - Settings -> Sonarr/Radarr: Add connection (localhost ports, API keys auto-read from config)
-#
-# 4. TAUTULLI:
-#    - Open http://<host>:8181 -> Settings -> Plex Media Server
-#    - Add Plex server connection and authentication token
-#
-# 5. SEERR: Automated — Plex auth, Sonarr/Radarr setup, library sync
-#
-# 6. CLOUDFLARE TUNNEL:
-#    - Routes configured in Cloudflare Zero Trust dashboard:
-#      tautulli.clintflix.tv  -> http://tautulli:8181
-#      requests.clintflix.tv  -> http://seerr:5055

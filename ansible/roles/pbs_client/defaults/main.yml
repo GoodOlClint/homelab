@@ -1,5 +1,4 @@
 ---
-# Proxmox Backup Client Configuration
 
 # Debian suite for the Proxmox repository, DERIVED per host from the guest OS.
 # `make rebuild <guest>` rolls guests one at a time, so the fleet is MIXED for

@@ -3,9 +3,10 @@
 #
 # Pre-flight: Load secrets, VLAN data, and local overrides
 #
-# Phase 1: Bootstrap core services (DNS, AdGuard, OpenObserve, PBS, UniFi)
+# Phase 1: Bootstrap core services (DNS, AdGuard, Infisical, OpenObserve, PBS,
+#   UniFi, apt-cache)
 #   Each VM gets its primary role only — no monitoring clients yet.
-#   Order matters: DNS → AdGuard → OpenObserve → proxmox-backup → UniFi
+#   Order matters: DNS → AdGuard → Infisical → OpenObserve → proxmox-backup → UniFi
 #
 # Phase 2: Monitoring clients (rsyslog + telegraf) on all infrastructure VMs
 #   Runs after OpenObserve is up and ready to receive logs/metrics.

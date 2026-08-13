@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Rehearse the DR seed path against a DISPOSABLE local Infisical (cutover-week
-# plan 1.4). Spins postgres+redis+infisical in throwaway containers, bootstraps
+# Rehearse the DR seed path against a DISPOSABLE local Infisical. Spins
+# postgres+redis+infisical in throwaway containers, bootstraps
 # an admin + project exactly like ansible/tasks/bootstrap_infisical_setup.yml
 # (infisical bootstrap CLI), runs scripts/seed_infisical.sh against it with env
 # overrides, and relies on the seed script's own hard verify. Everything is

@@ -88,7 +88,7 @@ external_secrets:
   pfsense:
     cloudflare_dns_api_token: "REPLACE_ME"
 
-  # /vps — Only TRUE SECRETS (IPs/public keys moved to all.yml)
+  # /vps — true secrets only (IPs/public keys live in group_vars all.yml)
   vps:
     maxmind_license_key: "REPLACE_ME"
 

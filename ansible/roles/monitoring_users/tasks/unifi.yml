@@ -1,5 +1,4 @@
 ---
-# UniFi Controller monitoring user provisioning tasks
 
 - name: Check UniFi Controller reachability
   ansible.builtin.uri:

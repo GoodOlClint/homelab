@@ -1,5 +1,4 @@
 ---
-# Telegraf installation for Debian/Ubuntu (apt)
 
 # Fetch the key to a PATH and hand deb822 the path, never the URL. Given a URL,
 # deb822_repository re-fetches on EVERY run (its write_signed_by_key early-exits

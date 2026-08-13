@@ -1,5 +1,4 @@
 ---
-# Proxmox monitoring user provisioning tasks
 
 - name: Check if Proxmox monitoring user exists
   ansible.builtin.command:

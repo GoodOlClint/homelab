@@ -20,20 +20,16 @@ PBS_NAMESPACE="{{ plex_pbs_namespace | default('plex') }}"
 # Backup hostname for PBS (defaults to actual hostname)
 BACKUP_HOSTNAME="{{ inventory_hostname | default(ansible_facts['hostname']) }}"
 
-# Logging function
 log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG_FILE"
 }
 
-# Error handling
 error_exit() {
     log "ERROR: $1"
-    # Cleanup temp directory on error
     rm -rf "$RESTORE_DIR"
     exit 1
 }
 
-# Cleanup function
 cleanup() {
     log "Cleaning up temporary files..."
     rm -rf "$RESTORE_DIR"
@@ -42,12 +38,10 @@ trap cleanup EXIT
 
 log "Starting Plex config PBS restore process"
 
-# Check if proxmox-backup-client is available
 if ! command -v proxmox-backup-client &> /dev/null; then
     error_exit "proxmox-backup-client not found. Install with: apt install proxmox-backup-client"
 fi
 
-# Source PBS environment file for credentials
 if [ -f "$PBS_ENV_FILE" ]; then
     source "$PBS_ENV_FILE"
 else
@@ -56,7 +50,6 @@ fi
 
 log "Looking for available backups in PBS..."
 
-# List all snapshots in the namespace
 set +e
 SNAPSHOTS=$(proxmox-backup-client snapshot list --ns "$PBS_NAMESPACE" --output-format json 2>/dev/null)
 LIST_EXIT=$?
@@ -66,7 +59,6 @@ if [ $LIST_EXIT -ne 0 ]; then
     error_exit "Failed to list snapshots from PBS (exit code: $LIST_EXIT)"
 fi
 
-# Parse JSON to find the most recent snapshot
 # Format: [namespace:]<type>/<ID>/<timestamp>
 LATEST_SNAPSHOT=$(echo "$SNAPSHOTS" | jq -r '.[] | select(.["backup-type"] == "host") | .["backup-id"] + "/" + (.["backup-time"] | todate)' | sort -r | head -n 1)
 
@@ -74,18 +66,15 @@ if [ -z "$LATEST_SNAPSHOT" ]; then
     error_exit "No backups found in PBS namespace '$PBS_NAMESPACE'"
 fi
 
-# Extract backup-id and timestamp
 BACKUP_ID=$(echo "$LATEST_SNAPSHOT" | cut -d'/' -f1)
 BACKUP_TIME=$(echo "$LATEST_SNAPSHOT" | cut -d'/' -f2)
 
 log "Found latest backup: host/$BACKUP_ID/$BACKUP_TIME"
 
-# Create restore directory
 mkdir -p "$RESTORE_DIR"
 
 log "Restoring backup from PBS..."
 
-# Restore the plex-config.pxar archive from PBS
 proxmox-backup-client restore \
     --ns "$PBS_NAMESPACE" \
     "host/$BACKUP_ID/$BACKUP_TIME" \
@@ -97,7 +86,6 @@ fi
 
 log "Backup restored to $RESTORE_DIR"
 
-# Validate extracted files
 log "Validating extracted databases..."
 VALID=true
 
@@ -132,11 +120,9 @@ if [ "$VALID" != "true" ]; then
     error_exit "One or more extracted DBs failed validation. Backup may be corrupted."
 fi
 
-# Stop Plex before restoring files
 log "Stopping plexmediaserver..."
 systemctl stop plexmediaserver || error_exit "Failed to stop plexmediaserver"
 
-# Restore Plug-ins
 log "Restoring Plug-ins..."
 if [ -d "$RESTORE_DIR/Plug-ins" ]; then
     log "Removing old Plug-ins..."
@@ -149,21 +135,18 @@ else
     log "WARNING: Plug-ins directory not found in backup"
 fi
 
-# Restore main database
 log "Restoring main DB..."
 if [ -f "$RESTORE_DIR/com.plexapp.plugins.library.db" ]; then
     cp -af "$RESTORE_DIR/com.plexapp.plugins.library.db" "$DB_DIR/com.plexapp.plugins.library.db" || error_exit "Failed to restore main DB"
     chown plex:plex "$DB_DIR/com.plexapp.plugins.library.db"
 fi
 
-# Restore blobs database
 log "Restoring blobs DB..."
 if [ -f "$RESTORE_DIR/com.plexapp.plugins.library.blobs.db" ]; then
     cp -af "$RESTORE_DIR/com.plexapp.plugins.library.blobs.db" "$DB_DIR/com.plexapp.plugins.library.blobs.db" || error_exit "Failed to restore blobs DB"
     chown plex:plex "$DB_DIR/com.plexapp.plugins.library.blobs.db"
 fi
 
-# Restore Preferences.xml
 log "Restoring Preferences.xml..."
 if [ -f "$RESTORE_DIR/Preferences.xml" ]; then
     cp -af "$RESTORE_DIR/Preferences.xml" "$PLEX_DIR/Preferences.xml" || error_exit "Failed to restore Preferences.xml"
@@ -172,7 +155,6 @@ else
     log "WARNING: Preferences.xml not found in backup"
 fi
 
-# Restore SSL certificate PFX
 PFX_PATH="{{ plex_pfx_path | default('/var/lib/plexmediaserver/plex_certificate.pfx') }}"
 log "Restoring PFX certificate..."
 if [ -f "$RESTORE_DIR/plex_certificate.pfx" ]; then
@@ -184,7 +166,6 @@ else
     log "WARNING: PFX certificate not found in backup (certbot will regenerate on next renewal)"
 fi
 
-# Start Plex
 log "Starting plexmediaserver..."
 systemctl start plexmediaserver || error_exit "Failed to start plexmediaserver"
 
@@ -197,7 +178,6 @@ for i in {1..30}; do
     sleep 5
 done
 
-# Wait for Plex API to become available
 PLEX_API="http://localhost:32400"
 log "Waiting for Plex API to become available..."
 for i in {1..30}; do
@@ -208,7 +188,6 @@ for i in {1..30}; do
     sleep 5
 done
 
-# Trigger metadata refresh for all libraries
 log "Triggering metadata refresh for all libraries..."
 sections=$(curl -s -H "X-Plex-Token: $PLEX_TOKEN" "$PLEX_API/library/sections" | grep -o 'key="[0-9]*"' | grep -o '[0-9]*' || true)
 for section in $sections; do

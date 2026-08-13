@@ -1,6 +1,4 @@
 ---
-# UniFi OS Server Deployment Playbook
-
 - name: Deploy UniFi OS Server
   hosts: unifi
   become: true

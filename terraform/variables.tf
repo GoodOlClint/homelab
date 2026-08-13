@@ -244,8 +244,8 @@ variable "backup_jobs" {
     all      = optional(bool, false)
     mode     = optional(string, "snapshot")
     # protected backups are exempt from pruning AND datastore retention —
-    # default-on would grow storage until it fills (Codex P1). Reserve for
-    # deliberately retained jobs.
+    # default-on would grow storage until it fills. Reserve for deliberately
+    # retained jobs.
     protected = optional(bool, false)
     prune_backups = optional(map(string), {
       keep-daily   = "7"

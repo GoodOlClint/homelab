@@ -1,10 +1,7 @@
 ---
 # Bootstrap pre_tasks — minimal facts loading for first-time deployment.
-# Unlike the full pre_tasks in infrastructure.yml, this does NOT:
-#   - Check/connect to Infisical (it doesn't exist yet)
-#   - Load secrets.sops.yml fallback
-#   - Run monitoring_users
-#   - Load rendered policy artifacts
+# Unlike full_pre_tasks.yml, this does NOT check/connect to Infisical
+# (it doesn't exist yet).
 
 - name: Check for local override vars file
   ansible.builtin.stat:

@@ -1,7 +1,5 @@
 # Packer Template Detection and Selection
-# This file handles finding and selecting Packer-built VM templates
 
-# Data source to find the latest Packer template
 # Searches for templates matching pattern: ubuntu-24.04-base-YYYYMMDD-HHMM
 data "proxmox_virtual_environment_vms" "packer_templates" {
   count     = var.use_packer_template && var.packer_template_name == "" ? 1 : 0
@@ -19,16 +17,13 @@ data "proxmox_virtual_environment_vms" "packer_templates" {
 }
 
 locals {
-  # Determine which Packer template to use
-  # Priority: 1) Explicit template name, 2) Auto-detected latest, 3) null if not using Packer
   packer_template_name = var.use_packer_template ? (
     var.packer_template_name != "" ?
     var.packer_template_name :
     try(data.proxmox_virtual_environment_vms.packer_templates[0].vms[0].name, null)
   ) : null
 
-  # Get the VM ID for cloning (Packer templates use numeric VM IDs)
-  # Priority: 1) Explicit VM ID variable, 2) Auto-detected, 3) null
+  # Cloning references the template by numeric VM ID, not name.
   packer_template_vm_id = var.use_packer_template ? (
     var.packer_template_vm_id != null ?
     var.packer_template_vm_id :
@@ -42,7 +37,8 @@ locals {
     for vm in var.vm_configurations : vm.name => (
       var.use_packer_template ? null : (
         # lookup(..., null) rather than [vm.image] so an undefined key surfaces
-        # as the resource precondition below, not an opaque "invalid index".
+        # as the resource precondition in virtual_machines.tf, not an opaque
+        # "invalid index".
         vm.image == null ? local.ubuntu_cloud_image_id : lookup(local.extra_cloud_image_ids, vm.image, null)
       )
     ) if vm.type != "lxc"

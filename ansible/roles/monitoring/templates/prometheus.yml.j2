@@ -128,7 +128,7 @@ scrape_configs:
 
   # Speedtest Monitoring
   - job_name: 'speedtest'
-    scrape_interval: 30m  # Run every 30 minutes
+    scrape_interval: 30m
     scrape_timeout: 90s
     static_configs:
       - targets: ['speedtest:9798']

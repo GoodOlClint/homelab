@@ -11,8 +11,8 @@
 #
 # `index` is the stable disk slot (scsi<index-1>) — never renumber an existing
 # volume's index. Gaps are allowed (a retired volume may leave one); only
-# uniqueness is load-bearing now that consumers resolve volumes from holder
-# state instead of list position.
+# uniqueness is load-bearing — consumers resolve volumes from holder state,
+# not list position.
 
 locals {
   # Deterministic block order: sorted by operator-assigned index. Order only
@@ -31,8 +31,8 @@ locals {
   # KEYS derive solely from var.data_volumes (statically known): filtering by
   # the computed path made the whole key set unknown during an append plan,
   # which turned EXISTING consumers' mount_point.volume unknown and — because
-  # container mount_points are ForceNew — proposed replacing unrelated guests
-  # (Codex review of W1). A just-appended volume carries a null path instead;
+  # container mount_points are ForceNew — proposed replacing unrelated guests.
+  # A just-appended volume carries a null path instead;
   # consumer preconditions reject attaching it before it materializes.
   data_volume_refs = {
     for i, v in local.data_volumes_ordered : v.name => {

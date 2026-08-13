@@ -1,11 +1,11 @@
 ---
-# Automated Infisical configuration — replaces manual post-bootstrap steps
+# Automated Infisical configuration.
 # Runs on localhost after Phase 2 deploys the Infisical server.
 # Uses: infisical CLI (bootstrap command), Infisical REST API, sops CLI
 #
 # Creates: admin account, project, machine identity, client credentials
 # Saves: all IDs and credentials back to bootstrap.sops.yml
-# Seeds: runtime secrets from secrets.sops.yml into Infisical
+# Seeds: external secrets from bootstrap.sops.yml (external_secrets) into Infisical
 
 # --- Idempotency: skip if already fully configured AND credentials are valid ---
 

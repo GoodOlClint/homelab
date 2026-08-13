@@ -35,23 +35,19 @@ SMB_ENABLED=true
 SMB_ENABLED=false
 {% endif %}
 
-# Logging function
 log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG_FILE"
 }
 
-# Error handling
 error_exit() {
     log "ERROR: $1"
     exit 1
 }
 
-# Create backup directory
 mkdir -p "$BACKUP_DIR"
 
 log "Starting PostgreSQL backup process"
 
-# First, backup global objects (roles, tablespaces, etc.)
 log "Backing up global objects (roles, tablespaces, etc.)"
 GLOBALS_FILE="$BACKUP_DIR/postgres_globals_${TIMESTAMP}.sql"
 PGPASSWORD="$POSTGRES_PASSWORD" pg_dumpall -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" --globals-only > "$GLOBALS_FILE"
@@ -60,7 +56,6 @@ if [ $? -eq 0 ]; then
     gzip "$GLOBALS_FILE"
     log "Successfully created globals backup: ${GLOBALS_FILE}.gz"
 
-    # Upload globals to SMB if enabled
     if [ "$SMB_ENABLED" = true ]; then
         if [ -n "$SMB_DOMAIN" ]; then
             smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_DOMAIN/$SMB_USER%$SMB_PASS" -c "mkdir \"$REMOTE_BACKUP_PATH\" 2>/dev/null; cd \"$REMOTE_BACKUP_PATH\"; put \"${GLOBALS_FILE}.gz\" \"$(basename "${GLOBALS_FILE}.gz")\"" 2>/dev/null || true
@@ -72,7 +67,6 @@ else
     log "WARNING: Failed to backup global objects"
 fi
 
-# Get list of databases (excluding system databases)
 DATABASES=$(PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "{{ postgres_default_db | default('radarr-main') }}" -t -c "SELECT datname FROM pg_database WHERE datistemplate = false AND datname NOT IN ('postgres', 'template0', 'template1');" | grep -v '^$' | tr -d ' ')
 
 if [ -z "$DATABASES" ]; then
@@ -80,7 +74,6 @@ if [ -z "$DATABASES" ]; then
     exit 0
 fi
 
-# Backup each database using custom format
 for DB in $DATABASES; do
     log "Backing up database: $DB"
     BACKUP_FILE="$BACKUP_DIR/${DB}_${TIMESTAMP}.dump"
@@ -91,18 +84,15 @@ for DB in $DATABASES; do
     if [ $? -eq 0 ]; then
         log "Successfully created backup: $BACKUP_FILE"
 
-        # Upload to SMB if enabled
         if [ "$SMB_ENABLED" = true ]; then
             log "Uploading backup to SMB share: $SMB_SERVER/$SMB_SHARE/$REMOTE_BACKUP_PATH/"
 
-            # Create remote directory structure
             if [ -n "$SMB_DOMAIN" ]; then
                 smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_DOMAIN/$SMB_USER%$SMB_PASS" -c "mkdir \"$REMOTE_BACKUP_PATH\" 2>/dev/null; exit" 2>/dev/null || true
             else
                 smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_USER%$SMB_PASS" -c "mkdir \"$REMOTE_BACKUP_PATH\" 2>/dev/null; exit" 2>/dev/null || true
             fi
 
-            # Upload backup file
             if [ -n "$SMB_DOMAIN" ]; then
                 smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_DOMAIN/$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; put \"$BACKUP_FILE\" \"$(basename "$BACKUP_FILE")\""
             else
@@ -120,16 +110,13 @@ for DB in $DATABASES; do
     fi
 done
 
-# Clean up old local backups
 log "Cleaning up local backups older than $RETENTION_DAYS days"
 find "$BACKUP_DIR" -name "*.dump" -type f -mtime +$RETENTION_DAYS -delete
 find "$BACKUP_DIR" -name "*.sql.gz" -type f -mtime +$RETENTION_DAYS -delete
 
-# Clean up old remote backups if SMB is enabled
 if [ "$SMB_ENABLED" = true ]; then
     log "Cleaning up remote backups older than $RETENTION_DAYS days"
 
-    # Get list of remote files and delete old ones
     CUTOFF_DATE=$(date -d "$RETENTION_DAYS days ago" +%Y%m%d)
 
     if [ -n "$SMB_DOMAIN" ]; then

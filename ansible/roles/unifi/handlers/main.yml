@@ -1,5 +1,4 @@
 ---
-# UniFi OS Server Handlers
 
 - name: Restart UniFi OS Server
   ansible.builtin.systemd:

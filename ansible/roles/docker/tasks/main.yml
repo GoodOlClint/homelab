@@ -212,9 +212,8 @@
     - config
     - compose
 
-# Retired 2026-08-10: the docker VM's cloudflared tunnel was never used. The
-# old rendered .env held the tunnel token — desired state is absent, which also
-# purges the stale credential from hosts configured before the retirement.
+# Stays as state:absent — hosts configured before the cloudflared retirement
+# still carry the tunnel token in this file.
 - name: Remove retired docker .env (held the unused cloudflared token)
   ansible.builtin.file:
     path: "{{ docker_base_dir }}/.env"

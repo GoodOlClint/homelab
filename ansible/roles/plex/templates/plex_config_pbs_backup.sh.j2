@@ -28,7 +28,6 @@ PBS_ENV_FILE="/etc/proxmox-backup/pbs-client.env"
 PBS_NAMESPACE="{{ plex_pbs_namespace | default('plex') }}"
 PBS_ENABLED=true
 
-# Source PBS environment file for credentials
 if [ -f "$PBS_ENV_FILE" ]; then
     source "$PBS_ENV_FILE"
 else
@@ -42,15 +41,12 @@ PBS_ENABLED=false
 # Backup hostname for PBS (defaults to actual hostname)
 BACKUP_HOSTNAME="{{ inventory_hostname | default(ansible_facts['hostname']) }}"
 
-# Logging function
 log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG_FILE"
 }
 
-# Error handling
 error_exit() {
     log "ERROR: $1"
-    # Cleanup temp directory on error
     rm -rf "$BACKUP_DIR"
     # Ensure Plex is started if we stopped it
     if systemctl is-active --quiet plexmediaserver; then
@@ -62,7 +58,6 @@ error_exit() {
     exit 1
 }
 
-# Cleanup function
 cleanup() {
     log "Cleaning up temporary files..."
     rm -rf "$BACKUP_DIR"
@@ -71,18 +66,16 @@ trap cleanup EXIT
 
 log "Starting Plex config PBS backup process"
 
-# Check if PBS is available
 if [ "$PBS_ENABLED" = true ]; then
     if ! command -v proxmox-backup-client &> /dev/null; then
         error_exit "proxmox-backup-client not found. Install with: apt install proxmox-backup-client"
     fi
 
-    # Test PBS connection and create namespace if needed
     log "Testing PBS connection..."
-    set +e  # Temporarily disable exit on error for PBS test
+    set +e
     proxmox-backup-client snapshot list --ns "$PBS_NAMESPACE" &>/dev/null
     PBS_TEST_EXIT=$?
-    set -e  # Re-enable exit on error
+    set -e
 
     if [ $PBS_TEST_EXIT -ne 0 ] && [ $PBS_TEST_EXIT -ne 255 ]; then
         log "WARNING: Cannot connect to PBS (exit code: $PBS_TEST_EXIT), falling back to local backup only"
@@ -128,20 +121,17 @@ while true; do
     attempt=$((attempt+1))
 done
 
-# Create backup directory
 mkdir -p "$BACKUP_DIR"
 
 log "Stopping plexmediaserver..."
 systemctl stop plexmediaserver || error_exit "Failed to stop plexmediaserver"
 
 log "Copying DB, Plug-ins, Preferences.xml, and SSL certificate..."
-# Copy files with error checking
 cp "$DB_DIR/$DB_MAIN" "$BACKUP_DIR/${DB_MAIN}" || error_exit "Failed to copy main database"
 cp "$DB_DIR/$DB_BLOBS" "$BACKUP_DIR/${DB_BLOBS}" || error_exit "Failed to copy blobs database"
 cp -a "$PLEX_DIR/Plug-ins" "$BACKUP_DIR/Plug-ins" || error_exit "Failed to copy Plug-ins"
 cp "$PLEX_DIR/Preferences.xml" "$BACKUP_DIR/Preferences.xml" || error_exit "Failed to copy Preferences.xml"
 
-# Copy SSL certificate PFX if it exists
 PFX_PATH="{{ plex_pfx_path | default('/var/lib/plexmediaserver/plex_certificate.pfx') }}"
 if [ -f "$PFX_PATH" ]; then
     cp "$PFX_PATH" "$BACKUP_DIR/plex_certificate.pfx" || error_exit "Failed to copy PFX certificate"
@@ -153,7 +143,6 @@ fi
 log "Starting plexmediaserver..."
 systemctl start plexmediaserver || error_exit "Failed to start plexmediaserver"
 
-# Run integrity check on copied main database
 log "Running integrity check on main DB..."
 if [ -f "$BACKUP_DIR/$DB_MAIN" ]; then
     INTEGRITY=$("$PLEX_SQLITE" "$BACKUP_DIR/$DB_MAIN" "PRAGMA integrity_check;" | tail -n 1)
@@ -163,7 +152,6 @@ if [ -f "$BACKUP_DIR/$DB_MAIN" ]; then
     log "Main database integrity check passed."
 fi
 
-# Run integrity check on copied blobs database
 log "Running integrity check on blobs DB..."
 if [ -f "$BACKUP_DIR/$DB_BLOBS" ]; then
     INTEGRITY_BLOBS=$("$PLEX_SQLITE" "$BACKUP_DIR/$DB_BLOBS" "PRAGMA integrity_check;" | tail -n 1)
@@ -173,7 +161,6 @@ if [ -f "$BACKUP_DIR/$DB_BLOBS" ]; then
     log "Blobs database integrity check passed."
 fi
 
-# Upload to PBS if enabled
 if [ "$PBS_ENABLED" = true ]; then
     log "Uploading backups to Proxmox Backup Server..."
 
@@ -182,7 +169,6 @@ if [ "$PBS_ENABLED" = true ]; then
 
     log "Backing up to PBS repository: $PBS_REPOSITORY"
 
-    # Execute PBS backup - backup the entire directory
     proxmox-backup-client backup \
         "plex-config.pxar:$BACKUP_DIR" \
         --ns "$PBS_NAMESPACE" \
@@ -192,7 +178,6 @@ if [ "$PBS_ENABLED" = true ]; then
     if [ $? -eq 0 ]; then
         log "Successfully uploaded backups to PBS"
 
-        # List recent backups
         log "Recent PBS backups:"
         proxmox-backup-client snapshot list --ns "$PBS_NAMESPACE" | tail -n 5
     else

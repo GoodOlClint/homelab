@@ -52,8 +52,6 @@ locals {
         subnet    = local.merged_vlans[vlan_key].subnet
         subnet_v6 = local.merged_vlans[vlan_key].subnet_v6
 
-        # Management VLAN: static from mgmt_ip_offset or vm_id (whichever is set), DHCP when neither
-        # Other VLANs: static from ip_offset when set, DHCP when null
         ip = (
           vlan_key == var.management_vlan ? (
             coalesce(vm_config.mgmt_ip_offset, vm_config.vm_id) != null ? cidrhost(local.merged_vlans[vlan_key].subnet, coalesce(vm_config.mgmt_ip_offset, vm_config.vm_id)) : null
@@ -92,7 +90,6 @@ locals {
 
         mtu = try(local.merged_vlans[vlan_key].mtu, 1500)
 
-        # Management VLAN: DHCP only when neither vm_id nor mgmt_ip_offset is set
         dhcp = vlan_key == var.management_vlan ? (coalesce(vm_config.mgmt_ip_offset, vm_config.vm_id) == null) : (vm_config.ip_offset == null)
 
         # IPv6 RA - accept on every v6-enabled interface unless v6 is explicitly disabled.
@@ -207,8 +204,6 @@ resource "proxmox_virtual_environment_vm" "vms" {
   vm_id      = each.value.vm_id # null = auto-assign by Proxmox
   node_name  = coalesce(each.value.node_name, var.virtual_environment_node)
   protection = var.unprotect ? false : each.value.protected
-
-  # Dependencies are inferred from resource references in initialization block
 
   # Clone from Packer template (when using Packer)
   dynamic "clone" {

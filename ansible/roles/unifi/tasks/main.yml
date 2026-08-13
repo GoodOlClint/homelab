@@ -1,5 +1,4 @@
 ---
-# Main tasks for UniFi OS Server
 
 - name: Verify required pre_tasks facts
   ansible.builtin.assert:

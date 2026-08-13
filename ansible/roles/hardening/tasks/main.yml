@@ -1,7 +1,4 @@
 ---
-# Ansible Role: Hardening
-# Harden Linux VMs for security best practices
-
 - name: Ensure UFW is installed
   ansible.builtin.apt:
     name: ufw

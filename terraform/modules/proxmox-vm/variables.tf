@@ -176,7 +176,7 @@ variable "data_volumes" {
   }
 
   # scsi0..scsi30 is PVE's SCSI slot range; index must be a whole number or the
-  # derived interface name is garbage ("scsi0.5" — Codex review of W1)
+  # derived interface name is garbage ("scsi0.5")
   validation {
     condition     = alltrue([for v in var.data_volumes : v.index >= 1 && v.index <= 31 && v.index == floor(v.index)])
     error_message = "data_volumes indices must be integers between 1 and 31 (holder VM scsi slots)."
@@ -209,7 +209,7 @@ variable "unprotect" {
   default     = false
 }
 
-# Static VLAN configuration (required)
+# Static VLAN configuration
 variable "vlans" {
   description = "Static VLAN configuration - defines all VLANs used by VMs"
   type = map(object({
@@ -225,7 +225,7 @@ variable "vlans" {
     # and emits no route at all — see vm_gateway_vlans in virtual_machines.tf.
     gateway = optional(string, "auto")
   }))
-  default = {} # Empty by default when using Unifi integration
+  default = {}
 }
 
 # Module-specific variables

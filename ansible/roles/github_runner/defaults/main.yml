@@ -1,6 +1,4 @@
 ---
-# github_runner role defaults
-
 # Base installation directory (each instance gets a numbered subdirectory)
 github_runner_base_dir: /opt/actions-runner
 
@@ -13,7 +11,6 @@ github_runner_repo: "goodolclint/PSProxmoxVE"
 # Runner name prefix (instances are named <prefix>-1, <prefix>-2, etc.)
 github_runner_name_prefix: "{{ inventory_hostname }}"
 
-# Runner labels
 github_runner_labels: "self-hosted,proxmox,integration"
 
 # Number of parallel runner instances

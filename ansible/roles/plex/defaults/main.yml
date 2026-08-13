@@ -1,5 +1,4 @@
 ---
-# plex role defaults
 
 # Path to the Plex SSL certificate PFX file
 plex_pfx_path: "/var/lib/plexmediaserver/plex_certificate.pfx"

@@ -1,4 +1,2 @@
 ---
-# expand_disk role defaults
-#
 # No variables — this role auto-detects the root device and partition.

@@ -1,4 +1,3 @@
-# Enhanced Telegraf configuration template for comprehensive monitoring
 
 [[processors.regex]]
   namepass = ["*"]
@@ -13,20 +12,8 @@
   string_as_label = true
   export_timestamp = true
 
-{# Note: Remote write disabled - Prometheus scrapes from :9273 instead
-   This avoids issues with string-valued metrics being dropped
-{% if hostvars['openobserve'] is defined and hostvars['openobserve'].ansible_host is defined %}
-[[outputs.http]]
-  url = "http://{{ hostvars['openobserve'].ansible_host }}:{{ openobserve_listen_port }}/api/default/prometheus/api/v1/write"
-  method = "POST"
-  data_format = "prometheusremotewrite"
-  [outputs.http.headers]
-    Content-Type = "application/x-protobuf"
-    Content-Encoding = "snappy"
-    X-Prometheus-Remote-Write-Version = "0.1.0"
-    Authorization = "Basic {{ (openobserve_root_user_email + ':' + secrets.monitoring.openobserve_root_user_pass) | b64encode }}"
-{% endif %}
-#}
+{# No outputs.http remote write to OpenObserve — deliberate: Prometheus scrapes
+   :9273 instead, because prometheusremotewrite drops string-valued metrics. #}
 
 # System Metrics
 [[inputs.cpu]]

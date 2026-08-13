@@ -62,7 +62,7 @@ resource "proxmox_virtual_environment_container" "containers" {
     keyctl  = each.value.keyctl
   }
 
-  # 1:1 media-range ownership for NAS bind mounts (ADR 0017; review P1)
+  # 1:1 media-range ownership for NAS bind mounts (ADR 0017)
   dynamic "idmap" {
     for_each = each.value.media_idmap ? local.media_idmap_entries : []
     content {

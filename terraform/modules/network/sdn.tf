@@ -1,5 +1,4 @@
 # Proxmox SDN Zone and VNET management
-# Only active when manage_sdn = true (infrastructure project)
 
 # --- SDN VLAN Zones ---
 # Each zone maps to a physical bridge on the Proxmox host

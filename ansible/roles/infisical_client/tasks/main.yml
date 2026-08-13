@@ -1,6 +1,4 @@
 ---
-# Infisical Client/Agent — install CLI, provision per-VM identity, run agent
-
 - name: Skip infisical_client when disabled
   ansible.builtin.meta: end_role
   when: not infisical_client_enabled

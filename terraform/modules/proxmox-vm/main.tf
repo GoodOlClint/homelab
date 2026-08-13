@@ -1,7 +1,7 @@
 # Proxmox VM Module
-# This module creates VMs in Proxmox with static VLAN configuration.
-# It handles cloud-image download, Packer template cloning, VM creation with multiple network interfaces,
-# GPU passthrough assignment, and generates Ansible inventory output.
+# Creates VMs and LXCs with static VLAN configuration: pinned cloud-image /
+# LXC-template download, Packer template cloning, and multi-interface
+# network configuration.
 
 data "local_file" "ssh_public_key" {
   filename = var.ssh_public_key_path
@@ -61,12 +61,10 @@ resource "proxmox_virtual_environment_download_file" "lxc_template" {
   upload_timeout     = 600
 }
 
-# Static VLAN configuration
 locals {
   # Data-volume holder is a VM (ADR 0020) — only real LXC guests need the template
   lxc_guest_count = length([for vm in var.vm_configurations : vm.name if vm.type == "lxc"])
 
-  # Use downloaded image if created, otherwise use existing image
   ubuntu_cloud_image_id = var.create_cloud_image ? proxmox_virtual_environment_download_file.ubuntu_cloud_image[0].id : "${var.virtual_environment_storage}:iso/${var.cloud_image.file_name}"
 
   # Extra images actually referenced by some VM guest (ADR 0025). Unreferenced
@@ -86,7 +84,6 @@ locals {
 
   lxc_template_id = local.lxc_guest_count > 0 ? proxmox_virtual_environment_download_file.lxc_template[0].id : null
 
-  # Use static VLAN configuration (no UniFi integration)
   merged_vlans = var.vlans
 
   # Resolved router address per VLAN — null means the VLAN genuinely has no

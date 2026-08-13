@@ -1,5 +1,4 @@
 ---
-# tasks file for nvidia_licensing
 - name: Verify required pre_tasks facts
   ansible.builtin.assert:
     that:

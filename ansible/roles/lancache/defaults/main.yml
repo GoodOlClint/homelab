@@ -1,5 +1,4 @@
 ---
-# Docker compose base directory
 lancache_base_dir: /opt/lancache
 
 lancache_cache_disk_size: "500g"

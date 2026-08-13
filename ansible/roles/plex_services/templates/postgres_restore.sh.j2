@@ -33,7 +33,6 @@ SMB_ENABLED=true
 SMB_ENABLED=false
 {% endif %}
 
-# Usage function
 usage() {
     echo "Usage: $0 [OPTIONS]"
     echo "Options:"
@@ -66,18 +65,15 @@ usage() {
     exit 1
 }
 
-# Logging function
 log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG_FILE"
 }
 
-# Error handling
 error_exit() {
     log "ERROR: $1"
     exit 1
 }
 
-# List local backups
 list_backups() {
     log "Available local backups:"
     if [ -d "$BACKUP_DIR" ]; then
@@ -94,7 +90,6 @@ list_backups() {
     fi
 }
 
-# List remote backups
 list_remote_backups() {
     if [ "$SMB_ENABLED" != true ]; then
         error_exit "SMB is not configured"
@@ -110,7 +105,6 @@ list_remote_backups() {
     fi
 }
 
-# Download backup from remote
 download_remote_backup() {
     local database="$1"
     local backup_file="$2"
@@ -136,7 +130,6 @@ download_remote_backup() {
     fi
 }
 
-# Find latest backup for database
 find_latest_backup() {
     local database="$1"
     local location="$2"  # "local" or "remote"
@@ -180,7 +173,6 @@ find_latest_backup() {
     fi
 }
 
-# Restore database from backup
 restore_database() {
     local backup_file="$1"
     local schema_only="${2:-false}"
@@ -190,7 +182,6 @@ restore_database() {
         error_exit "Backup file not found: $backup_file"
     fi
 
-    # Detect backup format and extract database name
     if [[ "$backup_file" =~ \.dump$ ]]; then
         # Custom format (.dump)
         database_name=$(basename "$backup_file" | sed 's/_[0-9]\{8\}_[0-9]\{6\}\.dump$//')
@@ -209,12 +200,10 @@ restore_database() {
         log "Restoring database '$database_name' from backup: $backup_file (format: $BACKUP_FORMAT)"
     fi
 
-    # Check if PostgreSQL is running
     if ! PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -c '\q' 2>/dev/null; then
         error_exit "Cannot connect to PostgreSQL server"
     fi
 
-    # Drop existing database if it exists (with confirmation)
     if PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -lqt | cut -d \| -f 1 | grep -qw "$database_name"; then
         log "WARNING: Database '$database_name' already exists and will be dropped!"
         read -p "Are you sure you want to continue? (y/N): " -n 1 -r
@@ -224,23 +213,18 @@ restore_database() {
             exit 0
         fi
 
-        # Terminate existing connections
         PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$database_name' AND pid <> pg_backend_pid();" 2>/dev/null || true
 
-        # Drop database
         PGPASSWORD="$POSTGRES_PASSWORD" dropdb -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" "$database_name"
         log "Dropped existing database: $database_name"
     fi
 
-    # Create new database
     PGPASSWORD="$POSTGRES_PASSWORD" createdb -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" "$database_name"
     log "Created new database: $database_name"
 
-    # Restore from backup based on format
     if [ "$schema_only" = true ]; then
         log "Restoring schema only (no data)..."
         if [ "$BACKUP_FORMAT" = "custom" ]; then
-            # Use pg_restore with --schema-only for custom format
             PGPASSWORD="$POSTGRES_PASSWORD" pg_restore -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$database_name" --no-owner --no-acl --schema-only "$backup_file"
         else
             log "WARNING: Schema-only restore not fully supported for .sql.gz files"
@@ -250,10 +234,8 @@ restore_database() {
     else
         log "Restoring data from backup..."
         if [ "$BACKUP_FORMAT" = "custom" ]; then
-            # Use pg_restore for custom format (.dump files)
             PGPASSWORD="$POSTGRES_PASSWORD" pg_restore -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$database_name" --no-owner --no-acl "$backup_file"
         else
-            # Use psql for legacy SQL format (.sql.gz files)
             gunzip -c "$backup_file" | PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" "$database_name"
         fi
     fi
@@ -269,7 +251,6 @@ restore_database() {
     fi
 }
 
-# Restore global objects
 restore_globals() {
     local globals_file="$1"
 
@@ -279,12 +260,10 @@ restore_globals() {
 
     log "Restoring global objects (roles, tablespaces) from: $globals_file"
 
-    # Check if PostgreSQL is running
     if ! PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -c '\q' 2>/dev/null; then
         error_exit "Cannot connect to PostgreSQL server"
     fi
 
-    # Restore globals
     log "Restoring global objects..."
     gunzip -c "$globals_file" | PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" postgres
 
@@ -295,7 +274,6 @@ restore_globals() {
     fi
 }
 
-# Get list of all database backups
 get_all_databases() {
     local location="$1"  # "local" or "remote"
 
@@ -391,7 +369,6 @@ fi
 
 # Main restore logic
 if [ "$HYDRATE" = true ]; then
-    # Hydrate mode: Restore globals + schema only (no data)
     if [ "$USE_LATEST" != true ]; then
         error_exit "Hydrate mode requires --latest flag"
     fi
@@ -400,7 +377,6 @@ if [ "$HYDRATE" = true ]; then
     log "HYDRATE MODE: Restoring globals + schema"
     log "========================================="
 
-    # Step 1: Restore globals
     log "Step 1/2: Restoring global objects..."
     if [ "$USE_REMOTE" = true ]; then
         latest_remote=$(find_latest_backup "postgres_globals" "remote")
@@ -419,7 +395,6 @@ if [ "$HYDRATE" = true ]; then
         fi
     fi
 
-    # Step 2: Restore all database schemas (no data)
     log "Step 2/2: Restoring database schemas (no data)..."
     location="local"
     [ "$USE_REMOTE" = true ] && location="remote"
@@ -459,7 +434,6 @@ if [ "$HYDRATE" = true ]; then
     log "========================================="
 
 elif [ "$RESTORE_ALL" = true ]; then
-    # Restore all databases (with data)
     if [ "$USE_LATEST" != true ]; then
         error_exit "Restore all mode requires --latest flag"
     fi
@@ -468,7 +442,6 @@ elif [ "$RESTORE_ALL" = true ]; then
     log "FULL RESTORE: All databases"
     log "========================================="
 
-    # Step 1: Restore globals
     log "Step 1/2: Restoring global objects..."
     if [ "$USE_REMOTE" = true ]; then
         latest_remote=$(find_latest_backup "postgres_globals" "remote")
@@ -487,7 +460,6 @@ elif [ "$RESTORE_ALL" = true ]; then
         fi
     fi
 
-    # Step 2: Restore all databases
     log "Step 2/2: Restoring all databases..."
     location="local"
     [ "$USE_REMOTE" = true ] && location="remote"
@@ -527,10 +499,8 @@ elif [ "$RESTORE_ALL" = true ]; then
     log "========================================="
 
 elif [ "$RESTORE_GLOBALS" = true ]; then
-    # Restore global objects only
     if [ "$USE_LATEST" = true ]; then
         if [ "$USE_REMOTE" = true ]; then
-            # Find and download latest remote globals backup
             latest_remote=$(find_latest_backup "postgres_globals" "remote")
             if [ -n "$latest_remote" ]; then
                 downloaded_file=$(download_remote_backup "postgres_globals" "$latest_remote")
@@ -539,7 +509,6 @@ elif [ "$RESTORE_GLOBALS" = true ]; then
                 error_exit "No remote globals backup found"
             fi
         else
-            # Find latest local globals backup
             latest_local=$(find "$BACKUP_DIR" -name "postgres_globals_*.sql.gz" -type f | sort | tail -n1)
             if [ -n "$latest_local" ]; then
                 restore_globals "$latest_local"
@@ -553,12 +522,9 @@ elif [ "$RESTORE_GLOBALS" = true ]; then
         error_exit "Must specify either --latest or --file with --globals"
     fi
 elif [ -n "$BACKUP_FILE" ]; then
-    # Restore specific file
     restore_database "$BACKUP_FILE"
 elif [ -n "$DATABASE" ] && [ "$USE_LATEST" = true ]; then
-    # Restore latest backup for database
     if [ "$USE_REMOTE" = true ]; then
-        # Find and download latest remote backup
         latest_remote=$(find_latest_backup "$DATABASE" "remote")
         if [ -n "$latest_remote" ]; then
             downloaded_file=$(download_remote_backup "$DATABASE" "$latest_remote")
@@ -567,7 +533,6 @@ elif [ -n "$DATABASE" ] && [ "$USE_LATEST" = true ]; then
             error_exit "No remote backup found for database: $DATABASE"
         fi
     else
-        # Find latest local backup
         latest_local=$(find_latest_backup "$DATABASE" "local")
         if [ -n "$latest_local" ]; then
             restore_database "$latest_local"

@@ -5,7 +5,7 @@
 #
 # Usage: make vps-rotate-keys
 # After running, update pfSense WireGuard peer with the new public key,
-# then update secrets.sops.yml with the new private key.
+# then update Infisical /vps/vps_wg_private_key with the new private key.
 
 - name: Rotate VPS WireGuard Keys
   hosts: vps
