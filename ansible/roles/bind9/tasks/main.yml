@@ -107,7 +107,7 @@
 
 - name: Check if reverse zone files exist
   ansible.builtin.stat:
-    path: "/etc/bind/db.{{ item.value.vlan_id }}.16.172.in-addr.arpa"
+    path: "/etc/bind/db.{{ item.value.vlan_id }}.{{ ipv4_prefix_reversed }}.in-addr.arpa"
   loop: "{{ dns_zones | dict2items }}"
   register: reverse_zone_files_stat
   tags:
@@ -118,7 +118,7 @@
 - name: Create reverse zone files (only if they don't exist)
   ansible.builtin.template:
     src: db.reverse-zone.j2
-    dest: "/etc/bind/db.{{ item.item.value.vlan_id }}.16.172.in-addr.arpa"
+    dest: "/etc/bind/db.{{ item.item.value.vlan_id }}.{{ ipv4_prefix_reversed }}.in-addr.arpa"
     mode: '0644'
   vars:
     forward_zone: "{{ item.item.value.zone }}"
@@ -134,7 +134,7 @@
 
 - name: Set ownership of reverse zone files
   ansible.builtin.file:
-    path: "/etc/bind/db.{{ item.value.vlan_id }}.16.172.in-addr.arpa"
+    path: "/etc/bind/db.{{ item.value.vlan_id }}.{{ ipv4_prefix_reversed }}.in-addr.arpa"
     owner: bind
     group: bind
     mode: '0644'
