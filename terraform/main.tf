@@ -38,6 +38,7 @@ module "vms" {
   # Pinned guest OS images (ADR 0016)
   create_cloud_image = var.create_cloud_image
   cloud_image        = var.cloud_image
+  cloud_images       = var.cloud_images # per-guest overrides (ADR 0025)
   lxc_template       = var.lxc_template
 
   # Detached data volumes (ADR 0015) — defined alongside the fleet in vm-configs.tf

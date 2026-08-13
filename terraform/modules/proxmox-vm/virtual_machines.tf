@@ -1,13 +1,42 @@
 locals {
   # Determine which VLAN gets the default gateway for each VM:
   # - Single VLAN (management only): management gets the default route
-  # - Multiple VLANs: first non-management VLAN gets the default route
-  # - DHCP management (no vm_id): null — DHCP provides the gateway
+  # - Multiple VLANs: first non-management VLAN THAT HAS A ROUTER
+  # - No non-management VLAN has one: fall back to management, but ONLY if the
+  #   guest actually has that leg and it has a router — otherwise null, which
+  #   the precondition below rejects rather than shipping a routeless guest
+  # - A guest with neither vm_id nor mgmt_ip_offset is NOT supported here: the
+  #   coalesce below errors at plan time. That is pre-existing and loud, so it
+  #   is left alone deliberately; do not read the DHCP-management wording in
+  #   variables.tf as a working path (W6 review, 2026-08-12).
+  #
+  # The gateway filter is load-bearing, not defensive. PBS is the one guest with
+  # a storage-VLAN leg, and VLAN 20 has no router. Today it survives only because
+  # its list is [vlan10, vlan40, vlan20] with vlan10 as management, so vlan40 wins
+  # the scan. At WP4 (ADR 0017) the vlan10 leg goes away and management becomes
+  # vlan40, leaving [vlan40, vlan20] — the old "first non-management" rule then
+  # picks vlan20 and the guest boots with a default route to a nonexistent router:
+  # no package installs, no qemu-guest-agent, and terraform hangs waiting for the
+  # agent to report an IP. Reproduced on worklab 2026-08-12 (W6).
   vm_gateway_vlans = {
     for vm_config in var.vm_configurations : vm_config.name => (
       coalesce(vm_config.mgmt_ip_offset, vm_config.vm_id) == null ? null :
-      length(vm_config.vlans) == 1 ? vm_config.vlans[0] :
-      [for v in vm_config.vlans : v if v != var.management_vlan][0]
+      # The single-VLAN shortcut is gated on that VLAN actually having a router.
+      # Ungated it defeated both preconditions: a lone gateway-less leg returned
+      # itself, the precondition saw non-null and passed, and the guest booted
+      # with no default route — which fails EXACTLY like the wrong-router case
+      # this whole mechanism exists to stop (no internet → cloud-init packages
+      # fail → qemu-guest-agent never installs → bpg hangs waiting for an agent
+      # IP). "No route" and "route to nowhere" are the same outage.
+      length(vm_config.vlans) == 1 ? (lookup(local.vlan_gateways, vm_config.vlans[0], null) != null ? vm_config.vlans[0] : null) :
+      # The fallback must be a leg the guest HAS and that has a router. Falling
+      # back to var.management_vlan unconditionally could name a VLAN absent
+      # from vm_config.vlans, so no interface would match is_gateway and the
+      # guest would boot with no default route and no diagnostic at all.
+      try(
+        [for v in vm_config.vlans : v if v != var.management_vlan && lookup(local.vlan_gateways, v, null) != null][0],
+        contains(vm_config.vlans, var.management_vlan) && lookup(local.vlan_gateways, var.management_vlan, null) != null ? var.management_vlan : null
+      )
     )
   }
 
@@ -44,11 +73,13 @@ locals {
 
         # Gateway: set on ALL interfaces with static IPs (for policy routing)
         # The template determines whether it's the default route or a policy route
+        # null on a gateway-less VLAN — the template then emits no route for this
+        # leg, leaving only the kernel link route that same-subnet traffic uses.
         gw = (
           vlan_key == var.management_vlan ? (
-            coalesce(vm_config.mgmt_ip_offset, vm_config.vm_id) != null ? cidrhost(local.merged_vlans[vlan_key].subnet, 1) : null
+            coalesce(vm_config.mgmt_ip_offset, vm_config.vm_id) != null ? local.vlan_gateways[vlan_key] : null
           ) :
-          vm_config.ip_offset != null ? cidrhost(local.merged_vlans[vlan_key].subnet, 1) : null
+          vm_config.ip_offset != null ? local.vlan_gateways[vlan_key] : null
         )
         gw_v6 = null
 
@@ -204,7 +235,7 @@ resource "proxmox_virtual_environment_vm" "vms" {
 
   disk {
     datastore_id = coalesce(each.value.disk_storage, var.primary_disk_storage)
-    file_id      = local.vm_disk_source # Only for cloud images, null for Packer
+    file_id      = local.vm_disk_source_by_name[each.value.name] # Only for cloud images, null for Packer
     interface    = "virtio0"
     iothread     = true
     discard      = "on"
@@ -259,6 +290,24 @@ resource "proxmox_virtual_environment_vm" "vms" {
     precondition {
       condition     = each.value.data_volume == null || local.data_volume_ids[each.value.data_volume.name] != null
       error_message = "Data volume for '${each.value.name}' is not materialized — apply the holder, format+chown it (ADR 0020), then build this guest."
+    }
+    precondition {
+      condition     = each.value.image == null || contains(keys(var.cloud_images), each.value.image)
+      error_message = "Guest '${each.value.name}' sets image = \"${coalesce(each.value.image, "none")}\", which is not a key in var.cloud_images (ADR 0025)."
+    }
+    # Packer mode clones a single module-wide template and ignores disk.file_id
+    # entirely, so a per-guest image would be silently dropped — the guest would
+    # come up on the Ubuntu template while the config claims otherwise. Fail
+    # loudly instead; the two features are mutually exclusive by construction.
+    precondition {
+      condition     = each.value.image == null || !var.use_packer_template
+      error_message = "Guest '${each.value.name}' sets image = \"${coalesce(each.value.image, "none")}\" but use_packer_template is true — Packer clones one template and cannot honour a per-guest image (ADR 0025)."
+    }
+    # A static guest with no resolvable gateway VLAN gets no default route and
+    # no error — it just boots unreachable off-subnet. Fail at plan instead.
+    precondition {
+      condition     = local.vm_gateway_vlans[each.value.name] != null
+      error_message = "Guest '${each.value.name}' has no VLAN with a router: every leg in ${jsonencode(each.value.vlans)} is gateway-less (or names a VLAN not defined in var.vlans) and the management VLAN '${var.management_vlan}' is not among them (or has no gateway either). It would boot with no default route."
     }
   }
 

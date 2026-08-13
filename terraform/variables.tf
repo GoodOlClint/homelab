@@ -80,6 +80,30 @@ variable "cloud_image" {
   }
 }
 
+# Extra pinned images for guests that cannot run the fleet default (ADR 0025).
+# PBS 4 is Debian-13-only; the rest of the fleet stays Ubuntu. A guest opts in
+# with `image = "debian13"` in vm-configs.tf. Same roll discipline as
+# cloud_image: bumping the pin here IS the deliberate roll for those guests.
+variable "cloud_images" {
+  description = "Additional pinned cloud images by name (ADR 0016 contract, ADR 0025 rationale)"
+  type = map(object({
+    url                = string
+    file_name          = string
+    checksum           = string
+    checksum_algorithm = optional(string, "sha256")
+  }))
+  default = {
+    # PVE's iso datastore rejects a .qcow2 extension, so file_name renames it
+    # to .img on the way in — the payload is qcow2 either way.
+    debian13 = {
+      url                = "https://cloud.debian.org/images/cloud/trixie/20260810-2566/debian-13-genericcloud-amd64-20260810-2566.qcow2"
+      file_name          = "debian-13-genericcloud-amd64-20260810.img"
+      checksum           = "0ce1f1d675733027d3e17a4665cb95e1d7173bdf67fb8a87ff822ff5ee025bc2a90ecb270465ef395755e41c868b40072eb9ac493810196d9cf68f941afb93dc"
+      checksum_algorithm = "sha512"
+    }
+  }
+}
+
 variable "lxc_template" {
   description = "Pinned LXC template for containers (explicit release + checksum — ADR 0016)"
   type = object({
@@ -214,11 +238,11 @@ variable "guest_access_plane" {
 variable "backup_jobs" {
   description = "PVE backup jobs keyed by job id: schedule + PBS storage + guest selection + retention"
   type = map(object({
-    schedule  = string                          # e.g. "02:30" or "mon..fri 03:00"
-    storage   = string                          # PVE storage id (backup-finalize registers "pbs")
-    vmids     = optional(list(string), null)    # explicit guest VMIDs (null with all=true = everything)
-    all       = optional(bool, false)
-    mode      = optional(string, "snapshot")
+    schedule = string                       # e.g. "02:30" or "mon..fri 03:00"
+    storage  = string                       # PVE storage id (backup-finalize registers "pbs")
+    vmids    = optional(list(string), null) # explicit guest VMIDs (null with all=true = everything)
+    all      = optional(bool, false)
+    mode     = optional(string, "snapshot")
     # protected backups are exempt from pruning AND datastore retention —
     # default-on would grow storage until it fills (Codex P1). Reserve for
     # deliberately retained jobs.

@@ -121,6 +121,14 @@ resource "proxmox_virtual_environment_container" "containers" {
       condition     = each.value.data_volume == null || local.data_volume_ids[each.value.data_volume.name] != null
       error_message = "Data volume for '${each.value.name}' is not materialized — apply the holder, format+chown it (ADR 0020), then build this guest."
     }
+    # Mirrors the VM precondition. Containers need it MORE, not less: WP4/ADR
+    # 0017 makes most of the fleet LXC, and a null gateway VLAN here silently
+    # emits no gateway at all (see the ip_config block below) — a guest that
+    # boots unreachable off-subnet with nothing in the plan to say so.
+    precondition {
+      condition     = local.vm_gateway_vlans[each.value.name] != null
+      error_message = "Guest '${each.value.name}' has no VLAN with a router: every leg in ${jsonencode(each.value.vlans)} is gateway-less (or names a VLAN not defined in var.vlans) and the management VLAN '${var.management_vlan}' is not among them (or has no gateway either). It would boot with no default route."
+    }
   }
 
   # Same builder as VMs: identical VLANs, MACs, MTUs. Map iteration is lexicographic

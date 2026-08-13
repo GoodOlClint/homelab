@@ -17,6 +17,10 @@ locals {
       subnet_v6   = try(v.ipv6_subnet, "${local.network_data.ipv6_prefix}:${format("%x", v.id)}::/64")
       mtu         = try(v.mtu, 1500)
       description = try(v.description, v.name)
+      # Absent key = "auto" (.1). An explicit `gateway: null` in vlans.yaml means
+      # the VLAN has no router at all — storage/cluster VLANs. That distinction
+      # decides which leg gets a guest's default route (proxmox-vm W6 fix).
+      gateway = try(coalesce(v.gateway, "none"), "auto")
     } if try(v.bridge, null) != null
   }
 

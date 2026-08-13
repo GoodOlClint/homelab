@@ -35,9 +35,18 @@ locals {
     try(data.proxmox_virtual_environment_vms.packer_templates[0].vms[0].vm_id, null)
   ) : null
 
-  # Determine VM disk source: cloud image only (Packer uses clone instead)
-  # This is used in virtual_machines.tf for the disk.file_id attribute
-  vm_disk_source = var.use_packer_template ? null : local.ubuntu_cloud_image_id
+  # Determine VM disk source per guest: cloud image only (Packer uses clone instead).
+  # Used in virtual_machines.tf for the disk.file_id attribute. A guest's
+  # `image` key selects an entry from var.cloud_images; null = fleet default.
+  vm_disk_source_by_name = {
+    for vm in var.vm_configurations : vm.name => (
+      var.use_packer_template ? null : (
+        # lookup(..., null) rather than [vm.image] so an undefined key surfaces
+        # as the resource precondition below, not an opaque "invalid index".
+        vm.image == null ? local.ubuntu_cloud_image_id : lookup(local.extra_cloud_image_ids, vm.image, null)
+      )
+    ) if vm.type != "lxc"
+  }
 }
 
 # Output for debugging

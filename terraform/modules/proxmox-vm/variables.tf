@@ -50,6 +50,7 @@ variable "vm_configurations" {
   type = list(object({
     name           = string                        # Unique guest name (used for hostname if hostname not specified)
     type           = optional(string, "vm")        # Guest type: "vm" or "lxc"
+    image          = optional(string, null)        # Key in var.cloud_images (null = fleet default var.cloud_image). VM only — ADR 0025.
     node_name      = optional(string, null)        # Cluster node placement (null = module default node)
     ha             = optional(bool, false)         # Register as an HA resource (requires vm_id and Ceph-backed disk)
     vm_id          = optional(number, null)        # Explicit Proxmox VMID (also sets static management IP). null = auto-assign + DHCP on management VLAN.
@@ -106,6 +107,16 @@ variable "vm_configurations" {
     # Additional cloud-init or VM configuration options
     extra_config = optional(map(string), {})
   }))
+
+  # `image` selects a VM cloud image. Containers build from var.lxc_template and
+  # ignore it entirely, so an LXC carrying one would silently come up on the
+  # wrong OS — the same failure the use_packer_template precondition exists to
+  # stop. Caught here rather than in the container resource so both guest types
+  # are covered by one rule.
+  validation {
+    condition     = alltrue([for vm in var.vm_configurations : vm.image == null || vm.type != "lxc"])
+    error_message = "An LXC guest cannot set `image` — containers build from var.lxc_template. Roll that pin instead (ADR 0016/0025)."
+  }
 }
 
 # Pinned guest OS images (ADR 0016 — bumping these is the deliberate image roll)
@@ -117,6 +128,21 @@ variable "cloud_image" {
     checksum           = string
     checksum_algorithm = optional(string, "sha256")
   })
+}
+
+# Extra pinned images for guests that cannot run the fleet default (ADR 0025:
+# PBS 4 is Debian-13-only while the rest of the fleet is Ubuntu). Same ADR 0016
+# contract as cloud_image — explicit version URL + checksum, never 'current'.
+# A guest opts in with `image = "<key>"`; omitting it keeps the fleet default.
+variable "cloud_images" {
+  description = "Additional pinned cloud images by name, for guests overriding the fleet default"
+  type = map(object({
+    url                = string
+    file_name          = string
+    checksum           = string
+    checksum_algorithm = optional(string, "sha256")
+  }))
+  default = {}
 }
 
 variable "lxc_template" {
@@ -193,6 +219,11 @@ variable "vlans" {
     subnet_v6   = optional(string, null) # IPv6 subnet - if null, IPv6 is disabled for this VLAN
     mtu         = optional(number, 1500)
     description = optional(string, "")
+    # Router on this VLAN. "auto" = first host address (.1); "none" = NO router
+    # (storage/cluster VLANs have no gateway); anything else = literal address.
+    # A VLAN with no gateway is skipped when choosing the default-route interface
+    # and emits no route at all — see vm_gateway_vlans in virtual_machines.tf.
+    gateway = optional(string, "auto")
   }))
   default = {} # Empty by default when using Unifi integration
 }
