@@ -359,7 +359,7 @@ clean-ssh:
 # globally — that would clobber the main project's endpoint from its tfvars).
 # hosts-apply is deliberately INTERACTIVE (no auto-approve): a host-networking apply
 # can drop connectivity, so review the plan and confirm by hand.
-.PHONY: node-iso node-bootstrap hosts-plan hosts-apply proxmox-hosts
+.PHONY: node-iso node-bootstrap hosts-plan hosts-apply proxmox-hosts nut-clients
 
 # Bake a node's answer file (+ optional ISO): make node-iso NODE=crete [ISO=/path/pve-9.iso]
 node-iso:
@@ -386,6 +386,11 @@ hosts-apply:
 # and the WP2 fields in network-data/local/host-bindings.yaml.
 proxmox-hosts:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/proxmox.yaml ansible/playbooks/proxmox-hosts.yml $(if $(LIMIT),--limit $(LIMIT),)
+
+# NUT upsmon secondaries on the physical hosts (nut_clients inventory group).
+# Server side is the pfSense NUT package — see docs/pfsense-nut.md.
+nut-clients:
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/proxmox.yaml ansible/playbooks/nut-clients.yml $(if $(LIMIT),--limit $(LIMIT),)
 
 # === UniFi plane — terraform/unifi/ (WP5, ADR 0005) ============================
 # Separate root: the unifi provider connects to the controller at plan time, so

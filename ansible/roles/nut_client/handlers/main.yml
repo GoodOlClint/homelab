@@ -1,0 +1,5 @@
+---
+- name: restart nut-monitor
+  ansible.builtin.service:
+    name: nut-monitor
+    state: restarted

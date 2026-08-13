@@ -18,3 +18,13 @@ proxmox:
       ansible_host: 172.16.30.104
   vars:
     ansible_user: root
+
+# NUT upsmon secondaries (nut-clients.yml / make nut-clients): the cluster
+# nodes plus any standalone host on the compute UPS.
+nut_clients:
+  children:
+    proxmox:
+  hosts:
+    worklab:
+      ansible_host: 172.16.30.75
+      ansible_user: root

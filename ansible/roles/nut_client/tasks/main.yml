@@ -1,0 +1,29 @@
+---
+- name: Install NUT client
+  ansible.builtin.apt:
+    name: nut-client
+    state: present
+
+- name: Configure NUT for netclient mode
+  ansible.builtin.template:
+    src: nut.conf.j2
+    dest: /etc/nut/nut.conf
+    owner: root
+    group: nut
+    mode: '0640'
+  notify: restart nut-monitor
+
+- name: Configure upsmon
+  ansible.builtin.template:
+    src: upsmon.conf.j2
+    dest: /etc/nut/upsmon.conf
+    owner: root
+    group: nut
+    mode: '0640'
+  notify: restart nut-monitor
+
+- name: Enable and start nut-monitor
+  ansible.builtin.service:
+    name: nut-monitor
+    enabled: true
+    state: started

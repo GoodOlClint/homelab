@@ -159,12 +159,14 @@ Two units, two goals (see [research doc](research-baremetal-iac-2026-07-10.md) f
 
 The compute UPS is only useful if the nodes obey it. Architecture (USB + NUT, **no SNMP/network card** — saves ~$300-500 and isn't needed):
 
-- **NUT master = pfSense (Netgate 6100).** USB from the **compute UPS** → Netgate. pfSense is always-on (it's the firewall), in the closet (USB reach), has a mature NUT package, and is **cross-powered from the *network* UPS** — so it survives while the compute UPS drains and can signal the nodes to shut down. It must NOT be powered by the UPS it's monitoring (chicken-and-egg), and can't be a compute node (those are what shut down).
-- **NUT clients:** pve + crete + crete2 (new `nut_client` Ansible role — `upsmon` secondary pointed at pfSense) and the Synology (built-in "remote NUT server" mode → pfSense). They shut down on low battery.
-- **HA Green:** NUT *client* for monitoring/alerts only (Home Assistant NUT integration → battery %, load, runtime, automations). Not the master — HA OS updates/reboots make it too flaky to coordinate Ceph shutdown.
-- **Network UPS:** runtime only, no orchestrated shutdown — switches/pfSense/APs boot clean from a hard power-off. Optionally monitored for alerts.
+- **NUT server = pfSense (Netgate 6100).** **Both UPSes** on its USB (the package GUI carries one; the second rides the Advanced `ups.conf` box). pfSense is always-on (it's the firewall), in the closet (USB reach), has a mature NUT package, and is **cross-powered from the *network* UPS** — its own `upsmon` monitors the *network* UPS as primary, so it only shuts itself down when its own feed goes critical and survives while the compute UPS drains. Compute-side secondaries act on the compute UPS's `OB LB` status directly (no FSD from pfSense needed).
+- **NUT clients:** pve + crete + crete2 **+ worklab** (`nut_client` Ansible role — `upsmon` secondary, `make nut-clients`), the Synology (built-in "remote NUT server" mode → pfSense; its `ups`/`monuser`/`secret` hardcoding pins those names on the server forever), and the **Mac Studio** (Homebrew nut + launchd). They shut down on low battery.
+- **HA Green:** NUT *client* for monitoring/alerts only (Home Assistant NUT integration → both UPSes: battery %, load, runtime, automations). Not the coordinator — HA OS updates/reboots make it too flaky to coordinate Ceph shutdown.
+- **Network UPS:** runtime only, no orchestrated shutdown — switches/pfSense/APs boot clean from a hard power-off. Powers pfSense + HA Green, and the cabinet fans move onto it so cooling runs through a shutdown sequence.
 
-Only the `nut_client` role (pve/crete/crete2) is repo work; pfSense NUT (ADR-0005 defers pfSense IaC) and Synology are configured in their own UIs.
+Only the `nut_client` role is repo work; pfSense NUT (ADR-0005 defers pfSense IaC), Synology, and the Mac Studio are configured out-of-band — as-built config captured in [pfsense-nut.md](pfsense-nut.md).
+
+**As-built status (2026-08-13):** pfSense serving both UPSes; Synology, HA Green, pve, worklab, and Mac Studio clients all connected and verified. Remaining: crete/crete2 inherit via the `proxmox` inventory group at cutover; pull-the-plug rehearsal once compute workloads are configured; compute-UPS output-cut for the BIOS auto-restart trick (below) needs an `upssched`/`upscmd load.off.delay` design now that no primary shuts that UPS down.
 
 ### Power recovery (coming back after an outage)
 

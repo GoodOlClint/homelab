@@ -595,6 +595,7 @@ All `ansible-*` targets support `TAGS=<tag>` to filter by play-level tags (e.g.,
 | `update-dns` | Update DNS configuration |
 | `backup-finalize` | Register the PBS datastore as PVE storage (once, after PBS provisioning; prerequisite for `backup_jobs` terraform applies) |
 | `expand-disk` | Expand root filesystem on service VMs |
+| `nut-clients` | Deploy NUT `upsmon` secondaries to the physical hosts (`nut_clients` inventory group; server is the pfSense NUT package — see `docs/pfsense-nut.md`) |
 
 ### Secrets
 

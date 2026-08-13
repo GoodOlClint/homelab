@@ -240,6 +240,7 @@ make ansible-services TAGS=plex,homepage  # plex + homepage plays
 | `make infisical-backup` | Export Infisical → SOPS backup |
 | `make refresh-identity` | Refresh Infisical machine identities (supports `LIMIT=`, `FORCE=true`) |
 | `make clean` | Destroy all (protected VMs preserved). `FORCE=true` to destroy everything |
+| `make nut-clients` | Deploy NUT `upsmon` secondaries to the physical hosts (`nut_clients` group in `inventory/proxmox.yaml`; server = pfSense NUT package, `docs/pfsense-nut.md`) |
 | `make setup-hooks` | Install pre-commit hooks |
 | `make init` | Create venv, install deps, terraform init, galaxy install |
 

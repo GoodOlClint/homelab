@@ -1,0 +1,14 @@
+---
+# upsmon secondary pointed at the NUT server (the pfSense NUT package, which
+# serves both UPSes — see docs/pfsense-nut.md).
+#
+# nut_server_host: upsd answers on pfSense's management-VLAN address (not each
+# VLAN's gateway address). Derived from vlans.yaml, which the playbook loads as
+# network_data; .1 is the vlans.yaml default-gateway convention.
+nut_ups_name: ups
+nut_server_host: "{{ network_data.vlans.management.gateway | default(network_data.ipv4_prefix ~ '.' ~ network_data.vlans.management.id ~ '.1') }}"
+# monuser/secret is the account the Synology's NUT client hardcodes, so it must
+# exist on the server regardless; a `secondary` login can only read status.
+# Access control is the pfSense firewall rule on 3493, not this credential.
+nut_monitor_user: monuser
+nut_monitor_password: secret

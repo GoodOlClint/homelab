@@ -1,0 +1,17 @@
+---
+# NUT upsmon secondaries on the physical hosts (pve + worklab today; crete/
+# crete2 inherit via the proxmox group at cutover). The server side is the
+# pfSense NUT package — hand-managed per ADR-0005, captured in
+# docs/pfsense-nut.md. Deliberately no Infisical/SOPS dependency: the monitor
+# account is the Synology-hardcoded monuser (see nut_client defaults).
+- name: NUT clients
+  hosts: nut_clients
+  become: true
+  pre_tasks:
+    - name: Load VLAN definitions
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../../network-data/vlans.yaml"
+        name: network_data
+      tags: [always]
+  roles:
+    - nut_client
