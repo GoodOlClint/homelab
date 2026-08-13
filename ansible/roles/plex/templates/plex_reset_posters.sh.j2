@@ -21,10 +21,7 @@ if [ ! -f "$FLAG_FILE" ]; then
     exit 0
 fi
 
-# Load Plex token from Infisical agent env
-if [ -f /etc/infisical/secrets/plex.env ]; then
-    . /etc/infisical/secrets/plex.env
-fi
+PLEX_TOKEN="$(grep -m1 '^plex_token=' /etc/infisical/secrets/plex.env 2>/dev/null | cut -d= -f2- || true)"
 
 # Fallback: bake token from Ansible secrets
 export PLEX_TOKEN="${PLEX_TOKEN:-{{ (secrets.plex | default({})).plex_token | default('') }}}"

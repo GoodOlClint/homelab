@@ -11,10 +11,7 @@ RETENTION_DAYS="{{ postgres_backup_retention_days | default('30') }}"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 LOG_FILE="/var/log/postgres_backup.log"
 
-# Load runtime secrets from Infisical agent (with baked fallback)
-if [ -f /etc/infisical/secrets/plex-services.env ]; then
-    . /etc/infisical/secrets/plex-services.env
-fi
+POSTGRES_PASSWORD="$(grep -m1 '^postgres_password=' /etc/infisical/secrets/plex-services.env 2>/dev/null | cut -d= -f2- || true)"
 
 # PostgreSQL connection details
 POSTGRES_USER="{{ postgres_user | default('qstick') }}"
@@ -50,21 +47,20 @@ log "Starting PostgreSQL backup process"
 
 log "Backing up global objects (roles, tablespaces, etc.)"
 GLOBALS_FILE="$BACKUP_DIR/postgres_globals_${TIMESTAMP}.sql"
-PGPASSWORD="$POSTGRES_PASSWORD" pg_dumpall -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" --globals-only > "$GLOBALS_FILE"
-
-if [ $? -eq 0 ]; then
+if PGPASSWORD="$POSTGRES_PASSWORD" pg_dumpall -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" --globals-only > "$GLOBALS_FILE"; then
     gzip "$GLOBALS_FILE"
     log "Successfully created globals backup: ${GLOBALS_FILE}.gz"
 
     if [ "$SMB_ENABLED" = true ]; then
         if [ -n "$SMB_DOMAIN" ]; then
-            smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_DOMAIN/$SMB_USER%$SMB_PASS" -c "mkdir \"$REMOTE_BACKUP_PATH\" 2>/dev/null; cd \"$REMOTE_BACKUP_PATH\"; put \"${GLOBALS_FILE}.gz\" \"$(basename "${GLOBALS_FILE}.gz")\"" 2>/dev/null || true
+            smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_DOMAIN/$SMB_USER%$SMB_PASS" -c "mkdir \"$REMOTE_BACKUP_PATH\" 2>/dev/null; cd \"$REMOTE_BACKUP_PATH\"; put \"${GLOBALS_FILE}.gz\" \"$(basename "${GLOBALS_FILE}.gz")\"" 2>/dev/null || log "WARNING: Failed to upload globals backup to SMB share"
         else
-            smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_USER%$SMB_PASS" -c "mkdir \"$REMOTE_BACKUP_PATH\" 2>/dev/null; cd \"$REMOTE_BACKUP_PATH\"; put \"${GLOBALS_FILE}.gz\" \"$(basename "${GLOBALS_FILE}.gz")\"" 2>/dev/null || true
+            smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_USER%$SMB_PASS" -c "mkdir \"$REMOTE_BACKUP_PATH\" 2>/dev/null; cd \"$REMOTE_BACKUP_PATH\"; put \"${GLOBALS_FILE}.gz\" \"$(basename "${GLOBALS_FILE}.gz")\"" 2>/dev/null || log "WARNING: Failed to upload globals backup to SMB share"
         fi
     fi
 else
-    log "WARNING: Failed to backup global objects"
+    rm -f "$GLOBALS_FILE"
+    error_exit "Failed to backup global objects"
 fi
 
 DATABASES=$(PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "{{ postgres_default_db | default('radarr-main') }}" -t -c "SELECT datname FROM pg_database WHERE datistemplate = false AND datname NOT IN ('postgres', 'template0', 'template1');" | grep -v '^$' | tr -d ' ')
@@ -79,9 +75,7 @@ for DB in $DATABASES; do
     BACKUP_FILE="$BACKUP_DIR/${DB}_${TIMESTAMP}.dump"
 
     # Create compressed backup in custom format (better for pg_restore)
-    PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -Fc -f "$BACKUP_FILE" "$DB"
-
-    if [ $? -eq 0 ]; then
+    if PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -Fc -f "$BACKUP_FILE" "$DB"; then
         log "Successfully created backup: $BACKUP_FILE"
 
         if [ "$SMB_ENABLED" = true ]; then
@@ -93,13 +87,14 @@ for DB in $DATABASES; do
                 smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_USER%$SMB_PASS" -c "mkdir \"$REMOTE_BACKUP_PATH\" 2>/dev/null; exit" 2>/dev/null || true
             fi
 
+            SMB_PUT_OK=true
             if [ -n "$SMB_DOMAIN" ]; then
-                smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_DOMAIN/$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; put \"$BACKUP_FILE\" \"$(basename "$BACKUP_FILE")\""
+                smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_DOMAIN/$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; put \"$BACKUP_FILE\" \"$(basename "$BACKUP_FILE")\"" || SMB_PUT_OK=false
             else
-                smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; put \"$BACKUP_FILE\" \"$(basename "$BACKUP_FILE")\""
+                smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; put \"$BACKUP_FILE\" \"$(basename "$BACKUP_FILE")\"" || SMB_PUT_OK=false
             fi
 
-            if [ $? -eq 0 ]; then
+            if [ "$SMB_PUT_OK" = true ]; then
                 log "Successfully uploaded backup to SMB share"
             else
                 log "WARNING: Failed to upload backup to SMB share"

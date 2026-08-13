@@ -15,11 +15,8 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 
 echo "[$(date)] Starting Plex config restore..."
 
-# Load runtime secrets from Infisical agent (with baked fallback)
-if [ -f /etc/infisical/secrets/plex.env ]; then
-    . /etc/infisical/secrets/plex.env
-fi
-
+PLEX_TOKEN="$(grep -m1 '^plex_token=' /etc/infisical/secrets/plex.env 2>/dev/null | cut -d= -f2- || true)"
+PLEX_SMB_PASS="$(grep -m1 '^plex_smb_pass=' /etc/infisical/secrets/plex.env 2>/dev/null | cut -d= -f2- || true)"
 PLEX_SMB_PASS="${PLEX_SMB_PASS:-{{ secrets.plex.plex_smb_pass }}}"
 PLEX_SMB_MOUNT="{{ plex_smb_mount }}"
 PLEX_SMB_SHARE="{{ plex_smb_share }}"

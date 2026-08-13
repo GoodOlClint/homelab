@@ -2,12 +2,20 @@
 # Source this file before running proxmox-backup-client commands
 # Example: . /etc/proxmox-backup/pbs-client.env && proxmox-backup-client snapshot list
 
-# Try Infisical agent-rendered secrets first (supports runtime rotation)
+export PBS_REPOSITORY="{{ pbs_username }}!{{ pbs_token_name }}@{{ pbs_server_host }}:{{ pbs_datastore }}"
+
+# Agent values are grep-extracted, never sourced: they render unquoted and a
+# '$' in any secret breaks the sourcing shell.
 if [ -f /etc/infisical/secrets/pbs.env ]; then
-    . /etc/infisical/secrets/pbs.env
-else
-    # Baked fallback (values from last Ansible deploy)
-    export PBS_REPOSITORY="{{ pbs_username }}!{{ pbs_token_name }}@{{ pbs_server_host }}:{{ pbs_datastore }}"
-    export PBS_PASSWORD="{{ secrets.pbs_backup_token | default('') }}"
-    export PBS_FINGERPRINT="{{ secrets.pbs_fingerprint | default('') }}"
+    PBS_PASSWORD="$(grep -m1 '^PBS_PASSWORD=' /etc/infisical/secrets/pbs.env 2>/dev/null | cut -d= -f2- || true)"
+    PBS_FINGERPRINT="$(grep -m1 '^PBS_FINGERPRINT=' /etc/infisical/secrets/pbs.env 2>/dev/null | cut -d= -f2- || true)"
 fi
+
+# Baked fallback (values from last Ansible deploy)
+if [ -z "${PBS_PASSWORD:-}" ]; then
+    PBS_PASSWORD="{{ secrets.pbs_backup_token | default('') }}"
+fi
+if [ -z "${PBS_FINGERPRINT:-}" ]; then
+    PBS_FINGERPRINT="{{ secrets.pbs_fingerprint | default('') }}"
+fi
+export PBS_PASSWORD PBS_FINGERPRINT

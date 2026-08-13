@@ -326,7 +326,11 @@
     cron_file: modem_scraper
     user: root
     minute: "*/5"
-    job: ". /etc/infisical/secrets/monitoring.env && /opt/monitoring/scripts/modem_scraper.py >> /var/log/modem_scraper.log 2>&1"
+    job: >-
+      [ -f /etc/infisical/secrets/monitoring.env ] || exit 0;
+      modem_username="$(grep -m1 '^modem_username=' /etc/infisical/secrets/monitoring.env 2>/dev/null | cut -d= -f2-)"
+      modem_password="$(grep -m1 '^modem_password=' /etc/infisical/secrets/monitoring.env 2>/dev/null | cut -d= -f2-)"
+      /opt/monitoring/scripts/modem_scraper.py >> /var/log/modem_scraper.log 2>&1
     state: "{{ 'present' if (isp_monitor_enabled | default(false)) else 'absent' }}"
   when: isp_monitor_enabled | default(false)
   tags:

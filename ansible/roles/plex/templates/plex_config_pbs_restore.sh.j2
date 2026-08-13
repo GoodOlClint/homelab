@@ -11,7 +11,8 @@ DB_DIR="$PLEX_DIR/Plug-in Support/Databases"
 PLEX_SQLITE="/usr/lib/plexmediaserver/Plex SQLite"
 LOG_FILE="/var/log/plex_config_pbs_restore.log"
 RESTORE_DIR="/tmp/plex_pbs_restore"
-PLEX_TOKEN="{{ (secrets.plex | default({})).plex_token | default('') }}"
+PLEX_TOKEN="$(grep -m1 '^plex_token=' /etc/infisical/secrets/plex.env 2>/dev/null | cut -d= -f2- || true)"
+PLEX_TOKEN="${PLEX_TOKEN:-{{ (secrets.plex | default({})).plex_token | default('') }}}"
 
 # PBS Configuration
 PBS_ENV_FILE="/etc/proxmox-backup/pbs-client.env"
@@ -75,12 +76,10 @@ mkdir -p "$RESTORE_DIR"
 
 log "Restoring backup from PBS..."
 
-proxmox-backup-client restore \
+if ! proxmox-backup-client restore \
     --ns "$PBS_NAMESPACE" \
     "host/$BACKUP_ID/$BACKUP_TIME" \
-    "plex-config.pxar" "$RESTORE_DIR"
-
-if [ $? -ne 0 ]; then
+    "plex-config.pxar" "$RESTORE_DIR"; then
     error_exit "Failed to restore backup from PBS"
 fi
 

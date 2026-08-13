@@ -74,9 +74,7 @@ log "Backing up Infisical PostgreSQL database..."
 
 # Dump the infisical database in custom format
 BACKUP_FILE="$BACKUP_DIR/infisical_${TIMESTAMP}.dump"
-docker exec "$POSTGRES_CONTAINER" pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB" > "$BACKUP_FILE"
-
-if [ $? -ne 0 ]; then
+if ! docker exec "$POSTGRES_CONTAINER" pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB" > "$BACKUP_FILE"; then
     error_exit "Failed to dump Infisical PostgreSQL database"
 fi
 
@@ -118,13 +116,11 @@ fi
 
 log "Uploading to PBS repository: $PBS_REPOSITORY"
 
-proxmox-backup-client backup \
+if proxmox-backup-client backup \
     "infisical-backup.pxar:$BACKUP_DIR" \
     --ns "$PBS_NAMESPACE" \
     --backup-id "infisical" \
-    --backup-time "$(date +%s)"
-
-if [ $? -eq 0 ]; then
+    --backup-time "$(date +%s)"; then
     log "Successfully uploaded Infisical backup to PBS"
     log "Recent PBS backups:"
     proxmox-backup-client snapshot list --ns "$PBS_NAMESPACE" | tail -n 5

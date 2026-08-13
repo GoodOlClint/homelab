@@ -15,6 +15,14 @@ log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG_FILE"
 }
 
+# Error handling
+error_exit() {
+    log "ERROR: $1"
+    # Cleanup temp directory on error
+    rm -rf "$BACKUP_DIR"
+    exit 1
+}
+
 # PBS Configuration
 {% if pbs_backup_enabled | default(true) %}
 PBS_ENV_FILE="/etc/proxmox-backup/pbs-client.env"
@@ -25,8 +33,7 @@ PBS_ENABLED=true
 if [ -f "$PBS_ENV_FILE" ]; then
     source "$PBS_ENV_FILE"
 else
-    log "ERROR: PBS environment file not found at $PBS_ENV_FILE"
-    PBS_ENABLED=false
+    error_exit "PBS environment file not found at $PBS_ENV_FILE"
 fi
 {% else %}
 PBS_ENABLED=false
@@ -34,14 +41,6 @@ PBS_ENABLED=false
 
 # Backup hostname for PBS (defaults to actual hostname)
 BACKUP_HOSTNAME="{{ inventory_hostname | default(ansible_facts['hostname']) }}"
-
-# Error handling
-error_exit() {
-    log "ERROR: $1"
-    # Cleanup temp directory on error
-    rm -rf "$BACKUP_DIR"
-    exit 1
-}
 
 # Cleanup function
 cleanup() {
@@ -69,8 +68,7 @@ if [ "$PBS_ENABLED" = true ]; then
     set -e  # Re-enable exit on error
 
     if [ $PBS_TEST_EXIT -ne 0 ] && [ $PBS_TEST_EXIT -ne 255 ]; then
-        log "WARNING: Cannot connect to PBS (exit code: $PBS_TEST_EXIT), falling back to local backup only"
-        PBS_ENABLED=false
+        error_exit "Cannot connect to PBS (exit code: $PBS_TEST_EXIT)"
     else
         # Create namespace if it doesn't exist (ENOENT means namespace doesn't exist yet)
         if [ $PBS_TEST_EXIT -eq 255 ]; then
@@ -82,8 +80,7 @@ if [ "$PBS_ENABLED" = true ]; then
             if [ $CREATE_EXIT -eq 0 ]; then
                 log "Successfully created namespace '$PBS_NAMESPACE'"
             else
-                log "WARNING: Failed to create namespace (exit code: $CREATE_EXIT), falling back to local backup only"
-                PBS_ENABLED=false
+                error_exit "Failed to create namespace (exit code: $CREATE_EXIT)"
             fi
         fi
     fi
@@ -91,7 +88,9 @@ fi
 
 # Auto-discover all running and stopped containers
 log "Discovering Docker containers..."
-CONTAINERS=$(docker ps -a --format '{% raw %}{{.Names}}{% endraw %}' 2>/dev/null || true)
+if ! CONTAINERS=$(docker ps -a --format '{% raw %}{{.Names}}{% endraw %}' 2>/dev/null); then
+    error_exit "docker ps failed - is Docker running?"
+fi
 
 if [ -z "$CONTAINERS" ]; then
     log "No Docker containers found to backup"
@@ -228,24 +227,21 @@ if [ "$PBS_ENABLED" = true ]; then
     log "Backing up to PBS repository: $PBS_REPOSITORY"
 
     # Execute PBS backup - backup the entire directory
-    proxmox-backup-client backup \
+    if proxmox-backup-client backup \
         "docker-backup.pxar:$BACKUP_DIR" \
         --ns "$PBS_NAMESPACE" \
         --backup-id "$BACKUP_ID" \
-        --backup-time "$(date +%s)"
-
-    if [ $? -eq 0 ]; then
+        --backup-time "$(date +%s)"; then
         log "Successfully uploaded backups to PBS"
 
         # List recent backups
         log "Recent PBS backups:"
         proxmox-backup-client snapshot list --ns "$PBS_NAMESPACE" | tail -n 5
     else
-        log "WARNING: Failed to upload backups to PBS"
+        error_exit "Failed to upload backups to PBS"
     fi
 else
-    log "PBS backup disabled or unavailable, backups remain in $BACKUP_DIR"
-    log "WARNING: Local backups will be deleted on script exit unless PBS is enabled"
+    log "PBS backup disabled by configuration; nothing uploaded (staging is deleted on exit)"
 fi
 
 log "Docker PBS backup process completed successfully"

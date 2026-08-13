@@ -5,10 +5,7 @@
 
 set -euo pipefail
 
-# Load runtime secrets from Infisical agent (with baked fallback)
-if [ -f /etc/infisical/secrets/plex.env ]; then
-    . /etc/infisical/secrets/plex.env
-fi
+PLEX_CERT_PFX_PASSWORD="$(grep -m1 '^plex_cert_pfx_password=' /etc/infisical/secrets/plex.env 2>/dev/null | cut -d= -f2- || true)"
 
 CERT_DIR="{{ plex_cert_dir }}"
 PFX_PATH="{{ plex_pfx_path }}"

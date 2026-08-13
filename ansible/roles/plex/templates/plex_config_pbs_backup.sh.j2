@@ -12,34 +12,11 @@ DB_MAIN="com.plexapp.plugins.library.db"
 DB_BLOBS="com.plexapp.plugins.library.blobs.db"
 PLEX_SQLITE="/usr/lib/plexmediaserver/Plex SQLite"
 
-# Load runtime secrets from Infisical agent (with baked fallback)
-if [ -f /etc/infisical/secrets/plex.env ]; then
-    . /etc/infisical/secrets/plex.env
-fi
-
+PLEX_TOKEN="$(grep -m1 '^plex_token=' /etc/infisical/secrets/plex.env 2>/dev/null | cut -d= -f2- || true)"
 PLEX_TOKEN="${PLEX_TOKEN:-{{ (secrets.plex | default({})).plex_token | default('') }}}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 LOG_FILE="/var/log/plex_config_pbs_backup.log"
 BACKUP_DIR="/tmp/plex_pbs_backup"
-
-# PBS Configuration
-{% if pbs_backup_enabled | default(true) %}
-PBS_ENV_FILE="/etc/proxmox-backup/pbs-client.env"
-PBS_NAMESPACE="{{ plex_pbs_namespace | default('plex') }}"
-PBS_ENABLED=true
-
-if [ -f "$PBS_ENV_FILE" ]; then
-    source "$PBS_ENV_FILE"
-else
-    log "ERROR: PBS environment file not found at $PBS_ENV_FILE"
-    PBS_ENABLED=false
-fi
-{% else %}
-PBS_ENABLED=false
-{% endif %}
-
-# Backup hostname for PBS (defaults to actual hostname)
-BACKUP_HOSTNAME="{{ inventory_hostname | default(ansible_facts['hostname']) }}"
 
 log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG_FILE"
@@ -57,6 +34,24 @@ error_exit() {
     fi
     exit 1
 }
+
+# PBS Configuration
+{% if pbs_backup_enabled | default(true) %}
+PBS_ENV_FILE="/etc/proxmox-backup/pbs-client.env"
+PBS_NAMESPACE="{{ plex_pbs_namespace | default('plex') }}"
+PBS_ENABLED=true
+
+if [ -f "$PBS_ENV_FILE" ]; then
+    source "$PBS_ENV_FILE"
+else
+    error_exit "PBS environment file not found at $PBS_ENV_FILE"
+fi
+{% else %}
+PBS_ENABLED=false
+{% endif %}
+
+# Backup hostname for PBS (defaults to actual hostname)
+BACKUP_HOSTNAME="{{ inventory_hostname | default(ansible_facts['hostname']) }}"
 
 cleanup() {
     log "Cleaning up temporary files..."
@@ -78,8 +73,7 @@ if [ "$PBS_ENABLED" = true ]; then
     set -e
 
     if [ $PBS_TEST_EXIT -ne 0 ] && [ $PBS_TEST_EXIT -ne 255 ]; then
-        log "WARNING: Cannot connect to PBS (exit code: $PBS_TEST_EXIT), falling back to local backup only"
-        PBS_ENABLED=false
+        error_exit "Cannot connect to PBS (exit code: $PBS_TEST_EXIT)"
     else
         # Create namespace if it doesn't exist (ENOENT means namespace doesn't exist yet)
         if [ $PBS_TEST_EXIT -eq 255 ]; then
@@ -91,8 +85,7 @@ if [ "$PBS_ENABLED" = true ]; then
             if [ $CREATE_EXIT -eq 0 ]; then
                 log "Successfully created namespace '$PBS_NAMESPACE'"
             else
-                log "WARNING: Failed to create namespace (exit code: $CREATE_EXIT), falling back to local backup only"
-                PBS_ENABLED=false
+                error_exit "Failed to create namespace (exit code: $CREATE_EXIT)"
             fi
         fi
     fi
@@ -169,23 +162,20 @@ if [ "$PBS_ENABLED" = true ]; then
 
     log "Backing up to PBS repository: $PBS_REPOSITORY"
 
-    proxmox-backup-client backup \
+    if proxmox-backup-client backup \
         "plex-config.pxar:$BACKUP_DIR" \
         --ns "$PBS_NAMESPACE" \
         --backup-id "$BACKUP_ID" \
-        --backup-time "$(date +%s)"
-
-    if [ $? -eq 0 ]; then
+        --backup-time "$(date +%s)"; then
         log "Successfully uploaded backups to PBS"
 
         log "Recent PBS backups:"
         proxmox-backup-client snapshot list --ns "$PBS_NAMESPACE" | tail -n 5
     else
-        log "WARNING: Failed to upload backups to PBS"
+        error_exit "Failed to upload backups to PBS"
     fi
 else
-    log "PBS backup disabled or unavailable, backups remain in $BACKUP_DIR"
-    log "WARNING: Local backups will be deleted on script exit unless PBS is enabled"
+    log "PBS backup disabled by configuration; nothing uploaded (staging is deleted on exit)"
 fi
 
 log "Plex config PBS backup process completed successfully"

@@ -9,10 +9,7 @@ set -euo pipefail
 BACKUP_DIR="/opt/plex-services/postgres_backups"
 LOG_FILE="/var/log/postgres_restore.log"
 
-# Load runtime secrets from Infisical agent (with baked fallback)
-if [ -f /etc/infisical/secrets/plex-services.env ]; then
-    . /etc/infisical/secrets/plex-services.env
-fi
+POSTGRES_PASSWORD="$(grep -m1 '^postgres_password=' /etc/infisical/secrets/plex-services.env 2>/dev/null | cut -d= -f2- || true)"
 
 # PostgreSQL connection details
 POSTGRES_USER="{{ postgres_user | default('qstick') }}"
@@ -113,17 +110,20 @@ download_remote_backup() {
         error_exit "SMB is not configured"
     fi
 
-    log "Downloading backup from remote: $backup_file"
+    # Callers capture this function's stdout as the downloaded path — every
+    # other write must go to stderr or the path comes back polluted.
+    log "Downloading backup from remote: $backup_file" >&2
     mkdir -p "$BACKUP_DIR"
 
+    SMB_GET_OK=true
     if [ -n "$SMB_DOMAIN" ]; then
-        smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_DOMAIN/$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; get \"$backup_file\" \"$BACKUP_DIR/$backup_file\""
+        smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_DOMAIN/$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; get \"$backup_file\" \"$BACKUP_DIR/$backup_file\"" >&2 || SMB_GET_OK=false
     else
-        smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; get \"$backup_file\" \"$BACKUP_DIR/$backup_file\""
+        smbclient "//$SMB_SERVER/$SMB_SHARE" -U "$SMB_USER%$SMB_PASS" -c "cd \"$REMOTE_BACKUP_PATH\"; get \"$backup_file\" \"$BACKUP_DIR/$backup_file\"" >&2 || SMB_GET_OK=false
     fi
 
-    if [ $? -eq 0 ]; then
-        log "Successfully downloaded backup: $BACKUP_DIR/$backup_file"
+    if [ "$SMB_GET_OK" = true ]; then
+        log "Successfully downloaded backup: $BACKUP_DIR/$backup_file" >&2
         echo "$BACKUP_DIR/$backup_file"
     else
         error_exit "Failed to download backup from remote"
@@ -222,25 +222,26 @@ restore_database() {
     PGPASSWORD="$POSTGRES_PASSWORD" createdb -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" "$database_name"
     log "Created new database: $database_name"
 
+    RESTORE_OK=true
     if [ "$schema_only" = true ]; then
         log "Restoring schema only (no data)..."
         if [ "$BACKUP_FORMAT" = "custom" ]; then
-            PGPASSWORD="$POSTGRES_PASSWORD" pg_restore -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$database_name" --no-owner --no-acl --schema-only "$backup_file"
+            PGPASSWORD="$POSTGRES_PASSWORD" pg_restore -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$database_name" --no-owner --no-acl --schema-only "$backup_file" || RESTORE_OK=false
         else
             log "WARNING: Schema-only restore not fully supported for .sql.gz files"
             log "Will restore full backup (use .dump format for schema-only support)"
-            gunzip -c "$backup_file" | PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" "$database_name"
+            gunzip -c "$backup_file" | PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" "$database_name" || RESTORE_OK=false
         fi
     else
         log "Restoring data from backup..."
         if [ "$BACKUP_FORMAT" = "custom" ]; then
-            PGPASSWORD="$POSTGRES_PASSWORD" pg_restore -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$database_name" --no-owner --no-acl "$backup_file"
+            PGPASSWORD="$POSTGRES_PASSWORD" pg_restore -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$database_name" --no-owner --no-acl "$backup_file" || RESTORE_OK=false
         else
-            gunzip -c "$backup_file" | PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" "$database_name"
+            gunzip -c "$backup_file" | PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" "$database_name" || RESTORE_OK=false
         fi
     fi
 
-    if [ $? -eq 0 ]; then
+    if [ "$RESTORE_OK" = true ]; then
         if [ "$schema_only" = true ]; then
             log "Successfully restored database schema '$database_name' from backup"
         else
@@ -265,9 +266,7 @@ restore_globals() {
     fi
 
     log "Restoring global objects..."
-    gunzip -c "$globals_file" | PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" postgres
-
-    if [ $? -eq 0 ]; then
+    if gunzip -c "$globals_file" | PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" postgres; then
         log "Successfully restored global objects"
     else
         error_exit "Failed to restore global objects"
