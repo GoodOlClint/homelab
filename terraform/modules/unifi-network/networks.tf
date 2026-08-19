@@ -24,3 +24,15 @@ data "unifi_network" "infrastructure" {
 data "unifi_network" "core" {
   name = local.network_data.vlans.core.name
 }
+
+data "unifi_network" "vivint" {
+  name = local.network_data.vlans.vivint.name
+}
+
+data "unifi_network" "iot" {
+  name = local.network_data.vlans.iot.name
+}
+
+data "unifi_network" "management" {
+  name = local.network_data.vlans.management.name
+}

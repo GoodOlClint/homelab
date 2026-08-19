@@ -48,9 +48,15 @@ resource "unifi_port_profile" "access" {
     # Core access: untagged client ports on the aggregation switch (Mac
     # Studio 10G via the patch loop — no VLAN config needed on macOS).
     { core = data.unifi_network.core.id },
+    # Access-switch device ports. Design rule: NOTHING lives on the untagged
+    # VLAN 1 (UniFi discovery only), so every populated port carries an explicit
+    # profile — a new switch inherits nothing from the one it replaced.
+    { vivint = data.unifi_network.vivint.id },
+    { iot = data.unifi_network.iot.id },
+    { mgmt = data.unifi_network.management.id },
   )
 
-  name                  = "tf-${replace(each.key, "_", "-")}-access"
+  name = "tf-${replace(each.key, "_", "-")}-access"
   # "customize" + native network + no tagged networks = an access port. The
   # controller normalizes "native" to this on write, which fails the
   # provider's post-apply verification if we say "native" here.

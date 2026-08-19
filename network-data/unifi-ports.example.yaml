@@ -5,7 +5,7 @@
 #   mac               : the switch MAC (from the UniFi controller after adoption).
 #   jumbo_frames      : device-level jumbo toggle (covers the storage VLAN end-to-end).
 #   ports[].index     : physical port number.
-#   ports[].profile   : trunk | ceph | corosync | corosync_ring1 | storage
+#   ports[].profile   : trunk | node_install | ceph | corosync | corosync_ring1 | storage | core | vivint
 #                       (module port-profile names; omit to leave the port default).
 #   ports[].aggregate_members : LACP group, listed ONLY on the first member port
 #                       (e.g. [1, 2]); the member ports still get their profile.

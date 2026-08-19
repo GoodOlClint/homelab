@@ -56,6 +56,14 @@ had incompatible attribute names.
 - **Never set `jumbo_frames` for aggregation models** — the controller refuses
   the toggle (`api.err.JumboFrameChangeNotAllowed`; jumbo is always-on and the
   field reads false). Binding is per-switch for models with a real toggle.
+- **Never set `jumbo_frames` for switches governed by Global Switch Settings
+  either** (learned on the Pro-Max-48, 2026-08-14): the per-device field only
+  sticks for switches listed in the site's `global_switch.switch_exclusions`;
+  for everyone else the controller silently reverts it and the apply bounces
+  forever ("inconsistent result … was cty.True, but now cty.False"). Jumbo for
+  non-excluded switches is the site-wide toggle (Settings → Networks → Global
+  Switch Settings), flipped ON 2026-08-14. In practice no stanza should set
+  `jumbo_frames` unless the switch is deliberately excluded from global config.
 - The controller normalizes/renames silently; after any errored apply, diagnose
   from `rest/networkconf` / `stat/device` reality first — most "failures" were
   successful writes with a broken read-back.

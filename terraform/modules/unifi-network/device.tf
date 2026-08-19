@@ -9,9 +9,10 @@ resource "unifi_device" "switches" {
   mac  = each.value.mac
   name = try(each.value.name, each.key)
   # null = leave the device default. The Pro-Aggregation REFUSES this toggle
-  # (api.err.JumboFrameChangeNotAllowed — jumbo is always-on for aggregation
-  # models, the field just reads false); set jumbo_frames in the bindings only
-  # for switches that actually expose the toggle (e.g. the 48-port PoE).
+  # (jumbo is always-on for aggregation models), and non-excluded switches
+  # follow the site's Global Switch Settings — the controller reverts the
+  # per-device field and the apply bounces forever. Only set jumbo_frames for
+  # a switch listed in global_switch.switch_exclusions (README, quirks).
   jumboframe_enabled = try(each.value.jumbo_frames, null)
   allow_adoption     = true
   forget_on_destroy  = false
