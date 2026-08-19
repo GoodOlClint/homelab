@@ -1,0 +1,27 @@
+#!ipxe
+{# Fetched by iPXE from the TFTP dir it was loaded from, run before anything
+   else. Nodes have 6 NICs; only the install NIC (host-bindings install_nic_mac)
+   sits on a port that answers DHCP, so configure exactly that one instead of
+   letting `dhcp` walk every interface through its timeout. #}
+:start
+{% for n in range(0, 8) %}
+{% for name, node in host_bindings.nodes.items() %}
+iseq ${net{{ n }}/mac} {{ node.install_nic_mac | lower }} && set ifn net{{ n }} && goto found ||
+{% endfor %}
+{% endfor %}
+echo autoexec: no known install NIC found — falling back to dhcp on all interfaces
+dhcp || goto retry
+goto chain
+
+:found
+echo autoexec: install NIC ${ifn} (${${ifn}/mac}) — configuring
+ifopen ${ifn}
+dhcp ${ifn} || goto retry
+
+:chain
+chain http://{{ pxe_service_ip }}/boot.ipxe || goto retry
+
+:retry
+echo autoexec: failed, retrying in 5s
+sleep 5
+goto start

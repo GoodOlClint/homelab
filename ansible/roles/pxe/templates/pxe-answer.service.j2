@@ -1,0 +1,14 @@
+# {{ ansible_managed }}
+[Unit]
+Description=PVE auto-installer answer matcher (by install-NIC MAC)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/bin/python3 {{ pxe_base_dir }}/answer-server.py
+Restart=on-failure
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target

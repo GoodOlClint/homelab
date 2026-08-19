@@ -1,0 +1,250 @@
+---
+# --- Proxmox repo (signed shim/grub + the auto-install assistant) -----------
+- name: Check Proxmox archive keyring
+  ansible.builtin.stat:
+    path: /usr/share/keyrings/proxmox-archive-keyring.gpg
+  register: _pxe_key_stat
+
+# Size guard + no checksum: vendor keys rotate; steady state does no network.
+- name: Fetch Proxmox archive keyring
+  ansible.builtin.get_url:
+    url: "{{ pxe_proxmox_key_url }}"
+    dest: /usr/share/keyrings/proxmox-archive-keyring.gpg
+    mode: "0644"
+  when: not _pxe_key_stat.stat.exists or _pxe_key_stat.stat.size == 0
+
+- name: Proxmox pve-no-subscription repo (deb822)
+  ansible.builtin.deb822_repository:
+    name: proxmox
+    types: deb
+    uris: "http://download.proxmox.com/debian/pve"
+    suites: "{{ pxe_proxmox_repo_suite }}"
+    components: pve-no-subscription
+    signed_by: /usr/share/keyrings/proxmox-archive-keyring.gpg
+    install_python_debian: true
+  register: _pxe_repo
+
+# Only the PXE artefacts come from the Proxmox repo; everything else stays Debian.
+- name: Pin the Proxmox repo to the PXE packages only
+  ansible.builtin.copy:
+    dest: /etc/apt/preferences.d/pxe-proxmox
+    mode: "0644"
+    content: |
+      Package: *
+      Pin: origin download.proxmox.com
+      Pin-Priority: 100
+
+      Package: shim-signed shim-helpers-amd64-signed grub-efi-amd64-signed proxmox-auto-install-assistant
+      Pin: origin download.proxmox.com
+      Pin-Priority: 1001
+  register: _pxe_pin
+
+- name: Refresh apt after source/pin changes
+  ansible.builtin.apt:
+    update_cache: true
+  when: _pxe_repo is changed or _pxe_pin is changed
+
+- name: Install PXE services and build tools
+  ansible.builtin.apt:
+    name:
+      - nginx
+      - tftpd-hpa
+      - proxmox-auto-install-assistant
+      - cpio
+      - python3
+      - ipxe
+    state: present
+
+# --- Layout ------------------------------------------------------------------
+- name: Create PXE directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ pxe_base_dir }}"
+    - "{{ pxe_base_dir }}/build"
+    - "{{ pxe_base_dir }}/iso"
+    - "{{ pxe_tftp_dir }}"
+    - "{{ pxe_tftp_dir }}/grub"
+    - "{{ pxe_http_dir }}"
+    - "{{ pxe_http_dir }}/pve"
+
+- name: Answer directory (root hash inside — not world-readable)
+  ansible.builtin.file:
+    path: "{{ pxe_answer_dir }}"
+    state: directory
+    mode: "0750"
+
+# --- Signed boot chain: shim + network grub from the Proxmox-built packages ----
+# Extracted from the .debs rather than installed, so the guest's own bootloader
+# is never touched. Re-extract by deleting the two files.
+- name: Extract Proxmox-signed shim and network grub
+  ansible.builtin.shell: |
+    set -euo pipefail
+    cd {{ pxe_base_dir }}/build
+    rm -rf deb-extract && mkdir deb-extract
+    apt-get download shim-signed grub-efi-amd64-signed
+    for d in shim-signed_*.deb grub-efi-amd64-signed_*.deb; do dpkg-deb -x "$d" deb-extract; done
+    install -m 0644 deb-extract/usr/lib/shim/shimx64.efi.signed {{ pxe_tftp_dir }}/shimx64.efi
+    install -m 0644 deb-extract/usr/lib/grub/x86_64-efi-signed/grubnetx64.efi.signed {{ pxe_tftp_dir }}/grubx64.efi
+  args:
+    creates: "{{ pxe_tftp_dir }}/grubx64.efi"
+    executable: /bin/bash
+
+# --- Installer image -----------------------------------------------------------
+- name: Download the pinned PVE ISO
+  ansible.builtin.get_url:
+    url: "{{ pxe_pve_iso_url }}"
+    dest: "{{ pxe_base_dir }}/iso/proxmox-ve_{{ pxe_pve_iso_version }}.iso"
+    checksum: "sha256:{{ pxe_pve_iso_sha256 }}"
+    mode: "0644"
+
+- name: Prepare the ISO for HTTP-fetched answer files
+  ansible.builtin.command:
+    cmd: >-
+      proxmox-auto-install-assistant prepare-iso
+      {{ pxe_base_dir }}/iso/proxmox-ve_{{ pxe_pve_iso_version }}.iso
+      --fetch-from http --url {{ pxe_answer_url }}
+      --output {{ pxe_base_dir }}/iso/pve-http-{{ pxe_pve_iso_version }}.iso
+    creates: "{{ pxe_base_dir }}/iso/pve-http-{{ pxe_pve_iso_version }}.iso"
+
+- name: Deploy netboot build script
+  ansible.builtin.template:
+    src: build-netboot.sh.j2
+    dest: "{{ pxe_base_dir }}/build/build-netboot.sh"
+    mode: "0755"
+  register: _pxe_build_script
+
+# Kernel + initrd with the prepared ISO embedded (the installer mounts /proxmox.iso).
+- name: Build kernel + ISO-embedded initrd for HTTP boot
+  ansible.builtin.command:
+    cmd: "{{ pxe_base_dir }}/build/build-netboot.sh"
+    creates: "{{ pxe_http_dir }}/pve/.built-{{ pxe_pve_iso_version }}"
+
+# --- Menus and services ----------------------------------------------------------
+# GRUB's $prefix differs between netboot builds (/grub vs /boot/grub vs the
+# boot-file dir), so the same menu is served at every location it may look.
+- name: GRUB netboot menu directories
+  ansible.builtin.file:
+    path: "{{ pxe_tftp_dir }}/{{ item }}"
+    state: directory
+    mode: "0755"
+  loop: [grub, boot/grub]
+
+- name: GRUB netboot menu
+  ansible.builtin.template:
+    src: grub.cfg.j2
+    dest: "{{ pxe_tftp_dir }}/{{ item }}"
+    mode: "0644"
+  loop:
+    - grub/grub.cfg
+    - boot/grub/grub.cfg
+    - grub.cfg
+
+# iPXE first stage (Secure Boot OFF for the session): GRUB's efinet driver cannot
+# transmit on the MS-01's i226 UEFI driver ("couldn't send network packet",
+# 2026-08-19), so the signed shim→GRUB chain above is kept for re-validation
+# while installs ride iPXE. snponly uses the firmware's own NIC driver; ipxe.efi
+# carries native drivers — pfSense hands out snponly.efi.
+- name: iPXE binaries on the TFTP root
+  ansible.builtin.copy:
+    src: "/usr/lib/ipxe/{{ item }}"
+    dest: "{{ pxe_tftp_dir }}/{{ item }}"
+    remote_src: true
+    mode: "0644"
+  loop: [snponly.efi, ipxe.efi]
+
+- name: First-boot hook served to the installer (answer [first-boot] from-url)
+  ansible.builtin.template:
+    src: first-boot.sh.j2
+    dest: "{{ pxe_http_dir }}/first-boot.sh"
+    mode: "0644"
+
+- name: iPXE boot menu (HTTP)
+  ansible.builtin.template:
+    src: boot.ipxe.j2
+    dest: "{{ pxe_http_dir }}/boot.ipxe"
+    mode: "0644"
+
+# iPXE EFI builds fetch autoexec.ipxe from the TFTP directory they were loaded
+# from and run it first — so no DHCP "iPXE boot file" option is needed and the
+# firmware→iPXE→iPXE re-DHCP loop never happens.
+- name: iPXE autoexec (DHCP only the install NIC, then chain to the HTTP menu)
+  ansible.builtin.template:
+    src: autoexec.ipxe.j2
+    dest: "{{ pxe_tftp_dir }}/autoexec.ipxe"
+    mode: "0644"
+
+- name: Fetch netboot.xyz iPXE (rescue menu; Secure-Boot-off sessions only)
+  ansible.builtin.get_url:
+    url: "{{ pxe_netbootxyz_url }}"
+    dest: "{{ pxe_http_dir }}/netboot.xyz.efi"
+    mode: "0644"
+  register: _nbxyz
+  failed_when: false
+
+- name: tftpd-hpa serves the TFTP root
+  ansible.builtin.copy:
+    dest: /etc/default/tftpd-hpa
+    mode: "0644"
+    content: |
+      TFTP_USERNAME="tftp"
+      TFTP_DIRECTORY="{{ pxe_tftp_dir }}"
+      TFTP_ADDRESS=":69"
+      TFTP_OPTIONS="--secure"
+  notify: restart tftpd-hpa
+
+- name: nginx site for the HTTP side
+  ansible.builtin.template:
+    src: nginx-pxe.conf.j2
+    dest: /etc/nginx/sites-available/pxe
+    mode: "0644"
+  notify: reload nginx
+
+- name: Enable the pxe site, disable the default
+  ansible.builtin.file:
+    src: "{{ item.src | default(omit) }}"
+    path: "{{ item.path }}"
+    state: "{{ item.state }}"
+  loop:
+    - { path: /etc/nginx/sites-enabled/default, state: absent }
+    - { src: /etc/nginx/sites-available/pxe, path: /etc/nginx/sites-enabled/pxe, state: link }
+  notify: reload nginx
+
+# --- Answer files -------------------------------------------------------------------
+- name: Copy per-node answer files (baked by scripts/bake-answer.sh)
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ pxe_answer_dir }}/{{ item | basename | regex_replace('^answer-', '') }}"
+    mode: "0640"
+  with_fileglob: "{{ pxe_answer_src_glob }}"
+  notify: restart pxe-answer
+
+- name: MAC -> node map from host bindings
+  ansible.builtin.template:
+    src: mac-map.json.j2
+    dest: "{{ pxe_answer_dir }}/mac-map.json"
+    mode: "0640"
+  notify: restart pxe-answer
+
+- name: Answer matcher service
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { src: answer-server.py.j2, dest: "{{ pxe_base_dir }}/answer-server.py", mode: "0755" }
+    - { src: pxe-answer.service.j2, dest: /etc/systemd/system/pxe-answer.service, mode: "0644" }
+  notify: restart pxe-answer
+
+- name: Enable services
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  loop:
+    - tftpd-hpa
+    - nginx
+    - pxe-answer

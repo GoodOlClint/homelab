@@ -1,0 +1,42 @@
+#!/bin/bash
+# {{ ansible_managed }} — PVE auto-installer [first-boot] hook (answer file
+# `source = "from-url"`), run once by proxmox-first-boot on the node's first boot.
+# Finishes what the installer leaves undone so a node is Ansible-ready with no
+# hand steps (ADR 0026): pin NIC names, quiet the console until WP2, reboot once.
+set -euo pipefail
+MARK=/var/lib/pve-first-boot.done
+if [ -e "$MARK" ]; then exit 0; fi
+
+# The 9.2 auto-installer does not pin nicN names; WP1/WP2 depend on them.
+pve-network-interface-pinning generate
+
+# The installer puts the mgmt IP on a vmbr0 over the install NIC. terraform/hosts
+# owns vmbr0 (on the bond) and WP2 expects the mgmt address directly on the
+# install NIC, so move it there and drop the installer's bridge. Edits the
+# pending file the pinning step wrote (applied at the reboot below).
+IF=/etc/network/interfaces.new; [ -f "$IF" ] || IF=/etc/network/interfaces
+python3 - "$IF" <<'PY'
+import re, sys
+p = sys.argv[1]; s = open(p).read()
+m = re.search(r"auto vmbr0\niface vmbr0 inet static\n((?:[ \t]+\S.*\n)+)", s)
+if not m:
+    sys.exit("first-boot: no installer vmbr0 stanza in %s — layout changed, not touching it" % p)
+if m:
+    body = m.group(1)
+    addr = re.search(r"^\s*address\s+(\S+)", body, re.M).group(1)
+    gw = re.search(r"^\s*gateway\s+(\S+)", body, re.M)
+    port = re.search(r"^\s*bridge-ports\s+(\S+)", body, re.M).group(1)
+    static = f"auto {port}\niface {port} inet static\n\taddress {addr}\n" + (f"\tgateway {gw.group(1)}\n" if gw else "")
+    s = s.replace(m.group(0), "")
+    s, n = re.subn(rf"(?m)^(auto {port}\n)?iface {port} inet manual\n", static, s, count=1)
+    if n != 1:
+        sys.exit(f"first-boot: no manual stanza for {port} to re-home onto")
+    open(p, "w").write(s)
+PY
+
+# AMT shares the install NIC's MAC and loops ME frames back; the bridge warns
+# at console level. WP2's netconsole policy replaces this file.
+printf 'kernel.printk = 3 4 1 7\n' > /etc/sysctl.d/90-console-quiet-pre-wp2.conf
+
+touch "$MARK"
+systemctl reboot

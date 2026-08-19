@@ -85,6 +85,16 @@ locals {
       memory_mb    = 2048
       disk_size_gb = 100 # apt-cacher-ng cache — disposable derived state (ADR 0021), no data volume
     },
+    {
+      name         = "pxe"
+      vm_id        = 117
+      vlans        = ["vlan10", "vlan40"]
+      ip_offset    = 117
+      cpu_cores    = 2
+      memory_mb    = 2048
+      disk_size_gb = 20 # ISO + netboot initrd ≈ 6 GiB; all derived from the pinned ISO (ADR 0026)
+      image        = "debian13" # proxmox-auto-install-assistant + signed shim/grub come from the Proxmox trixie repo
+    },
   ]
 
   # --- Services VMs ---

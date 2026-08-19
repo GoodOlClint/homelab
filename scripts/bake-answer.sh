@@ -39,9 +39,9 @@ print("" if d is None else (json.dumps(d) if isinstance(d, (list, dict)) else d)
 
 # MS-01 nodes share one template; pve has its own.
 case "$NODE" in
-  crete|crete2) TMPL="$HOSTS_DIR/templates/answer-ms01.toml.tmpl" ;;
-  pve)          TMPL="$HOSTS_DIR/templates/answer-pve.toml.tmpl" ;;
-  *) echo "ERROR: unknown node '$NODE' (expected crete|crete2|pve)"; exit 1 ;;
+  ms-01a|ms-01b) TMPL="$HOSTS_DIR/templates/answer-ms01.toml.tmpl" ;;
+  pve)           TMPL="$HOSTS_DIR/templates/answer-pve.toml.tmpl" ;;
+  *) echo "ERROR: unknown node '$NODE' (expected ms-01a|ms-01b|pve)"; exit 1 ;;
 esac
 [ -f "$TMPL" ] || { echo "ERROR: template $TMPL missing"; exit 1; }
 
@@ -62,6 +62,10 @@ ROOT_HASH=$(openssl passwd -6 "$ROOT_PW")
 # MAC with colons stripped, for the ID_NET_NAME_MAC glob filter.
 MAC_NOSEP="${MAC//:/}"
 
+# PXE first-boot hook (ADR 0026): cluster.pxe_url = http://<pxe service ip>.
+# Empty = no hook (ISO/IDE-R fallback): the [first-boot] section is removed.
+PXE_URL=$(yread cluster.pxe_url)
+
 OUT="$HOSTS_DIR/answer-${NODE}.toml"
 sed \
   -e "s|@FQDN@|${FQDN}|g" \
@@ -72,7 +76,16 @@ sed \
   -e "s|@INSTALL_GATEWAY@|${GW}|g" \
   -e "s|@INSTALL_NIC_MAC@|${MAC_NOSEP}|g" \
   -e "s|@BOOT_DISKS@|${BOOT_DISKS}|g" \
+  -e "s|@PXE_URL@|${PXE_URL}|g" \
   "$TMPL" > "$OUT"
+if [ -z "$PXE_URL" ]; then
+  "$VENV_PYTHON" - "$OUT" <<'PY'
+import re, sys
+p = sys.argv[1]; s = open(p).read()
+s = re.sub(r"\n# First boot:.*?\[first-boot\]\n(?:.*\n)*?(?=\n\[|\Z)", "\n", s, flags=re.S)
+open(p, "w").write(s)
+PY
+fi
 chmod 600 "$OUT"
 echo "Baked $OUT"
 

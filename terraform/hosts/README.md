@@ -15,7 +15,7 @@ WP2 re-homes mgmt from the i226-V install link to the bond and stands up the VIP
 session + corosync ring0), the ConnectX 25G ports (Ceph VLAN 21 link, WP2 — ADR 0014), and the second
 i226 (ring1, WP2) — so a re-apply can never drop the link Terraform is talking over.
 
-## Day-1 bring-up (per node: crete, crete2, then pve on Day-2)
+## Day-1 bring-up (per node: ms-01a, ms-01b, then msi on Day-2 — proven end to end 2026-08-19)
 
 > **Seat the 25G ConnectX card BEFORE installing.** The PVE 9 installer pins every
 > present NIC by MAC to a stable `nicN` name. If the card is added later it stays
@@ -36,8 +36,24 @@ i226 (ring1, WP2) — so a re-apply can never drop the link Terraform is talking
    # validates via `proxmox-auto-install-assistant validate-answer` if installed
    ```
 
-3. **Install.** Boot the node off the baked ISO (unattended). It comes up on its
-   VLAN 30 mgmt IP with `nicN` names pinned (incl. the ConnectX).
+3. **Install — PXE (ADR 0026).** `make node-answers` bakes every node's answer
+   file; `make ansible pxe` ships them to the `pxe` guest, which serves the PVE
+   installer over iPXE (the signed shim → GRUB chain is parked — GRUB's efinet
+   cannot transmit on the i226, see the plan) and answers each node by its
+   install-NIC MAC. pfSense DHCP values:
+   [docs/pfsense-netboot.md](../../docs/pfsense-netboot.md). Then AMT
+   *Reset to PXE* on the node — or, from a running node, `efibootmgr -n <the
+   I226-LM IPv4 PXE entry> && systemctl reboot` (the warm path keeps the PHY at
+   2.5G; a cold firmware PXE trains at 10 Mb/s). Unattended, no media session.
+   It comes up on its VLAN 30 mgmt IP with `nicN` names pinned (incl. the ConnectX).
+   The answer file's `[first-boot]` hook (served by the pxe guest) pins NIC
+   names (`pve-network-interface-pinning generate` — the 9.2 auto-installer does
+   not), quiets the console, and reboots once, so the node needs **no hand
+   steps** before step 4. Secure Boot must be OFF for the PXE session (iPXE is
+   unsigned — see ADR 0026) and re-enabled afterwards by hand.
+   *Fallback when the network itself is down:* step 2's ISO over AMT IDE-R
+   (~1–2 MB/s — measured 2026-08-18); without the pxe guest the `[first-boot]`
+   section is dropped at bake time, so run the pinning command by hand.
 
 4. **Capture the bond slaves.** SSH in and record the two 10G NIC `nicN` names into
    `nodes.auto.tfvars` (gitignored — copy from `nodes.auto.tfvars.example`):
@@ -54,9 +70,13 @@ i226 (ring1, WP2) — so a re-apply can never drop the link Terraform is talking
 6. **Apply the host networking.** Endpoint = the node's VLAN 30 mgmt URL (the stable
    link — never the bond being reconfigured):
    ```
-   make hosts-plan  ENDPOINT=https://<node-vlan30-ip>:8006/
-   make hosts-apply ENDPOINT=https://<node-vlan30-ip>:8006/   # interactive confirm
+   make hosts-plan  ENDPOINT=https://<node-vlan30-ip>:8006/ NODE=<node>
+   make hosts-apply ENDPOINT=https://<node-vlan30-ip>:8006/ NODE=<node>   # interactive confirm
    ```
+   `NODE=` scopes the apply to that node — required while the node is still
+   standalone (its API cannot reach the other nodes in `nodes.auto.tfvars`).
+   After the cluster exists, omit `NODE=` and point `ENDPOINT` at the VIP to
+   converge every node in one apply.
 
 ## DoD (WP1)
 

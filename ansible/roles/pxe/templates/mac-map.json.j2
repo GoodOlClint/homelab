@@ -1,0 +1,5 @@
+{
+{% for name, node in host_bindings.nodes.items() %}
+  "{{ node.install_nic_mac | lower }}": "{{ name }}"{{ "," if not loop.last else "" }}
+{% endfor %}
+}

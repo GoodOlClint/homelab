@@ -1,0 +1,16 @@
+---
+- name: restart tftpd-hpa
+  ansible.builtin.systemd:
+    name: tftpd-hpa
+    state: restarted
+
+- name: reload nginx
+  ansible.builtin.systemd:
+    name: nginx
+    state: reloaded
+
+- name: restart pxe-answer
+  ansible.builtin.systemd:
+    name: pxe-answer
+    state: restarted
+    daemon_reload: true

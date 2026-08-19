@@ -193,6 +193,28 @@
     - phase1
     - apt-cache
 
+# PXE netboot for bare-metal PVE installs (ADR 0026). First Debian 13 guest in
+# the fleet: dns_config is netplan-specific and deliberately NOT applied here.
+- name: "Phase 1: Configure pxe VM (PVE netboot, answer files by MAC)"
+  hosts: pxe
+  become: true
+  vars_files:
+    - ../group_vars/all.yml
+  pre_tasks:
+    - name: Load all configuration and secrets
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/full_pre_tasks.yml"
+      tags: [always]
+    - name: Load host bindings (install-NIC MACs for the answer matcher)
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../../network-data/local/host-bindings.yaml"
+        name: host_bindings
+      tags: [always]
+  roles:
+    - pxe
+  tags:
+    - phase1
+    - pxe
+
 # ============================================================
 # Phase 2: Monitoring clients (OpenObserve is now running)
 # ============================================================

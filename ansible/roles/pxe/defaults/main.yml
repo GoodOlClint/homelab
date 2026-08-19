@@ -1,0 +1,29 @@
+---
+# PXE netboot for bare-metal PVE installs (ADR 0026). Chain: pfSense DHCP ->
+# shimx64.efi (TFTP) -> grubx64.efi (= Proxmox-signed grubnetx64) -> grub.cfg ->
+# PVE kernel + ISO-embedded initrd over HTTP -> answer file over HTTP by MAC.
+
+# Pinned installer image — bumping these IS the deliberate roll (ADR 0016 posture).
+pxe_pve_iso_version: "9.2-1"
+pxe_pve_iso_sha256: "4e88fe416df9b527624a175f24c9aa07c714d3332afb1ee3dbf3879573ef2c6c"
+pxe_pve_iso_url: "https://enterprise.proxmox.com/iso/proxmox-ve_{{ pxe_pve_iso_version }}.iso"
+
+pxe_base_dir: /srv/pxe
+pxe_tftp_dir: "{{ pxe_base_dir }}/tftp"
+pxe_http_dir: "{{ pxe_base_dir }}/http"
+pxe_answer_dir: "{{ pxe_base_dir }}/answers"
+
+# Address install-VLAN clients reach this guest on (routed by pfSense). The
+# services-VLAN leg, per fleet convention (ADR 0017 end state is single-homed there).
+pxe_service_ip: "{{ ansible_host | replace(mgmt_vlan_prefix, services_vlan_prefix) }}"
+pxe_answer_url: "http://{{ pxe_service_ip }}/answer"
+
+# Proxmox trixie repo: only for the signed shim/grub builds + the assistant.
+pxe_proxmox_repo_suite: trixie
+pxe_proxmox_key_url: "https://enterprise.proxmox.com/debian/proxmox-archive-keyring-{{ pxe_proxmox_repo_suite }}.gpg"
+
+# Rendered by scripts/bake-answer.sh on the operator machine (they carry the
+# bootstrap-tier root hash — never rendered by this role).
+pxe_answer_src_glob: "{{ playbook_dir }}/../../terraform/hosts/answer-*.toml"
+
+pxe_netbootxyz_url: "https://boot.netboot.xyz/ipxe/netboot.xyz.efi"

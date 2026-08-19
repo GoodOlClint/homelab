@@ -1,20 +1,27 @@
-# proxmox-auto-install answer file — MS-01 nodes (crete, crete2).
+# proxmox-auto-install answer file — MS-01 nodes (ms-01a, ms-01b).
 # TEMPLATE: @PLACEHOLDERS@ are injected by scripts/bake-answer.sh at ISO-bake time
 # (nothing secret or site-specific is committed — repo is public). Validate the
 # baked file with `proxmox-auto-install-assistant validate-answer <file>`.
 #
-# Disk decision (operator, 2026-07): 2x 1TB NVMe -> capped ZFS-mirror boot (120G)
-# + the remaining ~810G of each disk left FREE for a Ceph OSD partition per node
-# (WP2 creates the OSDs). hdsize caps the boot pool and leaves that free space.
+# Disk decision (operator, 2026-07; amended 2026-08-16): the 2x 1TB NVMe
+# (CT1000T710SSD8) are the ZFS-mirror boot pair; a dedicated 2TB NVMe per node
+# carries the Ceph OSD (whole-disk, WP2 via the osd_disks binding). Boot disks
+# are selected by MODEL, not device name — with three NVMe drives seated the
+# kernel enumeration order is not stable, and a bare nvme0n1/nvme1n1 list could
+# mirror boot onto the OSD drive. hdsize still caps the boot pool; the leftover
+# ~810G/disk stays free (scratch / future second OSD partition).
 #
-# NIC decision: select the install NIC (i226-V, VLAN 30 mgmt / corosync ring0) by
-# MAC so naming is deterministic regardless of PCIe enumeration. Seat the 25G card
-# BEFORE installing so the installer also pins the ConnectX ports to nicN.
+# NIC decision (amended 2026-08-16): the install NIC is the i226-LM — it is the
+# AMT-capable port, and AMT must share the VLAN 30 install/mgmt plane because the
+# other i226 lands on the corosync ring1 access port (VLAN 32-only, no gateway),
+# which would strand AMT. Selected by MAC so naming is deterministic regardless of
+# PCIe enumeration. Seat the 25G card BEFORE installing so the installer also pins
+# the ConnectX ports to nicN.
 
 [global]
 keyboard             = "en-us"
 country              = "us"
-timezone             = "America/Denver"
+timezone             = "America/Chicago"
 fqdn                 = "@FQDN@"
 mailto               = "@MAILTO@"
 root-password-hashed = "@ROOT_PW_HASH@"
@@ -25,10 +32,18 @@ source                  = "from-answer"
 cidr                    = "@INSTALL_CIDR@"    # VLAN 30 mgmt CIDR
 gateway                 = "@INSTALL_GATEWAY@" # VLAN 30 gateway
 dns                     = "1.1.1.1"           # bootstrap resolver (AdGuard not up yet)
-filter.ID_NET_NAME_MAC  = "*@INSTALL_NIC_MAC@" # i226-V MAC, no colons (e.g. *58:47ca... -> *5847ca78f9d9)
+filter.ID_NET_NAME_MAC  = "*@INSTALL_NIC_MAC@" # i226-LM MAC, colons stripped by bake-answer.sh
 
 [disk-setup]
 filesystem = "zfs"
 zfs.raid   = "raid1"
-zfs.hdsize = 120                       # GiB — cap boot pool; rest of each NVMe -> Ceph OSD (WP2)
-disk-list  = ["nvme0n1", "nvme1n1"]    # both 1TB NVMe -> boot mirror
+zfs.hdsize = 120                        # GiB — cap boot pool
+filter.ID_MODEL = "CT1000T710SSD8"      # both 1TB NVMe -> boot mirror; never the 2TB OSD drive
+
+# First boot: pin nicN names + quiet console + reboot — served by the pxe guest
+# (ADR 0026). bake-answer.sh drops this section when no pxe_url binding is set
+# (ISO/IDE-R fallback installs then need `pve-network-interface-pinning generate` by hand).
+[first-boot]
+source   = "from-url"
+url      = "@PXE_URL@/first-boot.sh"
+ordering = "fully-up"

@@ -365,21 +365,30 @@ clean-ssh:
 node-iso:
 	@bash scripts/bake-answer.sh $(NODE) $(ISO)
 
+# Bake the answer file for EVERY node in host-bindings (PXE answer endpoint
+# serves them by install-NIC MAC — ADR 0026). Then `make ansible pxe` to ship.
+node-answers:
+	@for n in $$(.venv/bin/python3 -c "import yaml;print(' '.join(yaml.safe_load(open('network-data/local/host-bindings.yaml'))['nodes']))"); do bash scripts/bake-answer.sh $$n || exit 1; done
+
 # One hand-off step: create terraform@pve token on a fresh node. make node-bootstrap IP=<node-vlan30-ip>
 node-bootstrap:
 	@bash scripts/node-bootstrap.sh $(IP)
 
 # Plan the host plane. make hosts-plan ENDPOINT=https://<node-vlan30-ip>:8006/
+# NODE=<name> scopes the plan/apply to that node's resources — REQUIRED before the
+# node is clustered (a standalone node's API cannot reach the others); omit it
+# once the cluster exists to converge every node through the VIP.
+HOSTS_TARGETS = $(if $(NODE),-target='proxmox_network_linux_bond.bond0["$(NODE)"]' -target='proxmox_network_linux_bridge.vmbr0["$(NODE)"]' -target='proxmox_network_linux_vlan.storage["$(NODE)"]',)
 hosts-plan:
 	@test -n "$(ENDPOINT)" || { echo "ERROR: set ENDPOINT=https://<node-vlan30-ip>:8006/"; exit 1; }
 	@cd terraform/hosts && terraform init -input=false >/dev/null && \
-		TF_VAR_virtual_environment_endpoint="$(ENDPOINT)" terraform plan -no-color -input=false
+		TF_VAR_virtual_environment_endpoint="$(ENDPOINT)" terraform plan -no-color -input=false $(HOSTS_TARGETS)
 
 # Apply the host plane (interactive confirm). make hosts-apply ENDPOINT=https://<node-vlan30-ip>:8006/
 hosts-apply:
 	@test -n "$(ENDPOINT)" || { echo "ERROR: set ENDPOINT=https://<node-vlan30-ip>:8006/"; exit 1; }
 	@cd terraform/hosts && terraform init -input=false >/dev/null && \
-		TF_VAR_virtual_environment_endpoint="$(ENDPOINT)" terraform apply -input=false
+		TF_VAR_virtual_environment_endpoint="$(ENDPOINT)" terraform apply -input=false $(HOSTS_TARGETS)
 
 # WP2: cluster plane (pvecm, corosync rings, Ceph, VIP). Day-1: run AFTER
 # hosts-apply. Needs ansible/inventory/proxmox.yaml (see proxmox.example.yml)

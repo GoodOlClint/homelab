@@ -1,0 +1,33 @@
+#!ipxe
+# {{ ansible_managed }} — served to iPXE clients (pfSense "iPXE boot file name").
+set base http://{{ pxe_service_ip }}
+:menu
+menu PXE — {{ inventory_hostname }}
+item --gap Proxmox VE {{ pxe_pve_iso_version }}
+item --key i pve     Install Proxmox VE (automated — answer file by MAC over HTTP)
+item --gap Other
+item --key l local   Boot from local disk
+item --key n nbxyz   netboot.xyz rescue menu
+item --key s shell   iPXE shell
+choose --default pve --timeout 10000 target && goto ${target}
+
+:pve
+echo Loading Proxmox VE kernel + installer initrd (ISO embedded, ~1.7 GiB) ...
+kernel ${base}/pve/linux26 ro ramdisk_size=16777216 rw quiet splash=silent proxmox-start-auto-installer
+initrd ${base}/pve/initrd
+boot || goto failed
+
+:local
+exit
+
+:nbxyz
+chain https://boot.netboot.xyz || goto failed
+
+:shell
+shell
+goto menu
+
+:failed
+echo Boot failed — dropping to menu in 10s
+sleep 10
+goto menu

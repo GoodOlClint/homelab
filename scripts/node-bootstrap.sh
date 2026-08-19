@@ -7,8 +7,11 @@
 # Idempotent: skips the user/token if they already exist.
 #
 # Usage:  scripts/node-bootstrap.sh <node-mgmt-ip>
-# Store the printed token secret in bootstrap.sops.yml as proxmox_terraform_token,
-# then set TF_VAR_virtual_environment_api_token to use it (see terraform/hosts/README.md).
+# Run it on the CLUSTER BOOTSTRAP node only and store that token in bootstrap.sops.yml
+# as proxmox_terraform_token: users/tokens live in /etc/pve, so a token minted on a
+# node that later JOINS the cluster is replaced by the cluster's at join time.
+# terraform/hosts still authenticates as root@pam/password (Makefile); switching
+# the provider to this token is follow-up work (ADR-0002 least-privilege intent).
 
 set -euo pipefail
 IP="${1:?usage: node-bootstrap.sh <node-mgmt-ip>}"
@@ -24,7 +27,7 @@ pveum aclmod / --user terraform@pve --role Administrator
 if pveum user token list terraform@pve 2>/dev/null | grep -q " provider "; then
   echo "TOKEN_EXISTS: terraform@pve!provider already present — regenerate manually if the secret was lost."
 else
-  echo "=== NEW TOKEN (store the value in bootstrap.sops.yml as proxmox_terraform_token) ==="
+  echo "=== NEW TOKEN (bootstrap node only: store as proxmox_terraform_token in bootstrap.sops.yml; a joining node's token is discarded at join) ==="
   pveum user token add terraform@pve provider --privsep 0
 fi
 REMOTE

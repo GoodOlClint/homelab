@@ -16,7 +16,7 @@
 [global]
 keyboard             = "en-us"
 country              = "us"
-timezone             = "America/Denver"
+timezone             = "America/Chicago"
 fqdn                 = "@FQDN@"
 mailto               = "@MAILTO@"
 root-password-hashed = "@ROOT_PW_HASH@"
@@ -33,3 +33,11 @@ filter.ID_NET_NAME_MAC = "*@INSTALL_NIC_MAC@" # I225-V MAC, no colons
 filesystem = "zfs"
 zfs.raid   = "raid1"
 disk-list  = @BOOT_DISKS@   # ["nvmeXn1","nvmeYn1"] — the two 980 PRO 500G, whole-disk boot mirror
+
+# First boot: pin nicN names + quiet console + reboot — served by the pxe guest
+# (ADR 0026). bake-answer.sh drops this section when no pxe_url binding is set
+# (ISO/IDE-R fallback installs then need `pve-network-interface-pinning generate` by hand).
+[first-boot]
+source   = "from-url"
+url      = "@PXE_URL@/first-boot.sh"
+ordering = "fully-up"

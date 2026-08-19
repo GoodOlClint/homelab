@@ -1,0 +1,23 @@
+# {{ ansible_managed }} — served by TFTP to the Proxmox-signed network GRUB.
+set default=0
+set timeout=10
+set timeout_style=menu
+insmod http
+insmod linuxefi
+insmod chain
+set pxe_http="(http,{{ pxe_service_ip }})"
+
+menuentry 'Install Proxmox VE {{ pxe_pve_iso_version }} (automated — answer file by MAC over HTTP)' {
+    echo 'Loading Proxmox VE kernel ...'
+    linux ${pxe_http}/pve/linux26 ro ramdisk_size=16777216 rw quiet splash=silent proxmox-start-auto-installer
+    echo 'Loading installer initrd (ISO embedded, ~1.8 GiB) ...'
+    initrd ${pxe_http}/pve/initrd
+}
+
+menuentry 'Boot from local disk' {
+    exit
+}
+
+menuentry 'netboot.xyz rescue menu (requires Secure Boot OFF — unsigned iPXE)' {
+    chainloader ${pxe_http}/netboot.xyz.efi
+}

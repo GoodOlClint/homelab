@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# {{ ansible_managed }} — build PVE netboot artefacts from the HTTP-prepared ISO.
+# Output: {{ pxe_http_dir }}/pve/linux26 + initrd (initrd = installer initrd with
+# the prepared ISO appended as /proxmox.iso, which the installer loop-mounts).
+set -euo pipefail
+ISO="{{ pxe_base_dir }}/iso/pve-http-{{ pxe_pve_iso_version }}.iso"
+OUT="{{ pxe_http_dir }}/pve"
+WORK="$(mktemp -d {{ pxe_base_dir }}/build/netboot.XXXXXX)"
+trap 'umount "$WORK/mnt" 2>/dev/null || true; rm -rf "$WORK"' EXIT
+mkdir -p "$WORK/mnt" "$WORK/cpio"
+mount -o loop,ro "$ISO" "$WORK/mnt"
+cp "$WORK/mnt/boot/linux26" "$OUT/linux26.tmp"
+cp "$WORK/mnt/boot/initrd.img" "$OUT/initrd.tmp"
+umount "$WORK/mnt"
+ln "$ISO" "$WORK/cpio/proxmox.iso"
+( cd "$WORK/cpio" && echo proxmox.iso | cpio -H newc -o 2>/dev/null | gzip -1 ) >> "$OUT/initrd.tmp"
+mv "$OUT/linux26.tmp" "$OUT/linux26"
+mv "$OUT/initrd.tmp" "$OUT/initrd"
+chmod 0644 "$OUT/linux26" "$OUT/initrd"
+rm -f "$OUT"/.built-*; touch "$OUT/.built-{{ pxe_pve_iso_version }}"
+echo "built: $(ls -la "$OUT")"
