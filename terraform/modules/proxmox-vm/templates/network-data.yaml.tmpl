@@ -38,24 +38,31 @@ ethernets:
 %{ endif }
 %{ if !iface.dhcp && iface.gateway != "" }
     routes:
-%{ if !iface.is_gateway ~}
+      # Every static leg gets its own table (connected + default) and a /32 source
+      # rule below — INCLUDING the gateway leg. Without it, traffic sourced from the
+      # gateway leg's address falls through to main, where the OTHER legs' connected
+      # routes live, and a reply to a host on a sibling VLAN leaves via that sibling
+      # interface with the wrong source address: asymmetric through pfSense (TCP
+      # dies out-of-state) and the switch reports the IP behind two MACs.
       - to: ${iface.subnet}
         scope: link
         table: ${iface.routing_table}
-%{ endif ~}
       - to: default
         via: ${iface.gateway}
-%{ if !iface.is_gateway ~}
         table: ${iface.routing_table}
+%{ if iface.is_gateway ~}
+      - to: default
+        via: ${iface.gateway}
 %{ endif ~}
 %{ if iface.gateway_v6 != "" }
       - to: "::/0"
         via: ${iface.gateway_v6}
-%{ if !iface.is_gateway ~}
         table: ${iface.routing_table}
+%{ if iface.is_gateway ~}
+      - to: "::/0"
+        via: ${iface.gateway_v6}
 %{ endif ~}
 %{ endif }
-%{ if !iface.is_gateway }
     routing-policy:
       # /32, NOT the interface prefix. This rule exists to send traffic ORIGINATING
       # from this host's own address out the matching interface. Using /${iface.prefix}
@@ -68,7 +75,6 @@ ethernets:
       # and never being reverse-NATed.
       - from: ${iface.address}/32
         table: ${iface.routing_table}
-%{ endif }
 %{ endif }
 %{ if length(iface.dns_servers) > 0 }
     nameservers:
