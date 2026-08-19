@@ -1,0 +1,60 @@
+---
+# Restore-bridge pool (ADR 0027): a ZFS mirror on the boot disks' free space
+# past the answer-file hdsize cap — the interim restore target while Ceph
+# waits for node 3. The same partitions become Ceph OSDs afterwards (ADR 0027
+# sequence: destroy the pool, append the -part4 paths to osd_disks).
+# Gated on the per-node binding `bridge_disks` (two by-id boot-disk paths).
+
+- name: Carve the bridge partition from each boot disk's free space
+  ansible.builtin.command:
+    cmd: >-
+      sgdisk -n {{ proxmox_host_bridge_part }}:0:0
+      -t {{ proxmox_host_bridge_part }}:BF01
+      -c {{ proxmox_host_bridge_part }}:{{ proxmox_host_bridge_pool }} {{ item }}
+    creates: "{{ item }}-part{{ proxmox_host_bridge_part }}"
+  loop: "{{ proxmox_host_bridge_disks }}"
+  register: _bridge_parted
+
+- name: Settle the new partition links
+  ansible.builtin.shell: partprobe && udevadm settle
+  when: _bridge_parted is changed
+  changed_when: false
+
+- name: Check for the bridge pool
+  ansible.builtin.command:
+    cmd: "zpool list -H -o name {{ proxmox_host_bridge_pool }}"
+  register: _bridge_zpool
+  changed_when: false
+  failed_when: false
+
+- name: Create the bridge pool (mirror of the carved partitions)
+  ansible.builtin.command:
+    cmd: >-
+      zpool create -o ashift=12 -O compression=lz4 -O atime=off
+      {{ proxmox_host_bridge_pool }} mirror
+      {{ proxmox_host_bridge_disks | map('regex_replace', '$', '-part' ~ proxmox_host_bridge_part) | join(' ') }}
+  when: _bridge_zpool.rc != 0
+  changed_when: true
+
+- name: Check PVE storage entries
+  ansible.builtin.command:
+    cmd: pvesm status
+  register: _bridge_pvesm
+  changed_when: false
+  run_once: true
+
+# Cluster-wide entry (storage.cfg is shared) restricted to the nodes that carry the pool.
+- name: Register the bridge pool as PVE storage
+  ansible.builtin.command:
+    cmd: >-
+      pvesm add zfspool {{ proxmox_host_bridge_pool }}
+      --pool {{ proxmox_host_bridge_pool }} --content images,rootdir --sparse 1
+      --nodes {{ groups['proxmox'] | select('in', _bridge_nodes) | join(',') }}
+  vars:
+    _bridge_nodes: >-
+      {{ host_bindings.nodes | dict2items
+         | selectattr('value.bridge_disks', 'defined')
+         | map(attribute='key') | list }}
+  run_once: true
+  changed_when: true
+  when: proxmox_host_bridge_pool not in (_bridge_pvesm.stdout_lines | map('split') | map('first') | list)

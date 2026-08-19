@@ -9,6 +9,8 @@
 - ansible.builtin.import_tasks: network.yml
 - ansible.builtin.import_tasks: cluster.yml
 - ansible.builtin.import_tasks: qdevice.yml
+- ansible.builtin.import_tasks: bridge_pool.yml
+  when: proxmox_host_bridge_disks | length == 2
 # Ceph waits for the full 3-node cluster (plan Day 2; ADR 0024): a 2-node
 # bootstrap would build a degraded size=3 pool and fail the HEALTH_OK gate.
 # Mirrors the QDevice branches, which key off the same node count.

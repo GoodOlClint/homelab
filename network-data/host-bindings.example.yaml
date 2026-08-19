@@ -49,6 +49,9 @@ nodes:
     ring1_nic: "nic3"
     ceph_nic: "nic4"
     osd_disks: ["/dev/nvme1n1"]
+    # Optional restore-bridge pool (ADR 0027): the two boot disks by-id; the role
+    # carves -part4 from their free space past the answer-file hdsize cap.
+    bridge_disks: ["/dev/disk/by-id/nvme-MODEL_SERIAL1", "/dev/disk/by-id/nvme-MODEL_SERIAL2"]
 
   ms-01b:
     fqdn: "ms-01b.example.internal"

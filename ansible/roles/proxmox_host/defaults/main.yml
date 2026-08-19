@@ -51,6 +51,12 @@ proxmox_host_ring0_ip: "{{ network_data.ipv4_prefix }}.{{ proxmox_host_ring0_vla
 proxmox_host_ring1_ip: "{{ network_data.ipv4_prefix }}.{{ proxmox_host_ring1_vlan }}.{{ proxmox_host_octet }}"
 proxmox_host_ceph_ip: "{{ network_data.ipv4_prefix }}.{{ proxmox_host_ceph_vlan }}.{{ proxmox_host_octet }}"
 
+# Restore-bridge ZFS pool on the boot disks' free space (ADR 0027); per-node
+# binding `bridge_disks` = the two boot-disk by-id paths, empty = no pool.
+proxmox_host_bridge_pool: bridge
+proxmox_host_bridge_part: 4
+proxmox_host_bridge_disks: "{{ proxmox_host_node.bridge_disks | default([]) }}"
+
 # Ceph pool + storage IDs (owned by tasks/ceph.yml; the fleet root's cutover
 # tfvars consume these as its primary_disk_storage / virtual_environment_storage)
 proxmox_host_ceph_pool: "ceph-rbd"
