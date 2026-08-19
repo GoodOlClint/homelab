@@ -61,6 +61,18 @@
   changed_when: false
   failed_when: false
 
+# A disk that is NOT yet an OSD may still carry old signatures (a previous
+# install, or the installer image that was dd'd onto it — ADR 0026), which makes
+# `pveceph osd create` refuse it. Only disks ceph-volume does not know are wiped.
+- name: Wipe stale signatures from disks that are not OSDs yet
+  ansible.builtin.command:
+    cmd: "wipefs -a {{ item.item }}"
+  changed_when: true
+  loop: "{{ _osd_check.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: item.rc != 0 and 'No valid Ceph' in (item.stdout ~ item.stderr)
+
 - name: Create OSDs
   ansible.builtin.command:
     cmd: "pveceph osd create {{ item.item }}"

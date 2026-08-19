@@ -11,7 +11,7 @@
     api_user: root@pam
     api_password: "{{ proxmox_host_api_password }}"
     validate_certs: false
-    master_ip: "{{ _master_ring0 }}"
+    master_ip: "{{ _master_join_ip }}"
     fingerprint: "{{ _join_fp }}"
     link0: "{{ hostvars[_joiner].proxmox_host_ring0_ip }}"
     link1: "{{ hostvars[_joiner].proxmox_host_ring1_ip }}"

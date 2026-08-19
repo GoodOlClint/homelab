@@ -15,18 +15,26 @@
 # is a quorate member. delegate_to: localhost keeps proxmoxer in the control
 # venv (PVE nodes are PEP-668 externally-managed python).
 
+# Role defaults are not visible through hostvars[other_host]; facts are. The
+# orchestrator below reads every node's addresses via hostvars.
+- name: Publish per-node addresses as facts
+  ansible.builtin.set_fact:
+    proxmox_host_mgmt_ip: "{{ proxmox_host_mgmt_ip }}"
+    proxmox_host_ring0_ip: "{{ proxmox_host_ring0_ip }}"
+    proxmox_host_ring1_ip: "{{ proxmox_host_ring1_ip }}"
+
 - name: Create the cluster and join all nodes (orchestrated, strictly serial)
   run_once: true
   vars:
     _master: "{{ groups['proxmox'][0] }}"
     _master_api: "{{ hostvars[_master].proxmox_host_mgmt_ip }}"
     # master_ip doubles as the module's idempotency key: on a re-run it is
-    # compared against /cluster/status node `ip` fields, which are the corosync
-    # ring0 addresses — so it must be the master's RING0 IP, not its mgmt IP,
-    # or every re-run fails "already part of a cluster" (mgmt==ring0 on the
-    # nested harness masked this; ADR 0023 amended). pveproxy binds ::, so the
-    # join reaches the master's API on the ring0 VLAN fine.
-    _master_ring0: "{{ hostvars[_master].proxmox_host_ring0_ip }}"
+    # compared against /cluster/status node `ip` fields, which PVE derives by
+    # resolving each nodename through /etc/hosts — the answer-file install
+    # writes the MGMT address there, so the key must be the master's mgmt IP
+    # (measured live 2026-08-19; the nested W4 harness, where mgmt==ring0,
+    # masked this). The rings are passed separately as link0/link1.
+    _master_join_ip: "{{ hostvars[_master].proxmox_host_mgmt_ip }}"
     # The fingerprint must be the MASTER's cert — select its nodelist entry,
     # never [0]: the list is unordered once the cluster has joined members.
     _join_fp: >-

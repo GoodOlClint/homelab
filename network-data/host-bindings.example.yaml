@@ -8,13 +8,13 @@
 #   install_gateway : VLAN 30 gateway (pfSense).
 #   root_ssh_key    : operator SSH public key (goes into the installed root account).
 #   boot_disks      : pve ONLY — the two 980 PRO 500G device names (boot mirror).
-#                     Omit for crete/crete2 (their template hard-codes both 1TB NVMe).
+#                     Omit for ms-01a/ms-01b (their template hard-codes both 1TB NVMe).
 #
 # WP2 (proxmox_host role) fields — the nicN names are only known AFTER the
 # answer-file install pins them (see terraform/hosts/README.md):
 #   install_nic : pinned nicN name of the install NIC (carries VLAN 31 ring0 tagged).
-#   ring1_nic   : carrier for the VLAN 32 ring1 sub-if — the i226-LM nicN name on
-#                 MS-01s; "vmbr0" on pve (single copper port, ring1 rides the bond).
+#   ring1_nic   : ring1 carrier — the i226-V nicN name on MS-01s (untagged on its
+#                 VLAN 32 access port); "vmbr0" on pve (ring1 rides the bond as a VLAN 32 sub-if).
 #   ceph_nic    : the ConnectX 25G port cabled to an SFP28 switch port — Ceph
 #                 cluster network, access/native VLAN 33, jumbo (ADR-0014).
 #                 The second ConnectX port stays uncabled (spare).
@@ -38,8 +38,8 @@ cluster:
   openobserve_syslog_target: "172.16.40.10"
 
 nodes:
-  crete:
-    fqdn: "crete.example.internal"
+  ms-01a:
+    fqdn: "ms-01a.example.internal"
     mailto: "root@example.internal"
     install_nic_mac: "aa:bb:cc:dd:ee:01"
     install_cidr: "172.16.30.103/24"
@@ -50,8 +50,8 @@ nodes:
     ceph_nic: "nic4"
     osd_disks: ["/dev/nvme1n1"]
 
-  crete2:
-    fqdn: "crete2.example.internal"
+  ms-01b:
+    fqdn: "ms-01b.example.internal"
     mailto: "root@example.internal"
     install_nic_mac: "aa:bb:cc:dd:ee:02"
     install_cidr: "172.16.30.106/24"

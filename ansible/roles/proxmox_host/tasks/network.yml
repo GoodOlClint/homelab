@@ -45,3 +45,28 @@
     delay: 5
     timeout: 120
   when: _install_nic_stripped is changed or _ifaces_dropin is changed
+
+# LLDP so the UniFi controller can label switch ports with the node + NIC
+# behind them (client-list names still come from DHCP/alias — LLDP is
+# port-level only). Default lldpd config transmits on every physical port.
+- name: Install lldpd
+  ansible.builtin.apt:
+    name: lldpd
+    state: present
+
+- name: Enable lldpd
+  ansible.builtin.service:
+    name: lldpd
+    state: started
+    enabled: true
+
+# The X710 firmware runs its own LLDP agent that consumes LLDP frames before
+# the OS sees them, silently blinding lldpd on exactly the bond ports. The
+# priv-flag does not survive a reboot, so a udev rule re-applies it whenever
+# an i40e port appears (no-op on nodes without i40e NICs).
+- name: Disable the i40e firmware LLDP agent via udev
+  ansible.builtin.copy:
+    dest: /etc/udev/rules.d/80-i40e-fw-lldp.rules
+    mode: "0644"
+    content: |
+      ACTION=="add", SUBSYSTEM=="net", DRIVERS=="i40e", RUN+="/usr/sbin/ethtool --set-priv-flags $name disable-fw-lldp on"

@@ -34,6 +34,50 @@
   run_once: true
   when: groups['proxmox'] | length == 2
 
+# `pvecm qdevice setup` ssh-copy-ids root@qnetd interactively and aborts if
+# corosync-qnetd is missing there — both are hands-off when prepared here.
+- name: Install corosync-qnetd on the QDevice host
+  ansible.builtin.apt:
+    name: corosync-qnetd
+    state: present
+  delegate_to: "{{ proxmox_host_qdevice_addr }}"
+  vars:
+    ansible_user: root
+  run_once: true
+  when:
+    - groups['proxmox'] | length == 2
+    - proxmox_host_qdevice_addr | length > 0
+
+- name: Read each node's root SSH public key
+  ansible.builtin.slurp:
+    src: /root/.ssh/id_rsa.pub
+  register: _node_root_pub
+  when:
+    - groups['proxmox'] | length == 2
+    - proxmox_host_qdevice_addr | length > 0
+
+- name: Authorize the node root keys on the QDevice host
+  ansible.posix.authorized_key:
+    user: root
+    key: "{{ _node_root_pub.content | b64decode }}"
+  delegate_to: "{{ proxmox_host_qdevice_addr }}"
+  vars:
+    ansible_user: root
+  when:
+    - groups['proxmox'] | length == 2
+    - proxmox_host_qdevice_addr | length > 0
+
+# pvecm's ssh-copy-id has no tty under Ansible: an unknown host key hangs forever.
+- name: Trust the QDevice host key on each node
+  ansible.builtin.known_hosts:
+    name: "{{ proxmox_host_qdevice_addr }}"
+    key: >-
+      {{ lookup('ansible.builtin.pipe',
+                'ssh-keyscan -T 5 -t ed25519 ' ~ proxmox_host_qdevice_addr ~ ' 2>/dev/null | grep -v "^#"') }}
+  when:
+    - groups['proxmox'] | length == 2
+    - proxmox_host_qdevice_addr | length > 0
+
 - name: Set up the QDevice (2-node cluster only)
   ansible.builtin.command:
     cmd: "pvecm qdevice setup {{ proxmox_host_qdevice_addr }} -f"

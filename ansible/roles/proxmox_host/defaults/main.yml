@@ -21,6 +21,8 @@ proxmox_host_ceph_mtu: "{{ network_data.vlans.ceph.mtu | default(9000) }}"
 proxmox_host_ceph_public_network: "{{ network_data.ipv4_prefix }}.{{ proxmox_host_storage_vlan }}.0/24"
 proxmox_host_ceph_cluster_network: "{{ network_data.ipv4_prefix }}.{{ proxmox_host_ceph_vlan }}.0/24"
 proxmox_host_mgr_count: 2
+# Ceph release whose repo the node tracks (PVE 9 ships squid).
+proxmox_host_ceph_release: squid
 
 # Cluster-wide bindings
 proxmox_host_vip_cidr: "{{ host_bindings.cluster.vip_cidr }}"
@@ -68,3 +70,6 @@ proxmox_host_netconsole_port: 5515
 # must match the module's media_idmap_uid/media_idmap_size)
 proxmox_host_media_idmap_start: 2000
 proxmox_host_media_idmap_size: 11
+
+# Resolver search domain set via pvesh (repos.yml); fleet internal zone.
+proxmox_host_dns_search: "{{ network_data.domain_suffix }}"

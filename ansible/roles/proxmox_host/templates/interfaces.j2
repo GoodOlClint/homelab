@@ -12,9 +12,13 @@ auto {{ proxmox_host_node.install_nic }}.{{ proxmox_host_ring0_vlan }}
 iface {{ proxmox_host_node.install_nic }}.{{ proxmox_host_ring0_vlan }} inet static
     address {{ proxmox_host_ring0_ip }}/24
 
-# Corosync ring1 — VLAN {{ proxmox_host_ring1_vlan }} on {{ proxmox_host_node.ring1_nic }}
-auto {{ proxmox_host_node.ring1_nic }}.{{ proxmox_host_ring1_vlan }}
-iface {{ proxmox_host_node.ring1_nic }}.{{ proxmox_host_ring1_vlan }} inet static
+# Corosync ring1 — VLAN {{ proxmox_host_ring1_vlan }}. A dedicated NIC sits on an
+# access port (untagged, like the ceph link); only a bond-carried ring1 (pve:
+# ring1_nic = vmbr0) rides a tagged sub-if over the trunk.
+{% set _r1 = proxmox_host_node.ring1_nic %}
+{% set _r1_iface = (_r1 ~ '.' ~ proxmox_host_ring1_vlan) if _r1.startswith('vmbr') else _r1 %}
+auto {{ _r1_iface }}
+iface {{ _r1_iface }} inet static
     address {{ proxmox_host_ring1_ip }}/24
 
 # Ceph cluster network — 25G SFP28 to the aggregation switch, access/native

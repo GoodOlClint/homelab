@@ -51,6 +51,12 @@
         group: root
       notify: apply sysctl
 
+    - name: Retire the PXE first-boot console-quiet sysctl (netconsole policy owns printk now)
+      ansible.builtin.file:
+        path: /etc/sysctl.d/90-console-quiet-pre-wp2.conf
+        state: absent
+      notify: apply sysctl
+
     - name: Deploy netconsole start script
       ansible.builtin.template:
         src: netconsole-start.sh.j2
