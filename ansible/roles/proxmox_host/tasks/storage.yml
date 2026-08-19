@@ -1,0 +1,24 @@
+---
+# Cluster storage entries the hosts plane owns (B3: storage defs are Ansible's;
+# bpg has no storage resource). Ceph/PBS/bridge entries live in their own task
+# files; this one is the NAS NFS export (ISO/templates/snippets + the PBS guest's
+# own vzdump target). Gated on the binding: no export bound, no entry.
+
+- name: Check PVE storage entries
+  ansible.builtin.command:
+    cmd: pvesm status
+  register: _storage_pvesm
+  changed_when: false
+  run_once: true
+
+- name: Register the NAS NFS export as PVE storage
+  ansible.builtin.command:
+    cmd: >-
+      pvesm add nfs {{ proxmox_host_nas_nfs_id }}
+      --server {{ proxmox_host_nas_nfs.split(':')[0] }}
+      --export {{ proxmox_host_nas_nfs.split(':')[1] }}
+      --content vztmpl,iso,import,snippets,backup
+      --prune-backups keep-all=1
+  run_once: true
+  changed_when: true
+  when: proxmox_host_nas_nfs_id not in (_storage_pvesm.stdout_lines | map('split') | map('first') | list)

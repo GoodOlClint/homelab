@@ -57,6 +57,10 @@ proxmox_host_bridge_pool: bridge
 proxmox_host_bridge_part: 4
 proxmox_host_bridge_disks: "{{ proxmox_host_node.bridge_disks | default([]) }}"
 
+# NAS NFS export registered cluster-wide as PVE storage (binding: "<server>:<export>").
+proxmox_host_nas_nfs_id: nas-nfs
+proxmox_host_nas_nfs: "{{ host_bindings.cluster.nas_nfs | default('') }}"
+
 # Ceph pool + storage IDs (owned by tasks/ceph.yml; the fleet root's cutover
 # tfvars consume these as its primary_disk_storage / virtual_environment_storage)
 proxmox_host_ceph_pool: "ceph-rbd"
