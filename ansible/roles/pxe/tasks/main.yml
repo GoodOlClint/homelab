@@ -155,13 +155,53 @@
 # 2026-08-19), so the signed shim→GRUB chain above is kept for re-validation
 # while installs ride iPXE. snponly uses the firmware's own NIC driver; ipxe.efi
 # carries native drivers — pfSense hands out snponly.efi.
-- name: iPXE binaries on the TFTP root
+- name: Unsigned iPXE binaries on the TFTP root (SB-off installs)
   ansible.builtin.copy:
     src: "/usr/lib/ipxe/{{ item }}"
     dest: "{{ pxe_tftp_dir }}/{{ item }}"
     remote_src: true
     mode: "0644"
   loop: [snponly.efi, ipxe.efi]
+  when: not pxe_secure_boot
+
+# Secure Boot transport (ipxe.org/secboot): the MS-signed shim + iPXE-CA-signed
+# iPXE. shimx64.efi loads its second stage by filename, so it is installed twice
+# (snponly-shim.efi -> snponly.efi, ipxe-shim.efi -> ipxe.efi). The signed iPXE
+# also boots fine with SB off, so it replaces the unsigned pair outright.
+- name: Fetch + install signed iPXE Secure Boot binaries
+  when: pxe_secure_boot
+  block:
+    - name: Download the signed iPXE release archive
+      ansible.builtin.get_url:
+        url: "{{ pxe_ipxe_signed_url }}"
+        dest: "{{ pxe_base_dir }}/build/ipxeboot.tar.gz"
+        mode: "0644"
+
+    - name: Extract the x86_64-sb signed binaries
+      ansible.builtin.unarchive:
+        src: "{{ pxe_base_dir }}/build/ipxeboot.tar.gz"
+        dest: "{{ pxe_base_dir }}/build"
+        remote_src: true
+        include:
+          - ipxeboot/x86_64-sb/shimx64.efi
+          - ipxeboot/x86_64-sb/snponly.efi
+          - ipxeboot/x86_64-sb/ipxe.efi
+
+    - name: Install signed iPXE (second stage, by name)
+      ansible.builtin.copy:
+        src: "{{ pxe_base_dir }}/build/ipxeboot/x86_64-sb/{{ item }}"
+        dest: "{{ pxe_tftp_dir }}/{{ item }}"
+        remote_src: true
+        mode: "0644"
+      loop: [snponly.efi, ipxe.efi]
+
+    - name: Install the MS-signed shim under both loader names
+      ansible.builtin.copy:
+        src: "{{ pxe_base_dir }}/build/ipxeboot/x86_64-sb/shimx64.efi"
+        dest: "{{ pxe_tftp_dir }}/{{ item }}"
+        remote_src: true
+        mode: "0644"
+      loop: [snponly-shim.efi, ipxe-shim.efi]
 
 - name: First-boot hook served to the installer (answer [first-boot] from-url)
   ansible.builtin.template:

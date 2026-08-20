@@ -26,6 +26,12 @@ Bare-metal PVE nodes install over **PXE** served from a **fleet guest** (`pxe`, 
 - **A bare-metal control plane (Tinkerbell, MAAS, Metal³).** Rejected in the July research: they *are* PXE + answer-file workflows with a database in front; three nodes do not justify one.
 - **Per-node baked ISOs over PXE (`--fetch-from iso`).** One image per node and a rebuild on every bindings change; the HTTP-fetch mode gives one generic image and per-node answers for free.
 
+## Signed-iPXE Secure Boot test (2026-08-20, msi)
+
+Tested the ipxe.org/secboot signed chain to see if nodes could PXE-install with Secure Boot ON, un-parking the transport half. Result: the **transport works** — iPXE's Microsoft-signed shim (`snponly-shim.efi`) and the iPXE-CA-signed `snponly.efi` load and run under SB, and iPXE (SNP driver, no efinet issue) fetches the kernel+initrd over HTTP. But **the kernel handoff is blocked**: iPXE-under-SB verifies the images it loads, and the PVE installer kernel is signed by the *Proxmox* CA — trusted by neither the iPXE CA nor the Microsoft db — so it fails with `Verification failed: Security Policy Violation` (`0x7f04819a`). Bridging it would require enrolling a custom MOK and re-signing the Proxmox kernel per node, which defeats the hands-off install for a one-shot operation.
+
+Decision: **SB-on install is not pursued.** Installs stay SB-off (unsigned or signed iPXE, either boots with SB off); Secure Boot is applied *after* install via the `proxmox-boot-tool init <esp> grub` conversion (proven on ms-01a/b). The `pxe` role keeps a `pxe_secure_boot` toggle (default false) that serves the signed chain, retained for re-test if the trust situation ever changes.
+
 ## Install safety gate (added 2026-08-19)
 
 Once the old fleet was restored onto the cluster, an accidental re-PXE of a live node became catastrophic (the unattended installer wipes the boot disks). Two independent guards, both defaulting safe:

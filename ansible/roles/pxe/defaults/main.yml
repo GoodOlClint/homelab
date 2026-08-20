@@ -27,3 +27,20 @@ pxe_proxmox_key_url: "https://enterprise.proxmox.com/debian/proxmox-archive-keyr
 pxe_answer_src_glob: "{{ playbook_dir }}/../../terraform/hosts/answer-*.toml"
 
 pxe_netbootxyz_url: "https://boot.netboot.xyz/ipxe/netboot.xyz.efi"
+
+# Secure Boot for the INSTALL transport (ipxe.org/secboot): serve iPXE's
+# MS-signed shim (shimx64.efi) + iPXE-CA-signed snponly.efi so a node can PXE
+# with Secure Boot ON. The shim loads the second stage by its own filename, so
+# shimx64.efi copied to snponly-shim.efi loads snponly.efi. TEST (2026-08-20):
+# proves whether iPXE-under-SB will chain the Proxmox-signed installer kernel.
+# false = the unsigned Debian snponly.efi/ipxe.efi (SB-off installs).
+# TEST RESULT 2026-08-20 (msi): the signed shim+iPXE load fine under SB, but
+# iPXE-under-SB then verifies the chained kernel/initrd and REJECTS the
+# Proxmox-signed PVE installer (0x7f04819a "Security Policy Violation") — the
+# Proxmox CA is not trusted by the shim (iPXE CA + MS db). Bridging it needs a
+# per-node MOK + a re-signed kernel, not worth it for a one-shot install. So
+# installs stay SB-off; Secure Boot is applied post-install (proxmox-boot-tool
+# init <esp> grub, ADR 0026). Default false; the signed binaries also boot SB-off
+# if you want to keep them (they're strictly a superset).
+pxe_secure_boot: false
+pxe_ipxe_signed_url: "https://github.com/ipxe/ipxe/releases/latest/download/ipxeboot.tar.gz"
