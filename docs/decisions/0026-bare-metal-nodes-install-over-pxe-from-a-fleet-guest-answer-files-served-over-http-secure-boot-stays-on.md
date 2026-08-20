@@ -7,6 +7,9 @@
 
 ## Context
 
+> **Amended 2026-08-19 — the title is now aspirational: Secure Boot is OFF, not on.** TWO independent SB gaps, do not conflate them: (1) *PXE transport* — GRUB's `efinet` can't transmit on the i226, so the vendor-signed shim→GRUB chain is parked and installs ride unsigned iPXE with SB off (iPXE offers an MS-trusted signed shim — ipxe.org/secboot — which works on the i226 and could un-park this, but the chained PVE kernel would still need its Proxmox CA enrolled as a MOK per node). (2) *Installed-system boot* — this is what bricked ms-01b when SB was re-enabled: `proxmox-boot-tool` selects the on-disk bootloader at install time by SB state, so an SB-off install lands **systemd-boot** (Proxmox-unsigned), not shim+grub. Verified: host ESP holds only `systemd-bootx64.efi` while `shim-signed`/`grub-efi-amd64-signed` are installed-but-unused. Gap (2) is FIXABLE in place, no reinstall — the [Proxmox Host_Bootloader](https://pve.proxmox.com/wiki/Host_Bootloader) procedure: booted SB-off, run `proxmox-boot-tool init /dev/<esp> grub` for each ESP (deploys the Proxmox-signed shim+grub, keeps systemd-boot as fallback), verify `efibootmgr -v` shows `\EFI\proxmox\shimx64.efi`, THEN enable Secure Boot in BIOS. Runs entirely under SB-off, so no chicken-and-egg. To be proven on the disposable **msi** install, then optionally codified as a post-install task so nodes come out SB-capable regardless of the PXE transport. Until proven on our hardware, SB stays OFF on all PVE nodes; never re-enable it on a systemd-boot node.
+
+
 WP1 installs PVE nodes from a per-node answer-file ISO (`make node-iso`) that has to reach the box somehow. With the rack closed up the only remote medium was AMT IDE-R, and it was measured on ms-01b: it boots only with Secure Boot disabled, streams at roughly 1–2 MB/s through the ME (boot alone over a minute, the install still at 70 % after four hours), and the media session lives and dies with the MeshCommander KVM session. The July research had already concluded that the intended end state is DHCP + HTTP → iPXE → PVE kernel/initrd → answer file over HTTP, with AMT and JetKVM reduced to power and console — but WP1 shipped the ISO path as the shortcut. Three more bare-metal installs are ahead (ms-01a, msi at Day 2, worklab), plus rescue boots over the life of the cluster.
 
 ## Decision
@@ -22,6 +25,14 @@ Bare-metal PVE nodes install over **PXE** served from a **fleet guest** (`pxe`, 
 - **Turning Secure Boot off permanently** (this ADR's first draft). Unnecessary once the vendor-signed netboot chain was confirmed (`sbverify` on the ISO kernel; `grubnetx64.efi.signed` present in `grub-efi-amd64-signed`).
 - **A bare-metal control plane (Tinkerbell, MAAS, Metal³).** Rejected in the July research: they *are* PXE + answer-file workflows with a database in front; three nodes do not justify one.
 - **Per-node baked ISOs over PXE (`--fetch-from iso`).** One image per node and a rebuild on every bindings change; the HTTP-fetch mode gives one generic image and per-node answers for free.
+
+## Install safety gate (added 2026-08-19)
+
+Once the old fleet was restored onto the cluster, an accidental re-PXE of a live node became catastrophic (the unattended installer wipes the boot disks). Two independent guards, both defaulting safe:
+- **`boot.ipxe` defaults to local-disk boot**, not the installer — a stray PXE (boot-order fallthrough, leftover BootNext, mis-clicked *Reset to PXE*) boots the OS. Install is a deliberate console keypress (`i`).
+- **The answer server refuses unless the node is armed.** `make node-arm NODE=<n>` writes an auto-expiring flag (`answers/armed/<n>`, default 30 min); unarmed → 404 → the unattended installer has no answer file and does not wipe. `make node-disarm` / `make node-arm-status` manage it. Arming is the operator's explicit wipe confirm.
+
+Trade-off accepted: installs are no longer fully hands-off at the console (the `i` keypress + arm). A future refinement could let iPXE auto-select install only when the node is armed (arm-check over HTTP), restoring hands-off while keeping the gate.
 
 ## Consequences
 

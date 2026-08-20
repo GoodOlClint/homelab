@@ -36,7 +36,7 @@ Rule on the INFRASTRUCTURE interface (above any block): source `INFRASTRUCTURE n
 
 ## 4. Node side (once per node)
 
-BIOS: **Secure Boot OFF for the install session** (iPXE is unsigned; re-enable after — the installed PVE boots signed), UEFI network stack on, PXE on the install NIC enabled, boot order local disk first. Install = AMT *Reset to PXE* (MeshCommander power action) — one shot, no media session.
+BIOS: **Secure Boot OFF, and it STAYS off** (iPXE is unsigned AND the installed PVE boots via systemd-boot, which is not enrolled in the firmware SB db — re-enabling SB bricks boot; recovery is turning SB back off in BIOS). UEFI network stack on, PXE on the install NIC enabled, boot order local disk first. Install = AMT *Reset to PXE* (MeshCommander power action) — one shot, no media session.
 
 ## Verification (from any VLAN 30 host, e.g. a bench node)
 

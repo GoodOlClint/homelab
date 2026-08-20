@@ -41,16 +41,22 @@ i226 (ring1, WP2) — so a re-apply can never drop the link Terraform is talking
    installer over iPXE (the signed shim → GRUB chain is parked — GRUB's efinet
    cannot transmit on the i226, see the plan) and answers each node by its
    install-NIC MAC. pfSense DHCP values:
-   [docs/pfsense-netboot.md](../../docs/pfsense-netboot.md). Then AMT
-   *Reset to PXE* on the node — or, from a running node, `efibootmgr -n <the
+   [docs/pfsense-netboot.md](../../docs/pfsense-netboot.md).
+   **Arm the node first — this is the wipe confirm:** `make node-arm NODE=<node>`
+   (the answer server 404s until armed, so an unarmed PXE never wipes a disk;
+   auto-expires after 30 min, `make node-disarm` to cancel). Then AMT
+   *Reset to PXE* on the node (at the console/KVM, press `i` — iPXE defaults to
+   local-disk boot so a stray PXE can't auto-install) — or, from a running node, `efibootmgr -n <the
    I226-LM IPv4 PXE entry> && systemctl reboot` (the warm path keeps the PHY at
    2.5G; a cold firmware PXE trains at 10 Mb/s). Unattended, no media session.
    It comes up on its VLAN 30 mgmt IP with `nicN` names pinned (incl. the ConnectX).
    The answer file's `[first-boot]` hook (served by the pxe guest) pins NIC
    names (`pve-network-interface-pinning generate` — the 9.2 auto-installer does
    not), quiets the console, and reboots once, so the node needs **no hand
-   steps** before step 4. Secure Boot must be OFF for the PXE session (iPXE is
-   unsigned — see ADR 0026) and re-enabled afterwards by hand.
+   steps** before step 4. Secure Boot must be OFF and STAYS off (iPXE is
+   unsigned and the installed systemd-boot is not enrolled in the firmware SB
+   db, so re-enabling SB bricks boot — recovery is disabling SB in BIOS; see
+   ADR 0026).
    *Fallback when the network itself is down:* step 2's ISO over AMT IDE-R
    (~1–2 MB/s — measured 2026-08-18); without the pxe guest the `[first-boot]`
    section is dropped at bake time, so run the pinning command by hand.
