@@ -30,9 +30,9 @@ locals {
     },
     {
       name         = "adguard"
-      vm_id        = 102
-      vlans        = ["vlan10", "vlan40"]
-      ip_offset    = 53 # .53 on service VLANs
+      vm_id        = 202
+      vlans        = ["vlan40"]
+      ip_offset    = 54 # scratch instance (VMID 202) — the live resolver is the restored 102 at .53; final adguard = LXC pair, later
       ipv6_offset  = 53 # ::35 on service VLANs
       ipv6_mode    = "static"
       cpu_cores    = 4
@@ -148,8 +148,8 @@ locals {
     },
     {
       name         = "homepage"
-      vm_id        = 111
-      vlans        = ["vlan10", "vlan40"]
+      vm_id        = 211 # old 111 + 100 (ADR 0028)
+      vlans        = ["vlan40"]
       ip_offset    = 111
       cpu_cores    = 2
       memory_mb    = 2048

@@ -44,7 +44,7 @@ locals {
   # VNETs that need SDN management (have a bridge, not WireGuard)
   managed_vnets = {
     for key, v in local.network_data.vlans : key => v
-    if try(v.bridge, null) != null && !try(v.is_wireguard, false)
+    if try(v.bridge, null) != null && try(v.sdn_zone, null) != null && !try(v.is_wireguard, false)
   }
 
   # Typed maps for conditional for_each (avoids "inconsistent conditional result types" error)

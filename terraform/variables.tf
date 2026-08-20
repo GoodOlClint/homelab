@@ -125,6 +125,12 @@ variable "proxmox_nodes" {
   default     = null
 }
 
+variable "proxmox_node_ssh_addresses" {
+  description = "Node name → SSH address the provider uses for file uploads (mgmt-plane address, not whatever the node lists first)"
+  type        = map(string)
+  default     = {}
+}
+
 variable "unprotect" {
   type        = bool
   description = "Override all VM protection flags to false (used by make clean FORCE=true)"

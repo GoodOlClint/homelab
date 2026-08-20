@@ -28,6 +28,15 @@ provider "proxmox" {
   insecure = true # Allow self-signed certificates for local lab
   ssh {
     agent = true
+    # bpg otherwise resolves a node's SSH address from its first interface, which
+    # on the MS-01s is the storage VLAN — unreachable from the operator plane.
+    dynamic "node" {
+      for_each = var.proxmox_node_ssh_addresses
+      content {
+        name    = node.key
+        address = node.value
+      }
+    }
   }
 }
 
