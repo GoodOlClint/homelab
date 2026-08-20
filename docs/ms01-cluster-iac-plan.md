@@ -147,7 +147,7 @@ Placement per the okf doc: **VMs** — infisical (protected), pfsense-test, gith
 
 ## Greenfield-replace runbook (Day 3+, [ADR 0028](decisions/0028-greenfield-replace-builds-final-form-guests-beside-the-restored-copies-under-vmid-old-100-after-pruning-the-fleet-state-of-every-proxmox-resource.md))
 
-Order follows `make bootstrap`: adguard → infisical → dns → unifi → rest. Retiring guests (107 nvidia-licensing, 110 lancache, 112 minio) are not rebuilt.
+Order: **homepage first** (stateless, cosmetic outage — the proving guest, DONE 2026-08-20 as VMID 211), then infisical → dns → unifi → rest. **adguard is deferred** to its end-state shape — an LXC pair, one per MS-01 (design matrix) — because the fleet resolver is mission-critical AND the operator's own resolver: stopping 102 for the swap took down DNS on the Mac, so `terraform init` itself failed mid-rebuild (2026-08-20). A scratch final-form adguard VM (202, `.40.54`) stays up as the rehearsal artifact; the restored 102 at `.40.53` remains live. Retiring guests (107 nvidia-licensing, 110 lancache, 112 minio) are not rebuilt.
 
 **One-time (with the first guest):**
 1. Archive `terraform/terraform.tfstate` → `docs/pre-migration-state/terraform.tfstate.pre-cutover-<date>` (gitignored); `terraform state rm` every `proxmox_*` resource. Vultr/Cloudflare stay.
@@ -156,9 +156,9 @@ Order follows `make bootstrap`: adguard → infisical → dns → unifi → rest
 
 **Per guest:**
 1. `vm-configs.tf`: `vm_id` = old+100, `vlans = ["vlan40"]` (PBS keeps vlan20), data volume per the matrix; keep `ip_offset`.
-2. `make build <guest>` (targeted — NEVER a bare `terraform apply`/`make apply` while a restored copy runs). Fixed-IP guests (adguard): first at a scratch `ip_offset`, verify, then stop the copy and `make rebuild` at the real offset.
+2. `make build <guest>` (targeted — NEVER a bare `terraform apply`/`make apply` while a restored copy runs). Stop the restored copy FIRST when the guest keeps its `ip_offset` (the two cannot share the address); a guest whose address the operator's own workstation depends on (the resolver) needs a partner instance serving before its copy is stopped — that is the LXC-pair design, not a scratch-offset dance.
 3. Seed/restore state per the Stateful-data checklist; verify the service from a client.
-4. Restored copy: `qm shutdown <old>` + `qm set <old> --onboot 0`. Never destroy here — decommission sweep after a week.
+4. Restored copy: `qm set <old> --onboot 0` + `qm shutdown <old>`. Never destroy here — decommission sweep after a week. Repoint the live AdGuard rewrite for the guest (`<guest>.core` → services address) on 102 until adguard itself is replaced.
 5. `qm list` on all three nodes: no other VMID changed state.
 
 ## Stateful-data checklist (decide per service before its rebuild)
