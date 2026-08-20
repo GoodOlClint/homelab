@@ -142,8 +142,24 @@ Placement per the okf doc: **VMs** — infisical (protected), pfsense-test, gith
 | Day 1 | Wipe crete/crete2 → answer-file install → `hosts/` apply → `proxmox_host` role → 2-node cluster (+ temp QDevice). Verify DoD gates. |
 | Day 1–2 | **Restore-bridge ([ADR 0024](decisions/0024-cutover-rides-a-restore-bridge-restore-the-old-fleet-onto-the-2-node-pve-9-cluster-rebuild-pve-early.md), replaces the greenfield-backbone-first order):** final PBS backup pass on pve, then restore the old fleet as-is onto MS-01 local ZFS (retiring VMs excluded — lancache etc.), stopping each old VM as its restored copy comes up. Verify the restored fleet runs. Prereqs: vlan10/40 live on the MS-01 trunks (WP5); actual-usage capacity check vs MS-01 free ZFS. |
 | Day 2 | **DONE 2026-08-20** — msi (ex-pve) PXE-installed, joined as node 3, QDevice dropped, Ceph bootstrapped HEALTH_OK (4 OSDs across 3 hosts, size=3), VIP live. msi runs turbo-capped on the RMA-pending 14900K. Original notes: Nothing left needed on pve → wipe pve (25G NIC **already seated** — verified 2026-08-11; GPU stays), answer-file install, join cluster, drop QDevice, Ceph bootstrap + pool, validate the 25G ceph VLAN/`HEALTH_OK`. Keepalived VIP up; repoint endpoint at it. pve ring quirk: ONE copper NIC (I225-V `mgmt0`) → ring0 on it (48-port, VLAN 31 tagged over native 30); **ring1 = VLAN 32 subif on the bond** (Pro-Agg trunk carries it) — rings deliberately cross different switches. |
-| Day 2–3 | Move interim/restored guests' disks → Ceph. Then greenfield-replace at leisure: `make bootstrap` (adguard + infisical), `make infisical-seed`, dns LXC, unifi VM + cloud re-import, rest of the fleet in final form (WP3/WP4). Stateful restores per checklist. |
+| Day 2–3 | **Disk move DONE 2026-08-20** — all 16 restored guests live-moved bridge → `ceph-rbd` (`qm move-disk` + `qm set --ide2 ceph-rbd:cloudinit`, ~6 min total, no guest outage), `bridge` storage + pools destroyed, Crucial `-part4` added as OSDs (8 total, HEALTH_OK; partitions had to be retyped `BF01`→`8300` first — pveceph treats a ZFS-typed partition as in use). Remaining: greenfield-replace at leisure per the runbook below (ADR 0028): `make bootstrap` (adguard + infisical), `make infisical-seed`, dns LXC, unifi VM + cloud re-import, rest of the fleet in final form (WP3/WP4). Stateful restores per checklist. |
 | Day 3+ | LLM VM (vfio passthrough, pinned), HA resources, PDM VM, monitoring per-node, PKI + certs (WP8), repo scrub + guard (WP6), docs (WP7), decommission sweep. |
+
+## Greenfield-replace runbook (Day 3+, [ADR 0028](decisions/0028-greenfield-replace-builds-final-form-guests-beside-the-restored-copies-under-vmid-old-100-after-pruning-the-fleet-state-of-every-proxmox-resource.md))
+
+Order follows `make bootstrap`: adguard → infisical → dns → unifi → rest. Retiring guests (107 nvidia-licensing, 110 lancache, 112 minio) are not rebuilt.
+
+**One-time (with the first guest):**
+1. Archive `terraform/terraform.tfstate` → `docs/pre-migration-state/terraform.tfstate.pre-cutover-<date>` (gitignored); `terraform state rm` every `proxmox_*` resource. Vultr/Cloudflare stay.
+2. `vars.auto.tfvars`: endpoint → VIP, `virtual_environment_node` → ms-01a, `virtual_environment_storage` → `cephfs`, `primary/secondary_disk_storage` → `ceph-rbd`, `proxmox_nodes` → the three nodes, `guest_access_plane = "services"`. `vlans.yaml` `sdn_zones.*.bridge` → `vmbr0` (Storage zone MTU 9000 — the bond is jumbo).
+3. `backup_jobs` re-authored for new VMIDs as replacements land (follow-on; old jobs died with the old cluster).
+
+**Per guest:**
+1. `vm-configs.tf`: `vm_id` = old+100, `vlans = ["vlan40"]` (PBS keeps vlan20), data volume per the matrix; keep `ip_offset`.
+2. `make build <guest>` (targeted — NEVER a bare `terraform apply`/`make apply` while a restored copy runs). Fixed-IP guests (adguard): first at a scratch `ip_offset`, verify, then stop the copy and `make rebuild` at the real offset.
+3. Seed/restore state per the Stateful-data checklist; verify the service from a client.
+4. Restored copy: `qm shutdown <old>` + `qm set <old> --onboot 0`. Never destroy here — decommission sweep after a week.
+5. `qm list` on all three nodes: no other VMID changed state.
 
 ## Stateful-data checklist (decide per service before its rebuild)
 
