@@ -370,6 +370,23 @@ node-iso:
 node-answers:
 	@for n in $$(.venv/bin/python3 -c "import yaml;print(' '.join(yaml.safe_load(open('network-data/local/host-bindings.yaml'))['nodes']))"); do bash scripts/bake-answer.sh $$n || exit 1; done
 
+# --- PXE install safety gate (ADR 0026) --------------------------------------
+# A node will ONLY receive its answer file (and thus be wiped+installed) while it
+# is ARMED. Default is disarmed, so an accidental PXE boot never erases a host.
+# Arm deliberately right before an install; it auto-expires after ARM_MINUTES.
+ARM_MINUTES ?= 30
+node-arm:
+	@test -n "$(NODE)" || { echo "ERROR: set NODE=<ms-01a|ms-01b|msi>"; exit 1; }
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible pxe -i ansible/inventory/vms.yaml -b -o -m ansible.builtin.shell 		-a "mkdir -p /srv/pxe/answers/armed && date -d '+$(ARM_MINUTES) min' +%s > /srv/pxe/answers/armed/$(NODE)" >/dev/null
+	@echo "ARMED $(NODE) for install for $(ARM_MINUTES) min. It will be WIPED on its next PXE boot. 'make node-disarm NODE=$(NODE)' to cancel."
+
+node-disarm:
+	@test -n "$(NODE)" || { echo "ERROR: set NODE=<node>"; exit 1; }
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible pxe -i ansible/inventory/vms.yaml -b -o -m ansible.builtin.file 		-a "path=/srv/pxe/answers/armed/$(NODE) state=absent" >/dev/null && echo "DISARMED $(NODE)."
+
+node-arm-status:
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible pxe -i ansible/inventory/vms.yaml -b -m ansible.builtin.shell -a 'set -- /srv/pxe/answers/armed/*; if [ -e "$$1" ]; then for f; do echo "$$(basename "$$f"): armed until $$(date -d @"$$(cat "$$f")" 2>/dev/null)"; done; else echo "(no nodes armed)"; fi'
+
 # One hand-off step: create terraform@pve token on a fresh node. make node-bootstrap IP=<node-vlan30-ip>
 node-bootstrap:
 	@bash scripts/node-bootstrap.sh $(IP)

@@ -6,10 +6,14 @@
 import json
 import os
 import sys
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ANSWER_DIR = "{{ pxe_answer_dir }}"
 MAC_MAP = os.path.join(ANSWER_DIR, "mac-map.json")
+# A node is installable only while an unexpired arm flag exists (make node-arm).
+# Default state is DISARMED -> an accidental PXE gets 404 and never wipes a disk.
+ARMED_DIR = os.path.join(ANSWER_DIR, "armed")
 LISTEN = ("127.0.0.1", 8080)
 
 
@@ -35,6 +39,15 @@ def match(payload, mac_map):
     return None
 
 
+def armed(node, now=None):
+    """True iff answers/armed/<node> exists and its epoch expiry is in the future."""
+    try:
+        with open(os.path.join(ARMED_DIR, node)) as f:
+            return int(f.read().strip() or 0) > (now if now is not None else time.time())
+    except (OSError, ValueError):
+        return False
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path.rstrip("/") != "/answer":
@@ -48,6 +61,12 @@ class Handler(BaseHTTPRequestHandler):
         if not node:
             self.log_message("no answer for macs %s", sorted(macs_from(payload)))
             return self._send(404, "no answer file for this host\n")
+        if not armed(node):
+            self.log_message(
+                "REFUSED install for %s: NOT ARMED (no disk wipe). macs=%s. "
+                "Arm deliberately with: make node-arm NODE=%s",
+                node, sorted(macs_from(payload)), node)
+            return self._send(404, "host not armed for install\n")
         path = os.path.join(ANSWER_DIR, f"{node}.toml")
         if not os.path.isfile(path):
             self.log_message("node %s matched but %s missing", node, path)
@@ -76,6 +95,14 @@ def _selfcheck():
     assert match({"network_interfaces": [{"mac": known.upper()}]}, m) == "n1"
     assert match({"network_interfaces": [{"mac": other}]}, m) is None
     assert match({}, m) is None
+    import tempfile
+    global ARMED_DIR
+    d = tempfile.mkdtemp(); ARMED_DIR = d
+    assert armed("n1") is False                                   # no flag -> disarmed
+    open(os.path.join(d, "n1"), "w").write(str(int(time.time()) + 600))
+    assert armed("n1") is True                                    # unexpired -> armed
+    open(os.path.join(d, "n1"), "w").write(str(int(time.time()) - 1))
+    assert armed("n1") is False                                   # expired -> disarmed
     print("selfcheck ok")
 
 

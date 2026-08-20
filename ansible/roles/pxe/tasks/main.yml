@@ -76,6 +76,14 @@
     state: directory
     mode: "0750"
 
+# Per-node install arm flags live here (make node-arm). Default state is empty =
+# DISARMED, so a fresh deploy can never auto-wipe a host that happens to PXE.
+- name: Arm-flag directory (empty by default — nodes are disarmed)
+  ansible.builtin.file:
+    path: "{{ pxe_answer_dir }}/armed"
+    state: directory
+    mode: "0750"
+
 # --- Signed boot chain: shim + network grub from the Proxmox-built packages ----
 # Extracted from the .debs rather than installed, so the guest's own bootloader
 # is never touched. Re-extract by deleting the two files.

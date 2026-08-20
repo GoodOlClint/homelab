@@ -4,12 +4,15 @@ set base http://{{ pxe_service_ip }}
 :menu
 menu PXE — {{ inventory_hostname }}
 item --gap Proxmox VE {{ pxe_pve_iso_version }}
-item --key i pve     Install Proxmox VE (automated — answer file by MAC over HTTP)
+item --key i pve     Install Proxmox VE (armed nodes only — make node-arm)
 item --gap Other
 item --key l local   Boot from local disk
 item --key n nbxyz   netboot.xyz rescue menu
 item --key s shell   iPXE shell
-choose --default pve --timeout 10000 target && goto ${target}
+# SAFETY: default = local disk. An accidental/stray PXE (boot-order fallthrough,
+# leftover BootNext, mis-clicked Reset-to-PXE) boots the OS, never the wiper.
+# Install is a deliberate keypress (i) AND the node must be armed server-side.
+choose --default local --timeout 10000 target && goto ${target}
 
 :pve
 echo Loading Proxmox VE kernel + installer initrd (ISO embedded, ~1.7 GiB) ...
