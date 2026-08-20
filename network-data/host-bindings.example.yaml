@@ -7,8 +7,8 @@
 #   install_cidr    : VLAN 30 mgmt address/CIDR for the fresh install.
 #   install_gateway : VLAN 30 gateway (pfSense).
 #   root_ssh_key    : operator SSH public key (goes into the installed root account).
-#   boot_disks      : pve ONLY — the two 980 PRO 500G device names (boot mirror).
-#                     Omit for ms-01a/ms-01b (their template hard-codes both 1TB NVMe).
+#   boot_disk_model : msi ONLY — ID_MODEL of the boot-mirror pair (answer-file filter)
+#                     (msi only — the MS-01 template hard-codes its boot-disk model).
 #
 # WP2 (proxmox_host role) fields — the nicN names are only known AFTER the
 # answer-file install pins them (see terraform/hosts/README.md):
@@ -66,15 +66,15 @@ nodes:
     ceph_nic: "nic4"
     osd_disks: ["/dev/nvme1n1"]
 
-  pve:
-    fqdn: "pve.example.internal"
+  msi:
+    fqdn: "msi.example.internal"
     mailto: "root@example.internal"
     install_nic_mac: "aa:bb:cc:dd:ee:03"
     install_cidr: "172.16.30.104/24"
     install_gateway: "172.16.30.1"
     root_ssh_key: "ssh-ed25519 AAAA... operator@example"
-    boot_disks: ["nvme0n1", "nvme2n1"] # the two 980 PRO 500G — VERIFY device names at install
+    boot_disk_model: "Samsung SSD 980 PRO 500GB"   # answer-file ID_MODEL filter for the boot mirror
     install_nic: "nic2"
     ring1_nic: "vmbr0" # single copper port — ring1 rides the bond (VLAN 32 sub-if)
     ceph_nic: "nic4"
-    osd_disks: ["/dev/nvme1n1", "/dev/nvme3n1"] # the two 990 PRO 2TB — VERIFY at install
+    osd_disks: ["/dev/disk/by-id/nvme-MODEL_SERIAL3", "/dev/disk/by-id/nvme-MODEL_SERIAL4"] # the two 2TB, by-id

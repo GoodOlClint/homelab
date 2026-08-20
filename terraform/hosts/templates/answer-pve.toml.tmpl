@@ -6,8 +6,8 @@
 #   boot  = ZFS mirror on the 2x Samsung 980 PRO 500G
 #   Ceph  = the 2x Samsung 990 PRO 2TB, whole-disk OSDs (WP2)
 #   the 5T Synology iSCSI SAN (sda) is RETIRED (ADR-0001: NAS = media/PBS/ISO only)
-# @BOOT_DISKS@ is injected as the two 980 PRO device names — VERIFY them at bake
-# time (NVMe enumeration can shift); pick the 500G pair, not the 2TB OSD disks.
+# Boot disks are selected by MODEL (@BOOT_DISK_MODEL@, binding boot_disk_model):
+# NVMe enumeration shifts between boots, and the 2TB OSD disks must never be picked.
 #
 # NIC: pve installs over the I225-V (single 2.5G, VLAN 30). Its 10G bond is the
 # 82599ES SFP+ pair (managed post-install by terraform/hosts). Seat the 25G card
@@ -32,7 +32,7 @@ filter.ID_NET_NAME_MAC = "*@INSTALL_NIC_MAC@" # I225-V MAC, no colons
 [disk-setup]
 filesystem = "zfs"
 zfs.raid   = "raid1"
-disk-list  = @BOOT_DISKS@   # ["nvmeXn1","nvmeYn1"] — the two 980 PRO 500G, whole-disk boot mirror
+filter.ID_MODEL = "@BOOT_DISK_MODEL@"   # the 500G boot pair, whole-disk mirror; never the 2TB OSD disks
 
 # First boot: pin nicN names + quiet console + reboot — served by the pxe guest
 # (ADR 0026). bake-answer.sh drops this section when no pxe_url binding is set

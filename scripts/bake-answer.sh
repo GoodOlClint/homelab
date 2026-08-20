@@ -40,8 +40,8 @@ print("" if d is None else (json.dumps(d) if isinstance(d, (list, dict)) else d)
 # MS-01 nodes share one template; pve has its own.
 case "$NODE" in
   ms-01a|ms-01b) TMPL="$HOSTS_DIR/templates/answer-ms01.toml.tmpl" ;;
-  pve)           TMPL="$HOSTS_DIR/templates/answer-pve.toml.tmpl" ;;
-  *) echo "ERROR: unknown node '$NODE' (expected ms-01a|ms-01b|pve)"; exit 1 ;;
+  msi|pve)       TMPL="$HOSTS_DIR/templates/answer-pve.toml.tmpl" ;;
+  *) echo "ERROR: unknown node '$NODE' (expected ms-01a|ms-01b|msi)"; exit 1 ;;
 esac
 [ -f "$TMPL" ] || { echo "ERROR: template $TMPL missing"; exit 1; }
 
@@ -49,7 +49,8 @@ esac
 b() { yread "nodes.${NODE}.$1"; }
 FQDN=$(b fqdn); MAILTO=$(b mailto); MAC=$(b install_nic_mac)
 CIDR=$(b install_cidr); GW=$(b install_gateway); SSHKEY=$(b root_ssh_key)
-BOOT_DISKS=$(b boot_disks); [ -n "$BOOT_DISKS" ] || BOOT_DISKS="[]"
+BOOT_DISK_MODEL=$(b boot_disk_model)
+grep -q '@BOOT_DISK_MODEL@' "$TMPL" && [ -z "$BOOT_DISK_MODEL" ] && { echo "ERROR: binding 'boot_disk_model' empty for node '$NODE'"; exit 1; }
 for v in FQDN MAILTO MAC CIDR GW SSHKEY; do
   [ -n "${!v}" ] || { echo "ERROR: binding '$v' empty for node '$NODE' in $BINDINGS"; exit 1; }
 done
@@ -75,7 +76,7 @@ sed \
   -e "s|@INSTALL_CIDR@|${CIDR}|g" \
   -e "s|@INSTALL_GATEWAY@|${GW}|g" \
   -e "s|@INSTALL_NIC_MAC@|${MAC_NOSEP}|g" \
-  -e "s|@BOOT_DISKS@|${BOOT_DISKS}|g" \
+  -e "s|@BOOT_DISK_MODEL@|${BOOT_DISK_MODEL}|g" \
   -e "s|@PXE_URL@|${PXE_URL}|g" \
   "$TMPL" > "$OUT"
 if [ -z "$PXE_URL" ]; then
