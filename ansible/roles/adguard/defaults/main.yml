@@ -25,6 +25,8 @@ adguard_service_aliases:
     target: plex
   - domain: nvidia-dls
     target: nvidia-licensing
+  - domain: home
+    target: homepage
 
 # Cross-VLAN DNS rewrites: hostname resolved on a different VLAN's zone
 adguard_cross_vlan_rewrites:
