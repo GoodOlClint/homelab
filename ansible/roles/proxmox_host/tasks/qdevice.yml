@@ -97,11 +97,27 @@
   run_once: true
   when: groups['proxmox'] | length == 2
 
+# `pvecm qdevice remove` stops corosync-qdevice on EVERY node; the freshly
+# joined 3rd node never had it (it was a 2-node-only install), so the per-node
+# stop there returns rc=5 and aborts the removal half-done, leaving a 0-vote
+# votequorum zombie. Install it on all nodes first so the teardown completes.
+- name: Ensure corosync-qdevice present on all nodes before removal
+  ansible.builtin.apt:
+    name: corosync-qdevice
+    state: present
+  when:
+    - groups['proxmox'] | length >= 3
+    - "'Qdevice' in _qdev_status.stdout"
+
 - name: Remove the QDevice (3rd node has joined)
   ansible.builtin.command:
     cmd: pvecm qdevice remove
   run_once: true
+  register: _qdev_remove
   changed_when: true
+  failed_when: >-
+    _qdev_remove.rc != 0
+    and 'corosync-qdevice.service not loaded' not in _qdev_remove.stderr
   when:
     - groups['proxmox'] | length >= 3
     - "'Qdevice' in _qdev_status.stdout"

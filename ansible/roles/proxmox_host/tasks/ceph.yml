@@ -91,12 +91,22 @@
   changed_when: false
   run_once: true
 
+# --pg_autoscale_mode on lets Ceph size pg_num for the cluster (a bare create
+# defaults to 128 in warn mode → POOL_TOO_MANY_PGS on a small cluster).
 - name: Create RBD pool
   ansible.builtin.command:
-    cmd: "pveceph pool create {{ proxmox_host_ceph_pool }}"
+    cmd: "pveceph pool create {{ proxmox_host_ceph_pool }} --pg_autoscale_mode on"
   run_once: true
   changed_when: true
   when: proxmox_host_ceph_pool not in _ceph_pools.stdout_lines
+
+# Existing pools created before the autoscaler flag (or with it off) still warn;
+# converge them to on so pg_num self-tunes.
+- name: Ensure the RBD pool autoscaler is on
+  ansible.builtin.command:
+    cmd: "ceph osd pool set {{ proxmox_host_ceph_pool }} pg_autoscale_mode on"
+  run_once: true
+  changed_when: false
 
 # Storage definitions reconcile INDEPENDENTLY of pool/fs creation so a rerun
 # repairs partial state (pool created but storage add failed — Codex P2).
