@@ -238,10 +238,12 @@
     - iscsi
     - packages
 
+# open-iscsi.service is a oneshot (inactive once it has logged in), so
+# `state: started` would re-fire it on every run.
 - name: Ensure iSCSI initiator is started and enabled
   ansible.builtin.systemd:
     name: "{{ item }}"
-    state: started
+    state: "{{ 'started' if item == 'iscsid' else omit }}"
     enabled: true
 
   loop:
@@ -386,7 +388,7 @@
     path: "{{ pbs_iscsi_mount_path }}"
     src: "{{ iscsi_device_path.stdout }}"
     fstype: "{{ pbs_iscsi_filesystem }}"
-    opts: _netdev,defaults
+    opts: _netdev,nofail,defaults
     state: mounted
   when: pbs_storage_backend == 'iscsi'
   tags:
@@ -472,9 +474,25 @@
     - backup
     - datastore
 
+# A LUN that already carries a datastore (PBS guest rebuild, ADR 0025) must be
+# re-attached, never re-initialised: `--reuse-datastore` requires the existing
+# .chunks layout instead of refusing the non-empty path.
+- name: Check for existing datastore chunk stores
+  ansible.builtin.stat:
+    path: "{{ item.path }}/.chunks"
+  loop: "{{ pbs_datastores }}"
+  loop_control:
+    label: "{{ item.path }}"
+  register: pbs_datastore_chunks
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - datastore
+
 - name: Create datastores via CLI
   ansible.builtin.shell: |
-    proxmox-backup-manager datastore create {{ item.name }} {{ item.path }}{% if item.comment is defined %} --comment "{{ item.comment }}"{% endif %}{% if item.gc_schedule is defined %} --gc-schedule "{{ item.gc_schedule }}"{% endif %}{% if item.prune_schedule is defined %} --prune-schedule "{{ item.prune_schedule }}"{% endif %}{% if item.keep_last is defined %} --keep-last {{ item.keep_last }}{% endif %}{% if item.keep_hourly is defined and item.keep_hourly > 0 %} --keep-hourly {{ item.keep_hourly }}{% endif %}{% if item.keep_daily is defined %} --keep-daily {{ item.keep_daily }}{% endif %}{% if item.keep_weekly is defined %} --keep-weekly {{ item.keep_weekly }}{% endif %}{% if item.keep_monthly is defined %} --keep-monthly {{ item.keep_monthly }}{% endif %}{% if item.keep_yearly is defined %} --keep-yearly {{ item.keep_yearly }}{% endif %}
+    proxmox-backup-manager datastore create {{ item.name }} {{ item.path }}{% if (pbs_datastore_chunks.results | selectattr('item.name', 'equalto', item.name) | first).stat.exists %} --reuse-datastore true{% endif %}{% if item.comment is defined %} --comment "{{ item.comment }}"{% endif %}{% if item.gc_schedule is defined %} --gc-schedule "{{ item.gc_schedule }}"{% endif %}{% if item.prune_schedule is defined %} --prune-schedule "{{ item.prune_schedule }}"{% endif %}{% if item.keep_last is defined %} --keep-last {{ item.keep_last }}{% endif %}{% if item.keep_hourly is defined and item.keep_hourly > 0 %} --keep-hourly {{ item.keep_hourly }}{% endif %}{% if item.keep_daily is defined %} --keep-daily {{ item.keep_daily }}{% endif %}{% if item.keep_weekly is defined %} --keep-weekly {{ item.keep_weekly }}{% endif %}{% if item.keep_monthly is defined %} --keep-monthly {{ item.keep_monthly }}{% endif %}{% if item.keep_yearly is defined %} --keep-yearly {{ item.keep_yearly }}{% endif %}
   loop: "{{ pbs_datastores }}"
   when:
     - pbs_datastore_list.stdout is defined

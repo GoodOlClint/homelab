@@ -28,7 +28,7 @@
     pbs_pve_namespace: ""
     # Nodes reach PBS over the storage VLAN (PBS keeps its vlan20 leg — ADR 0017);
     # same-offset prefix translation is the repo convention.
-    pbs_pve_server: "{{ hostvars['proxmox-backup'].ansible_host | replace(mgmt_vlan_prefix, storage_vlan_prefix) }}"
+    pbs_pve_server: "{{ hostvars['proxmox-backup'].ansible_host | replace(mgmt_vlan_prefix, storage_vlan_prefix) | replace(services_vlan_prefix, storage_vlan_prefix) }}"
 
   tasks:
     - name: Require PBS credentials from Infisical /shared

@@ -93,12 +93,14 @@ locals {
     },
     {
       name         = "proxmox-backup"
-      vm_id        = 101
-      vlans        = ["vlan10", "vlan40", "vlan20"]
+      vm_id        = 201 # old 101 + 100 (ADR 0028)
+      node_name    = "ms-01b"
+      vlans        = ["vlan10", "vlan40", "vlan20"] # vlan20 leg stays: the datastore is the Synology iSCSI LUN (ADR 0017 exception)
       ip_offset    = 101
       cpu_cores    = 4
       memory_mb    = 4096
       disk_size_gb = 20
+      image        = "debian13" # PBS 4 is Debian-13-only (ADR 0025)
     },
     {
       name           = "unifi"
