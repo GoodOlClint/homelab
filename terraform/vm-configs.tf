@@ -16,6 +16,7 @@ locals {
   data_volumes = {
     plex          = { index = 1, size_gb = 150 } # Library dir, 62 GB measured 2026-08-21
     plex_services = { index = 2, size_gb = 40 }  # arr configs 3 GB + postgres 0.6 GB + dumps, measured 2026-08-21
+    openobserve   = { index = 3, size_gb = 100 } # OO stream 40 GB (db 1.8) + Prometheus TSDB 2.2 GB + Kuma/Grafana, measured 2026-08-21
   }
 
   # --- Infrastructure VMs ---
@@ -74,14 +75,21 @@ locals {
       memory_mb    = 2048
       disk_size_gb = 10
     },
+    # docker-on-LXC. OpenObserve parquet + metadata.sqlite, the Prometheus TSDB,
+    # Alertmanager state, Grafana and Uptime Kuma DBs all ride the data volume
+    # (ADR 0015) under one mount; the rootfs holds only compose + config.
     {
       name         = "openobserve"
-      vm_id        = 103
-      vlans        = ["vlan10", "vlan40"]
+      type         = "lxc"
+      node_name    = "ms-01b"
+      vm_id        = 203 # old 103 + 100 (ADR 0028)
+      vlans        = ["vlan40"]
       ip_offset    = 103
       cpu_cores    = 4
-      memory_mb    = 12288 # Log processing and queries
-      disk_size_gb = 100   # Storage for logs and metrics (bumped from 50: fleet-wide syslog shipping — DSM, pve/worklab hosts — grew OO stream data into the 85% alert; pair with a retention cap)
+      memory_mb    = 12288
+      disk_size_gb = 20
+      keyctl       = true
+      data_volume  = { name = "openobserve", path = "/var/lib/monitoring" }
     },
     {
       name         = "proxmox-backup"

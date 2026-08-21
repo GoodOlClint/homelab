@@ -65,21 +65,26 @@
     - /opt/monitoring/axosyslog
     - /opt/monitoring/textfile
     - /opt/monitoring/scripts
-    - /var/lib/openobserve
-    - /var/lib/uptime-kuma
   tags:
     - monitoring
 
-- name: Create Grafana data directory with correct ownership
+- name: Create data directories on the data volume
   ansible.builtin.file:
-    path: /var/lib/grafana
+    path: "{{ monitoring_data_dir }}/{{ item.name }}"
     state: directory
     mode: '0755'
-    owner: 472
-    group: 472
+    owner: "{{ item.owner }}"
+    group: "{{ item.owner }}"
+  loop:
+    - { name: openobserve, owner: 0 }
+    - { name: uptime-kuma, owner: 0 }
+    - { name: grafana, owner: 472 }
+    - { name: prometheus, owner: 65534 }
+    - { name: alertmanager, owner: 65534 }
+  loop_control:
+    label: "{{ item.name }}"
   tags:
     - monitoring
-    - grafana
 
 - name: Create Docker Compose file for monitoring stack
   ansible.builtin.template:

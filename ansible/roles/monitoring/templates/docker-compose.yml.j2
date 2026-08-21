@@ -20,7 +20,7 @@ services:
       - TZ={{ timezone }}
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      - /var/lib/openobserve:/data
+      - {{ monitoring_data_dir }}/openobserve:/data
 {# No healthcheck: this image is distroless — no wget, curl, nc, or even a shell — #}
 {# so nothing can be exec'd inside it. The previous wget check failed on every run #}
 {# ("executable file not found in $PATH"), which pinned the container to unhealthy #}
@@ -47,7 +47,7 @@ services:
       - GF_AUTH_ANONYMOUS_ENABLED=false
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      - /var/lib/grafana:/var/lib/grafana
+      - {{ monitoring_data_dir }}/grafana:/var/lib/grafana
       - /opt/monitoring/grafana/provisioning:/etc/grafana/provisioning
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
@@ -84,7 +84,7 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /opt/monitoring/prometheus:/etc/prometheus
       - /etc/infisical/secrets:/etc/prometheus/secrets:ro
-      - prometheus-data:/prometheus
+      - {{ monitoring_data_dir }}/prometheus:/prometheus
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
       interval: 30s
@@ -111,7 +111,7 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /opt/monitoring/alertmanager:/etc/alertmanager
       - /etc/infisical/secrets:/etc/alertmanager/secrets:ro
-      - alertmanager-data:/alertmanager
+      - {{ monitoring_data_dir }}/alertmanager:/alertmanager
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:9093/-/healthy"]
       interval: 30s
@@ -367,7 +367,7 @@ services:
       - TZ={{ timezone }}
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      - /var/lib/uptime-kuma:/app/data
+      - {{ monitoring_data_dir }}/uptime-kuma:/app/data
     healthcheck:
 {# This image ships curl but not wget. #}
       test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:3001/"]
@@ -381,7 +381,3 @@ services:
 networks:
   monitoring:
     driver: bridge
-
-volumes:
-  prometheus-data:
-  alertmanager-data:
