@@ -59,6 +59,7 @@
   loop: "{{ infisical_agent_templates }}"
   loop_control:
     label: "{{ item.dest_path | dirname }}"
+  when: (item.dest_path | dirname) != infisical_secrets_dir
 
 - name: Create placeholder files for agent-rendered secrets
   ansible.builtin.copy:
