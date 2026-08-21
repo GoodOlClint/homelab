@@ -106,40 +106,33 @@
     - certificate
     - tls
 
-- name: Configure Plex custom certificate path
+- name: Read current Plex certificate preferences
+  ansible.builtin.command:
+    cmd: >
+      xmlstarlet sel -t
+      -v 'concat(//Preferences/@customCertificatePath, "|", //Preferences/@customCertificateKey, "|", //Preferences/@customCertificateDomain)'
+      "{{ plex_preferences_path }}"
+  register: _plex_cert_prefs
+  changed_when: false
+  no_log: true
+  tags:
+    - plex
+    - certificate
+    - tls
+
+- name: Configure Plex custom certificate path, key and domain
   ansible.builtin.command:
     cmd: >
       xmlstarlet ed --inplace
       -u '//Preferences/@customCertificatePath' -v '{{ plex_pfx_path }}'
       -i '//Preferences[not(@customCertificatePath)]' -t attr -n customCertificatePath -v '{{ plex_pfx_path }}'
-      "{{ plex_preferences_path }}"
-  notify: restart plex
-  tags:
-    - plex
-    - certificate
-    - tls
-
-- name: Configure Plex custom certificate key (PFX password)
-  ansible.builtin.command:
-    cmd: >
-      xmlstarlet ed --inplace
       -u '//Preferences/@customCertificateKey' -v '{{ secrets.plex.plex_cert_pfx_password }}'
       -i '//Preferences[not(@customCertificateKey)]' -t attr -n customCertificateKey -v '{{ secrets.plex.plex_cert_pfx_password }}'
-      "{{ plex_preferences_path }}"
-  no_log: true
-  notify: restart plex
-  tags:
-    - plex
-    - certificate
-    - tls
-
-- name: Configure Plex custom certificate domain
-  ansible.builtin.command:
-    cmd: >
-      xmlstarlet ed --inplace
       -u '//Preferences/@customCertificateDomain' -v '{{ plex_cert_domain }}'
       -i '//Preferences[not(@customCertificateDomain)]' -t attr -n customCertificateDomain -v '{{ plex_cert_domain }}'
       "{{ plex_preferences_path }}"
+  when: _plex_cert_prefs.stdout != plex_pfx_path ~ '|' ~ secrets.plex.plex_cert_pfx_password ~ '|' ~ plex_cert_domain
+  no_log: true
   notify: restart plex
   tags:
     - plex

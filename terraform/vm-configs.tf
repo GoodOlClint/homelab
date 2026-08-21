@@ -13,8 +13,9 @@ locals {
   # Detached data volumes (ADR 0015): the WP4 fleet rebuild populates this map.
   # `index` is the volume's permanent disk slot on the holder VM (ADR 0020) —
   # assign the next free number (1..31) and NEVER renumber an existing volume.
-  # Example: plex = { index = 1, size_gb = 100 }
-  data_volumes = {}
+  data_volumes = {
+    plex = { index = 1, size_gb = 150 } # Library dir, 62 GB measured 2026-08-21
+  }
 
   # --- Infrastructure VMs ---
   # Core infrastructure services: DNS, monitoring, backup, network management
@@ -142,14 +143,28 @@ locals {
       memory_mb    = 16384 # 16GB — Valheim, BOINC (GPU), Kiwix, Doge-node
       disk_size_gb = 100
     },
+    # iGPU QuickSync via /dev/dri passthrough; gids are the CT-side render (991)
+    # and video (44) groups of the Ubuntu 26.04 template. Library on the plex
+    # data volume (ADR 0015), media via the host's /mnt/nas/plex mount (ADR 0017).
     {
       name         = "plex"
-      vm_id        = 108
-      vlans        = ["vlan10", "vlan40", "vlan20"]
+      type         = "lxc"
+      node_name    = "ms-01b"
+      vm_id        = 208 # old 108 + 100 (ADR 0028)
+      vlans        = ["vlan40"]
       ip_offset    = 108
       cpu_cores    = 8
-      memory_mb    = 16384 # GPU handles transcoding, 16GB is plenty
-      disk_size_gb = 100
+      memory_mb    = 16384
+      disk_size_gb = 20
+      media_idmap  = true
+      devices = [
+        { path = "/dev/dri/renderD128", gid = 991 },
+        { path = "/dev/dri/card1", gid = 44 },
+      ]
+      data_volume = { name = "plex", path = "/var/lib/plexmediaserver" }
+      bind_mounts = [
+        { source = "/mnt/nas/plex/data/media", path = "/mnt/media", read_only = true },
+      ]
     },
     {
       name         = "plex-services"
@@ -181,6 +196,7 @@ locals {
     },
     {
       name         = "homepage"
+      type         = "lxc"
       vm_id        = 211 # old 111 + 100 (ADR 0028)
       vlans        = ["vlan40"]
       ip_offset    = 111

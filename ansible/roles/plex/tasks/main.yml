@@ -118,18 +118,9 @@
     - (bootstrap.plex_username | default('REPLACE_ME') == 'REPLACE_ME') or (bootstrap.plex_password | default('REPLACE_ME') == 'REPLACE_ME')
   tags: [plex, secrets]
 
-- name: Install NVIDIA GRID driver
-  ansible.builtin.import_role:
-    name: nvidia
-  tags:
-    - plex
-    - nvidia
-    - driver
-
 - name: Ensure required packages.
   ansible.builtin.package:
     name:
-      - nfs-common
       - cifs-utils
     state: present
   tags:
@@ -145,48 +136,49 @@
     - plex
     - users
 
-- name: Add plex user to plex-services media group
+# Fixed ids: the Library lives on a data volume that outlives the guest
+# (ADR 0015), so ownership must mean the same thing after every rebuild.
+- name: Create plex group with fixed gid
+  ansible.builtin.group:
+    name: plex
+    gid: "{{ plex_gid }}"
+    system: true
+  tags:
+    - plex
+    - users
+
+- name: Create plex user with fixed uid (render/video for /dev/dri QuickSync)
   ansible.builtin.user:
     name: plex
-    groups: plex-services
+    uid: "{{ plex_uid }}"
+    group: plex
+    groups: plex-services,render,video
     append: true
+    system: true
+    home: /var/lib/plexmediaserver
+    create_home: false
+    shell: /usr/sbin/nologin
   register: plex_group_changed
   tags:
     - plex
     - users
 
+- name: Check if Plex is installed
+  ansible.builtin.stat:
+    path: /usr/lib/plexmediaserver
+  register: plex_installed
+  tags:
+    - plex
+    - packages
+
 - name: Restart Plex to pick up new group membership
   ansible.builtin.systemd:
     name: plexmediaserver
     state: restarted
-  when: plex_group_changed is changed
+  when: plex_group_changed is changed and plex_installed.stat.exists
   tags:
     - plex
     - users
-
-- name: Ensure NFS fstab entry and mount.
-  ansible.posix.mount:
-    backup: true
-
-    boot: "yes"
-    path: "/mnt/plex"
-    src: "{{ plex_nfs_src }}"
-    fstype: nfs
-    opts: "{{ nfs_mount_options }}"
-    state: "mounted"
-  tags:
-    - plex
-    - storage
-    - nfs
-
-- name: Mount /mnt/media
-  ansible.builtin.file:
-    src: /mnt/plex/data/media
-    dest: /mnt/media
-    state: link
-  tags:
-    - plex
-    - storage
 
 - name: Remove old Plex GPG key and repo files
   ansible.builtin.file:
@@ -233,14 +225,6 @@
     repo: "deb [signed-by=/usr/share/keyrings/plexmediaserver.v2.gpg] https://repo.plex.tv/deb/ public main"
     state: present
     filename: plex
-  tags:
-    - plex
-    - packages
-
-- name: Check if Plex is installed
-  ansible.builtin.stat:
-    path: /usr/lib/plexmediaserver
-  register: plex_installed
   tags:
     - plex
     - packages
@@ -338,6 +322,7 @@
     name:
       - git
       - python3-venv
+      - python3-packaging # ansible.builtin.pip needs it on the target
     state: present
   tags:
     - plex
@@ -416,30 +401,3 @@
   tags:
     - plex
     - poster-reset
-
-# --- Restore from backup (fresh install only) ---
-- name: Restore Plex config from PBS if not already installed
-  ansible.builtin.shell: /usr/local/bin/plex_config_pbs_restore.sh
-  when:
-    - not plex_installed.stat.exists
-    - pbs_backup_enabled | default(true)
-  args:
-    executable: /bin/bash
-  tags:
-    - plex
-    - backup
-    - pbs
-    - restore
-
-- name: Restore Plex config from SMB if not already installed (fallback)
-  ansible.builtin.shell: /usr/local/bin/plex_config_restore.sh
-  when:
-    - not plex_installed.stat.exists
-    - not (pbs_backup_enabled | default(true))
-  args:
-    executable: /bin/bash
-  tags:
-    - plex
-    - backup
-    - smb
-    - restore
