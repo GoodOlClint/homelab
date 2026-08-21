@@ -1,0 +1,32 @@
+# {{ ansible_managed }} — {{ vip_group }} VIP (ADR 0003 pair, ADR 0029 pattern)
+vrrp_script chk_{{ vip_group }} {
+    script "/usr/local/bin/check_dns.sh {{ vip_track_name }}"
+    interval 2
+    fall 2
+    rise 2
+}
+
+vrrp_instance {{ vip_group | upper }}_VIP {
+    state {{ 'MASTER' if inventory_hostname == groups[vip_group][0] else 'BACKUP' }}
+    interface {{ vip_interface | default(ansible_default_ipv4.interface) }}
+    virtual_router_id {{ vip_router_id }}
+    priority {{ vip_base_priority | default(150) | int - (groups[vip_group].index(inventory_hostname) * 10) }}
+    advert_int 1
+    unicast_src_ip {{ ansible_host }}
+    unicast_peer {
+{% for host in groups[vip_group] if host != inventory_hostname %}
+        {{ hostvars[host].ansible_host }}
+{% endfor %}
+    }
+    virtual_ipaddress {
+        {{ vip_ipv4 }}/{{ ansible_default_ipv4.prefix | default(24) }}
+    }
+{% if vip_ipv6 | default('') %}
+    virtual_ipaddress_excluded {
+        {{ vip_ipv6 }}/64
+    }
+{% endif %}
+    track_script {
+        chk_{{ vip_group }}
+    }
+}

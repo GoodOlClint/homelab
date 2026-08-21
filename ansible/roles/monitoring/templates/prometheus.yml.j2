@@ -72,7 +72,7 @@ scrape_configs:
       module: [http_2xx]
     static_configs:
       - targets:
-          - http://{{ hostvars['adguard'].ansible_host }}:3000  # AdGuard
+          - http://{{ network_data.dns_server.dns_ipv4 }}:3000  # AdGuard VIP
           - http://{{ ansible_host }}:{{ openobserve_listen_port }}  # OpenObserve
           - http://{{ ansible_host }}:3000  # Grafana
     relabel_configs:
@@ -108,8 +108,8 @@ scrape_configs:
       module: [icmp]
     static_configs:
       - targets:
-          - {{ hostvars['dns'].ansible_host }}  # DNS
-          - {{ hostvars['adguard'].ansible_host }}  # AdGuard
+          - {{ network_data.dns_server.bind_ipv4 }}  # BIND VIP
+          - {{ network_data.dns_server.dns_ipv4 }}  # AdGuard VIP
 {% if hostvars['plex'] is defined %}
           - {{ hostvars['plex'].ansible_host }}  # Plex
 {% endif %}
@@ -152,18 +152,18 @@ scrape_configs:
         labels:
           instance: 'openobserve'
           role: 'monitoring'
-{% if hostvars['dns'] is defined and hostvars['dns'].ansible_host is defined %}
-      - targets: ['{{ hostvars['dns'].ansible_host }}:9273']
+{% for h in groups['dns'] | default([]) %}
+      - targets: ['{{ hostvars[h].ansible_host }}:9273']
         labels:
-          instance: 'dns'
+          instance: '{{ h }}'
           role: 'infrastructure'
-{% endif %}
-{% if hostvars['adguard'] is defined and hostvars['adguard'].ansible_host is defined %}
-      - targets: ['{{ hostvars['adguard'].ansible_host }}:9273']
+{% endfor %}
+{% for h in groups['adguard'] | default([]) %}
+      - targets: ['{{ hostvars[h].ansible_host }}:9273']
         labels:
-          instance: 'adguard'
+          instance: '{{ h }}'
           role: 'infrastructure'
-{% endif %}
+{% endfor %}
 {% if hostvars['apt-cache'] is defined and hostvars['apt-cache'].ansible_host is defined %}
       - targets: ['{{ hostvars['apt-cache'].ansible_host }}:9273']
         labels:

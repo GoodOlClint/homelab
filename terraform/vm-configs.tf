@@ -19,25 +19,58 @@ locals {
   # --- Infrastructure VMs ---
   # Core infrastructure services: DNS, monitoring, backup, network management
   infrastructure_vms = [
+    # Authoritative pair (ADR 0003): dns1 is the zone primary, dns2 a secondary
+    # fed by AXFR; keepalived holds the BIND VIP (vlans.yaml dns_server.bind_ipv4,
+    # ip_offset 15). VMID = 200 + ip_offset (ADR 0029); 13/14 would collide with
+    # github-runner/squid's old+100 slots.
     {
-      name         = "dns"
-      vm_id        = 109
-      vlans        = ["vlan10", "vlan40"]
-      ip_offset    = 15
-      cpu_cores    = 4
-      memory_mb    = 2048
-      disk_size_gb = 20
+      name         = "dns1"
+      type         = "lxc"
+      node_name    = "ms-01a"
+      vm_id        = 218
+      vlans        = ["vlan40"]
+      ip_offset    = 18
+      cpu_cores    = 2
+      memory_mb    = 1024
+      disk_size_gb = 10
     },
     {
-      name         = "adguard"
-      vm_id        = 202
+      name         = "dns2"
+      type         = "lxc"
+      node_name    = "ms-01b"
+      vm_id        = 219
       vlans        = ["vlan40"]
-      ip_offset    = 54 # scratch instance (VMID 202) — the live resolver is the restored 102 at .53; final adguard = LXC pair, later
-      ipv6_offset  = 53 # ::35 on service VLANs
-      ipv6_mode    = "static"
-      cpu_cores    = 4
+      ip_offset    = 19
+      cpu_cores    = 2
+      memory_mb    = 1024
+      disk_size_gb = 10
+    },
+    # Resolver pair (ADR 0003): keepalived holds the client-facing VIP
+    # (vlans.yaml dns_server.dns_ipv4/dns_ipv6); IPv6 is SLAAC because a static
+    # CT v6 address makes PVE write IPv6AcceptRA=false (no default route).
+    {
+      name         = "adguard1"
+      type         = "lxc"
+      node_name    = "ms-01a"
+      vm_id        = 251
+      vlans        = ["vlan40"]
+      ip_offset    = 51
+      resolver     = true
+      cpu_cores    = 2
       memory_mb    = 2048
-      disk_size_gb = 20
+      disk_size_gb = 10
+    },
+    {
+      name         = "adguard2"
+      type         = "lxc"
+      node_name    = "ms-01b"
+      vm_id        = 252
+      vlans        = ["vlan40"]
+      ip_offset    = 52
+      resolver     = true
+      cpu_cores    = 2
+      memory_mb    = 2048
+      disk_size_gb = 10
     },
     {
       name         = "openobserve"
@@ -59,7 +92,7 @@ locals {
     },
     {
       name           = "unifi"
-      vm_id          = 100
+      vm_id          = 200 # old 100 + 100 (ADR 0028)
       mgmt_ip_offset = 10 # static management IP (decoupled from VMID)
       vlans          = ["vlan10"]
       cpu_cores      = 4

@@ -76,12 +76,8 @@
 # Ping monitoring to key infrastructure
 [[inputs.ping]]
   urls = [
-{% if hostvars['dns'] is defined and hostvars['dns'].ansible_host is defined %}
-    "{{ hostvars['dns'].ansible_host }}",
-{% endif %}
-{% if hostvars['adguard'] is defined and hostvars['adguard'].ansible_host is defined %}
-    "{{ hostvars['adguard'].ansible_host }}",
-{% endif %}
+    "{{ network_data.dns_server.bind_ipv4 }}",
+    "{{ network_data.dns_server.dns_ipv4 }}",
     "8.8.8.8",
     "1.1.1.1",
 {% if inventory_hostname == 'vps' %}

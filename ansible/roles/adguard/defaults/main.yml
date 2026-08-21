@@ -18,6 +18,7 @@ adguard_rewrite_vms:
   - github-runner
   - squid
   - mcp
+  - unifi
 
 # Service aliases: alternative domain names pointing to existing VMs
 adguard_service_aliases:
@@ -43,3 +44,14 @@ adguard_cross_vlan_rewrites:
 # 19 GB root disk grew querylog.json{,.1} to 12 GB and drove the VM to 88% full.
 # 30 days is roughly 4 GB at this network's query rate — adjust if the disk changes.
 adguard_querylog_interval: "720h"
+
+# Resolver VIP (ADR 0003 pair): keepalived unicast VRRP between the instances in
+# the `adguard` group; the VIP is the client-facing address from vlans.yaml.
+adguard_vip_ipv4: "{{ network_data.dns_server.dns_ipv4 }}"
+adguard_vip_ipv6: "{{ network_data.dns_server.dns_ipv6 | default('') }}"
+adguard_vip_interface: "{{ ansible_default_ipv4.interface }}"
+adguard_vrrp_router_id: 53
+adguard_vrrp_base_priority: 150
+# `stopped` stages keepalived installed+configured without claiming the VIP —
+# for the swap beside a restored copy that still holds the address.
+adguard_vip_state: started

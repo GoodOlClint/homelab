@@ -167,8 +167,11 @@ resource "proxmox_virtual_environment_container" "containers" {
       }
     }
 
+    # PVE rewrites a container's resolv.conf from this on every start, so it is
+    # the only durable control point (ADR 0029). Resolver guests keep the public
+    # failover: they must apt-install before any AdGuard answers.
     dns {
-      servers = var.dns_servers
+      servers = each.value.resolver ? var.dns_servers : [var.dns_servers[0]]
     }
 
     # Root gets the SSH key; the standard user is created by Ansible (WP4 common role)

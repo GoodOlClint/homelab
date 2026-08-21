@@ -124,6 +124,38 @@
     - dns
     - config
 
+- name: Seed AdGuard admin username in Infisical
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/generate_secret.yml"
+  vars:
+    secret_key: "adguard_username"
+    secret_gen_cmd: "printf '%s' admin"
+    secret_comment: "AdGuard Home web-UI admin user (homepage widget + make adguard-pause)"
+    secret_infisical_path: "/homepage"
+    secret_dict_path: "homepage"
+  when: inventory_hostname == groups['adguard'][0]
+  tags: [adguard, secrets]
+
+- name: Seed AdGuard admin password in Infisical
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/generate_secret.yml"
+  vars:
+    secret_key: "adguard_password"
+    secret_gen_cmd: "openssl rand -base64 24 | tr -d '/+=' | head -c 32"
+    secret_comment: "AdGuard Home web-UI admin password (homepage widget + make adguard-pause)"
+    secret_infisical_path: "/homepage"
+    secret_dict_path: "homepage"
+  when: inventory_hostname == groups['adguard'][0]
+  tags: [adguard, secrets]
+
+# Pair instances share one generation: concurrent creates of the same key race
+# (second writer gets a 500), so only the first member generates and the rest
+# copy its secrets fact.
+- name: Share seeded secrets with the other instances
+  ansible.builtin.set_fact:
+    secrets: "{{ hostvars[groups['adguard'][0]].secrets }}"
+  no_log: true
+  when: inventory_hostname != groups['adguard'][0]
+  tags: [adguard, secrets]
+
 - name: Check if AdGuard Home config exists
   ansible.builtin.stat:
     path: /etc/adguardhome/AdGuardHome.yaml
@@ -132,6 +164,26 @@
     - adguard
     - dns
     - config
+
+- name: Hash the admin password (AdGuard stores bcrypt)
+  ansible.builtin.command:
+    cmd: "{{ ansible_playbook_python }} -c 'import bcrypt,sys; print(bcrypt.hashpw(sys.stdin.buffer.read(), bcrypt.gensalt()).decode())'"
+    stdin: "{{ secrets.homepage.adguard_password }}"
+    stdin_add_newline: false
+  register: _adguard_hash
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  no_log: true
+  when: not _adguard_config.stat.exists
+  tags: [adguard, dns, config]
+
+- name: Set admin hash fact
+  ansible.builtin.set_fact:
+    adguard_admin_hash: "{{ _adguard_hash.stdout | trim }}"
+  no_log: true
+  when: not _adguard_config.stat.exists
+  tags: [adguard, dns, config]
 
 - name: Deploy AdGuard Home configuration (initial only)
   ansible.builtin.template:
@@ -301,3 +353,20 @@
   tags:
     - adguard
     - dns
+
+- name: Resolver VIP (keepalived)
+  ansible.builtin.include_tasks:
+    file: "{{ playbook_dir }}/../tasks/keepalived.yml"
+    apply:
+      tags: [adguard, dns, keepalived]
+  vars:
+    vip_group: adguard
+    vip_ipv4: "{{ adguard_vip_ipv4 }}"
+    vip_ipv6: "{{ adguard_vip_ipv6 }}"
+    vip_interface: "{{ adguard_vip_interface }}"
+    vip_router_id: "{{ adguard_vrrp_router_id }}"
+    vip_base_priority: "{{ adguard_vrrp_base_priority }}"
+    vip_track_name: "dns.{{ (dns_zones.values() | first).zone }}"
+    vip_state: "{{ adguard_vip_state }}"
+  when: groups['adguard'] | default([]) | length > 1
+  tags: [adguard, dns, keepalived]

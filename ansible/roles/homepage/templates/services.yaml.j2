@@ -133,15 +133,13 @@
           key: {{ '{{HOMEPAGE_VAR_PORTAINER_KEY}}' }}
     - AdGuard Home:
         icon: adguard-home.svg
-{% if hostvars['adguard'] is defined %}
-        href: http://{{ hostvars['adguard']['service_ip'] }}:3000
+        href: http://{{ network_data.dns_server.dns_ipv4 }}:3000
         description: DNS Filtering
         widget:
           type: adguard
-          url: http://{{ hostvars['adguard']['service_ip'] }}:3000
+          url: http://{{ network_data.dns_server.dns_ipv4 }}:3000
           username: {{ '{{HOMEPAGE_VAR_ADGUARD_USERNAME}}' }}
           password: {{ '{{HOMEPAGE_VAR_ADGUARD_PASSWORD}}' }}
-{% endif %}
     - Proxmox VE:
         icon: proxmox.svg
         href: https://{{ proxmox_host }}:8006

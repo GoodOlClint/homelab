@@ -219,14 +219,14 @@ All VMs are defined in `terraform/vm-configs.tf` and provisioned with cloud-init
 |----|------|-------|-----|-----|------|-----|---------|
 | unifi | 100 | mgmt | 4 | 4 GB | 50 GB | -- | UniFi Controller |
 | proxmox-backup | 101 | mgmt, services, storage | 4 | 4 GB | 20 GB | -- | Proxmox Backup Server |
-| adguard | 102 | mgmt, services | 4 | 2 GB | 20 GB | -- | AdGuard Home (DNS filtering) |
+| adguard1 / adguard2 | 251 / 252 | services | 2 | 2 GB | 10 GB | -- | AdGuard Home LXC pair, one per MS-01, keepalived VIP (ADR 0029) |
 | openobserve | 103 | mgmt, services | 4 | 12 GB | 50 GB | -- | Monitoring stack (OpenObserve, Grafana, Prometheus) |
 | docker | 104 | mgmt, services, storage | 4 | 16 GB | 100 GB | NVIDIA | Container workloads (Valheim, Authentik, etc.) |
 | infisical | 105 | mgmt, services | 4 | 4 GB | 30 GB | -- | Self-hosted secret vault |
 | plex-services | 106 | mgmt, services, storage | 4 | 4 GB | 256 GB | -- | *arr stack, PostgreSQL, Jellyseerr |
 | nvidia-licensing | 107 | mgmt, services | 2 | 2 GB | 20 GB | -- | NVIDIA GRID license server (FastAPI DLS) |
 | plex | 108 | mgmt, services, storage | 8 | 32 GB | 100 GB | NVIDIA | Plex Media Server (hardware transcoding) |
-| dns | 109 | mgmt, services | 4 | 2 GB | 20 GB | -- | BIND9 authoritative DNS |
+| dns1 / dns2 | 218 / 219 | services | 2 | 1 GB | 10 GB | -- | BIND9 authoritative LXC pair (primary + AXFR secondary), one per MS-01, keepalived VIP (ADR 0003/0029) |
 | lancache | 110 | mgmt, services, storage | 4 | 4 GB | 20 GB | -- | LAN game cache server |
 | homepage | 111 | mgmt, services | 2 | 2 GB | 10 GB | -- | Homepage dashboard |
 | minio | 112 | mgmt, services, storage | 4 | 4 GB | 20 GB | -- | MinIO object storage |
@@ -421,6 +421,8 @@ Self-hosted secret management platform deployed via Docker Compose:
 | docker-config.yml | Service VMs | Lightweight compose+config deploy (no full role) |
 | update-all.yml | All + VPS | OS patching (apt/apk) |
 | update-dns.yml | DNS VMs | DNS configuration updates |
+| adguard-pause.yml | adguard group | Disable filtering on both AdGuard instances for n minutes (`make adguard-pause`) |
+| adguard-rewrite.yml | adguard group | Add a DNS rewrite on both AdGuard instances via the API (`make adguard-rewrite`) |
 | backup-clients.yml | Multiple | PBS client configuration |
 | vps-rotate-keys.yml | VPS | WireGuard key rotation |
 | refresh-identity.yml | Service VMs | Refresh Infisical machine identity credentials |
@@ -569,6 +571,8 @@ The Makefile is the primary operational interface.
 | `terraform-bootstrap` | Terraform apply for the bootstrap guests only (guest-aware targeting) |
 | `terraform-apply` | Terraform init + apply (auto-approve) |
 | `inventory` | Generate Ansible inventory from Terraform outputs |
+| `adguard-pause MINUTES=n` | Pause AdGuard filtering on every resolver instance for n minutes (default 10) |
+| `adguard-rewrite DOMAIN=<fqdn> ANSWER=<ip>` | Add a DNS rewrite on every resolver instance via the API — the config template is initial-only; no-op when present |
 
 ### Targeted Operations
 

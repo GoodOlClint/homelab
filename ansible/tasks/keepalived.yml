@@ -1,0 +1,31 @@
+---
+# Shared VIP for a redundancy pair (ADR 0003 / 0029). Caller vars:
+#   vip_group       inventory group holding every instance (first member = MASTER)
+#   vip_ipv4        VIP address; vip_ipv6 optional (empty = none)
+#   vip_router_id   VRRP router id — unique per VIP on the VLAN
+#   vip_track_name  name check_dns.sh must resolve via 127.0.0.1 for this instance to hold the VIP
+#   vip_state       started | stopped (stage without claiming the address)
+#   vip_interface   default: primary interface; vip_base_priority default 150
+- name: Install keepalived
+  ansible.builtin.apt:
+    name: keepalived
+    state: present
+
+- name: Deploy VIP track script
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../files/check_dns.sh"
+    dest: /usr/local/bin/check_dns.sh
+    mode: "0755"
+
+- name: Deploy keepalived.conf
+  ansible.builtin.template:
+    src: "{{ playbook_dir }}/../templates/keepalived.conf.j2"
+    dest: /etc/keepalived/keepalived.conf
+    mode: "0644"
+  register: _keepalived_conf
+
+- name: Enable keepalived ({{ vip_state }})
+  ansible.builtin.systemd:
+    name: keepalived
+    enabled: true
+    state: "{{ 'reloaded' if (_keepalived_conf is changed and vip_state == 'started') else vip_state }}"

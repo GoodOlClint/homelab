@@ -69,7 +69,8 @@ variable "vm_configurations" {
     protected      = optional(bool, false)         # Proxmox guest protection — prevents accidental deletion
     # LXC-only options
     unprivileged = optional(bool, true)  # Unprivileged container (LXC only)
-    nesting      = optional(bool, false) # Enable nesting (docker-on-LXC)
+    nesting      = optional(bool, true)  # systemd >= 256 templates (Ubuntu 26.04) need it for networkd to bring up eth0; docker-on-LXC needs it too
+    resolver     = optional(bool, false) # This guest IS a fleet resolver: keeps the public bootstrap failover in its CT nameserver list (ADR 0029)
     keyctl       = optional(bool, false) # Enable keyctl (docker-on-LXC)
     devices = optional(list(object({     # Host device passthrough (e.g. /dev/dri for QuickSync)
       path = string

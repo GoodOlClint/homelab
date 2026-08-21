@@ -5,20 +5,32 @@ key "dhcp-update-key" {
     secret "{{ secrets.infrastructure.bind_tsig_key_secret }}";
 };
 
-// Forward zones — one per VLAN served by BIND
-{% for vlan, zone in dns_zones.items() %}
-zone "{{ zone.zone }}" {
-    type master;
-    file "/etc/bind/db.{{ zone.zone }}";
+{% set secondaries = bind9_instances[1:] | map('extract', hostvars, 'ansible_host') | list %}
+{% macro zone(name) %}
+zone "{{ name }}" {
+{% if bind9_primary %}
+    type primary;
+    file "/var/lib/bind/db.{{ name }}";
     allow-update { key "dhcp-update-key"; };
+{% if secondaries %}
+    allow-transfer { {{ secondaries | join('; ') }}; };
+    also-notify { {{ secondaries | join('; ') }}; };
+{% endif %}
+{% else %}
+    type secondary;
+    file "/var/cache/bind/db.{{ name }}";
+    primaries { {{ hostvars[bind9_instances[0]].ansible_host }}; };
+    // DDNS lands on the VIP, which may sit on a secondary: forward to the primary
+    allow-update-forwarding { any; };
+{% endif %}
 };
+{% endmacro %}
+// Forward zones — one per VLAN served by BIND
+{% for vlan, z in dns_zones.items() %}
+{{ zone(z.zone) }}
 {% endfor %}
 
 // Reverse zones — PTR records for each VLAN subnet
-{% for vlan, zone in dns_zones.items() %}
-zone "{{ zone.vlan_id }}.{{ ipv4_prefix_reversed }}.in-addr.arpa" {
-    type master;
-    file "/etc/bind/db.{{ zone.vlan_id }}.{{ ipv4_prefix_reversed }}.in-addr.arpa";
-    allow-update { key "dhcp-update-key"; };
-};
+{% for vlan, z in dns_zones.items() %}
+{{ zone(z.vlan_id ~ '.' ~ ipv4_prefix_reversed ~ '.in-addr.arpa') }}
 {% endfor %}

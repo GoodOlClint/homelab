@@ -35,12 +35,15 @@ output "ansible_inventory_yaml" {
     all = merge(
       {
         hosts = {
-          for vm_name, ip in module.vms.vm_management_ips : vm_name => {
+          for vm_name, ip in module.vms.vm_management_ips : vm_name => merge({
             ansible_host = local.inventory_ansible_host[vm_name]
             service_ip   = module.vms.vm_service_ips[vm_name]
             guest_type   = module.vms.guest_types[vm_name]
             pve_node     = try(module.vms.vm_nodes[vm_name], null)
-          }
+            },
+            # LXCs are root-only by module design (no cloud-init user)
+            module.vms.guest_types[vm_name] == "lxc" ? { ansible_user = "root" } : {}
+          )
         }
       },
       length(local.inventory_groups) > 0 ? { children = local.inventory_groups } : {}

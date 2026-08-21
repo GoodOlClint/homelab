@@ -65,8 +65,9 @@
 # --- Forward zone files ---
 
 - name: Check if forward zone files exist
+  when: bind9_primary
   ansible.builtin.stat:
-    path: "/etc/bind/db.{{ item.value.zone }}"
+    path: "/var/lib/bind/db.{{ item.value.zone }}"
   loop: "{{ dns_zones | dict2items }}"
   register: forward_zone_files_stat
   tags:
@@ -77,13 +78,13 @@
 - name: Create forward zone files (only if they don't exist)
   ansible.builtin.template:
     src: db.zone.j2
-    dest: "/etc/bind/db.{{ item.item.value.zone }}"
+    dest: "/var/lib/bind/db.{{ item.item.value.zone }}"
     mode: '0644'
   vars:
     zone_name: "{{ item.item.value.zone }}"
     zone_dns_ip: "{{ item.item.value.dns_ip }}"
-  loop: "{{ forward_zone_files_stat.results }}"
-  when: not item.stat.exists
+  loop: "{{ forward_zone_files_stat.results | default([]) }}"
+  when: bind9_primary and not item.stat.exists
   notify: Restart bind9
   tags:
     - bind9
@@ -92,8 +93,9 @@
     - config
 
 - name: Set ownership of forward zone files
+  when: bind9_primary
   ansible.builtin.file:
-    path: "/etc/bind/db.{{ item.value.zone }}"
+    path: "/var/lib/bind/db.{{ item.value.zone }}"
     owner: bind
     group: bind
     mode: '0644'
@@ -106,8 +108,9 @@
 # --- Reverse zone files ---
 
 - name: Check if reverse zone files exist
+  when: bind9_primary
   ansible.builtin.stat:
-    path: "/etc/bind/db.{{ item.value.vlan_id }}.{{ ipv4_prefix_reversed }}.in-addr.arpa"
+    path: "/var/lib/bind/db.{{ item.value.vlan_id }}.{{ ipv4_prefix_reversed }}.in-addr.arpa"
   loop: "{{ dns_zones | dict2items }}"
   register: reverse_zone_files_stat
   tags:
@@ -118,13 +121,13 @@
 - name: Create reverse zone files (only if they don't exist)
   ansible.builtin.template:
     src: db.reverse-zone.j2
-    dest: "/etc/bind/db.{{ item.item.value.vlan_id }}.{{ ipv4_prefix_reversed }}.in-addr.arpa"
+    dest: "/var/lib/bind/db.{{ item.item.value.vlan_id }}.{{ ipv4_prefix_reversed }}.in-addr.arpa"
     mode: '0644'
   vars:
     forward_zone: "{{ item.item.value.zone }}"
     zone_dns_ip: "{{ item.item.value.dns_ip }}"
-  loop: "{{ reverse_zone_files_stat.results }}"
-  when: not item.stat.exists
+  loop: "{{ reverse_zone_files_stat.results | default([]) }}"
+  when: bind9_primary and not item.stat.exists
   notify: Restart bind9
   tags:
     - bind9
@@ -133,8 +136,9 @@
     - config
 
 - name: Set ownership of reverse zone files
+  when: bind9_primary
   ansible.builtin.file:
-    path: "/etc/bind/db.{{ item.value.vlan_id }}.{{ ipv4_prefix_reversed }}.in-addr.arpa"
+    path: "/var/lib/bind/db.{{ item.value.vlan_id }}.{{ ipv4_prefix_reversed }}.in-addr.arpa"
     owner: bind
     group: bind
     mode: '0644'
@@ -144,25 +148,12 @@
     - dns
     - zones
 
-# --- Directory and permissions ---
-
-- name: Ensure /etc/bind directory is writable by bind user
-  ansible.builtin.file:
-    path: /etc/bind
-    owner: bind
-    group: bind
-    mode: '0755'
-    state: directory
-  tags:
-    - bind9
-    - dns
-    - config
-
 # --- Journal file validation ---
 
 - name: Check for corrupted journal files
+  when: bind9_primary
   ansible.builtin.shell: |
-    for zone in /etc/bind/db.*.jnl; do
+    for zone in /var/lib/bind/db.*.jnl; do
       if [ -f "$zone" ]; then
         named-journalprint "$zone" > /dev/null 2>&1 || echo "$zone"
       fi
@@ -179,8 +170,8 @@
   ansible.builtin.file:
     path: "{{ item }}"
     state: absent
-  loop: "{{ corrupt_journals.stdout_lines }}"
-  when: corrupt_journals.stdout_lines | length > 0
+  loop: "{{ corrupt_journals.stdout_lines | default([]) }}"
+  when: bind9_primary and corrupt_journals.stdout_lines | length > 0
   notify: Restart bind9
   tags:
     - bind9
@@ -242,7 +233,7 @@
         state: stopped
 
     - name: Remove all journal files
-      ansible.builtin.shell: rm -f /etc/bind/*.jnl
+      ansible.builtin.shell: rm -f /var/lib/bind/*.jnl
 
     - name: Start BIND service
       ansible.builtin.systemd:
@@ -258,17 +249,17 @@
     - name: Pause for DNS initialization
       ansible.builtin.pause:
         seconds: 3
-  when: "'failed=0' not in zone_status_check.stdout"
+  when: bind9_primary and 'failed=0' not in zone_status_check.stdout
   tags:
     - bind9
     - dns
     - zones
     - service
 
-- name: Verify BIND is responding for local zones
+- name: Verify BIND answers the local zone SOA (secondaries wait for the first AXFR)
   ansible.builtin.command: dig +short +time=2 +tries=3 @127.0.0.1 {{ (dns_zones.values() | first).zone }} SOA
   register: dns_test
-  retries: 5
+  retries: 15
   delay: 2
   until: dns_test.rc == 0 and dns_test.stdout != ""
   changed_when: false
@@ -276,3 +267,17 @@
     - bind9
     - dns
     - validate
+
+- name: Authoritative VIP (keepalived)
+  ansible.builtin.include_tasks:
+    file: "{{ playbook_dir }}/../tasks/keepalived.yml"
+    apply:
+      tags: [bind9, dns, keepalived]
+  vars:
+    vip_group: dns
+    vip_ipv4: "{{ bind9_vip_ipv4 }}"
+    vip_router_id: "{{ bind9_vrrp_router_id }}"
+    vip_track_name: "ns.{{ (dns_zones.values() | first).zone }}"
+    vip_state: "{{ bind9_vip_state }}"
+  when: bind9_instances | length > 1
+  tags: [bind9, dns, keepalived]

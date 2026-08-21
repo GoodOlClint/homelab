@@ -1,0 +1,28 @@
+---
+# make adguard-pause MINUTES=n — disable filtering on every resolver instance for n
+# minutes (AdGuard re-enables itself). No config sync exists between the pair by
+# design; this covers the "turn blocking off for a moment" need on both at once.
+- name: Pause AdGuard protection on all instances
+  hosts: adguard
+  gather_facts: false
+  vars_files:
+    - ../group_vars/all.yml
+  pre_tasks:
+    - name: Load configuration and secrets
+      ansible.builtin.include_tasks: ../tasks/full_pre_tasks.yml
+      tags: [always]
+  tasks:
+    - name: "Disable protection for {{ adguard_pause_minutes }} minutes"
+      ansible.builtin.uri:
+        url: "http://{{ ansible_host }}:3000/control/protection"
+        method: POST
+        url_username: "{{ secrets.homepage.adguard_username }}"
+        url_password: "{{ secrets.homepage.adguard_password }}"
+        force_basic_auth: true
+        body_format: json
+        body:
+          enabled: false
+          duration: "{{ (adguard_pause_minutes | int) * 60000 }}"
+      delegate_to: localhost
+      become: false
+      changed_when: true

@@ -52,7 +52,7 @@ ansible-bootstrap:
 
 plan:
 ifdef VM
-	@cd terraform && TARGETS="$$(../scripts/guest-targets.sh $(VM) targets)" \
+	@cd terraform && TARGETS="$$(../scripts/guest-targets.sh $(VM) group-targets)" \
 		&& terraform init && terraform plan -no-color $$TARGETS
 else
 	@cd terraform && terraform init && terraform plan -no-color
@@ -65,7 +65,7 @@ export PATH := $(CURDIR)/.venv/bin:$(PATH)
 
 init:
 	@python3 -m venv .venv
-	@. .venv/bin/activate && pip install pyyaml infisicalsdk ansible 'proxmoxer>=2.3' requests
+	@. .venv/bin/activate && pip install pyyaml infisicalsdk ansible 'proxmoxer>=2.3' requests bcrypt
 	@cd terraform && terraform init
 	@cd ansible && ansible-galaxy install -r requirements.yml --force
 
@@ -91,7 +91,7 @@ ifndef VM
 	$(error Usage: make build <vm-name>)
 endif
 	@echo "Building guest: $(VM)"
-	@cd terraform && TARGETS="$$(../scripts/guest-targets.sh $(VM) targets)" \
+	@cd terraform && TARGETS="$$(../scripts/guest-targets.sh $(VM) group-targets)" \
 		&& terraform init && terraform apply -no-color -auto-approve $$TARGETS
 	@# Targeted applies don't recompute ansible_inventory_yaml — a brand-new
 	@# guest never reaches vms.yaml without this (found building apt-cache).
@@ -188,6 +188,14 @@ ifndef VM
 endif
 endif
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml -i ansible/inventory/vps.yaml ansible/playbooks/update-all.yml $(if $(VM),--limit $(VM),)
+
+# Pause AdGuard filtering on BOTH resolver instances (no config sync — IaC deploys them identically)
+adguard-pause:
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/adguard-pause.yml -e "adguard_pause_minutes=$(or $(MINUTES),10)"
+
+# Add a DNS rewrite on BOTH resolver instances (config template is initial-only; live edits go via API)
+adguard-rewrite:
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/adguard-rewrite.yml -e "adguard_rewrite_domain=$(DOMAIN) adguard_rewrite_answer=$(ANSWER)"
 
 update-dns:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/update-dns.yml

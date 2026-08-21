@@ -1,5 +1,18 @@
 ---
-# No role-specific variables — all referenced variables come from
-# pre_tasks (dns_zones, ipv4_prefix_reversed, network_data,
-# internal_network_cidr) or the secrets fact
-# (secrets.infrastructure.bind_tsig_key_secret).
+# Zone data (dns_zones, ipv4_prefix_reversed, network_data, internal_network_cidr)
+# comes from pre_tasks; the TSIG secret from secrets.infrastructure.
+
+# Authoritative pair (ADR 0003): first group member is the zone primary (DDNS
+# target; zone files under /var/lib/bind — AppArmor denies named writes in
+# /etc/bind, which silently breaks DDNS journals), the rest are secondaries fed by AXFR
+# (zone files under /var/cache/bind). A single instance is simply the primary.
+bind9_instances: "{{ groups['dns'] | default([inventory_hostname]) }}"
+bind9_primary: "{{ inventory_hostname == bind9_instances[0] }}"
+
+# BIND VIP (ADR 0029 pattern): keepalived between the instances, address =
+# vlans.yaml dns_server.bind_ipv4 (what AdGuard forwards internal zones to).
+bind9_vip_ipv4: "{{ network_data.dns_server.bind_ipv4 }}"
+bind9_vrrp_router_id: 15
+# `stopped` stages keepalived installed+configured without claiming the VIP —
+# for the swap beside a restored copy that still holds the address.
+bind9_vip_state: started

@@ -1,6 +1,6 @@
 # ADR 0012 — Internal DNS must not be poisoned by public resolvers: AdGuard-first base, durable networkd drop-ins
 
-- **Status:** Accepted
+- **Status:** Accepted — amended for containers by [ADR 0029](0029-adguard-is-an-lxc-pair-behind-a-keepalived-vip-container-resolv-conf-is-terraform-owned-adguard-only-except-on-the-resolver-cts.md) (CT resolv.conf is Terraform-owned; the drop-in mechanism stays VM-only)
 - **Date:** 2026-07-27
 - **Deciders:** operator + agent (session 2026-07-27)
 - **Context source:** ADR 0011 Consequences (exporter repairs) · ansible/roles/dns_config/ · network-data/vlans.yaml
