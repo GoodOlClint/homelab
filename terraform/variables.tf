@@ -74,9 +74,9 @@ variable "cloud_image" {
     checksum_algorithm = optional(string, "sha256")
   })
   default = {
-    url       = "https://cloud-images.ubuntu.com/noble/20260725/noble-server-cloudimg-amd64.img"
-    file_name = "noble-server-cloudimg-amd64-20260725.img"
-    checksum  = "d1940f7d69d343355e183dff1e08a59852d32e7309baa7a4bad8365b11b005ac"
+    url       = "https://cloud-images.ubuntu.com/resolute/20260731/resolute-server-cloudimg-amd64.img"
+    file_name = "resolute-server-cloudimg-amd64-20260731.img"
+    checksum  = "9dc7c5363c0146a08ba0c9aa834d82c2c6dfbb1c471ad9a2f0aba1189e21be05"
   }
 }
 
@@ -113,9 +113,9 @@ variable "lxc_template" {
     checksum_algorithm = optional(string, "sha512")
   })
   default = {
-    url       = "http://download.proxmox.com/images/system/ubuntu-24.04-standard_24.04-2_amd64.tar.zst"
-    file_name = "ubuntu-24.04-standard_24.04-2_amd64.tar.zst"
-    checksum  = "45c2978e6b97fe292ada95fe06834276015e5739a594db4de2fdfd830fa0c37942e8ae118fc1e32ffd9154b3f9378b592738b668ea3957db41f2907b86f219de"
+    url       = "http://download.proxmox.com/images/system/ubuntu-26.04-standard_26.04-1_amd64.tar.zst"
+    file_name = "ubuntu-26.04-standard_26.04-1_amd64.tar.zst"
+    checksum  = "d5607f124d01f8ddfebd8e7da34c0022fb2a464e1662ee1e39a13f5ed1bae08a7364c486247fbd9f69f26c710729884ee5047aadb89f33a40066cd5f0d9def88"
   }
 }
 

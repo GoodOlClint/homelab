@@ -68,8 +68,8 @@ locals {
     },
     {
       name         = "infisical"
-      vm_id        = 105
-      vlans        = ["vlan10", "vlan40"]
+      vm_id        = 205 # old 105 + 100 (ADR 0028)
+      vlans        = ["vlan40"]
       ip_offset    = 105
       cpu_cores    = 4
       memory_mb    = 4096 # PostgreSQL + Redis + Infisical server
