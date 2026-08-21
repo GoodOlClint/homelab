@@ -13,7 +13,7 @@ services:
       - POSTGRES_DB={{ postgres_default_db | default('qstick') }}
       - TZ={{ timezone }}
     volumes:
-      - postgres:/var/lib/postgresql/data:rw
+      - /opt/plex-services/postgres/data:/var/lib/postgresql/data:rw
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U {{ postgres_user }}"]
       interval: 30s
@@ -39,7 +39,7 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - /opt/plex-services/sonarr:/config:rw
-      - plex_data:/data:rw
+      - /mnt/data:/data:rw
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8989/ping"]
       interval: 30s
@@ -65,7 +65,7 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - /opt/plex-services/radarr:/config:rw
-      - plex_data:/data:rw
+      - /mnt/data:/data:rw
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:7878/ping"]
       interval: 30s
@@ -176,7 +176,7 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - /opt/plex-services/bazarr:/config:rw
-      - plex_data:/data:rw
+      - /mnt/data:/data:rw
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:6767/ping"]
       interval: 30s
@@ -202,7 +202,7 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - /opt/plex-services/lidarr:/config:rw
-      - plex_data:/data:rw
+      - /mnt/data:/data:rw
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8686/ping"]
       interval: 30s
@@ -225,7 +225,7 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - /opt/plex-services/sabnzbd:/config:rw
-      - plex_data:/data:rw
+      - /mnt/data:/data:rw
 {% if scratch_disk_mount is defined %}
       - {{ scratch_disk_mount }}:/scratch:rw
 {% endif %}
@@ -276,12 +276,3 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
-
-volumes:
-  plex_data:
-    driver: local
-    driver_opts:
-      type: nfs
-      o: "addr={{ plex_nfs_src.split(':')[0] }},{{ nfs_mount_options }}"
-      device: "{{ plex_nfs_src }}/data"
-  postgres:

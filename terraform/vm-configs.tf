@@ -14,7 +14,8 @@ locals {
   # `index` is the volume's permanent disk slot on the holder VM (ADR 0020) —
   # assign the next free number (1..31) and NEVER renumber an existing volume.
   data_volumes = {
-    plex = { index = 1, size_gb = 150 } # Library dir, 62 GB measured 2026-08-21
+    plex          = { index = 1, size_gb = 150 } # Library dir, 62 GB measured 2026-08-21
+    plex_services = { index = 2, size_gb = 40 }  # arr configs 3 GB + postgres 0.6 GB + dumps, measured 2026-08-21
   }
 
   # --- Infrastructure VMs ---
@@ -94,7 +95,7 @@ locals {
     {
       name           = "unifi"
       vm_id          = 200 # old 100 + 100 (ADR 0028)
-      mgmt_ip_offset = 10 # static management IP (decoupled from VMID)
+      mgmt_ip_offset = 10  # static management IP (decoupled from VMID)
       vlans          = ["vlan10"]
       cpu_cores      = 4
       memory_mb      = 4096 # UniFi needs decent RAM for MongoDB
@@ -126,7 +127,7 @@ locals {
       ip_offset    = 117
       cpu_cores    = 2
       memory_mb    = 2048
-      disk_size_gb = 20 # ISO + netboot initrd ≈ 6 GiB; all derived from the pinned ISO (ADR 0026)
+      disk_size_gb = 20         # ISO + netboot initrd ≈ 6 GiB; all derived from the pinned ISO (ADR 0026)
       image        = "debian13" # proxmox-auto-install-assistant + signed shim/grub come from the Proxmox trixie repo
     },
   ]
@@ -167,15 +168,26 @@ locals {
         { source = "/mnt/nas/plex/data/media", path = "/mnt/media", read_only = true },
       ]
     },
+    # docker-on-LXC (nesting + keyctl). Configs, postgres data dir and the
+    # pg_dump timer's output ride the data volume (ADR 0015); media is the
+    # node's /mnt/nas/plex/data bind-mounted rw (ADR 0017) — the arrs write it.
+    # SABnzbd's par2 scratch lives on the rootfs (/mnt/scratch).
     {
       name         = "plex-services"
-      vm_id        = 106
-      vlans        = ["vlan10", "vlan40", "vlan20"]
+      type         = "lxc"
+      node_name    = "ms-01a"
+      vm_id        = 206 # old 106 + 100 (ADR 0028)
+      vlans        = ["vlan40"]
       ip_offset    = 106
       cpu_cores    = 4
-      memory_mb    = 4096
-      disk_size_gb = 256
-      extra_disks  = [{ size_gb = 100 }] # Scratch disk for SABnzbd par2 repair
+      memory_mb    = 8192
+      disk_size_gb = 64
+      keyctl       = true
+      media_idmap  = true
+      data_volume  = { name = "plex_services", path = "/opt/plex-services" }
+      bind_mounts = [
+        { source = "/mnt/nas/plex/data", path = "/mnt/data" },
+      ]
     },
     {
       name         = "nvidia-licensing"

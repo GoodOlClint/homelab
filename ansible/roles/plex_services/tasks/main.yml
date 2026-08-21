@@ -96,43 +96,6 @@
     postgres_password: "{{ secrets.plex_services.postgres_password }}"
   tags: [plex_services, secrets]
 
-- name: Install NFS client packages
-  ansible.builtin.apt:
-    name:
-      - nfs-common
-      - nfs-kernel-server
-    state: present
-    update_cache: true
-
-  when: nfs_enabled | default(true)
-  tags:
-    - plex_services
-    - packages
-    - nfs
-
-- name: Ensure sunrpc module loads at boot for NFS tuning
-  ansible.builtin.copy:
-    content: "sunrpc\n"
-    dest: /etc/modules-load.d/sunrpc.conf
-    mode: '0644'
-  when: nfs_enabled | default(true)
-  tags:
-    - plex_services
-    - nfs
-    - tuning
-
-- name: Tune NFS RPC slot table for concurrent I/O
-  ansible.posix.sysctl:
-    name: sunrpc.tcp_slot_table_entries
-    value: "128"
-    sysctl_file: /etc/sysctl.d/90-nfs-tuning.conf
-    reload: true
-  when: nfs_enabled | default(true)
-  tags:
-    - plex_services
-    - nfs
-    - tuning
-
 - name: Configure Docker syslog logging
   ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/configure_docker_logging.yml"
   tags: [plex_services, docker, logging, config]
@@ -176,35 +139,14 @@
     - plex_services
     - config
 
-- name: Format scratch disk
-  community.general.filesystem:
-    fstype: "{{ scratch_disk_fstype }}"
-    dev: "{{ scratch_disk_device }}"
-    opts: "-b 4096 -O ^has_journal"
-  when: scratch_disk_device is defined
-  tags:
-    - plex_services
-    - disks
-
-- name: Mount scratch disk
-  ansible.posix.mount:
-    path: "{{ scratch_disk_mount }}"
-    src: "{{ scratch_disk_device }}"
-    fstype: "{{ scratch_disk_fstype }}"
-    opts: defaults,noatime,nodiratime,nosuid,nodev,discard
-    state: mounted
-  when: scratch_disk_device is defined
-  tags:
-    - plex_services
-    - disks
-
-- name: Set scratch disk ownership
+- name: Create SABnzbd scratch directory
   ansible.builtin.file:
     path: "{{ scratch_disk_mount }}"
+    state: directory
     owner: "{{ plex_services['sabnzbd'].PUID }}"
     group: "{{ plex_services_pgid }}"
     mode: '0775'
-  when: scratch_disk_device is defined
+  when: scratch_disk_mount is defined
   tags:
     - plex_services
     - disks
@@ -230,6 +172,7 @@
       - postgresql-client-common
       - postgresql-client
       - python3-psycopg2
+      - python3-docker
       - smbclient
     state: present
     update_cache: true
@@ -239,32 +182,63 @@
     - packages
     - postgres
 
-- name: Copy PostgreSQL PBS backup script
-  ansible.builtin.template:
-    src: postgres_pbs_backup.sh.j2
-    dest: /usr/local/bin/postgres_pbs_backup.sh
+- name: Create postgres dump directory on the data volume
+  ansible.builtin.file:
+    path: /opt/plex-services/backups
+    state: directory
     owner: root
     group: root
-    mode: '0755'
-  when: pbs_backup_enabled | default(true)
+    mode: '0700'
   tags:
     - plex_services
     - backup
-    - pbs
     - postgres
 
-- name: Copy PostgreSQL legacy backup script (SMB)
-  ansible.builtin.template:
-    src: postgres_backup.sh.j2
-    dest: /usr/local/bin/postgres_backup.sh
-    owner: root
-    group: root
-    mode: '0755'
-  when: not (pbs_backup_enabled | default(true))
+- name: Install postgres pg_dump timer
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/{{ item.name }}"
+    content: "{{ item.content }}"
+    mode: '0644'
+  loop:
+    - name: plex-services-pgdump.service
+      content: |
+        [Unit]
+        Description=pg_dumpall of the plex-services postgres onto the data volume
+        Requires=docker.service
+        After=docker.service
+
+        [Service]
+        Type=oneshot
+        ExecStart=/bin/sh -c 'f=/opt/plex-services/backups/pg_dumpall-$(date +%%F).sql.gz; docker exec postgres pg_dumpall -U {{ postgres_user | default('qstick') }} | gzip > $f.tmp && mv $f.tmp $f'
+        ExecStartPost=/usr/bin/find /opt/plex-services/backups -name 'pg_dumpall-*.sql.gz' -mtime +{{ postgres_backup_retention_days | default(30) }} -delete
+    - name: plex-services-pgdump.timer
+      content: |
+        [Unit]
+        Description=Daily pg_dumpall of the plex-services postgres
+
+        [Timer]
+        OnCalendar=*-*-* 02:00:00
+        Persistent=true
+
+        [Install]
+        WantedBy=timers.target
+  loop_control:
+    label: "{{ item.name }}"
+  register: _pgdump_units
   tags:
     - plex_services
     - backup
-    - smb
+    - postgres
+
+- name: Enable postgres pg_dump timer
+  ansible.builtin.systemd:
+    name: plex-services-pgdump.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ _pgdump_units is changed }}"
+  tags:
+    - plex_services
+    - backup
     - postgres
 
 - name: Copy PostgreSQL restore script
@@ -278,38 +252,6 @@
     - plex_services
     - restore
     - postgres
-
-- name: Create PostgreSQL PBS backup cron job
-  ansible.builtin.cron:
-    name: "PostgreSQL PBS backup"
-    cron_file: postgres_pbs_backup
-    minute: "0"
-    hour: "2"
-    job: "/usr/local/bin/postgres_pbs_backup.sh >> /var/log/postgres_pbs_backup.log 2>&1"
-    user: root
-  when: pbs_backup_enabled | default(true)
-  tags:
-    - plex_services
-    - backup
-    - pbs
-    - postgres
-    - cron
-
-- name: Create PostgreSQL legacy backup cron job (SMB)
-  ansible.builtin.cron:
-    name: "PostgreSQL backup"
-    cron_file: postgres_backup
-    minute: "0"
-    hour: "2"
-    job: "/usr/local/bin/postgres_backup.sh >> /var/log/postgres_backup.log 2>&1"
-    user: root
-  when: not (pbs_backup_enabled | default(true))
-  tags:
-    - plex_services
-    - backup
-    - smb
-    - postgres
-    - cron
 
 - name: Create plex services docker compose file
   ansible.builtin.template:
@@ -334,44 +276,6 @@
     - plex_services
     - docker
     - service
-
-- name: Recreate NFS Docker volume if mount options changed
-  tags:
-    - plex_services
-    - nfs
-    - compose
-  block:
-    - name: Inspect existing plex_data Docker volume
-      community.docker.docker_volume_info:
-        name: plex-services_plex_data
-      register: _plex_data_volume
-      failed_when: false
-
-    - name: Check if NFS mount options need update
-      ansible.builtin.set_fact:
-        _nfs_volume_needs_recreate: >-
-          {{ _plex_data_volume.volume is defined and
-             _plex_data_volume.volume.Options is defined and
-             nfs_mount_options not in (_plex_data_volume.volume.Options.o | default('')) }}
-
-    - name: Stop all services before volume recreate
-      community.docker.docker_compose_v2:
-        project_src: /opt/plex-services
-        state: absent
-        remove_volumes: false
-      when: _nfs_volume_needs_recreate | bool
-
-    - name: Remove outdated NFS volume
-      community.docker.docker_volume:
-        name: plex-services_plex_data
-        state: absent
-      when: _nfs_volume_needs_recreate | bool
-
-    - name: Start services with updated NFS volume
-      community.docker.docker_compose_v2:
-        project_src: /opt/plex-services
-        state: present
-      when: _nfs_volume_needs_recreate | bool
 
 - name: Check if PostgreSQL container already exists
   community.docker.docker_container_info:
@@ -518,41 +422,6 @@
     - plex_services
     - postgres
     - database
-
-- name: Check if PostgreSQL is already initialized
-  ansible.builtin.stat:
-    path: /opt/plex-services/.postgres_initialized
-  register: _postgres_init_file
-
-- name: Attempt to restore databases from remote backup on first deployment
-  ansible.builtin.shell: |
-    if /usr/local/bin/postgres_restore.sh --list-remote | grep -q "\.sql\.gz$"; then
-      echo "Remote backups found, attempting to restore..."
-
-      databases=$(/usr/local/bin/postgres_restore.sh --list-remote | grep -o '^[^_]*' | sort -u)
-
-      for db in $databases; do
-        echo "Restoring database: $db"
-        /usr/local/bin/postgres_restore.sh -d "$db" -r -l || echo "Failed to restore $db, continuing..."
-      done
-
-      echo "Database restore completed"
-      # Mark as initialized since we restored existing data
-      touch /opt/plex-services/.postgres_initialized
-      exit 0
-    else
-      echo "No remote backups found, will proceed with database initialization"
-      exit 1
-    fi
-  when:
-    - not _postgres_init_file.stat.exists
-    - postgres_backup_enabled | default(true)
-  register: postgres_restore_result
-  failed_when: false
-  tags:
-    - plex_services
-    - postgres
-    - restore
 
 - name: Ensure lxml is installed for XML config management
   ansible.builtin.apt:
@@ -959,21 +828,13 @@
       ansible.builtin.set_fact:
         _sabnzbd_misc: "{{ _sabnzbd_misc_config.json.config.misc | default({}) }}"
 
-    - name: Enable SABnzbd API access from Docker network
-      ansible.builtin.uri:
-        url: "http://localhost:8080/api?mode=set_config&section=misc&keyword=inet_exposure&value=4&apikey={{ arr_api_keys.sabnzbd }}&output=json"
-        method: GET
-        return_content: true
-      register: _sabnzbd_inet_change
-      when: (_sabnzbd_misc.inet_exposure | default('0') | string) != '4'
-
     - name: Add container hostnames to SABnzbd host whitelist
       ansible.builtin.uri:
         url: "http://localhost:8080/api?mode=set_config&section=misc&keyword=host_whitelist&value=sabnzbd,sonarr,radarr,lidarr,prowlarr&apikey={{ arr_api_keys.sabnzbd }}&output=json"
         method: GET
         return_content: true
       register: _sabnzbd_whitelist_change
-      when: (_sabnzbd_misc.host_whitelist | default('')) != 'sabnzbd,sonarr,radarr,lidarr,prowlarr'
+      when: (_sabnzbd_misc.host_whitelist | default([])) != ['sabnzbd', 'sonarr', 'radarr', 'lidarr', 'prowlarr']
 
     - name: Mark SABnzbd wizard as completed
       ansible.builtin.uri:
@@ -1004,9 +865,7 @@
         state: restarted
         wait: true
         wait_timeout: 60
-      when: >-
-        (_sabnzbd_inet_change is not skipped) or
-        (_sabnzbd_whitelist_change is not skipped)
+      when: _sabnzbd_whitelist_change is not skipped
 
     - name: Wait for SABnzbd API after restart
       ansible.builtin.uri:
@@ -1017,9 +876,7 @@
       until: sabnzbd_restart_health is succeeded
       retries: 15
       delay: 3
-      when: >-
-        (_sabnzbd_inet_change is not skipped) or
-        (_sabnzbd_whitelist_change is not skipped)
+      when: _sabnzbd_whitelist_change is not skipped
 
     - name: Set SABnzbd complete download directory
       ansible.builtin.uri:
@@ -1034,7 +891,7 @@
         method: GET
         return_content: true
       vars:
-        _sabnzbd_incomplete_dir: "{{ '/scratch' if scratch_disk_device is defined else '/data/usenet/incomplete' }}"
+        _sabnzbd_incomplete_dir: "{{ '/scratch' if scratch_disk_mount is defined else '/data/usenet/incomplete' }}"
       when: (_sabnzbd_misc.download_dir | default('')) != _sabnzbd_incomplete_dir
 
     - name: Enable SABnzbd auto-resume on disk space available
@@ -1930,19 +1787,18 @@
         section: "{{ item.section }}"
         option: "{{ item.key }}"
         value: "{{ item.value }}"
-        no_extra_spaces: true
       loop:
         - { section: PMS, key: pms_ip, value: "{{ seerr_plex_hostname }}" }
         - { section: PMS, key: pms_port, value: "{{ seerr_plex_port }}" }
         - { section: PMS, key: pms_token, value: "{{ secrets.plex.plex_token }}" }
         - { section: PMS, key: pms_ssl, value: "{{ seerr_plex_use_ssl | ternary('1', '0') }}" }
-        - { section: PMS, key: pms_url_manual, value: "1" }
         - { section: General, key: http_base_url, value: "{{ tautulli_base_url | default('') }}" }
         - { section: General, key: allow_guest_access, value: "0" }
       loop_control:
         label: "[{{ item.section }}] {{ item.key }}"
       register: _tautulli_config_changes
       no_log: true
+      when: _tautulli_pms_check is changed
 
     - name: Restart Tautulli to apply config changes
       community.docker.docker_compose_v2:
