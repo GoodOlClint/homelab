@@ -49,13 +49,12 @@
   when: item.template_src is defined
   notify: restart infisical-agent
 
+# Existence only: a service role may own the directory (plex-services'
+# recyclarr dir is 2010:2000 0750) and pinning root/0755 here flip-flops it.
 - name: Ensure parent directories exist for agent-rendered secrets
   ansible.builtin.file:
     path: "{{ item.dest_path | dirname }}"
     state: directory
-    owner: root
-    group: root
-    mode: '0755'
   loop: "{{ infisical_agent_templates }}"
   loop_control:
     label: "{{ item.dest_path | dirname }}"
