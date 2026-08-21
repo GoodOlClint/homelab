@@ -1,0 +1,39 @@
+---
+# make adguard-rewrite DOMAIN=<fqdn> ANSWER=<ip> — add a DNS rewrite on every
+# resolver instance. The config template is initial-only (AdGuardHome rewrites
+# its own YAML), so live rewrites go through the API; no-op when already present.
+- name: Add AdGuard DNS rewrite on all instances
+  hosts: adguard
+  gather_facts: false
+  vars_files:
+    - ../group_vars/all.yml
+  pre_tasks:
+    - name: Load configuration and secrets
+      ansible.builtin.include_tasks: ../tasks/full_pre_tasks.yml
+      tags: [always]
+  tasks:
+    - name: List current rewrites
+      ansible.builtin.uri:
+        url: "http://{{ ansible_host }}:3000/control/rewrite/list"
+        url_username: "{{ secrets.homepage.adguard_username }}"
+        url_password: "{{ secrets.homepage.adguard_password }}"
+        force_basic_auth: true
+      register: _rewrites
+      delegate_to: localhost
+      become: false
+
+    - name: "Add rewrite {{ adguard_rewrite_domain }} -> {{ adguard_rewrite_answer }}"
+      ansible.builtin.uri:
+        url: "http://{{ ansible_host }}:3000/control/rewrite/add"
+        method: POST
+        url_username: "{{ secrets.homepage.adguard_username }}"
+        url_password: "{{ secrets.homepage.adguard_password }}"
+        force_basic_auth: true
+        body_format: json
+        body:
+          domain: "{{ adguard_rewrite_domain }}"
+          answer: "{{ adguard_rewrite_answer }}"
+      when: _rewrites.json | selectattr('domain', 'equalto', adguard_rewrite_domain) | selectattr('answer', 'equalto', adguard_rewrite_answer) | list | length == 0
+      delegate_to: localhost
+      become: false
+      changed_when: true
