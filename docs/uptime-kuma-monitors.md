@@ -56,7 +56,7 @@ Defaults for every monitor: 2 retries (1 for AxoSyslog, so the syslog path trips
 
 ## Rebuilding
 
-Kuma keeps everything in `/var/lib/uptime-kuma/kuma.db` on the monitoring VM. **That path must be in the backup set** — the Ansible role creates the directory but no monitor configuration.
+Kuma keeps everything in `/var/lib/monitoring/uptime-kuma/kuma.db` on the openobserve guest (the ADR 0015 data volume). **That path must be in the backup set** — the Ansible role creates the directory but no monitor configuration.
 
 To reseed a fresh Kuma (after creating the admin account through the UI on first visit):
 

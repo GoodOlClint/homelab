@@ -10,7 +10,7 @@ import json
 import sqlite3
 import sys
 
-DB = "/var/lib/uptime-kuma/kuma.db"
+DB = "/var/lib/monitoring/uptime-kuma/kuma.db"
 NOTIFICATION_NAME = "ntfy (homelab alerts)"
 
 targets = json.load(open(sys.argv[1]))
