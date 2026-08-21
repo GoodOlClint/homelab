@@ -2,11 +2,25 @@
 
 The pfSense NUT package is the NUT server for both UPSes (architecture and rationale in [physical-buildout-plan.md](physical-buildout-plan.md#repo-hook-nut-graceful-shutdown)). The package is hand-managed in the pfSense GUI per ADR-0005 (no pfSense IaC); this doc captures the config so it can be re-entered after a pfSense rebuild. There is no REST-API lane for NUT (the pfSense REST API package has no NUT endpoints), so re-entry is GUI or `pfSsh.php`.
 
-Both UPSes are on pfSense's USB. The GUI configures one UPS; the second rides the package's Advanced-settings boxes, which append raw NUT config.
+Both UPSes are on pfSense's USB (via a small powered hub on an extension — enumerates fine as `ugen0.3`/`ugen0.4`). The GUI configures one UPS; the second rides the package's Advanced-settings boxes, which append raw NUT config.
 
-## ups.conf (GUI UPS + Advanced box)
+## ups.conf (GUI UPS + Advanced boxes)
+
+The package renders ups.conf in three parts: the **global** Advanced box (`ups_conf`, "Additional configuration lines for ups.conf") first, then the GUI-defined `[network-ups]` stanza, then the **per-driver** Advanced box (`extra_args`) appended verbatim — which is where the extra `[ups]` stanza lives.
+
+Global box — required, or both drivers stay "Driver not connected" ("UPS Daemon pending" in the GUI):
 
 ```
+user = root
+```
+
+`usbhid-ups` drops to user `nut`, but the devd rule set (`/usr/local/etc/devd/nut-usb.conf`) has no entry for the OR2200PFCRT2U / CP1500PFCRM2U product IDs, so the `ugen` nodes stay `root:operator 0600` and the driver cannot open them. Rediscovered 2026-08-21 after the 26.07 upgrade dropped the NUT package (and its whole config section) — note every pfSense upgrade may require re-entering all of this; check Services → UPS after each one.
+
+Rendered result:
+
+```
+user = root
+
 [network-ups]
     driver = usbhid-ups
     port = auto
