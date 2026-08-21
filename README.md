@@ -423,6 +423,7 @@ Self-hosted secret management platform deployed via Docker Compose:
 | update-dns.yml | DNS VMs | DNS configuration updates |
 | adguard-pause.yml | adguard group | Disable filtering on both AdGuard instances for n minutes (`make adguard-pause`) |
 | adguard-rewrite.yml | adguard group | Add a DNS rewrite on both AdGuard instances via the API (`make adguard-rewrite`) |
+| data-volumes.yml | proxmox group | Format + chown new holder volumes, blkid-guarded (`make data-volumes`) |
 | backup-clients.yml | Multiple | PBS client configuration |
 | vps-rotate-keys.yml | VPS | WireGuard key rotation |
 | refresh-identity.yml | Service VMs | Refresh Infisical machine identity credentials |
@@ -581,6 +582,7 @@ The Makefile is the primary operational interface.
 | `plan <vm>` | Targeted Terraform plan for one guest (VM or LXC — resolved by `scripts/guest-targets.sh`) |
 | `build <vm>` | Targeted Terraform apply + inventory + Ansible for one guest |
 | `rebuild <vm>` | Replace the guest in one atomic apply (`-replace`), clean SSH key, re-run Ansible. Also reconciles VM↔LXC conversions and HA registration changes |
+| `data-volumes` | Apply the data-volume holder VM alone, then format+chown any new volume (ADR 0020). Run after adding a `data_volumes` entry and before `build` of its consumer |
 | `ansible <vm>` | Run site.yml limited to a single host (supports `TAGS=`) |
 | `docker-config <vm>` | Deploy only compose+config templates and restart (no full role) |
 

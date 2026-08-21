@@ -1,0 +1,34 @@
+---
+# One-time format of new detached data volumes (ADR 0020): mkfs.ext4 + chown of
+# the fs root to the consumer's mapped owner, before the first consumer starts.
+# Guarded on blkid — an already-formatted volume is never touched. lost+found
+# goes: it stays host-root owned (unmapped in the CT) and breaks any package
+# postinst that chown -R's the mount.
+- name: Format new data-volume holder disks
+  hosts: proxmox
+  become: true
+  gather_facts: false
+  vars:
+    data_volume_holder_vmid: 900
+    data_volume_owner: "100000:100000" # unprivileged CT root
+  tasks:
+    - name: Format and chown unformatted holder volumes
+      ansible.builtin.shell: |
+        set -euo pipefail
+        cat /etc/pve/nodes/*/qemu-server/{{ data_volume_holder_vmid }}.conf | grep -E '^(scsi|virtio|sata)[0-9]+:' | while IFS= read -r line; do
+          volid=$(echo "$line" | sed -E 's/^[a-z]+[0-9]+: ([^,]+),.*/\1/')
+          storage=${volid%%:*}; image=${volid#*:}
+          pool=$(pvesh get /storage/$storage --output-format json | python3 -c 'import sys,json;print(json.load(sys.stdin)["pool"])')
+          dev=$(rbd map "$pool/$image")
+          if [ -z "$(blkid -o value -s TYPE "$dev" || true)" ]; then
+            mkfs.ext4 -q -L "$image" "$dev"
+            mnt=$(mktemp -d); mount "$dev" "$mnt"; chown {{ data_volume_owner }} "$mnt"; rmdir "$mnt/lost+found"; umount "$mnt"; rmdir "$mnt"
+            echo "FORMATTED $volid"
+          fi
+          rbd unmap "$dev"
+        done
+      args:
+        executable: /bin/bash
+      run_once: true
+      register: _dv_format
+      changed_when: "'FORMATTED' in _dv_format.stdout"

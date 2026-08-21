@@ -38,7 +38,7 @@ ifneq (,$(filter build rebuild plan ansible docker-config update,$(firstword $(M
 endif
 
 # === Core Operations ===
-.PHONY: all apply plan init terraform-apply terraform-bootstrap inventory bootstrap ansible-bootstrap build rebuild rebuild-infisical
+.PHONY: all apply plan init terraform-apply terraform-bootstrap inventory bootstrap ansible-bootstrap build rebuild rebuild-infisical data-volumes
 
 all: apply
 
@@ -99,6 +99,13 @@ endif
 	@$(MAKE) inventory
 	@echo "Configuring guest: $(VM)"
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/site.yml --limit $(VM)
+
+# Data-volume holder (ADR 0020): apply the holder ALONE, then format+chown the
+# new volume(s) on the cluster plane — never the holder and its consumer in one
+# apply (the consumer would start against a raw disk).
+data-volumes:
+	@cd terraform && terraform init && terraform apply -no-color -auto-approve -target=module.vms.proxmox_virtual_environment_vm.data_volume_holder
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/proxmox.yaml ansible/playbooks/data-volumes.yml
 
 # Rebuild = one atomic apply with -replace: no destroyed-but-not-rebuilt window,
 # and cloud-init/file resources refresh in the same graph. Still staged with
@@ -419,7 +426,7 @@ hosts-apply:
 # hosts-apply. Needs ansible/inventory/proxmox.yaml (see proxmox.example.yml)
 # and the WP2 fields in network-data/local/host-bindings.yaml.
 proxmox-hosts:
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/proxmox.yaml ansible/playbooks/proxmox-hosts.yml $(if $(LIMIT),--limit $(LIMIT),)
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/proxmox.yaml ansible/playbooks/proxmox-hosts.yml $(if $(LIMIT),--limit $(LIMIT),) $(if $(TAGS),--tags $(TAGS),)
 
 # NUT upsmon secondaries on the physical hosts (nut_clients inventory group).
 # Server side is the pfSense NUT package — see docs/pfsense-nut.md.
