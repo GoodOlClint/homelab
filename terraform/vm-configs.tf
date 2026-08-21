@@ -143,8 +143,9 @@ locals {
       memory_mb    = 16384 # 16GB — Valheim, BOINC (GPU), Kiwix, Doge-node
       disk_size_gb = 100
     },
-    # iGPU QuickSync via /dev/dri passthrough; gids are the CT-side render (991)
-    # and video (44) groups of the Ubuntu 26.04 template. Library on the plex
+    # iGPU QuickSync via /dev/dri passthrough, by PCI path so it is the Intel
+    # device on every node (msi's renderD128 is the Quadro); gids are the CT-side
+    # render (991) and video (44) groups of the Ubuntu 26.04 template. Library on the plex
     # data volume (ADR 0015), media via the host's /mnt/nas/plex mount (ADR 0017).
     {
       name         = "plex"
@@ -158,8 +159,8 @@ locals {
       disk_size_gb = 20
       media_idmap  = true
       devices = [
-        { path = "/dev/dri/renderD128", gid = 991 },
-        { path = "/dev/dri/card1", gid = 44 },
+        { path = "/dev/dri/by-path/pci-0000:00:02.0-render", gid = 991 },
+        { path = "/dev/dri/by-path/pci-0000:00:02.0-card", gid = 44 },
       ]
       data_volume = { name = "plex", path = "/var/lib/plexmediaserver" }
       bind_mounts = [
