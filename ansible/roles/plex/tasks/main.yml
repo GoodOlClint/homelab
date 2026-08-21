@@ -180,6 +180,30 @@
     - plex
     - users
 
+# PVE creates a passed-through device at the path given in the CT config; the
+# iGPU is passed by PCI path (node-independent), but Plex only scans
+# /dev/dri/renderD* — give it the conventional names.
+- name: Symlink the passed-through iGPU to the names Plex scans
+  ansible.builtin.copy:
+    dest: /etc/tmpfiles.d/plex-dri.conf
+    mode: '0644'
+    content: |
+      L+ /dev/dri/renderD128 - - - - /dev/dri/by-path/pci-0000:00:02.0-render
+      L+ /dev/dri/card1 - - - - /dev/dri/by-path/pci-0000:00:02.0-card
+  register: _plex_dri_links
+  when: ansible_virtualization_type == 'lxc'
+  tags:
+    - plex
+    - packages
+
+- name: Create the iGPU symlinks now
+  ansible.builtin.command:
+    cmd: systemd-tmpfiles --create /etc/tmpfiles.d/plex-dri.conf
+  when: _plex_dri_links is changed
+  tags:
+    - plex
+    - packages
+
 - name: Remove old Plex GPG key and repo files
   ansible.builtin.file:
     path: "{{ item }}"
