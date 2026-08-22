@@ -147,7 +147,7 @@ locals {
   # Application services: media, containers, home automation, licensing
   services_vms = [
     # docker-on-LXC. Valheim config + world saves ride the data volume (ADR 0015);
-    # the kiwix ZIM library (538 GB) and the dogecoin chain (222 GB) stay on the
+    # the kiwix ZIM library (538 GB) stays on
     # NAS as node bind mounts (ADR 0017). No GPU: BOINC was decommissioned with
     # this rebuild (restorable from git history).
     {
@@ -157,14 +157,13 @@ locals {
       vm_id        = 204 # old 104 + 100 (ADR 0028)
       vlans        = ["vlan40"]
       ip_offset    = 104
-      cpu_cores    = 16
-      memory_mb    = 16384 # NAS-bind page cache (dogecoin chain reads) counts against the CT; 8 GB thrashed at memory.high 2026-08-22
+      cpu_cores    = 4
+      memory_mb    = 16384 # NAS-bind page cache counts against the CT; 8 GB thrashed at memory.high 2026-08-22
       disk_size_gb = 32
       keyctl       = true
       data_volume  = { name = "docker", path = "/opt/docker" }
       bind_mounts = [
         { source = "/mnt/nas/docker/kiwix", path = "/mnt/kiwix", read_only = true },
-        { source = "/mnt/nas/docker/dogecoin", path = "/mnt/dogecoin" },
       ]
     },
     # iGPU QuickSync via /dev/dri passthrough, by PCI path so it is the Intel

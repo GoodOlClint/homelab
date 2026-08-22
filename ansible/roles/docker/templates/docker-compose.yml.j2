@@ -12,41 +12,16 @@ services:
       - {{ docker_kiwix_dir }}:/data:ro
     command:
       - '*.zim'
-  doge-node:
-    container_name: doge-node
-{# The entrypoint chown -R's /data as root before dropping to 999; the CT's mapped root #}
-{# cannot chown on NFS (ADR 0017 bind mount owned 100999 on the node), so start as 999 directly #}
-    user: "999:999"
-    image: goodolclint/dogecoin-node:latest
-    restart: unless-stopped
-    ports:
-      - 22555:22555
-      - 3000:3000
-    environment:
-      - TZ={{ timezone }}
-    volumes:
-      - {{ docker_dogecoin_dir }}:/data
   valheim:
     container_name: valheim
-    image: valheim-server:playfab-test
+{# Upstream for now: the PlayFab-aware status.json/healthcheck lives in the local fork #}
+{# (~/Source/valheim-server-docker) — open a PR upstream, then restore the healthcheck. #}
+    image: ghcr.io/community-valheim-tools/valheim-server:latest
     restart: unless-stopped
 {# The server only writes the world on a clean SIGINT (ZNet.Shutdown -> Save(sync:true)). #}
 {# Docker's default 10s stop timeout SIGKILLs mid-save; the image's own shutdown waits 29s #}
 {# before escalating and supervisord allows 90s, so give it room. #}
     stop_grace_period: 120s
-{# The failure this exists for: PlayFab returning ServiceUnavailable at boot — server up, #}
-{# no lobby, a zombie nothing external could see. A2S can't see it either (the Steam query #}
-{# responder never starts under crossplay). status.json is the direct signal: valheim-status #}
-{# rewrites it every 10s and `error` goes non-null the moment the PlayFab query fails. #}
-{# The mtime clause catches valheim-status itself dying with a stale-but-valid file. #}
-{# Every failure mode here is repaired by the container restart autoheal will perform; #}
-{# a sustained PlayFab outage will restart-loop, as it would have with the log check. #}
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS localhost/status.json | jq -e '.error == null' >/dev/null && [ -n \"$(find /opt/valheim/htdocs/status.json -newermt '-2 minutes')\" ]"]
-      interval: 60s
-      timeout: 10s
-      retries: 3
-      start_period: 6m
     cap_add:
       - sys_nice
     ports:
@@ -79,12 +54,6 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - {{ docker_base_dir }}/valheim/config:/config
       - {{ docker_base_dir }}/valheim/data:/opt/valheim
-    labels:
-      - autoheal=true
-{# autoheal restarts via the API's ?t= param, defaulting to AUTOHEAL_DEFAULT_STOP_TIMEOUT=10 — #}
-{# a SIGKILL 10s into a world save, ignoring stop_grace_period. Match it per-container. #}
-      - autoheal.stop.timeout=120
-
 {# Restarts any container marked unhealthy that carries the autoheal=true label. #}
 {# Gives the Valheim PlayFab zombie an auto-recovery path Docker's restart policy lacks #}
 {# (restart: unless-stopped never fires on an unhealthy-but-running container). #}
