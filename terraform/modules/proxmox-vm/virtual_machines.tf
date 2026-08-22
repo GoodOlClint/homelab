@@ -130,13 +130,16 @@ locals {
     )
   }
 
-  # Service-facing IP: services VLAN IP if VM has it, otherwise falls back to management IP.
-  # Used by Homepage dashboard and other templates that need user-accessible URLs.
+  # Service-facing IP: services VLAN leg, else management leg, else the guest's
+  # first leg — a guest on neither plane (vlan30, ADR 0030) has no address on
+  # the management subnet.
   vm_service_ips = {
     for vm_config in var.vm_configurations : vm_config.name =>
     contains(vm_config.vlans, var.services_vlan) && vm_config.ip_offset != null
     ? cidrhost(local.merged_vlans[var.services_vlan].subnet, vm_config.ip_offset)
-    : local.vm_management_ips[vm_config.name]
+    : (contains(vm_config.vlans, var.management_vlan) || vm_config.ip_offset == null
+      ? local.vm_management_ips[vm_config.name]
+      : cidrhost(local.merged_vlans[vm_config.vlans[0]].subnet, vm_config.ip_offset))
   }
 }
 # Generate cloud-init user data files for each VM (only when not using Packer)

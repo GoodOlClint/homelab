@@ -2,7 +2,7 @@
 
 Decision: [ADR 0026](decisions/0026-bare-metal-nodes-install-over-pxe-from-a-fleet-guest-answer-files-served-over-http-secure-boot-stays-on.md) · plan: [pxe-netboot-plan.md](pxe-netboot-plan.md). The `pxe` guest is a fleet VM (`make build pxe`); everything below is the pfSense half that Terraform does not own.
 
-Values come from the live fleet: `<pxe-ip>` is the `pxe` guest's **services-VLAN (VLAN 40)** address (`terraform output` / `ansible/inventory/vms.yaml`, `service_ip`). The install VLAN is the one whose native the node install ports carry — **INFRASTRUCTURE (VLAN 30)** today; when the post-WP2 flip moves the install ports' native to Management (plan), repeat this section on the MANAGEMENT interface.
+Values come from the live fleet: `<pxe-ip>` is the `pxe` guest's address — since the 2026-08-22 re-home ([ADR 0030](decisions/0030-three-management-planes-vlan10-out-of-band-vlan30-hypervisor-with-pdm-pbs-apt-cache-pxe-vlan40-services.md)) pxe 217 sits **on the INFRASTRUCTURE VLAN (30) itself**, `ansible_host` in `ansible/inventory/vms.yaml`; the old 117 served from its VLAN 40 address. **Every `<pxe-ip>` field below (Next Server, option 250, the firewall rule) must be repointed when 217 replaces 117.** The install VLAN is the one whose native the node install ports carry — **INFRASTRUCTURE (VLAN 30)** today; when the post-WP2 flip moves the install ports' native to Management (plan), repeat this section on the MANAGEMENT interface.
 
 ## 1. DHCP server — Network Booting
 

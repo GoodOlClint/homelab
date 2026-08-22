@@ -140,18 +140,18 @@ locals {
     },
     {
       name         = "apt-cache"
-      vm_id        = 116
-      vlans        = ["vlan10", "vlan40"]
-      ip_offset    = 116
+      vm_id        = 216 # old 116 + 100 (ADR 0028); hypervisor plane (ADR 0030)
+      vlans        = ["vlan30"]
+      ip_offset    = 16
       cpu_cores    = 2
       memory_mb    = 2048
       disk_size_gb = 100 # apt-cacher-ng cache — disposable derived state (ADR 0021), no data volume
     },
     {
       name         = "pxe"
-      vm_id        = 117
-      vlans        = ["vlan10", "vlan40"]
-      ip_offset    = 117
+      vm_id        = 217 # old 117 + 100 (ADR 0028); hypervisor plane (ADR 0030)
+      vlans        = ["vlan30"]
+      ip_offset    = 17
       cpu_cores    = 2
       memory_mb    = 2048
       disk_size_gb = 20         # ISO + netboot initrd ≈ 6 GiB; all derived from the pinned ISO (ADR 0026)
