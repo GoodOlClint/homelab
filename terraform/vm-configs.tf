@@ -158,7 +158,7 @@ locals {
       vlans        = ["vlan40"]
       ip_offset    = 104
       cpu_cores    = 4
-      memory_mb    = 16384 # NAS-bind page cache counts against the CT; 8 GB thrashed at memory.high 2026-08-22
+      memory_mb    = 8192
       disk_size_gb = 32
       keyctl       = true
       data_volume  = { name = "docker", path = "/opt/docker" }
