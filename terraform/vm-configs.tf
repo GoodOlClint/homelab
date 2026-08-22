@@ -97,7 +97,9 @@ locals {
       name         = "proxmox-backup"
       vm_id        = 201 # old 101 + 100 (ADR 0028)
       node_name    = "ms-01b"
-      vlans        = ["vlan10", "vlan40", "vlan20"] # vlan20 leg stays: the datastore is the Synology iSCSI LUN (ADR 0017 exception)
+      # Hypervisor plane (ADR 0030) + the vlan20 leg for the Synology iSCSI LUN (ADR 0017 exception).
+      # ip_offset 101 keeps the LUN-side address; on vlan30 it sits inside the DHCP pool (pfSense probes before leasing).
+      vlans        = ["vlan30", "vlan20"]
       ip_offset    = 101
       cpu_cores    = 4
       memory_mb    = 4096
