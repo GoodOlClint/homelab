@@ -42,7 +42,7 @@ Every guest falls into exactly one class; the matrix below assigns them.
 | mcp | LXC | S | Assumed stateless — **verify at WP4 rebuild time**; promote to V if it holds real state | Minutes | Nothing |
 | minio | LXC | V | Bucket contents on a data volume | Minutes; S3 consumers retry | `mc mirror` out of the old VM → volume (plan, decided) |
 | doge | LXC | V | Chain data on a data volume (avoids multi-day re-sync on every rebuild) | Minutes; nothing depends on it | Copy datadir (plan) |
-| docker-legacy | docker-LXC | V | Valheim world data (+ any surviving app volumes; authentik currently disabled) on a data volume | Game sessions drop — announce, rebuild off-hours | Copy world data/volumes out of the old VM |
+| docker-legacy | docker-LXC | V | Valheim config + world saves on a data volume (index 4); kiwix ZIMs and the dogecoin chain stay on the NAS as node bind mounts; BOINC decommissioned 2026-08-21 (git history) | Game sessions drop — announce, rebuild off-hours | DONE 2026-08-21 as LXC 204: Valheim trees rsynced from the NAS export onto the volume |
 | LLM | VM (new) | V | Model cache on a data volume — re-download is the acceptable fallback, but tens of GB per rebuild is needless | User-facing only; no dependents | New guest, nothing to carry |
 | PDM | VM (new) | S | Management-pane config; verify at deploy whether anything merits a volume | None — humans use the node UIs meanwhile | New guest, nothing to carry |
 | vps | external | S | WG keys in Infisical `/vps`; `make vps-rebuild` is the existing rebuild path; ADR 0013 constraints (IPv4 endpoint, measured MTU 1400) stand | External access down during rebuild; LAN unaffected | Not part of the cluster cutover |
