@@ -1,6 +1,6 @@
 # ADR 0017 — Guests are single-homed on the services VLAN; storage reaches containers via host bind mounts
 
-- **Status:** Accepted
+- **Status:** Accepted — amended by [ADR 0030](0030-three-management-planes-vlan10-out-of-band-vlan30-hypervisor-with-pdm-pbs-apt-cache-pxe-vlan40-services.md) (management-plane guests on VLAN 10)
 - **Date:** 2026-07-28
 - **Deciders:** operator + agent (session 2026-07-28)
 - **Context source:** docs/rebuild-as-routine-design.md · vm-configs.tf dual-homing · CLAUDE.md routing-policy trap

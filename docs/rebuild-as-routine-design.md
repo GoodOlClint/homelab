@@ -41,12 +41,19 @@ Every guest falls into exactly one class; the matrix below assigns them.
 | homepage | LXC | S | Config is IaC; tokens in Infisical `/homepage` | Cosmetic | Nothing |
 | mcp | LXC | S | Assumed stateless — **verify at WP4 rebuild time**; promote to V if it holds real state | Minutes | Nothing |
 | minio | LXC | V | Bucket contents on a data volume | Minutes; S3 consumers retry | `mc mirror` out of the old VM → volume (plan, decided) |
-| doge | LXC | V | Chain data on a data volume (avoids multi-day re-sync on every rebuild) | Minutes; nothing depends on it | Copy datadir (plan) |
+| doge | retired 2026-08-22 (dropped from docker 204, f70e0ce) | — | Chain data on a data volume (avoids multi-day re-sync on every rebuild) | Minutes; nothing depends on it | Copy datadir (plan) |
 | docker-legacy | docker-LXC | V | Valheim config + world saves on a data volume (index 4); kiwix ZIMs and the dogecoin chain stay on the NAS as node bind mounts; BOINC decommissioned 2026-08-21 (git history) | Game sessions drop — announce, rebuild off-hours | DONE 2026-08-21 as LXC 204: Valheim trees rsynced from the NAS export onto the volume |
 | LLM | VM (new) | V | Model cache on a data volume — re-download is the acceptable fallback, but tens of GB per rebuild is needless | User-facing only; no dependents | New guest, nothing to carry |
-| PDM | VM (new) | S | Management-pane config; verify at deploy whether anything merits a volume | None — humans use the node UIs meanwhile | New guest, nothing to carry |
+| PDM | VM (new, vlan30 — ADR 0030) | S | Management-pane config; verify at deploy whether anything merits a volume | None — humans use the node UIs meanwhile | New guest, nothing to carry |
 | vps | external | S | WG keys in Infisical `/vps`; `make vps-rebuild` is the existing rebuild path; ADR 0013 constraints (IPv4 endpoint, measured MTU 1400) stand | External access down during rebuild; LAN unaffected | Not part of the cluster cutover |
 | pfsense | external | — | Hand-managed (ADR 0005). Ask: periodic `config.xml` export to the NAS so the DR story is at least a copy, not a memory | n/a | One manual change at cutover: DHCP hands out both resolver IPs (plan WP4) |
+
+| control | VM (new, vlan10 — ADR 0030) | S | MeshCentral + Portainer server config on a data volume | Console/management only | New guest |
+| talos-cp ×3 | VM (new, pinned, no HA — ADR 0031) | V | etcd on the VM disk; workloads on Ceph CSI PVs | Services-plane workloads reschedule; quorum survives one node | New guests |
+| registry (Zot) | k8s workload (ADR 0022/0031) | V | blobs on a PV | pulls fall through to upstream | New; minio retires |
+| CI runners | ARC pods (ADR 0032) | S | none | jobs queue | Replaces github-runner 113 |
+
+Stacks marked docker-LXC above are transitional; ADR 0031 moves them to the Talos cluster one at a time (order in the plan's post-migration change plan).
 
 ## Image policy (ADR 0016)
 
@@ -75,7 +82,7 @@ Everything below is already decided in the plan/ADR 0004 — this consolidates i
 3. Plex: Library dir copy-out → new data volume.
 4. plex-services: pg_dump + configs → new data volume.
 5. minio: `mc mirror` copy-out → new data volume.
-6. doge: datadir copy → new data volume.
+6. doge: retired 2026-08-22 — nothing to carry.
 7. docker-legacy: Valheim world data → new data volume.
 8. Kuma (optional, cheap): sqlite copy if the uptime record is wanted; monitors re-seed regardless.
 9. Manual: pfSense DHCP dual-resolver change; AdGuard admin password seeded into Infisical **before** the first AdGuard LXC build so both instances deploy with known creds.
