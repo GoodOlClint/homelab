@@ -28,215 +28,44 @@
     secret_dict_path: "docker"
   tags: [docker, valheim, secrets]
 
-- name: Install NVIDIA GRID driver
-  ansible.builtin.import_role:
-    name: nvidia
-  tags:
-    - docker
-    - nvidia
-    - driver
-
-- name: Check if NVIDIA container toolkit GPG key exists
-  ansible.builtin.stat:
-    path: /etc/apt/trusted.gpg.d/libnvidia-container.gpg
-  register: nvidia_gpg_key
-  tags:
-    - docker
-    - nvidia
-    - packages
-
-- name: Ensure apt keyrings directory exists
-  ansible.builtin.file:
-    path: /etc/apt/keyrings
-    state: directory
-    mode: '0755'
-  tags:
-    - docker
-    - nvidia
-    - packages
-
-- name: Download nvidia-container-toolkit GPG key
-  ansible.builtin.get_url:
-    url: https://nvidia.github.io/libnvidia-container/gpgkey
-    dest: /etc/apt/keyrings/libnvidia-container.asc
-    mode: '0644'
-  when: not nvidia_gpg_key.stat.exists or nvidia_gpg_key.stat.size == 0
-  tags:
-    - docker
-    - nvidia
-    - packages
-
-- name: Dearmor nvidia-container-toolkit GPG key
-  ansible.builtin.command:
-    # No `creates:` — see the plex role: it skips on an existing 0-byte file and
-    # would defeat the size guard below. `when:` provides idempotency.
-    cmd: gpg --batch --dearmor --yes -o /etc/apt/trusted.gpg.d/libnvidia-container.gpg /etc/apt/keyrings/libnvidia-container.asc
-  when: not nvidia_gpg_key.stat.exists or nvidia_gpg_key.stat.size == 0
-  tags:
-    - docker
-    - nvidia
-    - packages
-
-- name: Check if NVIDIA container toolkit repo is present
-  ansible.builtin.shell: grep -q '^deb .*/libnvidia-container' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null
-  register: nvidia_repo_present
-  changed_when: false
-  failed_when: false
-  tags:
-    - docker
-    - nvidia
-    - packages
-
-- name: Ensure nvidia-container-toolkit repo
-  ansible.builtin.apt_repository:
-    repo: deb [signed-by=/etc/apt/trusted.gpg.d/libnvidia-container.gpg] https://nvidia.github.io/libnvidia-container/stable/deb/$(ARCH) /
+# The 26.04 LXC template lacks python3-requests, which community.docker needs.
+- name: Install compose module dependencies
+  ansible.builtin.apt:
+    name: python3-docker
     state: present
-    filename: nvidia-container-toolkit
-  when: nvidia_repo_present.rc != 0
-  tags:
-    - docker
-    - nvidia
-    - packages
-
-- name: Ensure nvidia-container-toolkit package
-  ansible.builtin.package:
-    name: nvidia-container-toolkit
     update_cache: true
-    state: present
-  tags:
-    - docker
-    - nvidia
-    - packages
-
-- name: Check if nvidia-container-runtime is configured in Docker
-  ansible.builtin.shell: |
-    grep -q '"nvidia-container-runtime"' /etc/docker/daemon.json 2>/dev/null
-  register: nvidia_runtime_configured
-  changed_when: false
-  failed_when: false
-  tags:
-    - docker
-    - nvidia
-    - config
-
-- name: Configure NVIDIA runtime for Docker
-  ansible.builtin.shell: nvidia-ctk runtime configure --runtime=docker
-  args:
-    executable: /bin/bash
-  register: nvidia_ctk_result
-  when: nvidia_runtime_configured.rc != 0
-  tags:
-    - docker
-    - nvidia
-    - config
-
-- name: Restart Docker after NVIDIA toolkit install
-  ansible.builtin.systemd:
-    name: docker
-    state: restarted
-  when: nvidia_ctk_result is defined and nvidia_ctk_result is changed
-  tags:
-    - docker
-    - nvidia
-    - service
+  tags: [docker, packages]
 
 - name: Configure Docker syslog logging
   ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/configure_docker_logging.yml"
   tags: [docker, logging, config]
 
-- name: Verify CUDA container works
-  community.docker.docker_container:
-    name: nvidia-gpu-validation
-    image: ubuntu
-    command: nvidia-smi
-    runtime: nvidia
-    state: started
-    device_requests:
-      - driver: nvidia
-        count: -1
-        capabilities:
-          - gpu
-  tags:
-    - docker
-    - nvidia
-    - validate
-
-- name: Remove nvidia-gpu-validation container after test
-  community.docker.docker_container:
-    name: nvidia-gpu-validation
-    state: absent
-  tags:
-    - docker
-    - nvidia
-    - validate
-
-- name: Remove unused Ubuntu image after validation
-  community.docker.docker_image:
-    name: ubuntu
-    state: absent
-    force_absent: true
-  tags:
-    - docker
-    - nvidia
-    - validate
-
-
-- name: Ensure docker compose directory exists
+- name: Ensure compose and data directories exist
   ansible.builtin.file:
-    path: "{{ docker_base_dir }}"
+    path: "{{ item }}"
     state: directory
     owner: root
     group: root
     mode: '0755'
+  loop:
+    - "{{ docker_base_dir }}"
+    - "{{ docker_base_dir }}/valheim/config"
+    - "{{ docker_base_dir }}/valheim/data"
   tags:
     - docker
     - config
 
-- name: Deploy docker-compose.yml to the docker VM
+- name: Deploy docker-compose.yml to the docker host
   ansible.builtin.template:
     src: templates/docker-compose.yml.j2
     dest: "{{ docker_base_dir }}/docker-compose.yml"
     owner: root
     group: root
     mode: '0600'
-  vars:
-    docker_nfs_server: "{{ docker_nfs_src.split(':')[0] }}"
-    docker_nfs_path: "{{ docker_nfs_src.split(':')[1] }}"
-    kiwix_timezone: "{{ timezone }}"
-    boinc_user: 1000
-    boinc_group: 988
-    boinc_timezone: "{{ timezone }}"
-    doge_node_timezone: "{{ timezone }}"
   tags:
     - docker
     - config
     - compose
-
-# Stays as state:absent — hosts configured before the cloudflared retirement
-# still carry the tunnel token in this file.
-- name: Remove retired docker .env (held the unused cloudflared token)
-  ansible.builtin.file:
-    path: "{{ docker_base_dir }}/.env"
-    state: absent
-  tags:
-    - docker
-    - config
-
-- name: Set reboot required flag
-  ansible.builtin.set_fact:
-    reboot_required: "{{ nvidia_ctk_result is defined and nvidia_ctk_result is changed }}"
-  tags:
-    - docker
-
-- name: Reboot system if major Docker configuration changes were made
-  ansible.builtin.reboot:
-    reboot_timeout: 300
-    connect_timeout: 20
-    test_command: systemctl is-active docker
-  when: reboot_required | default(false)
-  tags:
-    - docker
-    - reboot
 
 - name: Deploy containers with Docker Compose
   community.docker.docker_compose_v2:

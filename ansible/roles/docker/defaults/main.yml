@@ -2,6 +2,9 @@
 # timezone is defined in group_vars/all.yml
 
 docker_base_dir: /opt/docker
+# Node bind mounts of the NAS docker export (ADR 0017): kiwix ZIMs read-only, the dogecoin chain rw
+docker_kiwix_dir: /mnt/kiwix
+docker_dogecoin_dir: /mnt/dogecoin
 
 # Valheim Server Configuration
 valheim_server_name: "Homelab Valheim"

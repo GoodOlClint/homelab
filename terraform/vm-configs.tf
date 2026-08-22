@@ -17,6 +17,7 @@ locals {
     plex          = { index = 1, size_gb = 150 } # Library dir, 62 GB measured 2026-08-21
     plex_services = { index = 2, size_gb = 40 }  # arr configs 3 GB + postgres 0.6 GB + dumps, measured 2026-08-21
     openobserve   = { index = 3, size_gb = 100 } # OO stream 40 GB (db 1.8) + Prometheus TSDB 2.2 GB + Kuma/Grafana, measured 2026-08-21
+    docker        = { index = 4, size_gb = 20 }  # Valheim config 0.5 GB + server/world backups 3.3 GB, measured 2026-08-21
   }
 
   # --- Infrastructure VMs ---
@@ -145,14 +146,26 @@ locals {
   # --- Services VMs ---
   # Application services: media, containers, home automation, licensing
   services_vms = [
+    # docker-on-LXC. Valheim config + world saves ride the data volume (ADR 0015);
+    # the kiwix ZIM library (538 GB) and the dogecoin chain (222 GB) stay on the
+    # NAS as node bind mounts (ADR 0017). No GPU: BOINC was decommissioned with
+    # this rebuild (restorable from git history).
     {
       name         = "docker"
-      vm_id        = 104
-      vlans        = ["vlan10", "vlan40", "vlan20"]
+      type         = "lxc"
+      node_name    = "ms-01a"
+      vm_id        = 204 # old 104 + 100 (ADR 0028)
+      vlans        = ["vlan40"]
       ip_offset    = 104
       cpu_cores    = 4
-      memory_mb    = 16384 # 16GB — Valheim, BOINC (GPU), Kiwix, Doge-node
-      disk_size_gb = 100
+      memory_mb    = 8192
+      disk_size_gb = 32
+      keyctl       = true
+      data_volume  = { name = "docker", path = "/opt/docker" }
+      bind_mounts = [
+        { source = "/mnt/nas/docker/kiwix", path = "/mnt/kiwix", read_only = true },
+        { source = "/mnt/nas/docker/dogecoin", path = "/mnt/dogecoin" },
+      ]
     },
     # iGPU QuickSync via /dev/dri passthrough, by PCI path so it is the Intel
     # device on every node (msi's renderD128 is the Quadro); gids are the CT-side

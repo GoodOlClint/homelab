@@ -6,43 +6,26 @@ services:
     ports:
       - 8090:8080
     environment:
-      - TZ={{ kiwix_timezone }}
+      - TZ={{ timezone }}
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      - kiwix_config:/data
+      - {{ docker_kiwix_dir }}:/data:ro
     command:
       - '*.zim'
-  boinc:
-    image: linuxserver/boinc:latest
-    container_name: boinc
-    runtime: nvidia
-    restart: unless-stopped
-    ports:
-      - 7080:8080
-      - 7081:8181
-      - 31416:31416
-    security_opt:
-      - seccomp:unconfined
-    environment:
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=all
-      - PUID={{ boinc_user }}
-      - PGID={{ boinc_group }}
-      - TZ={{ boinc_timezone }}
-    volumes:
-      - /etc/localtime:/etc/localtime:ro
-      - boinc_config:/config
   doge-node:
     container_name: doge-node
+{# The entrypoint chown -R's /data as root before dropping to 999; the CT's mapped root #}
+{# cannot chown on NFS (ADR 0017 bind mount owned 100999 on the node), so start as 999 directly #}
+    user: "999:999"
     image: goodolclint/dogecoin-node:latest
     restart: unless-stopped
     ports:
       - 22555:22555
       - 3000:3000
     environment:
-      - TZ={{ doge_node_timezone }}
+      - TZ={{ timezone }}
     volumes:
-      - doge-node_config:/data
+      - {{ docker_dogecoin_dir }}:/data
   valheim:
     container_name: valheim
     image: valheim-server:playfab-test
@@ -94,8 +77,8 @@ services:
       - UPDATE_CRON=0 4 * * *
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      - valheim_config:/config
-      - valheim_data:/opt/valheim
+      - {{ docker_base_dir }}/valheim/config:/config
+      - {{ docker_base_dir }}/valheim/data:/opt/valheim
     labels:
       - autoheal=true
 {# autoheal restarts via the API's ?t= param, defaulting to AUTOHEAL_DEFAULT_STOP_TIMEOUT=10 — #}
@@ -115,35 +98,3 @@ services:
       - AUTOHEAL_INTERVAL=30
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-
-volumes:
-  kiwix_config:
-    driver: local
-    driver_opts:
-      type: nfs
-      o: "addr={{ docker_nfs_server }},{{ nfs_mount_options }}"
-      device: ":{{ docker_nfs_path }}/kiwix"
-  boinc_config:
-    driver: local
-    driver_opts:
-      type: nfs
-      o: "addr={{ docker_nfs_server }},{{ nfs_mount_options }}"
-      device: ":{{ docker_nfs_path }}/boinc"
-  doge-node_config:
-    driver: local
-    driver_opts:
-      type: nfs
-      o: "addr={{ docker_nfs_server }},{{ nfs_mount_options }}"
-      device: ":{{ docker_nfs_path }}/dogecoin"
-  valheim_config:
-    driver: local
-    driver_opts:
-      type: nfs
-      o: "addr={{ docker_nfs_server }},{{ nfs_mount_options }}"
-      device: ":{{ docker_nfs_path }}/valheim/config"
-  valheim_data:
-    driver: local
-    driver_opts:
-      type: nfs
-      o: "addr={{ docker_nfs_server }},{{ nfs_mount_options }}"
-      device: ":{{ docker_nfs_path }}/valheim/data"
