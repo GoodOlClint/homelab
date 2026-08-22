@@ -70,6 +70,18 @@ If Plex/Valheim are on different VLANs, ensure pfSense routes or NATs the traffi
 - **Peer public key on pfSense must match the Infisical `/vps` keypair** (`vps_wg_public_key`). Rebuilds always redeploy the Infisical private key; if keys are ever rotated, update Infisical *and* pfSense together, or the next rebuild resurrects the old key and handshakes fail silently.
 - **VPS-side peer AllowedIPs must cover the internal supernets** (IPv4 /12 + the ULA /48), not just the transit /24. Cryptokey routing silently drops LAN-sourced SSH/pings to the VPS and breaks its telegraf/rsyslog egress otherwise. Real values live in gitignored `ansible/group_vars/local/all.yml` (`vps_wg_tunnel.peer_allowed_ips`).
 
+## Tunnel dead after a VPS rebuild: kill the stale pf state (2026-08-22)
+
+Symptom: `make vps-rebuild` fails at "Wait for WireGuard handshake"; on pfSense `wg show tun_wg1` shows the sent counter climbing but no handshake, a WAN packet capture on UDP 51821 shows **zero packets leaving**, and the firewall log shows no blocks. Keys, endpoint, routes and the VPS side are all correct.
+
+Cause: while the old VPS was alive its keepalives created an inbound `if-bound` + `reply-to` pf state for `pfsense:51821 <-> vps:51821` under the WAN pass rule. pfSense's own outbound initiations share that 4-tuple, so they ride the stale state instead of creating a new one — and refresh it every keepalive, so it never expires. After the instance behind the reserved IP is replaced the state silently eats every packet.
+
+Fix (root on pfSense): `pfctl -ss | grep 51821` to see it, then `pfctl -k 216.128.142.97; pfctl -k 0.0.0.0/0 -k 216.128.142.97`. The handshake lands within one keepalive. Then `make vps-close-ssh`.
+
+### Peers that "randomly" die at a reboot: the kernel peer table vs `config.xml` (2026-08-22)
+
+The WireGuard package loads `config.xml` into `if_wg` only on *Apply* and at boot. A peer edited and applied keeps working from the kernel table even after `config.xml` is written with older keys — right up to the next reboot, which reloads the file and kills every peer whose key moved in between. Seen 2026-08-22: between Jul 30 and Aug 18 the iPhone peer reverted to its pre-reinstall key and the VPS peer to an older key while other sections kept advancing (an older copy of the WireGuard section written back — stale edit form or a Packages-area restore; the window had rotated out of the 30-revision history, so the trigger is unconfirmed). Both kept working from the kernel until the 26.07 reboot. Signature: several peers fail together at a reboot, `wg show tun_wg0 dump` holds keys the clients no longer have, and the revision log (`/cf/conf/backup/*.xml`, `<revision>` block, readable unprivileged) shows no WireGuard edits. Fix: re-enter each client's current public key and **Apply Changes** (saving alone does not touch the kernel — verify with `wg show`). Keep a dated config export off-box (`~/Downloads/config-pfSense.*.xml` was what proved the revert) and raise Diagnostics → Backup & Restore → *Backup Count* above the default 30 so the history outlives a quiet month. Diagnostic split that got here: WAN packet capture, `pfctl -vsr` counters on the `:51820` rule, `sockstat -l` for port ownership, then `if_wg` silence = key mismatch.
+
 ## Tunnel MTU (measured — do not compute)
 
 Decision and evidence: [ADR 0013](decisions/0013-vps-tunnel-peers-over-reserved-ipv4-mtu-is-measured-per-address-family.md).
