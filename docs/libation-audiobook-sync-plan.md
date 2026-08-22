@@ -52,6 +52,20 @@ Verified against the current role, not assumed:
 
 So adding the service is a host_vars entry plus a compose block. The role needs new tasks only for the staging/publish paths.
 
+## Built 2026-08-22 (P0 of the post-migration plan)
+
+Steps 1–2 below are done on plex-services 206: `libation` in `plex_services` host_vars (UID 2013), `libation_image` pinned `rmcrackan/libation:13.7.10` (Docker Hub tags carry no `v`), `SLEEP_TIME=6h`, `/config` on the data volume, `/data` = `/mnt/data/media/Audiobooks` (the existing Plex section 11 root), master key generated into Infisical `/plex-services/libation_master_key` and delivered as `LIBATION_MASTER_KEY` via the agent env file. `Settings.json` is role-templated (`SplitFilesByChapter: false`, `FolderTemplate: <author>/<title> [<id>]`) and a change recreates the container.
+
+Staging (open question 4, decided): the image forces `InProgress=/tmp`, so `/tmp` is bound to `{{ scratch_disk_mount }}/libation` on the rootfs. Download + decrypt + convert happen there; only the finished book is copied into `/data`. The final copy is cross-filesystem, so Plex can see a book mid-copy once — accepted; bind `/tmp` to a sibling directory on the media export if that ever bites.
+
+**Remaining operator step (3):** until an account exists the container exits 3 and restart-loops every minute (harmless; `docker ps` shows *Restarting*). Run once:
+
+```
+docker exec -it libation LibationCli login-external --libationFiles /config --locale us --account <audible email>
+```
+
+open the printed URL, sign in, paste the final URL back, then `LibationCli list-accounts --libationFiles /config`. The next poll liberates the library into `/data`; watch `/mnt/scratch/libation` during the first run. Steps 4–6 follow once that converges.
+
 ## Sequencing
 
 1. **WP4, with the rest of the service definitions.** Add the host_vars entry, defaults, and compose block against the bind-mount model. Libation's `/config` (SQLite library database, encrypted account settings) goes on the data volume alongside the arr configs; staging goes on a disposable local path.

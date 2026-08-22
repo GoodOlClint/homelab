@@ -109,6 +109,10 @@
         dest_path: /etc/infisical/secrets/plex-services-seerr.env
         template_src: secrets/plex-services-seerr.env.tpl.j2
         post_command: "docker compose -f /opt/plex-services/docker-compose.yml up -d --force-recreate seerr"
+      - name: plex-services-libation
+        dest_path: /etc/infisical/secrets/plex-services-libation.env
+        template_src: secrets/plex-services-libation.env.tpl.j2
+        post_command: "docker compose -f /opt/plex-services/docker-compose.yml up -d --force-recreate libation"
       - name: cloudflared
         dest_path: /etc/infisical/secrets/cloudflared.env
         template_src: secrets/cloudflared.env.tpl.j2

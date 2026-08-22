@@ -119,6 +119,10 @@ plex_services:
     PUID: 2011
     PGID: "{{ plex_services_pgid }}"
     dbs: []
+  libation:
+    PUID: 2013
+    PGID: "{{ plex_services_pgid }}"
+    dbs: []
 
 # Recyclarr v8 Configuration — TRaSH Guide quality profiles
 # Use `docker exec recyclarr recyclarr list quality-profiles sonarr` for available trash IDs
