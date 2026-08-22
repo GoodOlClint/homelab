@@ -111,7 +111,7 @@ Each Infisical folder is owned by the role that generates/provisions its secrets
 | `/pbs` | proxmox_backup | — (no agent) | pbs_admin_password, pbs_backup_user_password | — |
 | `/infrastructure` | bind9 | — (no agent) | bind_tsig_key_secret | unifi_admin_password, synology_admin_password |
 | `/homepage` | control (portainer_api_key only) | homepage | portainer_api_key | adguard_*, unifi_*, authentik_token |
-| `/control` | control | — (no agent) | portainer_admin_password | — |
+| `/control` | control, pdm | — (no agent) | portainer_admin_password, pdm_root_password | — |
 | `/minio` | minio | minio | minio_root_password | — |
 | `/github-runner` | github_runner | — (no agent) | — | github_app_id, github_app_private_key, github_app_installation_id |
 | `/squid` | squid | — (no agent) | squid_ca_private_key, squid_ca_cert_pem | — |
@@ -163,7 +163,7 @@ Pre_tasks compute these facts from `network-data/vlans.yaml`:
 ### Tags Strategy
 Both `infrastructure.yml` and `services.yml` have play-level tags for targeted deploys:
 
-**infrastructure.yml tags:** `phase1`, `phase2`, `phase3`, `dns`, `adguard`, `infisical`, `openobserve`, `proxmox-backup`, `unifi`, `apt-cache`, `pxe`, `control`, `monitoring`, `monitoring-users`, `users`
+**infrastructure.yml tags:** `phase1`, `phase2`, `phase3`, `dns`, `adguard`, `infisical`, `openobserve`, `proxmox-backup`, `unifi`, `apt-cache`, `pxe`, `control`, `pdm`, `monitoring`, `monitoring-users`, `users`
 
 **services.yml tags:** `nvidia-licensing`, `docker`, `plex`, `plex-services`, `minio`, `homepage`, `github-runner`, `squid`, `mcp`, `lancache`
 
@@ -364,6 +364,7 @@ make ansible-services TAGS=plex,homepage  # plex + homepage plays
 - **Never rsync out of a Docker *named-volume* mountpoint (`/var/lib/docker/volumes/<v>/_data`) after `docker compose down`** — for NFS-backed volumes docker unmounts the export when the last container goes, so the path is an EMPTY directory and `rsync --delete` from it wipes the destination. The "final delta" pass of the docker→204 replace did exactly that (2026-08-21): emptied 204's Valheim trees and the server generated a fresh world before it was caught. Source the delta from the export itself (the node's `/mnt/nas/...` bind) or from the still-running container; and a 0-files-transferred delta right after a shutdown is a red flag, not a clean result
 - **Never expect an unprivileged CT's root to `chown` on an NFS bind mount** — CT root is host uid 100000, an ordinary uid to the NFS server, so any image entrypoint that "fixes volume ownership" as root before dropping privileges (`goodolclint/dogecoin-node` does) dies with `Permission denied`. `chown -R 100000+<uid>` the tree from the node once, and run the container as that uid (`user: "999:999"`) so the root branch is skipped
 - **Never remove or reorder an LXC `mount_point` expecting an in-place update** — bpg recreates the container (plan shows `1 to add, 1 to destroy` inside one `make build`), so the rootfs and anything loaded only there (a `docker load`ed local image) is gone; the holder data volume survives because it is attach-only. Read the plan line before `make build` on a CT whose binds changed (cost the valheim fork image 2026-08-22)
+- **Never let a Proxmox appliance package pull its `*-meta` Recommends onto a cloud-image guest** — `proxmox-datacenter-manager` *Recommends* `proxmox-datacenter-manager-meta`, which drags in the Proxmox kernel and `grub-pc`; `grub-pc`'s postinst has no install device on a cloud image and dpkg fails mid-transaction (cost two `make rebuild pdm` 2026-08-22). Install the real packages with `install_recommends: false`, and delete the `*-enterprise.sources` file the package drops (401 without a subscription, kills every later `apt update`) — the `pdm` and `proxmox_backup` roles both do this
 - **Never use `echo -n`** in secret generation commands — use `printf '%s'`
 - **Never use `is succeeded` alone** to gate on a registered variable — add `is not skipped`
 - **Never use `--start-at-task` with `services.yml --limit plex-services`** — breaks role dependencies

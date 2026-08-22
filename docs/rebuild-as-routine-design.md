@@ -44,7 +44,7 @@ Every guest falls into exactly one class; the matrix below assigns them.
 | doge | retired 2026-08-22 (dropped from docker 204, f70e0ce) | — | Chain data on a data volume (avoids multi-day re-sync on every rebuild) | Minutes; nothing depends on it | Copy datadir (plan) |
 | docker-legacy | docker-LXC | V | Valheim config + world saves on a data volume (index 4); kiwix ZIMs and the dogecoin chain stay on the NAS as node bind mounts; BOINC decommissioned 2026-08-21 (git history) | Game sessions drop — announce, rebuild off-hours | DONE 2026-08-21 as LXC 204: Valheim trees rsynced from the NAS export onto the volume |
 | LLM | VM (new) | V | Model cache on a data volume — re-download is the acceptable fallback, but tens of GB per rebuild is needless | User-facing only; no dependents | New guest, nothing to carry |
-| PDM | VM (new, vlan30 — ADR 0030) | S | Management-pane config; verify at deploy whether anything merits a volume | None — humans use the node UIs meanwhile | New guest, nothing to carry |
+| PDM | VM 220 (vlan30 — ADR 0030, built 2026-08-22) | S | Remotes config only (re-add via the UI wizard after a rebuild); root password in Infisical `/control` | None — humans use the node UIs meanwhile | New guest, nothing to carry |
 | vps | external | S | WG keys in Infisical `/vps`; `make vps-rebuild` is the existing rebuild path; ADR 0013 constraints (IPv4 endpoint, measured MTU 1400) stand | External access down during rebuild; LAN unaffected | Not part of the cluster cutover |
 | pfsense | external | — | Hand-managed (ADR 0005). Ask: periodic `config.xml` export to the NAS so the DR story is at least a copy, not a memory | n/a | One manual change at cutover: DHCP hands out both resolver IPs (plan WP4) |
 

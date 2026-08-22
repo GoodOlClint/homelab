@@ -1,0 +1,10 @@
+---
+pdm_proxmox_key_url: "https://enterprise.proxmox.com/debian/proxmox-archive-keyring-trixie.gpg"
+pdm_repo_suite: trixie
+pdm_repo_component: pdm-no-subscription
+# Recommends pulls proxmox-datacenter-manager-meta = Proxmox kernel + grub-pc, whose postinst fails on a cloud image
+pdm_packages:
+  - proxmox-datacenter-manager
+  - proxmox-datacenter-manager-ui
+# PDM remotes: id -> { type, nodes: [inventory hostnames in the proxmox group] }
+pdm_remotes: {}

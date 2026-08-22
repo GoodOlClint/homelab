@@ -221,6 +221,20 @@
     - phase1
     - control
 
+- name: "Phase 1: Configure pdm VM (Proxmox Datacenter Manager, ADR 0030)"
+  hosts: pdm
+  become: true
+  vars_files:
+    - ../group_vars/all.yml
+  pre_tasks: *load_all_config
+  roles:
+    - pdm
+    - rsyslog_client
+    - telegraf
+  tags:
+    - phase1
+    - pdm
+
 # PXE netboot for bare-metal PVE installs (ADR 0026). First Debian 13 guest in
 # the fleet: dns_config is netplan-specific and deliberately NOT applied here.
 - name: "Phase 1: Configure pxe VM (PVE netboot, answer files by MAC)"

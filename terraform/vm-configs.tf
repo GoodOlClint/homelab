@@ -147,6 +147,17 @@ locals {
       memory_mb    = 2048
       disk_size_gb = 100 # apt-cacher-ng cache — disposable derived state (ADR 0021), no data volume
     },
+    # Human management pane for the cluster + worklab (ADR 0030); class S, no volume.
+    {
+      name         = "pdm"
+      vm_id        = 220
+      vlans        = ["vlan30"]
+      ip_offset    = 20
+      cpu_cores    = 2
+      memory_mb    = 4096
+      disk_size_gb = 20
+      image        = "debian13"
+    },
     {
       name         = "pxe"
       vm_id        = 217 # old 117 + 100 (ADR 0028); hypervisor plane (ADR 0030)
