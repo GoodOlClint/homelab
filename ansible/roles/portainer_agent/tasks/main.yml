@@ -1,4 +1,10 @@
 ---
+- name: Install Docker SDK for Ansible docker modules
+  ansible.builtin.apt:
+    name: python3-docker
+    state: present
+  tags: [portainer, agent]
+
 - name: Deploy Portainer Agent container
   community.docker.docker_container:
     name: portainer-agent

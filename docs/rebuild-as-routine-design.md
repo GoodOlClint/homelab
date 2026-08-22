@@ -48,7 +48,7 @@ Every guest falls into exactly one class; the matrix below assigns them.
 | vps | external | S | WG keys in Infisical `/vps`; `make vps-rebuild` is the existing rebuild path; ADR 0013 constraints (IPv4 endpoint, measured MTU 1400) stand | External access down during rebuild; LAN unaffected | Not part of the cluster cutover |
 | pfsense | external | — | Hand-managed (ADR 0005). Ask: periodic `config.xml` export to the NAS so the DR story is at least a copy, not a memory | n/a | One manual change at cutover: DHCP hands out both resolver IPs (plan WP4) |
 
-| control | VM (new, vlan10 — ADR 0030) | S | MeshCentral + Portainer server config on a data volume | Console/management only | New guest |
+| control | LXC 212 (vlan10 — ADR 0030, built 2026-08-22) | S | MeshCentral data/files + Portainer state on data volume idx 5; Portainer admin password in Infisical `/control` | Console/management only | Nothing |
 | talos-cp ×3 | VM (new, pinned, no HA — ADR 0031) | V | etcd on the VM disk; workloads on Ceph CSI PVs | Services-plane workloads reschedule; quorum survives one node | New guests |
 | registry (Zot) | k8s workload (ADR 0022/0031) | V | blobs on a PV | pulls fall through to upstream | New; minio retires |
 | CI runners | ARC pods (ADR 0032) | S | none | jobs queue | Replaces github-runner 113 |

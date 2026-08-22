@@ -118,17 +118,11 @@
 - Infrastructure:
     - Portainer:
         icon: portainer.svg
-        href: https://portainer.{{ dns_zones.vlan100.zone }}
+        href: https://portainer.{{ dns_zones.vlan100.zone }}:{{ portainer_port }}
         description: Container Management
-        # TODO: Complete Portainer setup before widget will work:
-        #   1. Restart portainer container (resets 5-min admin creation window)
-        #   2. Navigate to https://portainer.{{ dns_zones.vlan100.zone }} and create admin account
-        #   3. Create API key: User Settings → Access Tokens
-        #   4. Store key in Infisical: /homepage/PORTAINER_API_KEY
-        #   5. Run: make docker-config homepage
         widget:
           type: portainer
-          url: http://{{ hostvars['homepage']['service_ip'] }}:{{ portainer_port }}
+          url: https://{{ hostvars['control']['ansible_host'] if 'control' in hostvars else 'control' }}:{{ portainer_port }}
           env: 1
           key: {{ '{{HOMEPAGE_VAR_PORTAINER_KEY}}' }}
     - AdGuard Home:

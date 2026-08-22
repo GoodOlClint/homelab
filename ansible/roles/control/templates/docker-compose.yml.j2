@@ -1,0 +1,32 @@
+services:
+  meshcentral:
+    image: {{ meshcentral_image }}
+    container_name: meshcentral
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - TZ={{ timezone }}
+      - NODE_ENV=production
+    volumes:
+      - {{ control_base_dir }}/meshcentral/data:/opt/meshcentral/meshcentral-data
+      - {{ control_base_dir }}/meshcentral/files:/opt/meshcentral/meshcentral-files
+      - {{ control_base_dir }}/meshcentral/backups:/opt/meshcentral/meshcentral-backups
+
+  portainer:
+    image: {{ portainer_image }}
+    container_name: portainer
+    restart: unless-stopped
+    command: --no-setup-token
+    ports:
+      - "{{ portainer_port }}:9443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - {{ control_base_dir }}/portainer:/data
+    healthcheck:
+      test: ["CMD", "wget", "--no-check-certificate", "-q", "--spider", "https://localhost:9443/api/system/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

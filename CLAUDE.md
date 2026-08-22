@@ -54,7 +54,7 @@ This repo automates a Proxmox-based homelab with Terraform (VM provisioning, SDN
 ### Two-Tier Architecture
 - **Tier 1 (Bootstrap):** `ansible/group_vars/bootstrap.sops.yml` — SOPS-encrypted. Contains only provider credentials (Proxmox, Vultr, Cloudflare), Infisical auth (client_id, client_secret, admin creds), and external secrets (user-provided API keys, passwords). Referenced as `bootstrap.key_name` or `bootstrap_config.key_name`.
 - **Tier 2 (Runtime):** Infisical VM — stores ALL runtime secrets. Organized into folders:
-  `/shared`, `/monitoring`, `/plex`, `/plex-services`, `/homepage`, `/docker`, `/minio`, `/vps`, `/pfsense`, `/pbs`, `/infrastructure`, `/github-runner`
+  `/shared`, `/monitoring`, `/plex`, `/plex-services`, `/homepage`, `/docker`, `/minio`, `/vps`, `/pfsense`, `/pbs`, `/infrastructure`, `/github-runner`, `/control`
   Root `/` is **empty** — all secrets live in named subfolders.
 - **No SOPS fallback.** If Infisical is unreachable, the deploy fails with a clear error. `secrets.sops.yml` is a DR artifact only (produced by `make infisical-backup`), never used at runtime.
 
@@ -110,7 +110,8 @@ Each Infisical folder is owned by the role that generates/provisions its secrets
 | `/pfsense` | — (manual ref) | — (no agent) | — | cloudflare_dns_api_token, bind_tsig_key_secret |
 | `/pbs` | proxmox_backup | — (no agent) | pbs_admin_password, pbs_backup_user_password | — |
 | `/infrastructure` | bind9 | — (no agent) | bind_tsig_key_secret | unifi_admin_password, synology_admin_password |
-| `/homepage` | — (user-provided only) | homepage | — | adguard_*, unifi_*, authentik_token, portainer_api_key |
+| `/homepage` | control (portainer_api_key only) | homepage | portainer_api_key | adguard_*, unifi_*, authentik_token |
+| `/control` | control | — (no agent) | portainer_admin_password | — |
 | `/minio` | minio | minio | minio_root_password | — |
 | `/github-runner` | github_runner | — (no agent) | — | github_app_id, github_app_private_key, github_app_installation_id |
 | `/squid` | squid | — (no agent) | squid_ca_private_key, squid_ca_cert_pem | — |
@@ -120,6 +121,7 @@ Each Infisical folder is owned by the role that generates/provisions its secrets
 - "Agent Readers" are VMs whose Infisical Agent templates include `with secret` blocks reading from this folder.
 - VMs without agents (vps, pfsense, pbs, infrastructure) consume secrets at Ansible deploy time via the `secrets` fact — not via agent.
 - `/homepage` has no owner role that generates secrets — it contains only user-provided external credentials seeded from `bootstrap.sops.yml`.
+- **A new folder must also be added to the nested-path loop in `ansible/tasks/infisical_login.yml`** — the `secrets` fact only loads the folders listed there, so an unlisted folder's secrets look absent to `generate_secret.yml` and get REGENERATED on every run (Portainer admin password rotated out from under the live instance, 2026-08-22).
 - When adding a new secret, find the correct owner folder first. If no existing folder fits, consider whether the secret truly needs a new folder or should be added to an existing one.
 
 ## Ansible Conventions
@@ -161,7 +163,7 @@ Pre_tasks compute these facts from `network-data/vlans.yaml`:
 ### Tags Strategy
 Both `infrastructure.yml` and `services.yml` have play-level tags for targeted deploys:
 
-**infrastructure.yml tags:** `phase1`, `phase2`, `phase3`, `dns`, `adguard`, `infisical`, `openobserve`, `proxmox-backup`, `unifi`, `apt-cache`, `pxe`, `monitoring`, `monitoring-users`, `users`
+**infrastructure.yml tags:** `phase1`, `phase2`, `phase3`, `dns`, `adguard`, `infisical`, `openobserve`, `proxmox-backup`, `unifi`, `apt-cache`, `pxe`, `control`, `monitoring`, `monitoring-users`, `users`
 
 **services.yml tags:** `nvidia-licensing`, `docker`, `plex`, `plex-services`, `minio`, `homepage`, `github-runner`, `squid`, `mcp`, `lancache`
 

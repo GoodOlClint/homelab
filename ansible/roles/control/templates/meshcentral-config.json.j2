@@ -1,0 +1,16 @@
+{
+  "settings": {
+    "cert": "{{ control_fqdn }}",
+    "port": 443,
+    "redirPort": 80,
+    "allowLoginToken": true,
+    "plugins": { "enabled": false }
+  },
+  "domains": {
+    "": {
+      "title": "{{ meshcentral_title }}",
+      "newAccounts": {{ meshcentral_new_accounts | to_json }},
+      "amtManager": true
+    }
+  }
+}

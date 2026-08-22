@@ -1,0 +1,15 @@
+---
+# timezone is defined in group_vars/all.yml
+control_base_dir: /opt/control
+
+meshcentral_image: "ghcr.io/ylianst/meshcentral:latest"
+meshcentral_title: "Homelab"
+# First account created through the UI becomes site admin; flip to false after that
+meshcentral_new_accounts: true
+
+portainer_image: "portainer/portainer-ce:alpine"
+portainer_port: 9443
+portainer_admin_user: "admin"
+# Inventory hosts running the portainer_agent role; registered as Portainer environments
+portainer_agent_hosts: []
+portainer_agent_port: 9001

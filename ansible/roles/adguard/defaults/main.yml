@@ -19,6 +19,7 @@ adguard_rewrite_vms:
   - squid
   - mcp
   - unifi
+  - control
 
 # Service aliases: alternative domain names pointing to existing VMs
 adguard_service_aliases:
@@ -28,6 +29,10 @@ adguard_service_aliases:
     target: nvidia-licensing
   - domain: home
     target: homepage
+  - domain: portainer
+    target: control
+  - domain: meshcentral
+    target: control
 
 # Cross-VLAN DNS rewrites: hostname resolved on a different VLAN's zone
 adguard_cross_vlan_rewrites:

@@ -18,6 +18,7 @@ locals {
     plex_services = { index = 2, size_gb = 40 }  # arr configs 3 GB + postgres 0.6 GB + dumps, measured 2026-08-21
     openobserve   = { index = 3, size_gb = 100 } # OO stream 40 GB (db 1.8) + Prometheus TSDB 2.2 GB + Kuma/Grafana, measured 2026-08-21
     docker        = { index = 4, size_gb = 20 }  # Valheim config 0.5 GB + server/world backups 3.3 GB, measured 2026-08-21
+    control       = { index = 5, size_gb = 10 }  # MeshCentral data/files + Portainer state (ADR 0030)
   }
 
   # --- Infrastructure VMs ---
@@ -102,6 +103,21 @@ locals {
       memory_mb    = 4096
       disk_size_gb = 20
       image        = "debian13" # PBS 4 is Debian-13-only (ADR 0025)
+    },
+    # Out-of-band control plane (ADR 0030): MeshCentral + Portainer server on the
+    # management VLAN; mgmt_ip_offset keeps it out of the DHCP pool.
+    {
+      name           = "control"
+      type           = "lxc"
+      node_name      = "ms-01b"
+      vm_id          = 212
+      mgmt_ip_offset = 12
+      vlans          = ["vlan10"]
+      cpu_cores      = 2
+      memory_mb      = 2048
+      disk_size_gb   = 10
+      keyctl         = true
+      data_volume    = { name = "control", path = "/opt/control" }
     },
     {
       name           = "unifi"

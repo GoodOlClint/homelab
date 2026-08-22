@@ -12,7 +12,6 @@ services:
       - caddy_config:/config
     depends_on:
       - homepage
-      - portainer
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:80"]
       interval: 30s
@@ -41,23 +40,6 @@ services:
       retries: 3
       start_period: 30s
 
-  portainer:
-    image: {{ portainer_image }}
-    container_name: portainer
-    restart: unless-stopped
-    ports:
-      - "{{ portainer_port }}:9000"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - portainer_data:/data
-    healthcheck:
-      test: ["CMD", "wget", "--no-check-certificate", "--no-verbose", "--tries=3", "--spider", "--header='Content-Type:application/json'", "http://localhost:9000/api/system/status"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
 volumes:
-  portainer_data:
   caddy_data:
   caddy_config:

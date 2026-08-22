@@ -150,6 +150,7 @@
     - infisical_client
     - dns_config
     - monitoring
+    - portainer_agent
   tags:
     - phase1
     - openobserve
@@ -192,6 +193,33 @@
   tags:
     - phase1
     - apt-cache
+
+- name: "Phase 1: Configure control LXC (MeshCentral + Portainer server, ADR 0030)"
+  hosts: control
+  become: true
+  vars_files:
+    - ../group_vars/all.yml
+  pre_tasks: *load_all_config
+  vars:
+    infisical_secret_paths: ["/shared", "/control"]
+    infisical_agent_templates:
+      - name: pbs
+        dest_path: /etc/infisical/secrets/pbs.env
+        template_src: secrets/pbs.env.tpl.j2
+    portainer_agent_hosts:
+      - plex-services
+      - docker
+      - openobserve
+      - homepage
+  roles:
+    - infisical_client
+    - pbs_client
+    - control
+    - rsyslog_client
+    - telegraf
+  tags:
+    - phase1
+    - control
 
 # PXE netboot for bare-metal PVE installs (ADR 0026). First Debian 13 guest in
 # the fleet: dns_config is netplan-specific and deliberately NOT applied here.

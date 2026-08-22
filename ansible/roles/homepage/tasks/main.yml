@@ -95,7 +95,3 @@
     project_src: "{{ homepage_base_dir }}"
     state: present
   tags: [homepage, compose, deploy]
-
-# TODO: Add authoritative BIND9 DNS records (home.* and portainer.*) via nsupdate
-# once dynamic DNS update issues are resolved. For now, homepage VM gets a
-# standard AdGuard rewrite like other VMs (see adguardhome.yaml.j2).
