@@ -24,6 +24,8 @@ Networks → Create: **CI**, VLAN `<ci.id>`, *Third-party gateway*, subnet `<ci 
 
 4. **Firewall → Rules → SERVICES** (where the runners live until ADR 0031 moves them): Pass `runner hosts` → CI net any; Pass `runner hosts` → `<VIP>` tcp/8006. Everything else from the runners toward vlan10/30 stays blocked.
 
+**State 2026-08-22:** UniFi network + pfSense interface/DHCP are done; the CI rules are deliberately **pass-any while traffic is captured** for the rule-tightening pass. The block-rfc1918 rule above is the target, not the live state — tighten once the capture shows what the integration jobs actually need (expected: nothing internal).
+
 Apply, then verify from a CI guest: `curl -m 3 https://1.1.1.1` succeeds; `curl -m 3 http://<adguard VIP>:3000` and `ping <a node>` fail.
 
 ## Proxmox side (IaC, for reference)
