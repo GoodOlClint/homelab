@@ -152,6 +152,21 @@ vlans:
     is_wireguard: false
     managed_by: ["pfsense", "unifi"]
 
+  ci:
+    id: REPLACE_WITH_VLAN_ID
+    name: "CI"
+    bridge: "Ci"
+    sdn_zone: "Homelab"
+    description: "CI sandbox — disposable guests built by the runners (ADR 0032); no route to RFC 1918"
+    domain_prefix: "ci"
+    dhcp_enabled: true
+    dhcp_range_start: "REPLACE"
+    dhcp_range_end: "REPLACE"
+    client_isolation: false
+    allows_mdns: false
+    is_wireguard: false
+    managed_by: ["pfsense", "unifi"]
+
   media:
     id: REPLACE_WITH_VLAN_ID
     name: "Media"

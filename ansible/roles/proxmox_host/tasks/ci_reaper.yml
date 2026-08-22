@@ -1,0 +1,43 @@
+---
+- name: Install the CI reaper script
+  ansible.builtin.template:
+    src: ci-reaper.sh.j2
+    dest: /usr/local/sbin/ci-reaper
+    mode: "0755"
+
+- name: Install the CI reaper timer units
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/{{ item.name }}"
+    mode: "0644"
+    content: "{{ item.content }}"
+  loop:
+    - name: ci-reaper.service
+      content: |
+        [Unit]
+        Description=Destroy CI sandbox guests older than {{ proxmox_host_ci_max_age_hours }}h (ADR 0032)
+
+        [Service]
+        Type=oneshot
+        ExecStart=/usr/local/sbin/ci-reaper
+    - name: ci-reaper.timer
+      content: |
+        [Unit]
+        Description=Hourly CI sandbox reaper
+
+        [Timer]
+        OnCalendar=hourly
+        RandomizedDelaySec=5m
+        Persistent=true
+
+        [Install]
+        WantedBy=timers.target
+  loop_control:
+    label: "{{ item.name }}"
+  register: _ci_reaper_units
+
+- name: Enable the CI reaper timer
+  ansible.builtin.systemd:
+    name: ci-reaper.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ _ci_reaper_units is changed }}"

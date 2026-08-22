@@ -52,3 +52,22 @@ variable "storage_mtu" {
   type    = number
   default = 9000 # jumbo frames to the Synology (NFS/PBS datastore)
 }
+
+# CI sandbox (ADR 0032)
+variable "ci_storages" {
+  description = "Datastores the CI token may allocate on (guest disks + ISO uploads)"
+  type        = list(string)
+  default     = ["ceph-rbd", "cephfs"]
+}
+
+variable "ci_sdn_zone" {
+  description = "SDN zone holding the CI VNET"
+  type        = string
+  default     = "Homelab"
+}
+
+variable "ci_vnet" {
+  description = "VNET the CI token may attach guests to (vlans.yaml ci.bridge)"
+  type        = string
+  default     = "Ci"
+}

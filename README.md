@@ -572,6 +572,7 @@ The Makefile is the primary operational interface.
 | `terraform-bootstrap` | Terraform apply for the bootstrap guests only (guest-aware targeting) |
 | `terraform-apply` | Terraform init + apply (auto-approve) |
 | `backup-jobs` | Apply only the PVE backup-job resources after editing `backup_jobs` in `vars.auto.tfvars` |
+| `sdn-apply` | Apply only the SDN zones/VNETs derived from `vlans.yaml` (new guest VLAN) |
 | `inventory` | Generate Ansible inventory from Terraform outputs |
 | `adguard-pause MINUTES=n` | Pause AdGuard filtering on every resolver instance for n minutes (default 10) |
 | `adguard-rewrite DOMAIN=<fqdn> ANSWER=<ip>` | Add a DNS rewrite on every resolver instance via the API — the config template is initial-only; no-op when present |

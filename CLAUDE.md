@@ -232,6 +232,7 @@ make ansible-services TAGS=plex,homepage  # plex + homepage plays
 | `make build <vm>` | Terraform + inventory + ansible for a single guest or a numbered pair (`make build adguard` builds `adguard1`+`adguard2` via `group-targets`; `scripts/guest-targets.sh` resolves type, HA, and cloud-init targets; resolution failure aborts before terraform runs) |
 | `make rebuild <vm>` | Replace guest in one atomic `-replace` apply → clean SSH → ansible (reconciles VM↔LXC conversions + stale HA registrations) |
 | `make backup-jobs` | Apply only `proxmox_backup_job.jobs` after editing `backup_jobs` in `vars.auto.tfvars` (re-author as replacements land; never a bare apply while old-shape guests sit outside state) |
+| `make sdn-apply` | Apply only the network module (SDN zones + VNETs from `vlans.yaml`) — how a new guest VLAN lands without a bare fleet apply |
 | `make data-volumes` | ADR 0020 holder step: apply the holder VM 900 ALONE, then `playbooks/data-volumes.yml` formats (`mkfs.ext4`, blkid-guarded) and chowns each new volume to the CT-root mapped owner. Run after adding a `data_volumes` entry and BEFORE `make build` of its consumer — never both in one apply |
 | `make ansible <vm>` | Run site.yml limited to one host (supports `TAGS=`) |
 | `make docker-config <vm>` | Deploy compose+config only, skip user/group/package/API setup |

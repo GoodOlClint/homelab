@@ -16,6 +16,7 @@ zones:
   sonos: {}
   vivint: {}
   guest: {}
+  ci: {}
 
 aliases:
   service_groups:

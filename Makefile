@@ -38,7 +38,7 @@ ifneq (,$(filter build rebuild plan ansible docker-config update,$(firstword $(M
 endif
 
 # === Core Operations ===
-.PHONY: all apply plan init terraform-apply terraform-bootstrap inventory bootstrap ansible-bootstrap build rebuild rebuild-infisical data-volumes backup-jobs
+.PHONY: all apply plan init terraform-apply terraform-bootstrap inventory bootstrap ansible-bootstrap build rebuild rebuild-infisical data-volumes backup-jobs sdn-apply
 
 all: apply
 
@@ -105,6 +105,11 @@ endif
 # guests are unmanaged by state (ADR 0028).
 backup-jobs:
 	@cd terraform && terraform init && terraform apply -no-color -auto-approve -target=proxmox_backup_job.jobs
+
+# SDN only (zones + VNETs from vlans.yaml): adding a guest VLAN must never be a
+# bare fleet apply while old-shape guests sit outside state (ADR 0028).
+sdn-apply:
+	@cd terraform && terraform init && terraform apply -no-color -auto-approve -target=module.network
 
 # Data-volume holder (ADR 0020): apply the holder ALONE, then format+chown the
 # new volume(s) on the cluster plane — never the holder and its consumer in one
@@ -422,11 +427,11 @@ hosts-plan:
 	@cd terraform/hosts && terraform init -input=false >/dev/null && \
 		TF_VAR_virtual_environment_endpoint="$(ENDPOINT)" terraform plan -no-color -input=false $(HOSTS_TARGETS)
 
-# Apply the host plane (interactive confirm). make hosts-apply ENDPOINT=https://<node-vlan30-ip>:8006/
+# Apply the host plane (interactive confirm; AUTO=1 skips it). make hosts-apply ENDPOINT=https://<node-vlan30-ip>:8006/
 hosts-apply:
 	@test -n "$(ENDPOINT)" || { echo "ERROR: set ENDPOINT=https://<node-vlan30-ip>:8006/"; exit 1; }
 	@cd terraform/hosts && terraform init -input=false >/dev/null && \
-		TF_VAR_virtual_environment_endpoint="$(ENDPOINT)" terraform apply -input=false $(HOSTS_TARGETS)
+		TF_VAR_virtual_environment_endpoint="$(ENDPOINT)" terraform apply -input=false $(if $(AUTO),-auto-approve,) $(HOSTS_TARGETS)
 
 # WP2: cluster plane (pvecm, corosync rings, Ceph, VIP). Day-1: run AFTER
 # hosts-apply. Needs ansible/inventory/proxmox.yaml (see proxmox.example.yml)

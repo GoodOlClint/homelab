@@ -1,0 +1,27 @@
+#!/bin/bash
+# Destroy guests in the CI pool older than the max age. Runs on every node;
+# each node only touches its own guests. Age = the guest config file's mtime,
+# set at creation and untouched while the guest runs.
+set -euo pipefail
+POOL="{{ proxmox_host_ci_pool }}"
+MAX_AGE_H="{{ proxmox_host_ci_max_age_hours }}"
+[ "$MAX_AGE_H" -gt 0 ] || exit 0
+NODE=$(hostname)
+NOW=$(date +%s)
+pvesh get "/pools/${POOL}" --output-format json 2>/dev/null \
+  | python3 -c 'import sys,json; [print(m["type"],m["vmid"],m.get("node","")) for m in json.load(sys.stdin).get("members",[]) if m["type"] in ("qemu","lxc")]' \
+  | while read -r type vmid node; do
+      [ "$node" = "$NODE" ] || continue
+      cfg="/etc/pve/nodes/${NODE}/${type}/${vmid}.conf"
+      [ -f "$cfg" ] || continue
+      age_h=$(( (NOW - $(stat -c %Y "$cfg")) / 3600 ))
+      [ "$age_h" -ge "$MAX_AGE_H" ] || continue
+      echo "ci-reaper: destroying ${type} ${vmid} (age ${age_h}h)"
+      if [ "$type" = qemu ]; then
+        qm stop "$vmid" --timeout 60 >/dev/null 2>&1 || true
+        qm destroy "$vmid" --purge --destroy-unreferenced-disks 1
+      else
+        pct stop "$vmid" >/dev/null 2>&1 || true
+        pct destroy "$vmid" --purge --destroy-unreferenced-disks 1
+      fi
+    done
