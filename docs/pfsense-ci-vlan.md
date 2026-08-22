@@ -28,6 +28,10 @@ Networks → Create: **CI**, VLAN `<ci.id>`, *Third-party gateway*, subnet `<ci 
 
 Apply, then verify from a CI guest: `curl -m 3 https://1.1.1.1` succeeds; `curl -m 3 http://<adguard VIP>:3000` and `ping <a node>` fail.
 
+## Proven 2026-08-22
+
+With `ci@pve!ci` alone: `GET /nodes/*/qemu/205/config` → 403, `GET /pools/ci` → 200; CT 5001 created in pool `ci` on `Ci`, DHCP lease from the pfSense CI interface, gateway ARP answered, ICMP to a vlan30 node blocked (rules still pass-any — whatever the capture shows), stop + destroy via the token, `ci-reaper` exits clean on an empty pool. Note for **containers** in the sandbox: the Ubuntu template's systemd needs `features: nesting=1` or `eth0` never comes up (DHCP waits on networkd); the PSProxmoxVE lane builds VMs and is unaffected.
+
 ## Proxmox side (IaC, for reference)
 
 - `make sdn-apply` — creates the `Ci` VNET from `vlans.yaml`.
