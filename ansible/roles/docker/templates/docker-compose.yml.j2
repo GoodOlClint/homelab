@@ -42,10 +42,13 @@ services:
       - CROSSPLAY={{ valheim_crossplay | default('true') }}
       - SERVER_ARGS={{ valheim_server_args | default('') }}
 {# The join code rotates on every restart (nightly UPDATE_CRON, any redeploy), so it #}
-{# gets posted by the image's own log-filter hook. $$ escapes compose interpolation — #}
+{# gets posted by the image's own log-filter hook. PlayFab can replace the code seconds #}
+{# after "registered with" ("Created new join code", 2026-08-22) — post on both lines. $$ escapes compose interpolation — #}
 {# these must expand in the container's shell, not on the Ansible host. #}
       - VALHEIM_LOG_FILTER_CONTAINS_JoinCode=registered with join code
-      - 'ON_VALHEIM_LOG_FILTER_CONTAINS_JoinCode={ read l; [ -n "$$DISCORD_WEBHOOK" ] || exit 0; curl -sfSL -X POST -H "Content-Type: application/json" -d "{\"content\":\"Valheim is up - join code **$${l##*join code }**\"}" "$$DISCORD_WEBHOOK"; }'
+      - VALHEIM_LOG_FILTER_CONTAINS_NewJoinCode=Created new join code
+      - 'ON_VALHEIM_LOG_FILTER_CONTAINS_JoinCode={ read l; c=$$(printf %s "$$l" | grep -oE "join code [0-9]+" | grep -oE "[0-9]+$$"); [ -n "$$DISCORD_WEBHOOK" ] && [ -n "$$c" ] || exit 0; curl -sfSL -X POST -H "Content-Type: application/json" -d "{\"content\":\"Valheim is up - join code **$$c**\"}" "$$DISCORD_WEBHOOK"; }'
+      - 'ON_VALHEIM_LOG_FILTER_CONTAINS_NewJoinCode={ read l; c=$$(printf %s "$$l" | grep -oE "join code [0-9]+" | grep -oE "[0-9]+$$"); [ -n "$$DISCORD_WEBHOOK" ] && [ -n "$$c" ] || exit 0; curl -sfSL -X POST -H "Content-Type: application/json" -d "{\"content\":\"Valheim join code changed - use **$$c**\"}" "$$DISCORD_WEBHOOK"; }'
       - BACKUPS_ENABLED=true
       - BACKUPS_CRON=0 */6 * * *
       - BACKUPS_MAX_COUNT=10
