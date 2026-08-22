@@ -8,7 +8,8 @@ MAX_AGE_H="{{ proxmox_host_ci_max_age_hours }}"
 [ "$MAX_AGE_H" -gt 0 ] || exit 0
 NODE=$(hostname)
 NOW=$(date +%s)
-pvesh get "/pools/${POOL}" --output-format json 2>/dev/null \
+MEMBERS=$(pvesh get "/pools/${POOL}" --output-format json 2>/dev/null || echo '{"members":[]}')
+echo "$MEMBERS" \
   | python3 -c 'import sys,json; [print(m["type"],m["vmid"],m.get("node","")) for m in json.load(sys.stdin).get("members",[]) if m["type"] in ("qemu","lxc")]' \
   | while read -r type vmid node; do
       [ "$node" = "$NODE" ] || continue

@@ -109,7 +109,7 @@ backup-jobs:
 # SDN only (zones + VNETs from vlans.yaml): adding a guest VLAN must never be a
 # bare fleet apply while old-shape guests sit outside state (ADR 0028).
 sdn-apply:
-	@cd terraform && terraform init && terraform apply -no-color -auto-approve -target=module.network
+	@cd terraform && terraform init && terraform apply -no-color -auto-approve -target=module.network $(if $(REAPPLY),-replace='module.network.proxmox_virtual_environment_sdn_applier.apply[0]',)
 
 # Data-volume holder (ADR 0020): apply the holder ALONE, then format+chown the
 # new volume(s) on the cluster plane — never the holder and its consumer in one

@@ -35,4 +35,13 @@ resource "proxmox_virtual_environment_sdn_applier" "apply" {
     proxmox_virtual_environment_sdn_zone_vlan.zones,
     proxmox_virtual_environment_sdn_vnet.vnets,
   ]
+
+  # depends_on orders creation only; a later VNET add left the config pending
+  # (Ci, 2026-08-22). Re-create the applier whenever a zone or VNET changes.
+  lifecycle {
+    replace_triggered_by = [
+      proxmox_virtual_environment_sdn_zone_vlan.zones,
+      proxmox_virtual_environment_sdn_vnet.vnets,
+    ]
+  }
 }
