@@ -17,7 +17,7 @@ The msi node runs a degraded 14900K awaiting RMA (turbo-capped); worklab is the 
 - **Bootstrap tier stays on Proxmox forever:** adguard ×2, dns ×2, infisical, pbs, apt-cache, pxe, unifi, plex (iGPU), the LLM VM (vfio), PDM. Anything the cluster needs to boot, or that needs a kernel device or a non-services VLAN leg, does not move.
 - **Migration candidates, in order:** registry (Zot) and ARC runners first — new workloads, nothing to migrate; then homepage (+ Caddy); then openobserve stack, plex-services (+ Libation), mcp, MeshCentral, the games host — one at a time, replace-beside-and-stop-old per the [ADR 0028](0028-greenfield-replace-builds-final-form-guests-beside-the-restored-copies-under-vmid-old-100-after-pruning-the-fleet-state-of-every-proxmox-resource.md) discipline. Durable state rides PVs on the same Ceph pool (CSI) — the ADR 0015 model with the platform's own volume noun.
 - **Until the msi RMA completes, the third etcd member runs on worklab**, then is replaced by a member on msi (Talos member replacement). CI nested-PVE tests target ms-01a, not msi.
-- **Timing:** after the remaining Proxmox greenfield-replaces (github-runner/mcp/apt-cache/pxe) and the ADR 0030 control plane — not in parallel with them.
+- **Timing:** after P0–P2 of the plan (no further greenfield-replaces for k8s-bound guests — github-runner 113 and mcp 115 stay until they move) — not in parallel with the ADR 0030 plane work.
 
 ## Rejected alternatives
 

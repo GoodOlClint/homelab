@@ -571,6 +571,7 @@ The Makefile is the primary operational interface.
 | `bootstrap` | First-time deployment: AdGuard + Infisical guests + secret seeding. Guest type (VM/LXC) and numbered instances (`adguard1`/`adguard2`) resolve automatically via `scripts/guest-targets.sh` |
 | `terraform-bootstrap` | Terraform apply for the bootstrap guests only (guest-aware targeting) |
 | `terraform-apply` | Terraform init + apply (auto-approve) |
+| `backup-jobs` | Apply only the PVE backup-job resources after editing `backup_jobs` in `vars.auto.tfvars` |
 | `inventory` | Generate Ansible inventory from Terraform outputs |
 | `adguard-pause MINUTES=n` | Pause AdGuard filtering on every resolver instance for n minutes (default 10) |
 | `adguard-rewrite DOMAIN=<fqdn> ANSWER=<ip>` | Add a DNS rewrite on every resolver instance via the API — the config template is initial-only; no-op when present |

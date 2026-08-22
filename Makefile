@@ -38,7 +38,7 @@ ifneq (,$(filter build rebuild plan ansible docker-config update,$(firstword $(M
 endif
 
 # === Core Operations ===
-.PHONY: all apply plan init terraform-apply terraform-bootstrap inventory bootstrap ansible-bootstrap build rebuild rebuild-infisical data-volumes
+.PHONY: all apply plan init terraform-apply terraform-bootstrap inventory bootstrap ansible-bootstrap build rebuild rebuild-infisical data-volumes backup-jobs
 
 all: apply
 
@@ -99,6 +99,12 @@ endif
 	@$(MAKE) inventory
 	@echo "Configuring guest: $(VM)"
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/site.yml --limit $(VM)
+
+# PVE backup jobs (B3): apply only the job resources after editing
+# `backup_jobs` in vars.auto.tfvars — never a bare apply while old-shape
+# guests are unmanaged by state (ADR 0028).
+backup-jobs:
+	@cd terraform && terraform init && terraform apply -no-color -auto-approve -target=proxmox_backup_job.jobs
 
 # Data-volume holder (ADR 0020): apply the holder ALONE, then format+chown the
 # new volume(s) on the cluster plane — never the holder and its consumer in one
