@@ -157,8 +157,8 @@ locals {
       vm_id        = 204 # old 104 + 100 (ADR 0028)
       vlans        = ["vlan40"]
       ip_offset    = 104
-      cpu_cores    = 4
-      memory_mb    = 8192
+      cpu_cores    = 16
+      memory_mb    = 16384 # NAS-bind page cache (dogecoin chain reads) counts against the CT; 8 GB thrashed at memory.high 2026-08-22
       disk_size_gb = 32
       keyctl       = true
       data_volume  = { name = "docker", path = "/opt/docker" }
