@@ -131,6 +131,8 @@ talos-registry:
 	@kubernetes/zot/deploy.sh
 registry-smoke:
 	@kubernetes/zot/deploy.sh smoke
+talos-arc:
+	@kubernetes/arc/deploy.sh
 
 # PVE backup jobs (B3): apply only the job resources after editing
 # `backup_jobs` in vars.auto.tfvars — never a bare apply while old-shape

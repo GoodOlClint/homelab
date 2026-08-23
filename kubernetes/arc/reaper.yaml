@@ -1,0 +1,35 @@
+# Destroys any pool-ci guest older than 6 h (ADR 0032). ctime comes from the
+# guest's `meta` config key, so stopped leftovers are reaped too.
+apiVersion: batch/v1
+kind: CronJob
+metadata: {name: ci-reaper, namespace: arc-runners}
+spec:
+  schedule: "17 * * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: reaper
+              image: alpine:3
+              env:
+                - {name: PVE_API, value: "${PVE_API}"}
+                - name: TOKEN
+                  valueFrom: {secretKeyRef: {name: pve-ci-token, key: token}}
+              command: ["/bin/sh", "-ec"]
+              args:
+                - |
+                  apk add --no-cache curl jq >/dev/null
+                  api() { curl -sk -H "Authorization: PVEAPIToken=$TOKEN" "$@"; }
+                  now=$(date +%s)
+                  api "$PVE_API/api2/json/pools/ci" | jq -r '.data.members[] | select(.type=="qemu" or .type=="lxc") | "\(.node) \(.type) \(.vmid)"' |
+                  while read -r node type vmid; do
+                    ctime=$(api "$PVE_API/api2/json/nodes/$node/$type/$vmid/config" | jq -r '.data.meta // "" | capture("ctime=(?<t>[0-9]+)").t // empty')
+                    [ -n "$ctime" ] && [ $((now - ctime)) -gt 21600 ] || continue
+                    echo "reaping $type/$vmid on $node (age $(( (now - ctime) / 3600 ))h)"
+                    api -X POST "$PVE_API/api2/json/nodes/$node/$type/$vmid/status/stop" >/dev/null || true
+                    sleep 10
+                    api -X DELETE "$PVE_API/api2/json/nodes/$node/$type/$vmid?purge=1&destroy-unreferenced-disks=1" >/dev/null
+                  done
