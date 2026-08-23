@@ -12,7 +12,7 @@ This repo automates a Proxmox-based homelab with Terraform (VM provisioning, SDN
 
 ## Canonical pipelines
 
-- **Kubernetes / Talos:** `kubernetes/` is the only surface — `kubernetes/talos/talos.sh` (configs rendered from the `talos_nodes` terraform output + Infisical `/talos` secrets; `make talos-secrets|apply|bootstrap`) and `kubernetes/ceph-csi/deploy.sh` (`make talos-csi|smoke`; `helm template | kubectl apply`, never `helm upgrade` — helm's client cannot complete the TLS handshake to this apiserver). **Ansible never touches a Talos node**, and no second tool may render machine configs. `kubeconfig`/`talosconfig` live in `kubernetes/talos/.secrets/` (gitignored; `make talos-secrets` re-pulls).
+- **Kubernetes / Talos:** `kubernetes/` is the only surface — `kubernetes/talos/talos.sh` (configs rendered from the `talos_nodes` terraform output + Infisical `/talos` secrets; `make talos-secrets|apply|bootstrap`) and `kubernetes/ceph-csi/deploy.sh` (`make talos-csi|smoke`; `helm template | kubectl apply`, never `helm upgrade` — helm's client cannot complete the TLS handshake to this apiserver). **Ansible never touches a Talos node**, and no second tool may render machine configs. `kubeconfig`/`talosconfig` live in `kubernetes/talos/.secrets/` (gitignored; `make talos-secrets` re-pulls). **P3b add-ons ([ADR 0034](docs/decisions/0034-p3b-metallb-l2-on-a-reserved-vlan40-slice-zot-behind-an-internal-cert-manager-ca-arc-scale-sets-as-hostnetwork-dind-pods-pinned-to-one-node-and-a-cronjob-reaper.md)):** every `kubernetes/<component>/deploy.sh` sources `kubernetes/lib.sh` (`helm_apply` = template|apply, `subnet_ip`, `inf_get`). MetalLB L2 owns services offsets **64–79** (`make talos-lb`; speakers need `ignoreExcludeLB` because every node is a control plane). cert-manager's self-signed `homelab-ca` ClusterIssuer is a **placeholder for Infisical PKI** — swap it before ADR 0022's ref-templating pushes the CA fleet-wide; the CA is exported to `kubernetes/.secrets/homelab-ca.crt` and the Talos nodes trust it through `machine.registries` (`make talos-trust` re-renders + re-applies). Zot is `registry.<domain_suffix>` on its own LB IP (AdGuard rewrite set by `make talos-registry`), upstream image ref, blobs on a ceph-rbd PVC. ARC scale sets (`psproxmoxve`, `pbs-collection`) are **hostNetwork dind pods pinned to talos-cp-a** sharing one RWO cache PVC; `runs-on:` must be the scale-set *name* (label lists never match). The GitHub App creds and the `ci@pve!ci` token enter the cluster as one-off secrets created by `make talos-arc` (P3b-only path). The ci-reaper CronJob destroys pool-`ci` guests older than 6 h. pfSense CI VLAN rules are hand-managed: [docs/pfsense-ci-vlan.md](docs/pfsense-ci-vlan.md).
 
 **Bare-metal node installs** boot over **PXE/iPXE from the `pxe` fleet guest** with per-node answer files served over HTTP keyed by install-NIC MAC; Secure Boot stays off on PVE nodes; AMT/JetKVM are power/console only (*Reset to PXE*). The AMT IDE-R ISO path (`make node-iso`) is the network-down fallback ([ADR 0026](docs/decisions/0026-bare-metal-nodes-install-over-pxe-from-a-fleet-guest-answer-files-served-over-http-secure-boot-stays-on.md), [plan](docs/pxe-netboot-plan.md)).
 
@@ -119,7 +119,7 @@ Each Infisical folder is owned by the role that generates/provisions its secrets
 | `/homepage` | control (portainer_api_key only) | homepage | portainer_api_key | adguard_*, unifi_*, authentik_token |
 | `/control` | control, pdm | — (no agent) | portainer_admin_password, pdm_root_password | — |
 | `/minio` | minio | minio | minio_root_password | — |
-| `/github-runner` | github_runner | — (no agent) | — | github_app_id, github_app_private_key, github_app_installation_id |
+| `/github-runner` | — (read by `make talos-arc` into the `arc-runners/github-app` k8s secret; no Ansible role since P3b) | — (no agent) | — | github_app_id, github_app_private_key, github_app_installation_id |
 | `/squid` | squid | — (no agent) | squid_ca_private_key, squid_ca_cert_pem | — |
 | `/talos` | `kubernetes/talos/talos.sh` (`make talos-secrets`, no Ansible role) | — (no agent) | talos_secrets_yaml, talosconfig (base64) | — |
 
@@ -172,7 +172,7 @@ Both `infrastructure.yml` and `services.yml` have play-level tags for targeted d
 
 **infrastructure.yml tags:** `phase1`, `phase2`, `phase3`, `dns`, `adguard`, `infisical`, `openobserve`, `proxmox-backup`, `unifi`, `apt-cache`, `pxe`, `control`, `pdm`, `monitoring`, `monitoring-users`, `users`
 
-**services.yml tags:** `nvidia-licensing`, `docker`, `plex`, `plex-services`, `minio`, `homepage`, `github-runner`, `squid`, `mcp`, `lancache`
+**services.yml tags:** `nvidia-licensing`, `docker`, `plex`, `plex-services`, `minio`, `homepage`, `squid`, `mcp`, `lancache`
 
 **How tags work with pre_tasks:**
 - All `pre_tasks` blocks have `tags: [always]`, so secrets/VLANs/facts always load regardless of `--tags` filter.
@@ -264,6 +264,7 @@ make ansible-services TAGS=plex,homepage  # plex + homepage plays
 | `make talos-plan` / `make talos-build` | Plan / targeted-apply the three Talos control-plane VMs (`terraform/talos.tf`, incl. the worklab alias) and write `kubernetes/talos/.secrets/nodes.json` |
 | `make talos-secrets` / `talos-apply` / `talos-bootstrap` | Pull (or generate once) the cluster secrets from Infisical `/talos`; render + `apply-config` every node (maintenance nodes via their DHCP lease, configured nodes in place); bootstrap etcd, fetch kubeconfig, wait Ready |
 | `make talos-csi` / `make talos-smoke` | Deploy ceph-csi RBD (`client.csi-rbd` key read from the first cluster node) + the default `ceph-rbd` StorageClass; smoke = PVC Bound + pod write/read |
+| `make talos-lb` / `talos-certs` / `talos-trust` / `talos-registry` / `registry-smoke` / `talos-arc` | P3b (ADR 0034): MetalLB L2 pool; cert-manager + `homelab-ca` (exports the CA); re-apply Talos configs so nodes trust the CA; Zot + AdGuard rewrite; pull busybox through Zot from a node; ARC controller + scale sets + reaper (secrets from Infisical `/github-runner` and the hosts-root `ci_api_token`) |
 | `make nut-clients` | Deploy NUT `upsmon` secondaries to the physical hosts (`nut_clients` group in `inventory/proxmox.yaml`; server = pfSense NUT package, `docs/pfsense-nut.md`) |
 | `make setup-hooks` | Install pre-commit hooks |
 | `make init` | Create venv, install deps, terraform init, galaxy install |

@@ -65,7 +65,6 @@
     - infrastructure
     - homepage
     - minio
-    - github-runner
     - squid
     - control
     - talos

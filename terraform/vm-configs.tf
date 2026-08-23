@@ -27,7 +27,7 @@ locals {
     # Authoritative pair (ADR 0003): dns1 is the zone primary, dns2 a secondary
     # fed by AXFR; keepalived holds the BIND VIP (vlans.yaml dns_server.bind_ipv4,
     # ip_offset 15). VMID = 200 + ip_offset (ADR 0029); 13/14 would collide with
-    # github-runner/squid's old+100 slots.
+    # squid's old+100 slot (github-runner 113 retired to ARC, ADR 0034).
     {
       name         = "dns1"
       type         = "lxc"
@@ -249,15 +249,6 @@ locals {
       cpu_cores    = 2
       memory_mb    = 2048
       disk_size_gb = 10
-    },
-    {
-      name         = "github-runner"
-      vm_id        = 113
-      vlans        = ["vlan10", "vlan40"]
-      ip_offset    = 113
-      cpu_cores    = 4
-      memory_mb    = 8192 # dotnet builds + Terraform
-      disk_size_gb = 50   # Runner workspace, SDK caches, Terraform providers
     },
     {
       name         = "mcp"

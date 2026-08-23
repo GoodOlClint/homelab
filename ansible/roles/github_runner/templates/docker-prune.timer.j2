@@ -1,9 +1,0 @@
-[Unit]
-Description=Scheduled Docker prune for github-runner
-
-[Timer]
-OnCalendar={{ github_runner_prune_schedule }}
-Persistent=true
-
-[Install]
-WantedBy=timers.target

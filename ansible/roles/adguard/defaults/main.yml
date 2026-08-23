@@ -14,7 +14,6 @@ adguard_rewrite_vms:
   - plex
   - plex-services
   - homepage
-  - github-runner
   - mcp
   - unifi
   - control
