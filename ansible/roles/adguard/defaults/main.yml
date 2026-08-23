@@ -11,12 +11,10 @@ adguard_rewrite_vms:
   - openobserve
   - proxmox-backup
   - docker
-  - nvidia-licensing
   - plex
   - plex-services
   - homepage
   - github-runner
-  - squid
   - mcp
   - unifi
   - control
@@ -26,8 +24,6 @@ adguard_rewrite_vms:
 adguard_service_aliases:
   - domain: media
     target: plex
-  - domain: nvidia-dls
-    target: nvidia-licensing
   - domain: home
     target: homepage
   - domain: portainer
