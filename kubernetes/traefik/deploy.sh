@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Traefik ingress controller (ADR 0035): one MetalLB IP at services offset 65,
 # wildcard *.<domain> from homelab-ca as the default TLS store, so app Ingresses
-# carry no tls: block. Hostnames are AdGuard rewrites to $LB_IP (set per app).
+# carry no tls: block; the services-zone wildcard covers the old home.<zone>-style aliases. Hostnames are AdGuard rewrites to $LB_IP (set per app).
 source "$(dirname "$0")/../lib.sh"
 NS=traefik
 HERE="$(cd "$(dirname "$0")" && pwd)"
 export DOMAIN="$(j .domain)" LB_IP="$(subnet_ip 65)" REGISTRY="registry.$(j .domain)"
+eval "$(inv_env)"; export ZONE="${HOST_ALIAS#home.}"   # services zone: app aliases live one label below the domain
 
 helm repo add traefik https://traefik.github.io/charts >/dev/null 2>&1 || true
 helm repo update traefik >/dev/null
