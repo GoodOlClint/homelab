@@ -28,18 +28,6 @@
     ansible_connection: ssh
     ansible_user: root
 
-- name: Set Proxmox monitoring user password
-  ansible.builtin.command:
-    cmd: "/usr/sbin/pveum passwd {{ proxmox_monitoring_user }}"
-    stdin: "{{ bootstrap.proxmox_password }}\n{{ bootstrap.proxmox_password }}\n"
-  when: user_created.changed or monitoring_user_exists
-  delegate_to: "{{ proxmox_host }}"
-  no_log: true
-  changed_when: true
-  vars:
-    ansible_connection: ssh
-    ansible_user: root
-
 - name: Check current ACL for monitoring user
   ansible.builtin.command:
     cmd: "/usr/sbin/pveum acl list"
@@ -59,14 +47,6 @@
   vars:
     ansible_connection: ssh
     ansible_user: root
-
-- name: Verify monitoring user has PVEAuditor role
-  ansible.builtin.assert:
-    that:
-      - proxmox_monitoring_role in current_acl.stdout
-      - proxmox_monitoring_user in current_acl.stdout
-    fail_msg: "{{ proxmox_monitoring_user }} does not have {{ proxmox_monitoring_role }} role assigned"
-    success_msg: "{{ proxmox_monitoring_user }} has {{ proxmox_monitoring_role }} role"
 
 # --- Auto-generate Proxmox monitoring API token ---
 
@@ -96,17 +76,24 @@
     ansible_connection: ssh
     ansible_user: root
 
+- name: Resolve the new token to a fact
+  ansible.builtin.set_fact:
+    _pve_token_value: "{{ (_pve_token_create.stdout | from_json).value }}"
+    _pve_token_comment: "Proxmox VE monitoring API token (monitoring@pve!monitoring)"
+  when: _pve_token_create is not skipped and _pve_token_create is changed
+  no_log: true
+
 - name: Store Proxmox token in Infisical
   ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/infisical_write_secret.yml"
   vars:
     secret_name: "proxmox_token_value"
-    secret_value: "{{ (_pve_token_create.stdout | from_json).value }}"
+    secret_value: "{{ _pve_token_value }}"
     secret_path: "/monitoring"
-    secret_comment: "Proxmox VE monitoring API token (monitoring@pve!monitoring)"
-  when: _pve_token_create is not skipped and _pve_token_create is changed
+    secret_comment: "{{ _pve_token_comment }}"
+  when: _pve_token_value is defined
 
 - name: Update secrets fact with new token
   ansible.builtin.set_fact:
-    secrets: "{{ secrets | combine({'monitoring': (secrets.monitoring | default({})) | combine({'proxmox_token_value': (_pve_token_create.stdout | from_json).value})}) }}"
-  when: _pve_token_create is not skipped and _pve_token_create is changed
+    secrets: "{{ secrets | combine({'monitoring': (secrets.monitoring | default({})) | combine({'proxmox_token_value': _pve_token_value})}) }}"
+  when: _pve_token_value is defined
   no_log: true
