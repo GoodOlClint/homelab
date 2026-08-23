@@ -22,9 +22,10 @@ resource "unifi_port_profile" "trunk_all" {
   # re-run if this profile is ever recreated (README, "Provider quirks").
 }
 
-# Node install-link ports on the 48-port switch (ADR 0019): the i226-V that
+# Node install-link ports on the 48-port switch (ADR 0019): the i226-LM that
 # carries the untagged VLAN 30 install/mgmt plane PLUS corosync ring0 tagged
 # (network.yml leaves ring0 tagged on the install NIC after the mgmt re-home).
+# Also worklab's untagged mgmt port — its native must stay 30.
 resource "unifi_port_profile" "node_install" {
   name    = "tf-node-install"
   forward = "customize"
@@ -34,6 +35,17 @@ resource "unifi_port_profile" "node_install" {
   # legacy tagged_networkconf_ids field anyway (it silently drops it when
   # tagged_vlan_mgmt is custom; the modern model wants exclusion lists).
   native_networkconf_id = data.unifi_network.infrastructure.id
+  tagged_vlan_mgmt      = "auto"
+  autoneg               = true
+}
+
+# Post-WP2 node install ports (ADR 0030): the host has no untagged address on
+# the NIC any more, so the native VLAN serves only AMT (cannot tag) and the
+# PXE first hop. Native = management, ring0 stays tagged.
+resource "unifi_port_profile" "node_oob" {
+  name                  = "tf-node-oob"
+  forward               = "customize"
+  native_networkconf_id = data.unifi_network.management.id
   tagged_vlan_mgmt      = "auto"
   autoneg               = true
 }

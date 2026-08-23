@@ -31,6 +31,7 @@ locals {
   profile_ids = merge(
     { trunk = unifi_port_profile.trunk_all.id },
     { node_install = unifi_port_profile.node_install.id },
+    { node_oob = unifi_port_profile.node_oob.id },
     { for k, p in unifi_port_profile.access : k => p.id },
   )
 }
