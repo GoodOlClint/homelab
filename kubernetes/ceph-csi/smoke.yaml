@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rbd-smoke
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: ceph-rbd
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rbd-smoke
+spec:
+  restartPolicy: Never
+  containers:
+    - name: smoke
+      image: busybox
+      command: ["sh", "-c", "echo hello-rbd > /data/probe && cat /data/probe"]
+      volumeMounts:
+        - name: data
+          mountPath: /data
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: rbd-smoke

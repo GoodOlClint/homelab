@@ -1,0 +1,13 @@
+# ceph-csi-rbd Helm values (ADR 0033). csiConfig (fsid + monitors) is injected
+# by deploy.sh from the live cluster — addresses never live in the tree.
+nodeplugin:
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+provisioner:
+  replicaCount: 2
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
