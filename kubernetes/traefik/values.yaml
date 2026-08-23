@@ -1,0 +1,17 @@
+image:
+  registry: ${REGISTRY}/docker.io
+deployment:
+  replicas: 1
+ports:
+  web:
+    http:
+      redirections:
+        entryPoint: {to: websecure, scheme: https, permanent: true}
+tlsStore:
+  default:
+    defaultCertificate: {secretName: wildcard-tls}
+service:
+  annotations: {metallb.io/loadBalancerIPs: "${LB_IP}"}
+providers:
+  kubernetesIngress:
+    publishedService: {enabled: true}

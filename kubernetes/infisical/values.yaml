@@ -1,0 +1,5 @@
+hostAPI: ${HOST_API}
+controllerManager:
+  manager:
+    image:
+      repository: ${REGISTRY}/docker.io/infisical/kubernetes-operator
