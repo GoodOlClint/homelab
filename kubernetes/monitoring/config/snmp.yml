@@ -2,7 +2,7 @@
 # Compatible with snmp_exporter v0.29.0
 auths:
   public_v2:
-    community: {{ synology_snmp_community }}
+    community: ${SYNOLOGY_SNMP_COMMUNITY}
     security_level: noAuthNoPriv
     auth_protocol: MD5
     priv_protocol: DES

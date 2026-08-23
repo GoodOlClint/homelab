@@ -1,0 +1,25 @@
+# One ceph-rbd volume per stateful service (ADR 0036); pods mount subPath `data` so ext4's lost+found stays outside the app tree.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: openobserve, namespace: monitoring}
+spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 60Gi}}}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: prometheus, namespace: monitoring}
+spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 10Gi}}}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: grafana, namespace: monitoring}
+spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 2Gi}}}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: uptime-kuma, namespace: monitoring}
+spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 2Gi}}}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: alertmanager, namespace: monitoring}
+spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 1Gi}}}

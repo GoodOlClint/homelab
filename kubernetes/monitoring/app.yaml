@@ -1,0 +1,470 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openobserve
+  namespace: monitoring
+  annotations: {secrets.infisical.com/auto-reload: "true"}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: openobserve}}
+  template:
+    metadata: {labels: {app: openobserve}}
+    spec:
+      containers:
+        - name: openobserve
+          # Pinned: the metadata DB is on schema 46, which only v0.92.x reads (renovate watches this line).
+          image: ${REGISTRY}/public.ecr.aws/zinclabs/openobserve:v0.92.0-rc2-amd64
+          ports: [{containerPort: 5080}]
+          env:
+            - {name: TZ, value: "${TZ}"}
+            - {name: ZO_ROOT_USER_EMAIL, value: "${OO_EMAIL}"}
+            - {name: ZO_ROOT_USER_PASSWORD, valueFrom: {secretKeyRef: {name: monitoring-secrets, key: ZO_ROOT_USER_PASSWORD}}}
+            - {name: ZO_DATA_DIR, value: /data}
+            - {name: ZO_HTTP_PORT, value: "5080"}
+            - {name: ZO_GRPC_PORT, value: "5081"}
+            - {name: ZO_COMPACT_ENABLED, value: "true"}
+            - {name: ZO_COMPACT_INTERVAL, value: "3600"}
+            - {name: ZO_MEMORY_CACHE_MAX_SIZE, value: "512"}
+            - {name: ZO_INGEST_ALLOWED_UPTO, value: "24"}
+            - {name: ZO_PROMETHEUS_ENABLED, value: "true"}
+            - {name: ZO_TELEMETRY_ENABLED, value: "false"}
+          volumeMounts:
+            - {name: data, mountPath: /data, subPath: data}
+          readinessProbe: {httpGet: {path: /healthz, port: 5080}, initialDelaySeconds: 10}
+      volumes:
+        - {name: data, persistentVolumeClaim: {claimName: openobserve}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: openobserve, namespace: monitoring}
+spec: {selector: {app: openobserve}, ports: [{port: 5080}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: monitoring
+  annotations: {secrets.infisical.com/auto-reload: "true"}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: grafana}}
+  template:
+    metadata:
+      labels: {app: grafana}
+      annotations: {checksum/config: "${CONFIG_HASH}"}
+    spec:
+      securityContext: {runAsUser: 472, runAsGroup: 472, fsGroup: 472, fsGroupChangePolicy: OnRootMismatch}
+      containers:
+        - name: grafana
+          image: ${REGISTRY}/docker.io/grafana/grafana:latest
+          ports: [{containerPort: 3000}]
+          env:
+            - {name: TZ, value: "${TZ}"}
+            - {name: GF_SECURITY_ADMIN_USER, value: admin}
+            - {name: GF_SECURITY_ADMIN_PASSWORD, valueFrom: {secretKeyRef: {name: monitoring-secrets, key: GF_SECURITY_ADMIN_PASSWORD}}}
+            - {name: GF_SERVER_ROOT_URL, value: "https://${GRAFANA_HOST}"}
+            - {name: GF_AUTH_ANONYMOUS_ENABLED, value: "false"}
+            - {name: OPENOBSERVE_ROOT_USER_EMAIL, value: "${OO_EMAIL}"}
+            - {name: OPENOBSERVE_ROOT_USER_PASS, valueFrom: {secretKeyRef: {name: monitoring-secrets, key: OPENOBSERVE_ROOT_USER_PASS}}}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/grafana, subPath: data}
+            - {name: provisioning, mountPath: /etc/grafana/provisioning/datasources/openobserve.yml, subPath: grafana-datasource.yml}
+            - {name: provisioning, mountPath: /etc/grafana/provisioning/dashboards/default.yml, subPath: grafana-dashboards.yml}
+            - {name: dashboards, mountPath: /etc/grafana/dashboards}
+          readinessProbe: {httpGet: {path: /api/health, port: 3000}, initialDelaySeconds: 10}
+      volumes:
+        - {name: data, persistentVolumeClaim: {claimName: grafana}}
+        - {name: provisioning, configMap: {name: grafana-provisioning}}
+        - {name: dashboards, configMap: {name: grafana-dashboards}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: grafana, namespace: monitoring}
+spec: {selector: {app: grafana}, ports: [{port: 3000}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: monitoring
+  annotations: {secrets.infisical.com/auto-reload: "true"}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: prometheus}}
+  template:
+    metadata:
+      labels: {app: prometheus}
+      annotations: {checksum/config: "${CONFIG_HASH}"}
+    spec:
+      securityContext: {runAsUser: 65534, runAsGroup: 65534, fsGroup: 65534, fsGroupChangePolicy: OnRootMismatch}
+      containers:
+        - name: prometheus
+          image: ${REGISTRY}/docker.io/prom/prometheus:latest
+          args:
+            - --config.file=/etc/prometheus/config/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            - --web.enable-lifecycle
+          ports: [{containerPort: 9090}]
+          env: [{name: TZ, value: "${TZ}"}]
+          volumeMounts:
+            - {name: config, mountPath: /etc/prometheus/config}
+            - {name: targets, mountPath: /etc/prometheus/targets}
+            - {name: secrets, mountPath: /etc/prometheus/secrets}
+            - {name: data, mountPath: /prometheus, subPath: data}
+          readinessProbe: {httpGet: {path: /-/ready, port: 9090}, initialDelaySeconds: 10}
+      volumes:
+        - {name: config, configMap: {name: prometheus-config}}
+        - {name: targets, configMap: {name: prometheus-targets}}
+        - {name: secrets, secret: {secretName: monitoring-secrets, items: [{key: OPENOBSERVE_ROOT_USER_PASS, path: openobserve_password}]}}
+        - {name: data, persistentVolumeClaim: {claimName: prometheus}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: prometheus, namespace: monitoring}
+spec: {selector: {app: prometheus}, ports: [{port: 9090}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+  namespace: monitoring
+  annotations: {secrets.infisical.com/auto-reload: "true"}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: alertmanager}}
+  template:
+    metadata:
+      labels: {app: alertmanager}
+      annotations: {checksum/config: "${CONFIG_HASH}"}
+    spec:
+      securityContext: {runAsUser: 65534, runAsGroup: 65534, fsGroup: 65534, fsGroupChangePolicy: OnRootMismatch}
+      containers:
+        - name: alertmanager
+          image: ${REGISTRY}/docker.io/prom/alertmanager:latest
+          args:
+            - --config.file=/etc/alertmanager/alertmanager.yml
+            - --storage.path=/alertmanager
+          ports: [{containerPort: 9093}]
+          env: [{name: TZ, value: "${TZ}"}]
+          volumeMounts:
+            - {name: config, mountPath: /etc/alertmanager/alertmanager.yml, subPath: alertmanager.yml}
+            - {name: secrets, mountPath: /etc/alertmanager/secrets}
+            - {name: data, mountPath: /alertmanager, subPath: data}
+          readinessProbe: {httpGet: {path: /-/ready, port: 9093}, initialDelaySeconds: 5}
+      volumes:
+        - {name: config, configMap: {name: alertmanager-config}}
+        - {name: secrets, secret: {secretName: monitoring-secrets, items: [{key: alert-ntfy-url, path: alert-ntfy-url}]}}
+        - {name: data, persistentVolumeClaim: {claimName: alertmanager}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: alertmanager, namespace: monitoring}
+spec: {selector: {app: alertmanager}, ports: [{port: 9093}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: blackbox, namespace: monitoring}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: blackbox}}
+  template:
+    metadata:
+      labels: {app: blackbox}
+      annotations: {checksum/config: "${CONFIG_HASH}"}
+    spec:
+      # Unprivileged ICMP: the prober runs as nobody, so the pod opens the ping group range (a PSA-baseline-safe sysctl).
+      securityContext: {sysctls: [{name: net.ipv4.ping_group_range, value: "0 2147483647"}]}
+      containers:
+        - name: blackbox
+          image: ${REGISTRY}/docker.io/prom/blackbox-exporter:latest
+          args: [--config.file=/config/blackbox.yml]
+          ports: [{containerPort: 9115}]
+          env: [{name: TZ, value: "${TZ}"}]
+          volumeMounts: [{name: config, mountPath: /config}]
+      volumes:
+        - {name: config, configMap: {name: blackbox-config}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: blackbox, namespace: monitoring}
+spec: {selector: {app: blackbox}, ports: [{port: 9115}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: speedtest, namespace: monitoring}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: speedtest}}
+  template:
+    metadata: {labels: {app: speedtest}}
+    spec:
+      enableServiceLinks: false   # the Service's SPEEDTEST_PORT link env would override the exporter's PORT
+      containers:
+        - name: speedtest
+          image: ${REGISTRY}/docker.io/miguelndecarvalho/speedtest-exporter:latest
+          ports: [{containerPort: 9798}]
+          env: [{name: TZ, value: "${TZ}"}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: speedtest, namespace: monitoring}
+spec: {selector: {app: speedtest}, ports: [{port: 9798}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: smokeping-prober, namespace: monitoring}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: smokeping-prober}}
+  template:
+    metadata: {labels: {app: smokeping-prober}}
+    spec:
+      securityContext: {sysctls: [{name: net.ipv4.ping_group_range, value: "0 2147483647"}]}
+      containers:
+        - name: smokeping-prober
+          image: ${REGISTRY}/quay.io/superq/smokeping-prober:latest
+          args: ${SMOKEPING_ARGS}
+          ports: [{containerPort: 9374}]
+          env: [{name: TZ, value: "${TZ}"}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: smokeping-prober, namespace: monitoring}
+spec: {selector: {app: smokeping-prober}, ports: [{port: 9374}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: proxmox-exporter
+  namespace: monitoring
+  annotations: {secrets.infisical.com/auto-reload: "true"}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: proxmox-exporter}}
+  template:
+    metadata: {labels: {app: proxmox-exporter}}
+    spec:
+      containers:
+        - name: proxmox-exporter
+          image: ${REGISTRY}/docker.io/prompve/prometheus-pve-exporter:latest
+          ports: [{containerPort: 9221}]
+          env:
+            - {name: TZ, value: "${TZ}"}
+            - {name: PVE_USER, value: monitoring@pve}
+            - {name: PVE_TOKEN_NAME, value: monitoring}
+            - {name: PVE_TOKEN_VALUE, valueFrom: {secretKeyRef: {name: monitoring-secrets, key: PVE_TOKEN_VALUE}}}
+            - {name: PVE_VERIFY_SSL, value: "false"}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: proxmox-exporter, namespace: monitoring}
+spec: {selector: {app: proxmox-exporter}, ports: [{port: 9221}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: snmp-exporter, namespace: monitoring}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: snmp-exporter}}
+  template:
+    metadata:
+      labels: {app: snmp-exporter}
+      annotations: {checksum/config: "${CONFIG_HASH}"}
+    spec:
+      containers:
+        - name: snmp-exporter
+          image: ${REGISTRY}/docker.io/prom/snmp-exporter:latest
+          args: [--config.file=/etc/snmp_exporter/snmp.yml]
+          ports: [{containerPort: 9116}]
+          env: [{name: TZ, value: "${TZ}"}]
+          volumeMounts: [{name: config, mountPath: /etc/snmp_exporter}]
+      volumes:
+        - {name: config, configMap: {name: snmp-config}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: snmp-exporter, namespace: monitoring}
+spec: {selector: {app: snmp-exporter}, ports: [{port: 9116}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unifi-poller
+  namespace: monitoring
+  annotations: {secrets.infisical.com/auto-reload: "true"}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: unifi-poller}}
+  template:
+    metadata: {labels: {app: unifi-poller}}
+    spec:
+      containers:
+        - name: unifi-poller
+          image: ${REGISTRY}/docker.io/golift/unifi-poller:latest
+          ports: [{containerPort: 9130}]
+          env:
+            - {name: TZ, value: "${TZ}"}
+            - {name: UP_UNIFI_DEFAULT_ROLE, value: unifi-poller}
+            - {name: UP_UNIFI_DEFAULT_URL, value: "https://${UNIFI}:${UNIFI_PORT}"}
+            - {name: UP_UNIFI_DEFAULT_USER, value: monitoring}
+            - {name: UP_UNIFI_DEFAULT_PASS, valueFrom: {secretKeyRef: {name: monitoring-secrets, key: UP_UNIFI_DEFAULT_PASS}}}
+            - {name: UP_UNIFI_DEFAULT_VERIFY_SSL, value: "false"}
+            - {name: UP_PROMETHEUS_HTTP_LISTEN, value: "0.0.0.0:9130"}
+            - {name: UP_PROMETHEUS_NAMESPACE, value: unpoller}
+            - {name: UP_INFLUXDB_DISABLE, value: "true"}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: unifi-poller, namespace: monitoring}
+spec: {selector: {app: unifi-poller}, ports: [{port: 9130}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pbs-exporter
+  namespace: monitoring
+  annotations: {secrets.infisical.com/auto-reload: "true"}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: pbs-exporter}}
+  template:
+    metadata: {labels: {app: pbs-exporter}}
+    spec:
+      securityContext: {runAsUser: 65534, runAsGroup: 65534}
+      containers:
+        - name: pbs-exporter
+          image: ${REGISTRY}/ghcr.io/natrontech/pbs-exporter:latest
+          ports: [{containerPort: 10019}]
+          env:
+            - {name: TZ, value: "${TZ}"}
+            - {name: PBS_ENDPOINT, value: "https://${PBS}:8007"}
+            - {name: PBS_USERNAME, value: monitoring@pbs}
+            - {name: PBS_API_TOKEN_NAME, value: monitoring-token}
+            - {name: PBS_API_TOKEN, valueFrom: {secretKeyRef: {name: monitoring-secrets, key: PBS_API_TOKEN}}}
+            - {name: PBS_INSECURE, value: "true"}
+            - {name: PBS_TIMEOUT, value: 5s}
+            - {name: PBS_LOGLEVEL, value: info}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: pbs-exporter, namespace: monitoring}
+spec: {selector: {app: pbs-exporter}, ports: [{port: 10019}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: uptime-kuma, namespace: monitoring}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: uptime-kuma}}
+  template:
+    metadata: {labels: {app: uptime-kuma}}
+    spec:
+      containers:
+        - name: uptime-kuma
+          image: ${REGISTRY}/docker.io/louislam/uptime-kuma:2
+          ports: [{containerPort: 3001}]
+          env: [{name: TZ, value: "${TZ}"}]
+          volumeMounts:
+            - {name: data, mountPath: /app/data, subPath: data}
+          readinessProbe: {httpGet: {path: /, port: 3001}, initialDelaySeconds: 15}
+      volumes:
+        - {name: data, persistentVolumeClaim: {claimName: uptime-kuma}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: uptime-kuma, namespace: monitoring}
+spec: {selector: {app: uptime-kuma}, ports: [{port: 3001}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: axosyslog
+  namespace: monitoring
+  annotations: {secrets.infisical.com/auto-reload: "true"}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: axosyslog}}
+  template:
+    metadata:
+      labels: {app: axosyslog}
+      annotations: {checksum/config: "${CONFIG_HASH}"}
+    spec:
+      containers:
+        - name: axosyslog
+          image: ${REGISTRY}/ghcr.io/axoflow/axosyslog:latest
+          args: [-e]
+          ports:
+            - {containerPort: 5514, protocol: UDP}
+            - {containerPort: 5514, protocol: TCP}
+            - {containerPort: 5515, protocol: UDP}
+            - {containerPort: 6514, protocol: TCP}
+          env:
+            - {name: TZ, value: "${TZ}"}
+            - {name: OPENOBSERVE_ROOT_USER_EMAIL, value: "${OO_EMAIL}"}
+            - {name: OPENOBSERVE_ROOT_USER_PASS, valueFrom: {secretKeyRef: {name: monitoring-secrets, key: OPENOBSERVE_ROOT_USER_PASS}}}
+          volumeMounts:
+            - {name: config, mountPath: /etc/syslog-ng/syslog-ng.conf, subPath: syslog-ng.conf, readOnly: true}
+      volumes:
+        - {name: config, configMap: {name: axosyslog-config}}
+---
+# The fleet's syslog/netconsole address (services offset 66): Local policy keeps the sender's source IP,
+# which is the only host identifier the netconsole stream has.
+apiVersion: v1
+kind: Service
+metadata:
+  name: syslog
+  namespace: monitoring
+  annotations: {metallb.io/loadBalancerIPs: "${SYSLOG_IP}"}
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  selector: {app: axosyslog}
+  ports:
+    - {name: syslog-udp, port: 5514, protocol: UDP}
+    - {name: syslog-tcp, port: 5514, protocol: TCP}
+    - {name: netconsole, port: 5515, protocol: UDP}
+    - {name: syslog-tls, port: 6514, protocol: TCP}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata: {name: uptimerobot-heartbeat, namespace: monitoring}
+spec:
+  schedule: "* * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: heartbeat
+              image: ${REGISTRY}/public.ecr.aws/docker/library/busybox:latest
+              imagePullPolicy: IfNotPresent   # a per-minute :latest re-check burns Docker Hub's anonymous pull quota
+              command: [sh, -c, 'wget -qO- --timeout=10 "$UPTIMEROBOT_HEARTBEAT_URL" >/dev/null']
+              env:
+                - {name: UPTIMEROBOT_HEARTBEAT_URL, valueFrom: {secretKeyRef: {name: monitoring-secrets, key: UPTIMEROBOT_HEARTBEAT_URL}}}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata: {name: monitoring, namespace: monitoring}
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: ${GRAFANA_HOST}
+      http: {paths: [{path: /, pathType: Prefix, backend: {service: {name: grafana, port: {number: 3000}}}}]}
+    - host: ${OO_HOST}
+      http: {paths: [{path: /, pathType: Prefix, backend: {service: {name: openobserve, port: {number: 5080}}}}]}
+    - host: ${PROM_HOST}
+      http: {paths: [{path: /, pathType: Prefix, backend: {service: {name: prometheus, port: {number: 9090}}}}]}
+    - host: ${AM_HOST}
+      http: {paths: [{path: /, pathType: Prefix, backend: {service: {name: alertmanager, port: {number: 9093}}}}]}
+    - host: ${KUMA_HOST}
+      http: {paths: [{path: /, pathType: Prefix, backend: {service: {name: uptime-kuma, port: {number: 3001}}}}]}

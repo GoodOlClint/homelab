@@ -1,0 +1,24 @@
+# Throwaway pod for `deploy.sh migrate`: mounts every stateful PVC at its root and rsyncs the
+# old guest's trees into <pvc>/data over ssh (key handed in via kubectl exec, never a Secret).
+apiVersion: v1
+kind: Pod
+metadata: {name: migrate, namespace: monitoring}
+spec:
+  restartPolicy: Never
+  containers:
+    - name: migrate
+      image: ${REGISTRY}/public.ecr.aws/docker/library/alpine:latest
+      command: [sh, -c, "apk add --no-cache rsync openssh-client sqlite >/dev/null && touch /ready && sleep infinity"]
+      readinessProbe: {exec: {command: [test, -f, /ready]}, periodSeconds: 2}
+      volumeMounts:
+        - {name: openobserve, mountPath: /openobserve}
+        - {name: prometheus, mountPath: /prometheus}
+        - {name: grafana, mountPath: /grafana}
+        - {name: uptime-kuma, mountPath: /uptime-kuma}
+        - {name: alertmanager, mountPath: /alertmanager}
+  volumes:
+    - {name: openobserve, persistentVolumeClaim: {claimName: openobserve}}
+    - {name: prometheus, persistentVolumeClaim: {claimName: prometheus}}
+    - {name: grafana, persistentVolumeClaim: {claimName: grafana}}
+    - {name: uptime-kuma, persistentVolumeClaim: {claimName: uptime-kuma}}
+    - {name: alertmanager, persistentVolumeClaim: {claimName: alertmanager}}

@@ -142,6 +142,15 @@ infisical-smoke:
 	@kubernetes/infisical/deploy.sh smoke
 talos-homepage:
 	@kubernetes/homepage/deploy.sh
+# P4b (ADR 0036): monitoring stack; axosyslog LB on services offset 66; history migration from the old guest
+talos-monitoring:
+	@kubernetes/monitoring/deploy.sh
+monitoring-migrate:
+	@kubernetes/monitoring/deploy.sh migrate $(FROM)
+# monitoring@pve + its token on the cluster: needs proxmox.yaml so proxmox_host resolves to a live node;
+# the play tag (not a task tag) so its pre_tasks load; the UniFi half is skipped (never probe the controller with monitor creds)
+monitoring-users:
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/infrastructure.yml --tags monitoring-users --skip-tags unifi-user
 
 # PVE backup jobs (B3): apply only the job resources after editing
 # `backup_jobs` in vars.auto.tfvars — never a bare apply while old-shape

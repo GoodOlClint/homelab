@@ -28,7 +28,7 @@ inf_get() { # path key
 }
 inf_host_api() { printf '%s/api' "$(sops -d --extract '["bootstrap_config"]["infisical_url"]' "$ROOT/ansible/group_vars/bootstrap.sops.yml")"; }
 # Fleet addresses for app configs: `export NAME=service_ip` per inventory guest (upper-snake), plus
-# ADGUARD (the VIP), SYNOLOGY, TZ and HOST_ALIAS (home.<services zone>) — eval the output.
+# ADGUARD/BIND (the VIPs), SYNOLOGY, TZ and HOST_ALIAS (home.<services zone>) — eval the output.
 inv_env() {
   "$ROOT/.venv/bin/python3" - "$ROOT" <<'PY'
 import sys, yaml
@@ -40,6 +40,7 @@ for h, v in hosts.items():
     print(f"export {h.upper().replace('-', '_')}={v['service_ip']}")
 print(f"export PBS={hosts['proxmox-backup']['service_ip']}")
 print(f"export ADGUARD={net['dns_server']['dns_ipv4']}")
+print(f"export BIND={net['dns_server']['bind_ipv4']}")
 print(f"export SYNOLOGY={g['synology_host']}")
 print(f"export TZ={g['timezone']}")
 print(f"export HOST_ALIAS=home.{net['vlans']['services']['domain_prefix']}.{net['domain_suffix']}")

@@ -1,4 +1,3 @@
-{% raw %}
 groups:
   - name: infrastructure
     rules:
@@ -138,4 +137,3 @@ groups:
         annotations:
           summary: "High latency to {{ $labels.instance }}"
           description: "RTT {{ $value }}s (>100ms) over 5 minutes"
-{% endraw %}

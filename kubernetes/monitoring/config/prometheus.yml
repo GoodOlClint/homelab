@@ -6,57 +6,39 @@ global:
     environment: 'production'
 
 rule_files:
-  - /etc/prometheus/alert.rules.yml
+  - /etc/prometheus/config/alert.rules.yml
 
 alerting:
   alertmanagers:
     - static_configs:
         - targets: ['alertmanager:9093']
 
-# Remote write to OpenObserve
 remote_write:
   - url: http://openobserve:5080/api/default/prometheus/api/v1/write
     basic_auth:
-      username: {{ openobserve_root_user_email }}
+      username: ${OO_EMAIL}
       password_file: /etc/prometheus/secrets/openobserve_password
 
 scrape_configs:
-  # Prometheus itself
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
 
-  # OpenObserve metrics
   - job_name: 'openobserve'
     static_configs:
       - targets: ['openobserve:5080']
 
-  # Node Exporter - OpenObserve host
-  - job_name: 'node-exporter-openobserve'
-    static_configs:
-      - targets: ['node-exporter:9100']
-        labels:
-          instance: 'openobserve'
-          role: 'monitoring'
-
-  # Blackbox Exporter - Endpoint monitoring
   - job_name: 'blackbox-exporter'
     static_configs:
       - targets: ['blackbox:9115']
 
-  # DNS Monitoring - Check DNS resolution across zones
+  # One target per internal zone (all answered by the AdGuard VIP); rendered by deploy.sh from vlans.yaml.
   - job_name: 'blackbox-dns'
     metrics_path: /probe
     params:
       module: [dns_udp]
-    static_configs:
-{% for vlan, zone in dns_zones.items() %}
-      - targets:
-          - '{{ zone.dns_ip }}'
-        labels:
-          zone: '{{ zone.zone }}'
-          vlan: '{{ vlan }}'
-{% endfor %}
+    file_sd_configs:
+      - files: ['/etc/prometheus/targets/blackbox-dns.json']
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
@@ -65,16 +47,13 @@ scrape_configs:
       - target_label: __address__
         replacement: blackbox:9115
 
-  # HTTP/HTTPS Monitoring - Check web services
   - job_name: 'blackbox-http'
     metrics_path: /probe
     params:
       module: [http_2xx]
     static_configs:
       - targets:
-          - http://{{ network_data.dns_server.dns_ipv4 }}:3000  # AdGuard VIP
-          - http://{{ ansible_host }}:{{ openobserve_listen_port }}  # OpenObserve
-          - http://{{ ansible_host }}:3000  # Grafana
+          - http://${ADGUARD}:3000
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
@@ -83,15 +62,31 @@ scrape_configs:
       - target_label: __address__
         replacement: blackbox:9115
 
-{% if hostvars['plex'] is defined %}
-  # Plex HTTPS Monitoring (self-signed cert, skip TLS verify)
+  # Own UIs through Traefik (homelab-ca is not in the prober's trust store).
+  - job_name: 'blackbox-ingress'
+    metrics_path: /probe
+    params:
+      module: [http_2xx_insecure]
+    static_configs:
+      - targets:
+          - https://${GRAFANA_HOST}/api/health
+          - https://${OO_HOST}/healthz
+          - https://${KUMA_HOST}/
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox:9115
+
   - job_name: 'blackbox-plex'
     metrics_path: /probe
     params:
       module: [http_2xx_insecure]
     static_configs:
       - targets:
-          - https://{{ hostvars['plex'].ansible_host | replace(mgmt_vlan_prefix, services_vlan_prefix) }}:32400/identity  # Plex Identity
+          - https://${PLEX}:32400/identity
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
@@ -99,25 +94,19 @@ scrape_configs:
         target_label: instance
       - target_label: __address__
         replacement: blackbox:9115
-{% endif %}
 
-  # ICMP Ping Monitoring - Check host availability
   - job_name: 'blackbox-ping'
     metrics_path: /probe
     params:
       module: [icmp]
     static_configs:
       - targets:
-          - {{ network_data.dns_server.bind_ipv4 }}  # BIND VIP
-          - {{ network_data.dns_server.dns_ipv4 }}  # AdGuard VIP
-{% if hostvars['plex'] is defined %}
-          - {{ hostvars['plex'].ansible_host }}  # Plex
-{% endif %}
-{% if hostvars['docker'] is defined %}
-          - {{ hostvars['docker'].ansible_host }}  # Docker
-{% endif %}
-          - 8.8.8.8  # Google DNS
-          - 1.1.1.1  # Cloudflare DNS
+          - ${BIND}
+          - ${ADGUARD}
+          - ${PLEX}
+          - ${DOCKER}
+          - 8.8.8.8
+          - 1.1.1.1
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
@@ -126,104 +115,28 @@ scrape_configs:
       - target_label: __address__
         replacement: blackbox:9115
 
-  # Speedtest Monitoring
   - job_name: 'speedtest'
     scrape_interval: 30m
     scrape_timeout: 90s
     static_configs:
       - targets: ['speedtest:9798']
 
-  # Smokeping Prober - Latency Distribution
   - job_name: 'smokeping'
     scrape_interval: 10s
     scrape_timeout: 5s
     static_configs:
       - targets: ['smokeping-prober:9374']
 
-  # Telegraf metrics from all hosts
+  # Every fleet guest's telegraf; rendered by deploy.sh from vms.yaml.
   - job_name: 'telegraf'
     honor_labels: true
-    static_configs:
-{# host.docker.internal (host-gateway), not the mgmt IP: replies the host sources #}
-{# from its own /32 VLAN IP to a container are policy-routed into the per-VLAN #}
-{# table (no docker bridge route) and blackholed, so scraping the mgmt IP from #}
-{# inside the container network times out. #}
-      - targets: ['host.docker.internal:9273']
-        labels:
-          instance: 'openobserve'
-          role: 'monitoring'
-{% for h in groups['dns'] | default([]) %}
-      - targets: ['{{ hostvars[h].ansible_host }}:9273']
-        labels:
-          instance: '{{ h }}'
-          role: 'infrastructure'
-{% endfor %}
-{% for h in groups['adguard'] | default([]) %}
-      - targets: ['{{ hostvars[h].ansible_host }}:9273']
-        labels:
-          instance: '{{ h }}'
-          role: 'infrastructure'
-{% endfor %}
-{% if hostvars['apt-cache'] is defined and hostvars['apt-cache'].ansible_host is defined %}
-      - targets: ['{{ hostvars['apt-cache'].ansible_host }}:9273']
-        labels:
-          instance: 'apt-cache'
-          role: 'infrastructure'
-{% endif %}
-{% if hostvars['plex'] is defined and hostvars['plex'].ansible_host is defined %}
-      - targets: ['{{ hostvars['plex'].ansible_host }}:9273']
-        labels:
-          instance: 'plex'
-          role: 'services'
-{% endif %}
-{% if hostvars['docker'] is defined and hostvars['docker'].ansible_host is defined %}
-      - targets: ['{{ hostvars['docker'].ansible_host }}:9273']
-        labels:
-          instance: 'docker'
-          role: 'services'
-{% endif %}
-{% if hostvars['plex-services'] is defined and hostvars['plex-services'].ansible_host is defined %}
-      - targets: ['{{ hostvars['plex-services'].ansible_host }}:9273']
-        labels:
-          instance: 'plex-services'
-          role: 'services'
-{% endif %}
-{% if hostvars['nvidia-licensing'] is defined and hostvars['nvidia-licensing'].ansible_host is defined %}
-      - targets: ['{{ hostvars['nvidia-licensing'].ansible_host }}:9273']
-        labels:
-          instance: 'nvidia-licensing'
-          role: 'services'
-{% endif %}
-{% if hostvars['homebridge'] is defined and hostvars['homebridge'].ansible_host is defined %}
-      - targets: ['{{ hostvars['homebridge'].ansible_host }}:9273']
-        labels:
-          instance: 'homebridge'
-          role: 'services'
-{% endif %}
-{% if hostvars['multicast-relay'] is defined and hostvars['multicast-relay'].ansible_host is defined %}
-      - targets: ['{{ hostvars['multicast-relay'].ansible_host }}:9273']
-        labels:
-          instance: 'multicast-relay'
-          role: 'services'
-{% endif %}
-{% if hostvars['proxmox-backup'] is defined and hostvars['proxmox-backup'].ansible_host is defined %}
-      - targets: ['{{ hostvars['proxmox-backup'].ansible_host }}:9273']
-        labels:
-          instance: 'proxmox-backup'
-          role: 'infrastructure'
-{% endif %}
-{% if hostvars['vps'] is defined %}
-      - targets: ['{{ vps_wg_tunnel.tunnel_address | split("/") | first }}:9273']
-        labels:
-          instance: 'vps'
-          role: 'infrastructure'
-{% endif %}
+    file_sd_configs:
+      - files: ['/etc/prometheus/targets/telegraf.json']
 
-  # Proxmox VE Exporter - Hypervisor Metrics
   - job_name: 'proxmox'
     static_configs:
       - targets:
-        - {{ proxmox_host }}  # Proxmox VE host IP
+        - ${PVE_API_HOST}
     metrics_path: /pve
     params:
       module: [default]
@@ -235,12 +148,11 @@ scrape_configs:
       - target_label: __address__
         replacement: proxmox-exporter:9221
 
-  # SNMP Exporter for Synology NAS
   - job_name: 'synology'
     scrape_interval: 30s
     static_configs:
       - targets:
-          - {{ synology_host }}
+          - ${SYNOLOGY}
         labels:
           instance: 'synology-nas'
           role: 'storage'
@@ -256,7 +168,6 @@ scrape_configs:
       - target_label: __address__
         replacement: snmp-exporter:9116
 
-  # UniFi Poller - Network Infrastructure
   - job_name: 'unifi-poller'
     static_configs:
       - targets: ['unifi-poller:9130']
@@ -264,9 +175,8 @@ scrape_configs:
           instance: 'unifi'
           role: 'network'
 
-  # Proxmox Backup Server Exporter
   - job_name: 'pbs-exporter'
-    scrape_interval: 60s  # PBS metrics don't change frequently
+    scrape_interval: 60s
     scrape_timeout: 30s
     static_configs:
       - targets: ['pbs-exporter:10019']
@@ -274,7 +184,6 @@ scrape_configs:
           instance: 'proxmox-backup'
           role: 'infrastructure'
 
-  # TLS Certificate Monitoring
   - job_name: 'blackbox-tls'
     metrics_path: /probe
     params:
