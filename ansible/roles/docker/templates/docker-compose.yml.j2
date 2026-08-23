@@ -64,8 +64,6 @@ services:
     container_name: valheim-status
     image: node:22-alpine
     restart: unless-stopped
-    ports:
-      - "{{ valheim_status_port }}:8081"
     environment:
       - ENTITY={{ valheim_playfab_entity_id }}
       - INTERVAL={{ valheim_status_interval }}
@@ -73,11 +71,21 @@ services:
       - {{ docker_base_dir }}/valheim/valheim-playfab-status.mjs:/app/valheim-playfab-status.mjs:ro
       - {{ docker_base_dir }}/valheim/status:/srv
     command: >
-      sh -c 'httpd -f -p 8081 -h /srv &
-      while true; do
+      sh -c 'while true; do
         if node /app/valheim-playfab-status.mjs --entity-id "$$ENTITY" > /srv/status.json.tmp 2>/dev/null && [ -s /srv/status.json.tmp ]; then mv /srv/status.json.tmp /srv/status.json; fi;
         sleep "$$INTERVAL";
       done'
+
+  valheim-status-web:
+    container_name: valheim-status-web
+    image: busybox:stable
+    restart: unless-stopped
+    ports:
+      - "{{ valheim_status_port }}:8081"
+    volumes:
+      - {{ docker_base_dir }}/valheim/status:/srv:ro
+    command: httpd -f -p 8081 -h /srv
+
 {# Restarts any container marked unhealthy that carries the autoheal=true label. #}
 {# Gives the Valheim PlayFab zombie an auto-recovery path Docker's restart policy lacks #}
 {# (restart: unless-stopped never fires on an unhealthy-but-running container). #}

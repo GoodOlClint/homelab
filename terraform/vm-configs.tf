@@ -241,15 +241,6 @@ locals {
       ]
     },
     {
-      name         = "lancache"
-      vm_id        = 110
-      vlans        = ["vlan10", "vlan40", "vlan20"]
-      ip_offset    = 110
-      cpu_cores    = 4
-      memory_mb    = 4096
-      disk_size_gb = 20
-    },
-    {
       name         = "homepage"
       type         = "lxc"
       vm_id        = 211 # old 111 + 100 (ADR 0028)
@@ -258,15 +249,6 @@ locals {
       cpu_cores    = 2
       memory_mb    = 2048
       disk_size_gb = 10
-    },
-    {
-      name         = "minio"
-      vm_id        = 112
-      vlans        = ["vlan10", "vlan40", "vlan20"]
-      ip_offset    = 112
-      cpu_cores    = 4
-      memory_mb    = 4096
-      disk_size_gb = 20
     },
     {
       name         = "github-runner"

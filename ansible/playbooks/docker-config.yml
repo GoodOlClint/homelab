@@ -71,6 +71,15 @@
         - plex_services_compose is changed or plex_services_recyclarr is changed
 
     # --- docker (legacy) ---
+    - name: Install the PlayFab lobby query script for valheim-status
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../roles/docker/files/valheim-playfab-status.mjs"
+        dest: "{{ docker_base_dir }}/valheim/valheim-playfab-status.mjs"
+        owner: root
+        group: root
+        mode: '0644'
+      when: inventory_hostname == 'docker'
+
     - name: Deploy docker VM docker-compose
       ansible.builtin.template:
         src: "{{ playbook_dir }}/../roles/docker/templates/docker-compose.yml.j2"
