@@ -50,21 +50,21 @@
 - Monitoring:
     - Grafana:
         icon: grafana.svg
-        href: http://${OPENOBSERVE}:3000
+        href: https://grafana.${DOMAIN}
         description: Dashboards
-        widget: {type: grafana, url: "http://${OPENOBSERVE}:3000", username: admin, password: "{{HOMEPAGE_VAR_GRAFANA_PASSWORD}}"}
+        widget: {type: grafana, url: "http://grafana.monitoring.svc:3000", username: admin, password: "{{HOMEPAGE_VAR_GRAFANA_PASSWORD}}"}
     - Prometheus:
         icon: prometheus.svg
-        href: http://${OPENOBSERVE}:9090
+        href: https://prometheus.${DOMAIN}
         description: Metrics
-        widget: {type: prometheus, url: "http://${OPENOBSERVE}:9090"}
+        widget: {type: prometheus, url: "http://prometheus.monitoring.svc:9090"}
     - OpenObserve:
         icon: sh-openobserve.svg
-        href: http://${OPENOBSERVE}:5080
+        href: https://openobserve.${DOMAIN}
         description: Log Management
     - Uptime Kuma:
         icon: uptime-kuma.svg
-        href: http://${OPENOBSERVE}:3001
+        href: https://uptime-kuma.${DOMAIN}
         description: Status Monitoring
 
 - Infrastructure:

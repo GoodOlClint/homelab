@@ -6,9 +6,9 @@ source "$(dirname "$0")/../lib.sh"
 NS=homepage
 HERE="$(cd "$(dirname "$0")" && pwd)"
 DOMAIN="$(j .domain)"
-export HOST="homepage.$DOMAIN" REGISTRY="registry.$DOMAIN" HOST_API="$(inf_host_api)" PROJECT_ID="$(inf_project_id)" GATEWAY="$(j .gateway)"
+export DOMAIN HOST="homepage.$DOMAIN" REGISTRY="registry.$DOMAIN" HOST_API="$(inf_host_api)" PROJECT_ID="$(inf_project_id)" GATEWAY="$(j .gateway)"
 export PVE_API="$(sed -n "s/^virtual_environment_endpoint *= *\"\([^\"]*\)\".*/\1/p" "$ROOT/terraform/vars.auto.tfvars")"
-eval "$(inv_env)"   # PLEX PLEX_SERVICES OPENOBSERVE CONTROL PBS UNIFI INFISICAL DOCKER ADGUARD SYNOLOGY TZ HOST_ALIAS
+eval "$(inv_env)"   # PLEX PLEX_SERVICES CONTROL PBS UNIFI INFISICAL DOCKER ADGUARD SYNOLOGY TZ HOST_ALIAS
 export HOSTS="$HOST,$HOST_ALIAS"
 
 ns "$NS"
