@@ -190,3 +190,4 @@ terraform/worklab-campaign/
 # Galaxy-installed role trees (dotted names) land in ansible/roles/ via make init
 ansible/roles/*.*/
 kubernetes/talos/.secrets/
+kubernetes/.secrets/

@@ -39,7 +39,7 @@ ifneq (,$(filter build rebuild plan ansible docker-config update,$(firstword $(M
 endif
 
 # === Core Operations ===
-.PHONY: talos-plan talos-build talos-secrets talos-apply talos-bootstrap talos-csi talos-smoke all apply plan init terraform-apply terraform-bootstrap inventory bootstrap ansible-bootstrap build rebuild rebuild-infisical data-volumes backup-jobs sdn-apply
+.PHONY: talos-plan talos-build talos-secrets talos-apply talos-bootstrap talos-csi talos-smoke talos-lb talos-certs talos-registry talos-trust registry-smoke talos-arc all apply plan init terraform-apply terraform-bootstrap inventory bootstrap ansible-bootstrap build rebuild rebuild-infisical data-volumes backup-jobs sdn-apply
 
 all: apply
 
@@ -120,6 +120,9 @@ talos-csi:
 	@kubernetes/ceph-csi/deploy.sh
 talos-smoke:
 	@kubernetes/ceph-csi/deploy.sh smoke
+# P3b (ADR 0034): MetalLB L2, internal CA, Zot, ARC runners
+talos-lb:
+	@kubernetes/metallb/deploy.sh
 
 # PVE backup jobs (B3): apply only the job resources after editing
 # `backup_jobs` in vars.auto.tfvars — never a bare apply while old-shape
