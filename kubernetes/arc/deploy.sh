@@ -21,7 +21,7 @@ if ! kubectl -n "$RUN" get secret github-app >/dev/null 2>&1; then
 fi
 if ! kubectl -n "$RUN" get secret pve-ci-token >/dev/null 2>&1; then
   kubectl -n "$RUN" create secret generic pve-ci-token \
-    --from-literal=token="ci@pve!ci=$(cd "$ROOT/terraform/hosts" && terraform output -raw ci_api_token)"
+    --from-literal=token="$(cd "$ROOT/terraform/hosts" && terraform output -raw ci_api_token)"
 fi
 kubectl apply -f "$HERE/cache-pvc.yaml"
 PVE_API=$(sed -n "s/^virtual_environment_endpoint *= *\"\([^\"]*\)\".*/\1/p" "$ROOT/terraform/vars.auto.tfvars") envsubst < "$HERE/reaper.yaml" | kubectl apply -f -
