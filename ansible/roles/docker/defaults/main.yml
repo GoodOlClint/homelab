@@ -13,6 +13,12 @@ valheim_world_name: "HomeWorld2"
 valheim_server_public: "false"
 # Crossplay issues a PlayFab join code per session (logged on start, rotates each restart)
 valheim_crossplay: "true"
+# PlayFab lobby monitor sidecar: the server's PlayFab entity ID (stable across
+# in-place restarts, rotates when the container is recreated — see
+# ~/Source/Valheim ADR 003). Re-pin from "PlayFab local entity ID" in the log.
+valheim_playfab_entity_id: "B0F9749E68C6707E"
+valheim_status_port: 8081
+valheim_status_interval: 60
 valheim_supervisor_user: "admin"
 valheim_supervisor_port: 9002
 # Extra valheim_server.x86_64 CLI args. `-modifier portals casual` = no teleport

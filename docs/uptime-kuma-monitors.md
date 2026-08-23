@@ -42,7 +42,7 @@ Targets use services-VLAN addresses; the real values live in the gitignored `net
 | Sonarr | HTTP | plex-services `:8989` | 60s |
 | Radarr | HTTP | plex-services `:7878` | 60s |
 | Sabnzbd | HTTP | plex-services `:8080` | 60s |
-| Valheim — PlayFab lobby | JSON query | docker `:8080/status.json`, `platform == playfab` | 60s |
+| Valheim — PlayFab lobby | JSON query | docker `:8081/status.json`, `online == true` (the `valheim-status` sidecar, keyed on the PlayFab entity ID; re-pointed 2026-08-23) | 60s |
 
 Defaults for every monitor: 2 retries (1 for AxoSyslog, so the syslog path trips fast), 60s retry interval, 16s timeout, accepted status `200-299` — widened to `300-399` for services that redirect to a login page.
 

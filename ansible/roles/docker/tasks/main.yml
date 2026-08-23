@@ -51,6 +51,18 @@
     - "{{ docker_base_dir }}"
     - "{{ docker_base_dir }}/valheim/config"
     - "{{ docker_base_dir }}/valheim/data"
+    - "{{ docker_base_dir }}/valheim/status"
+  tags:
+    - docker
+    - config
+
+- name: Install the PlayFab lobby query script
+  ansible.builtin.copy:
+    src: valheim-playfab-status.mjs
+    dest: "{{ docker_base_dir }}/valheim/valheim-playfab-status.mjs"
+    owner: root
+    group: root
+    mode: '0644'
   tags:
     - docker
     - config
