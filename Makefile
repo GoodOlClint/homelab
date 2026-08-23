@@ -78,7 +78,10 @@ terraform-bootstrap:
 		&& INFISICAL_TARGETS="$$(../scripts/guest-targets.sh infisical group-targets)" \
 		&& terraform init && terraform apply -no-color -auto-approve $$ADGUARD_TARGETS $$INFISICAL_TARGETS
 
+# Targeted applies (build/rebuild) never recompute outputs — refresh first so
+# the inventory reflects the guest that actually exists (PBS re-home, 2026-08-23).
 inventory: clean-ssh
+	@cd terraform && terraform apply -refresh-only -auto-approve -no-color > /dev/null
 	@cd terraform && terraform output -no-color -raw ansible_inventory_yaml > ../ansible/inventory/vms.yaml
 
 # === Per-VM Build/Rebuild ===
@@ -93,9 +96,6 @@ endif
 	@echo "Building guest: $(VM)"
 	@cd terraform && TARGETS="$$(../scripts/guest-targets.sh $(VM) group-targets)" \
 		&& terraform init && terraform apply -no-color -auto-approve $$TARGETS
-	@# Targeted applies don't recompute ansible_inventory_yaml — a brand-new
-	@# guest never reaches vms.yaml without this (found building apt-cache).
-	@cd terraform && terraform apply -refresh-only -auto-approve -no-color > /dev/null
 	@$(MAKE) inventory
 	@echo "Configuring guest: $(VM)"
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/site.yml --limit $(VM)

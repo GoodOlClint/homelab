@@ -5,7 +5,7 @@ control_base_dir: /opt/control
 meshcentral_image: "ghcr.io/ylianst/meshcentral:latest"
 meshcentral_title: "Homelab"
 # First account created through the UI becomes site admin; flip to false after that
-meshcentral_new_accounts: true
+meshcentral_new_accounts: false
 
 portainer_image: "portainer/portainer-ce:alpine"
 portainer_port: 9443
