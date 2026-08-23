@@ -101,7 +101,27 @@ variable "cloud_images" {
       checksum           = "0ce1f1d675733027d3e17a4665cb95e1d7173bdf67fb8a87ff822ff5ee025bc2a90ecb270465ef395755e41c868b40072eb9ac493810196d9cf68f941afb93dc"
       checksum_algorithm = "sha512"
     }
+    # Image Factory nocloud build with the qemu-guest-agent extension (ADR 0033);
+    # schematic ce4c980550dd2ab1b17bbf2b08801c7eb59418eafe8f279833297925d67c7515.
+    # First boot only — running nodes roll with `talosctl upgrade`.
+    talos = {
+      url                = "https://factory.talos.dev/image/ce4c980550dd2ab1b17bbf2b08801c7eb59418eafe8f279833297925d67c7515/v1.13.9/nocloud-amd64.qcow2"
+      file_name          = "talos-v1.13.9-nocloud-amd64.img"
+      checksum           = "4fab39d69d466f89102c4ccb34ce8b4125570d889e0191e76e13efedd5226721d7ed9b252722d8f839a4707b9bcd4d486aa52fa17f69b75c14c4c919fe4176e7"
+      checksum_algorithm = "sha512"
+    }
   }
+}
+
+variable "worklab_endpoint" {
+  description = "Standalone worklab PVE API endpoint — hosts the temporary third Talos control plane (ADR 0031/0033)"
+  type        = string
+}
+
+variable "worklab_password" {
+  description = "root@pam password for worklab (bootstrap.sops.yml)"
+  type        = string
+  sensitive   = true
 }
 
 variable "lxc_template" {

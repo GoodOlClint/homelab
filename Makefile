@@ -18,6 +18,7 @@ export TF_VAR_virtual_environment_password := $(call _read_secret,proxmox_passwo
 export TF_VAR_vultr_api_key := $(call _read_secret,vultr_api_key)
 export TF_VAR_cloudflare_api_token := $(call _read_secret,cloudflare_api_token)
 export TF_VAR_unifi_password := $(call _read_secret,unifi_admin_password)
+export TF_VAR_worklab_password := $(call _read_secret,worklab_password)
 
 # === Bootstrap Terraform Targets ===
 # Only create the AdGuard and Infisical guests (+ network dependencies).
@@ -38,7 +39,7 @@ ifneq (,$(filter build rebuild plan ansible docker-config update,$(firstword $(M
 endif
 
 # === Core Operations ===
-.PHONY: all apply plan init terraform-apply terraform-bootstrap inventory bootstrap ansible-bootstrap build rebuild rebuild-infisical data-volumes backup-jobs sdn-apply
+.PHONY: talos-plan talos-build talos-secrets talos-apply talos-bootstrap talos-csi talos-smoke all apply plan init terraform-apply terraform-bootstrap inventory bootstrap ansible-bootstrap build rebuild rebuild-infisical data-volumes backup-jobs sdn-apply
 
 all: apply
 
@@ -99,6 +100,26 @@ endif
 	@$(MAKE) inventory
 	@echo "Configuring guest: $(VM)"
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/site.yml --limit $(VM)
+
+# === Talos control plane (ADR 0031/0033) ===
+# Terraform owns the VMs only; everything past first boot is talosctl driven
+# from kubernetes/talos (the canonical pipeline — never Ansible).
+TALOS_TARGETS = -target=proxmox_virtual_environment_download_file.talos -target=proxmox_virtual_environment_download_file.talos_worklab -target=proxmox_virtual_environment_vm.talos_cp -target=proxmox_virtual_environment_vm.talos_cp_worklab
+talos-plan:
+	@cd terraform && terraform init && terraform plan -no-color $(TALOS_TARGETS)
+talos-build:
+	@cd terraform && terraform init && terraform apply -no-color -auto-approve $(TALOS_TARGETS)
+	@cd terraform && terraform output -json talos_nodes > ../kubernetes/talos/.secrets/nodes.json
+talos-secrets:
+	@kubernetes/talos/talos.sh secrets
+talos-apply:
+	@kubernetes/talos/talos.sh apply
+talos-bootstrap:
+	@kubernetes/talos/talos.sh bootstrap
+talos-csi:
+	@kubernetes/ceph-csi/deploy.sh
+talos-smoke:
+	@kubernetes/ceph-csi/deploy.sh smoke
 
 # PVE backup jobs (B3): apply only the job resources after editing
 # `backup_jobs` in vars.auto.tfvars — never a bare apply while old-shape
