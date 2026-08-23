@@ -58,7 +58,9 @@ Steps 1–2 below are done on plex-services 206: `libation` in `plex_services` h
 
 Staging (open question 4, decided — revised 2026-08-23): the image forces `InProgress=/tmp`, so `/tmp` is bound to `/mnt/data/media/.libation-inprogress` on the **media export itself** (created from a node as uid 2013 / gid 2000, setgid). The first full-library run had filled the 64 GB rootfs scratch with 53 GB of in-progress files and every decrypt then failed with no space, which also stalled postgres's host; on the export the publish into `/data/media/Audiobooks` is a same-filesystem rename, so Plex never sees a partial file either.
 
-**Remaining operator step (3):** until an account exists the container exits 3 and restart-loops every minute (harmless; `docker ps` shows *Restarting*). Run once:
+**Login done 2026-08-23 (via `docker compose run --rm -it libation LibationCli login-external …` — `exec` cannot land while the account-less container restart-loops). First liberate run is publishing. The Audiobooks tree needed `chgrp -R 2000` + setgid dirs first (the interim import wrote as Synology uid 1026 / gid 100, so uid 2013 could not create title folders — `UnauthorizedAccessException` per book). Known leftover: the interim import used a different folder template, so early titles exist twice (`Title [ASIN]` vs `Title: Series [ASIN]`); de-dupe of the old tree is the operator's, out of scope here.**
+
+Original step (3) for reference: until an account exists the container exits 3 and restart-loops every minute (harmless; `docker ps` shows *Restarting*). Run once:
 
 ```
 docker exec -it libation LibationCli login-external --libationFiles /config --locale us --account <audible email>
