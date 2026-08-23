@@ -19,7 +19,7 @@ graph TD
     PF --> STOR[Storage VLAN<br/>MTU 9000]
     PF --> MEDIA[Media VLAN]
 
-    MGMT --- M1[dns<br/>adguard<br/>unifi<br/>openobserve<br/>proxmox-backup<br/>infisical<br/>homepage]
+    MGMT --- M1[dns<br/>adguard<br/>unifi<br/>openobserve<br/>proxmox-backup<br/>infisical]
     SVC --- S1[docker<br/>plex<br/>plex-services<br/>nvidia-licensing]
     CORE --- C1[Clients<br/>Work / IoT<br/>Sonos / Guest / Vivint]
     STOR --- ST1[Synology NAS<br/>NFS / iSCSI<br/>jumbo frames]
@@ -228,7 +228,6 @@ All VMs are defined in `terraform/vm-configs.tf` and provisioned with cloud-init
 | plex | 108 | mgmt, services, storage | 8 | 32 GB | 100 GB | NVIDIA | Plex Media Server (hardware transcoding) |
 | dns1 / dns2 | 218 / 219 | services | 2 | 1 GB | 10 GB | -- | BIND9 authoritative LXC pair (primary + AXFR secondary), one per MS-01, keepalived VIP (ADR 0003/0029) |
 | lancache | 110 | mgmt, services, storage | 4 | 4 GB | 20 GB | -- | LAN game cache server |
-| homepage | 111 | mgmt, services | 2 | 2 GB | 10 GB | -- | Homepage dashboard |
 | minio | 112 | mgmt, services, storage | 4 | 4 GB | 20 GB | -- | MinIO object storage |
 | github-runner | 113 | mgmt, services | 4 | 8 GB | 50 GB | -- | GitHub Actions self-hosted runner |
 | squid | 114 | mgmt, services, openclaw | 2 | 2 GB | 20 GB | -- | Squid forward proxy (SSL bump) |
@@ -340,6 +339,10 @@ Self-hosted secret management platform deployed via Docker Compose:
 - **Proxmox Backup Server** (proxmox-backup VM) -- VM backup with deduplication
 - **NVIDIA Licensing Server** (nvidia-licensing VM) -- FastAPI DLS for GRID vGPU drivers
 
+### Talos Kubernetes services plane (`kubernetes/`)
+
+Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-manager (`homelab-ca`), Zot pull-through registry, ARC CI runners (ADR 0034), Traefik ingress + the Infisical Kubernetes operator + **homepage** (ADR 0035 — `make talos-ingress`, `make talos-infisical`, `make talos-homepage`). Each `kubernetes/<component>/deploy.sh` renders with `helm template | kubectl apply`; runtime secrets are `InfisicalSecret` CRDs; images pull through `registry.<domain>`.
+
 ## Ansible Roles
 
 33 roles in a single flat directory (`ansible/roles/`):
@@ -371,7 +374,6 @@ Self-hosted secret management platform deployed via Docker Compose:
 | authentik | Authentik SSO/OIDC identity provider (Docker Compose) |
 | nvidia | NVIDIA GRID vGPU driver installation |
 | nvidia_licensing | FastAPI DLS license server |
-| homepage | Homepage dashboard with Caddy reverse proxy |
 | github_runner | GitHub Actions self-hosted runner for CI integration tests |
 | squid | Squid forward proxy with SSL bump for OpenClaw VLAN |
 | mcp | MCP server host (MemPalace ChromaDB vector memory) |

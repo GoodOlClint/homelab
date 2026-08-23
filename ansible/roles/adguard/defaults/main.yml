@@ -13,7 +13,6 @@ adguard_rewrite_vms:
   - docker
   - plex
   - plex-services
-  - homepage
   - mcp
   - unifi
   - control
@@ -23,8 +22,6 @@ adguard_rewrite_vms:
 adguard_service_aliases:
   - domain: media
     target: plex
-  - domain: home
-    target: homepage
   - domain: portainer
     target: control
   - domain: meshcentral

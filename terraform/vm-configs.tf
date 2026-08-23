@@ -241,16 +241,6 @@ locals {
       ]
     },
     {
-      name         = "homepage"
-      type         = "lxc"
-      vm_id        = 211 # old 111 + 100 (ADR 0028)
-      vlans        = ["vlan40"]
-      ip_offset    = 111
-      cpu_cores    = 2
-      memory_mb    = 2048
-      disk_size_gb = 10
-    },
-    {
       name         = "mcp"
       vm_id        = 115
       vlans        = ["vlan10", "vlan40"]

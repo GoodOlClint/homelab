@@ -210,7 +210,6 @@
       - plex-services
       - docker
       - openobserve
-      - homepage
   roles:
     - infisical_client
     - pbs_client
