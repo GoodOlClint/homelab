@@ -158,6 +158,7 @@ output "talos_nodes" {
     prefix_len  = split("/", local.talos_services_vlan.subnet)[1]
     subnet      = local.talos_services_vlan.subnet
     dns_servers = module.network.dns_servers
+    domain      = module.network.domain_suffix
     schematic   = regex("image/([0-9a-f]+)/", var.cloud_images.talos.url)[0]
     version     = regex("/(v[0-9.]+)/", var.cloud_images.talos.url)[0]
     nodes = {

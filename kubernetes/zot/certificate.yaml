@@ -1,0 +1,7 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: {name: zot-tls, namespace: zot}
+spec:
+  dnsNames: ["${HOST}"]
+  secretName: zot-tls
+  issuerRef: {name: homelab-ca, kind: ClusterIssuer}

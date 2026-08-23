@@ -86,9 +86,15 @@ apiVersion: v1alpha1
 kind: HostnameConfig
 \$patch: delete
 YAML
+  local trust=()
+  if [ -f "$HERE/../.secrets/homelab-ca.crt" ]; then   # internal CA for the Zot registry (ADR 0034)
+    printf 'machine:\n  registries:\n    config:\n      registry.%s:\n        tls:\n          ca: %s\n' \
+      "$(j .domain)" "$(base64 < "$HERE/../.secrets/homelab-ca.crt" | tr -d '\n')" > "$SEC/trust.patch.yaml"
+    trust=(--config-patch "@$SEC/trust.patch.yaml")
+  fi
   talosctl gen config "$CLUSTER" "https://$VIP:6443" --with-secrets "$SEC/secrets.yaml" \
     --install-image "factory.talos.dev/nocloud-installer/$SCHEMATIC:$VERSION" \
-    --config-patch "@$HERE/patches/common.yaml" --config-patch "@$SEC/$n.patch.yaml" \
+    --config-patch "@$HERE/patches/common.yaml" --config-patch "@$SEC/$n.patch.yaml" "${trust[@]}" \
     --output-types controlplane -o "$f" --force >/dev/null
   echo "$f"
 }

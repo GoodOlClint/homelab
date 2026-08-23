@@ -1,0 +1,40 @@
+# Image ref stays upstream — the registry must always rebuild itself from the WAN (ADR 0022).
+service:
+  type: LoadBalancer
+  port: 443
+httpGet:
+  scheme: HTTPS
+persistence: true
+pvc:
+  storage: 50Gi
+mountConfig: true
+configFiles:
+  config.json: |-
+    {
+      "distSpecVersion": "1.1.1",
+      "storage": {"rootDirectory": "/var/lib/registry", "gc": true, "dedupe": true},
+      "http": {
+        "address": "0.0.0.0", "port": "5000",
+        "tls": {"cert": "/etc/zot-tls/tls.crt", "key": "/etc/zot-tls/tls.key"}
+      },
+      "log": {"level": "info"},
+      "extensions": {
+        "ui": {"enable": true},
+        "search": {"enable": true},
+        "sync": {
+          "enable": true,
+          "registries": [
+            {"urls": ["https://docker.io"], "onDemand": true, "tlsVerify": true, "content": [{"prefix": "**", "destination": "/docker.io"}]},
+            {"urls": ["https://ghcr.io"],   "onDemand": true, "tlsVerify": true, "content": [{"prefix": "**", "destination": "/ghcr.io"}]},
+            {"urls": ["https://quay.io"],   "onDemand": true, "tlsVerify": true, "content": [{"prefix": "**", "destination": "/quay.io"}]}
+          ]
+        }
+      }
+    }
+extraVolumes:
+  - name: tls
+    secret: {secretName: zot-tls}
+extraVolumeMounts:
+  - name: tls
+    mountPath: /etc/zot-tls
+    readOnly: true
