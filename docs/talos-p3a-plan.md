@@ -1,6 +1,6 @@
 # P3a change plan — Talos services-plane cluster (ADR 0031 build, ADR 0033 forks)
 
-Status: **Proposed 2026-08-23** — awaiting operator approval. Decision record: [ADR 0033](decisions/0033-talos-p3a-rides-talosctl-from-a-kubernetes-tree-with-the-factory-image-pinned-in-cloud-images-the-worklab-member-via-a-second-bpg-provider-alias-flannel-and-cluster-secrets-in-infisical.md). Scope: three control-plane VMs, cluster bootstrap, Ceph CSI RBD, the `kubernetes/` tree. Registry, ARC, ingress and runner-113 retirement are P3b.
+Status: **Approved + built 2026-08-23.** Deviations from the plan as written: nodes needed `kubelet.nodeIP.validSubnets` + `etcd.advertisedSubnets` pinned to the services subnet (both otherwise picked the Ceph leg); `talosctl gen config` v1.13 emits a `HostnameConfig` doc that the per-node patch deletes; ceph-csi runs in a PSA-privileged namespace; helm's client cannot TLS-handshake with the apiserver, so the deploy is `helm template | kubectl apply`. Decision record: [ADR 0033](decisions/0033-talos-p3a-rides-talosctl-from-a-kubernetes-tree-with-the-factory-image-pinned-in-cloud-images-the-worklab-member-via-a-second-bpg-provider-alias-flannel-and-cluster-secrets-in-infisical.md). Scope: three control-plane VMs, cluster bootstrap, Ceph CSI RBD, the `kubernetes/` tree. Registry, ARC, ingress and runner-113 retirement are P3b.
 
 ## Existing state (mapped 2026-08-23)
 

@@ -1,6 +1,6 @@
 # ADR 0033 — Talos P3a rides talosctl from a kubernetes tree with the factory image pinned in cloud_images, the worklab member via a second bpg provider alias, Flannel, and cluster secrets in Infisical
 
-- **Status:** Proposed
+- **Status:** Accepted (approved 2026-08-23, built the same day)
 - **Date:** 2026-08-23
 - **Deciders:** operator + agent
 - **Context source:** P3a brownfield gate, [docs/talos-p3a-plan.md](../talos-p3a-plan.md); amends [ADR 0031](0031-a-three-node-talos-kubernetes-cluster-becomes-the-services-plane-and-the-bootstrap-tier-stays-on-proxmox.md)
