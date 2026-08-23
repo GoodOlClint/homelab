@@ -1,0 +1,117 @@
+- Media:
+    - Plex:
+        icon: plex.svg
+        href: https://plex.clintflix.tv:32400/web
+        description: Media Server
+        widget: {type: plex, url: "https://${PLEX}:32400", key: "{{HOMEPAGE_VAR_PLEX_TOKEN}}"}
+    - Tautulli:
+        icon: tautulli.svg
+        href: https://tautulli.clintflix.tv
+        description: Plex Statistics
+        widget: {type: tautulli, url: "http://${PLEX_SERVICES}:8181", key: "{{HOMEPAGE_VAR_TAUTULLI_KEY}}"}
+    - Seerr:
+        icon: jellyseerr.svg
+        href: https://request.clintflix.tv
+        description: Media Requests
+        widget: {type: jellyseerr, url: "http://${PLEX_SERVICES}:5055", key: "{{HOMEPAGE_VAR_SEERR_KEY}}"}
+
+- Downloads:
+    - Sonarr:
+        icon: sonarr.svg
+        href: http://${PLEX_SERVICES}:8989
+        description: TV Series
+        widget: {type: sonarr, url: "http://${PLEX_SERVICES}:8989", key: "{{HOMEPAGE_VAR_SONARR_KEY}}"}
+    - Radarr:
+        icon: radarr.svg
+        href: http://${PLEX_SERVICES}:7878
+        description: Movies
+        widget: {type: radarr, url: "http://${PLEX_SERVICES}:7878", key: "{{HOMEPAGE_VAR_RADARR_KEY}}"}
+    - Lidarr:
+        icon: lidarr.svg
+        href: http://${PLEX_SERVICES}:8686
+        description: Music
+        widget: {type: lidarr, url: "http://${PLEX_SERVICES}:8686", key: "{{HOMEPAGE_VAR_LIDARR_KEY}}"}
+    - Prowlarr:
+        icon: prowlarr.svg
+        href: http://${PLEX_SERVICES}:9696
+        description: Indexer Manager
+        widget: {type: prowlarr, url: "http://${PLEX_SERVICES}:9696", key: "{{HOMEPAGE_VAR_PROWLARR_KEY}}"}
+    - Bazarr:
+        icon: bazarr.svg
+        href: http://${PLEX_SERVICES}:6767
+        description: Subtitles
+        widget: {type: bazarr, url: "http://${PLEX_SERVICES}:6767", key: "{{HOMEPAGE_VAR_BAZARR_KEY}}"}
+    - SABnzbd:
+        icon: sabnzbd.svg
+        href: http://${PLEX_SERVICES}:8080
+        description: Usenet Downloads
+        widget: {type: sabnzbd, url: "http://${PLEX_SERVICES}:8080", key: "{{HOMEPAGE_VAR_SABNZBD_KEY}}"}
+
+- Monitoring:
+    - Grafana:
+        icon: grafana.svg
+        href: http://${OPENOBSERVE}:3000
+        description: Dashboards
+        widget: {type: grafana, url: "http://${OPENOBSERVE}:3000", username: admin, password: "{{HOMEPAGE_VAR_GRAFANA_PASSWORD}}"}
+    - Prometheus:
+        icon: prometheus.svg
+        href: http://${OPENOBSERVE}:9090
+        description: Metrics
+        widget: {type: prometheus, url: "http://${OPENOBSERVE}:9090"}
+    - OpenObserve:
+        icon: sh-openobserve.svg
+        href: http://${OPENOBSERVE}:5080
+        description: Log Management
+    - Uptime Kuma:
+        icon: uptime-kuma.svg
+        href: http://${OPENOBSERVE}:3001
+        description: Status Monitoring
+
+- Infrastructure:
+    - Portainer:
+        icon: portainer.svg
+        href: https://${CONTROL}:9443
+        description: Container Management
+        widget: {type: portainer, url: "https://${CONTROL}:9443", env: 1, key: "{{HOMEPAGE_VAR_PORTAINER_KEY}}"}
+    - AdGuard Home:
+        icon: adguard-home.svg
+        href: http://${ADGUARD}:3000
+        description: DNS Filtering
+        widget: {type: adguard, url: "http://${ADGUARD}:3000", username: "{{HOMEPAGE_VAR_ADGUARD_USERNAME}}", password: "{{HOMEPAGE_VAR_ADGUARD_PASSWORD}}"}
+    - Proxmox VE:
+        icon: proxmox.svg
+        href: ${PVE_API}
+        description: Hypervisor
+        widget: {type: proxmox, url: "${PVE_API}", username: "monitoring@pve!monitoring", password: "{{HOMEPAGE_VAR_PROXMOX_TOKEN_SECRET}}"}
+    - Proxmox Backup:
+        icon: proxmox.svg
+        href: https://${PBS}:8007
+        description: Backup Server
+        widget: {type: proxmoxbackupserver, url: "https://${PBS}:8007", username: "monitoring@pbs!monitoring-token", password: "{{HOMEPAGE_VAR_PROXMOX_BACKUP_PASSWORD}}"}
+    - UniFi:
+        icon: unifi.svg
+        href: https://${UNIFI}:11443
+        description: Network Controller
+        widget: {type: unifi, url: "https://${UNIFI}:11443", username: "{{HOMEPAGE_VAR_UNIFI_USERNAME}}", password: "{{HOMEPAGE_VAR_UNIFI_PASSWORD}}"}
+    - Infisical:
+        icon: infisical.svg
+        href: http://${INFISICAL}:8080
+        description: Secrets Management
+    - pfSense:
+        icon: pfsense.svg
+        href: https://${GATEWAY}
+        description: Firewall / Gateway
+    - Synology NAS:
+        icon: synology-dsm.svg
+        href: https://${SYNOLOGY}:5001
+        description: Network Storage
+
+- Other:
+    - Kiwix:
+        icon: kiwix.svg
+        href: http://${DOCKER}:8090
+        description: Offline Wikipedia
+    - Dogecoin Node:
+        icon: si-dogecoin
+        href: http://${DOCKER}:3000
+        description: Crypto Full Node
