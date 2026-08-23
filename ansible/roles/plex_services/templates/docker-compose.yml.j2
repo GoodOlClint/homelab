@@ -292,6 +292,4 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /opt/plex-services/libation:/config:rw
       - {{ libation_books_path }}:/data:rw
-{% if scratch_disk_mount is defined %}
-      - {{ scratch_disk_mount }}/libation:/tmp:rw
-{% endif %}
+      - {{ libation_inprogress_path }}:/tmp:rw

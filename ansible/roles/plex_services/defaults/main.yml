@@ -8,6 +8,9 @@ libation_image: "rmcrackan/libation:13.7.10"
 libation_sleep_time: "6h"
 libation_folder_template: "<author>/<title> [<id>]"
 libation_books_path: "/mnt/data/media/Audiobooks"
+# In-progress downloads/decrypts: same export as the library, so the publish is a
+# rename and a full-library first run cannot fill the rootfs (53 GB did, 2026-08-23)
+libation_inprogress_path: "/mnt/data/media/.libation-inprogress"
 
 # *arr services authentication
 plex_services_arr_user: "admin"

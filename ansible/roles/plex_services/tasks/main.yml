@@ -176,18 +176,6 @@
     - plex_services
     - config
 
-- name: Create Libation in-progress scratch directory
-  ansible.builtin.file:
-    path: "{{ scratch_disk_mount }}/libation"
-    state: directory
-    owner: "{{ plex_services['libation'].PUID }}"
-    group: "{{ plex_services_pgid }}"
-    mode: '0700'
-  when: scratch_disk_mount is defined and 'libation' in plex_services
-  tags:
-    - plex_services
-    - disks
-
 - name: Deploy Libation settings
   ansible.builtin.template:
     src: libation-settings.json.j2
