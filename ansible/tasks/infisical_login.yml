@@ -68,6 +68,7 @@
     - github-runner
     - squid
     - control
+    - talos
   register: _infisical_nested
   delegate_to: localhost
   become: false

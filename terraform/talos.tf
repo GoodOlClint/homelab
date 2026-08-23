@@ -153,7 +153,13 @@ resource "proxmox_virtual_environment_vm" "talos_cp_worklab" {
 output "talos_nodes" {
   description = "Talos control-plane addressing for kubernetes/talos (make talos-apply)"
   value = {
-    api_vip = local.talos_api_vip
+    api_vip     = local.talos_api_vip
+    gateway     = cidrhost(local.talos_services_vlan.subnet, 1)
+    prefix_len  = split("/", local.talos_services_vlan.subnet)[1]
+    subnet      = local.talos_services_vlan.subnet
+    dns_servers = module.network.dns_servers
+    schematic   = regex("image/([0-9a-f]+)/", var.cloud_images.talos.url)[0]
+    version     = regex("/(v[0-9.]+)/", var.cloud_images.talos.url)[0]
     nodes = {
       for name, n in local.talos_node_addrs : name => merge(n, {
         dhcp_ips = try(
