@@ -40,7 +40,7 @@ resource "proxmox_acl" "ci_storage" {
   for_each  = toset(var.ci_storages)
   user_id   = proxmox_virtual_environment_user.ci.user_id
   path      = "/storage/${each.value}"
-  role_id   = "PVEDatastoreUser"
+  role_id   = each.value == var.ci_iso_storage ? "PVEDatastoreAdmin" : "PVEDatastoreUser" # ISO upload needs Datastore.AllocateTemplate
   propagate = true
 }
 

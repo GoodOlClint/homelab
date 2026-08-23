@@ -60,6 +60,12 @@ variable "ci_storages" {
   default     = ["ceph-rbd", "cephfs"]
 }
 
+variable "ci_iso_storage" {
+  description = "The ci_storages entry that receives ISO uploads (gets PVEDatastoreAdmin)"
+  type        = string
+  default     = "cephfs"
+}
+
 variable "ci_sdn_zone" {
   description = "SDN zone holding the CI VNET"
   type        = string
