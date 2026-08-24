@@ -10,8 +10,6 @@
 
   vars_files:
     - ../group_vars/all.yml
-    - ../roles/docker/defaults/main.yml
-    - ../roles/authentik/defaults/main.yml
     - ../roles/infisical/defaults/main.yml
     - ../roles/lancache/defaults/main.yml
     - ../roles/minio/defaults/main.yml
@@ -26,63 +24,6 @@
       when: inventory_hostname == 'lancache'
 
   tasks:
-    # --- docker (legacy) ---
-    - name: Install the PlayFab lobby query script for valheim-status
-      ansible.builtin.copy:
-        src: "{{ playbook_dir }}/../roles/docker/files/valheim-playfab-status.mjs"
-        dest: "{{ docker_base_dir }}/valheim/valheim-playfab-status.mjs"
-        owner: root
-        group: root
-        mode: '0644'
-      when: inventory_hostname == 'docker'
-
-    - name: Deploy docker VM docker-compose
-      ansible.builtin.template:
-        src: "{{ playbook_dir }}/../roles/docker/templates/docker-compose.yml.j2"
-        dest: "{{ docker_base_dir }}/docker-compose.yml"
-        owner: root
-        group: root
-        mode: '0600'
-      register: docker_compose
-      when: inventory_hostname == 'docker'
-
-    - name: Check if authentik is deployed
-      ansible.builtin.stat:
-        path: /opt/authentik
-      register: authentik_dir
-      when: inventory_hostname == 'docker'
-
-    - name: Deploy authentik docker-compose
-      ansible.builtin.template:
-        src: "{{ playbook_dir }}/../roles/authentik/templates/docker-compose.yml.j2"
-        dest: /opt/authentik/docker-compose.yml
-        owner: root
-        group: root
-        mode: '0644'
-      register: authentik_compose
-      when:
-        - inventory_hostname == 'docker'
-        - authentik_dir.stat.exists | default(false)
-
-    - name: Restart docker VM containers
-      community.docker.docker_compose_v2:
-        project_src: "{{ docker_base_dir }}"
-        state: present
-        recreate: always
-      when:
-        - inventory_hostname == 'docker'
-        - docker_compose is changed
-
-    - name: Restart authentik containers
-      community.docker.docker_compose_v2:
-        project_src: /opt/authentik
-        state: present
-        recreate: always
-      when:
-        - inventory_hostname == 'docker'
-        - authentik_dir.stat.exists | default(false)
-        - authentik_compose is changed
-
     # --- lancache ---
     - name: Deploy lancache docker-compose
       ansible.builtin.template:

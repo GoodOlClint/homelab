@@ -6,9 +6,9 @@
 #
 # Usage:
 #   make refresh-identity                              # check all hosts, only refresh unhealthy
-#   make refresh-identity LIMIT=docker            # check one host
+#   make refresh-identity LIMIT=plex              # check one host
 #   make refresh-identity FORCE=true                   # force refresh all regardless of health
-#   make refresh-identity LIMIT=docker FORCE=true # force refresh one host
+#   make refresh-identity LIMIT=plex FORCE=true   # force refresh one host
 #   make refresh-identity TAGS=cleanup                 # only clean up orphaned identities
 #   make refresh-identity TAGS="cleanup,refresh"       # cleanup + check/refresh all
 
@@ -107,7 +107,7 @@
 # Checks agent health first — skips healthy hosts unless force=true
 # ============================================================
 - name: "Refresh: Re-provision Machine Identities on target VMs"
-  hosts: docker,plex
+  hosts: plex
   become: true
   serial: 1
   gather_facts: false

@@ -17,7 +17,7 @@ locals {
     plex          = { index = 1, size_gb = 150 } # Library dir, 62 GB measured 2026-08-21
     plex_services = { index = 2, size_gb = 40 }  # retired with LXC 206 (ADR 0037, state moved to cluster PVCs); slot stays until the decommission sweep
     openobserve   = { index = 3, size_gb = 100 } # retired with LXC 203 (ADR 0036, history moved to cluster PVCs); slot stays until the decommission sweep
-    docker        = { index = 4, size_gb = 20 }  # Valheim config 0.5 GB + server/world backups 3.3 GB, measured 2026-08-21
+    docker        = { index = 4, size_gb = 20 }  # retired with LXC 204 (ADR 0038, Valheim state moved to a cluster PVC); slot stays until the decommission sweep
     control       = { index = 5, size_gb = 10 }  # MeshCentral data/files + Portainer state (ADR 0030)
   }
 
@@ -160,26 +160,6 @@ locals {
   # --- Services VMs ---
   # Application services: media, containers, home automation, licensing
   services_vms = [
-    # docker-on-LXC. Valheim config + world saves ride the data volume (ADR 0015);
-    # the kiwix ZIM library (538 GB) stays on
-    # NAS as node bind mounts (ADR 0017). No GPU: BOINC was decommissioned with
-    # this rebuild (restorable from git history).
-    {
-      name         = "docker"
-      type         = "lxc"
-      node_name    = "ms-01a"
-      vm_id        = 204 # old 104 + 100 (ADR 0028)
-      vlans        = ["vlan40"]
-      ip_offset    = 104
-      cpu_cores    = 4
-      memory_mb    = 8192
-      disk_size_gb = 32
-      keyctl       = true
-      data_volume  = { name = "docker", path = "/opt/docker" }
-      bind_mounts = [
-        { source = "/mnt/nas/docker/kiwix", path = "/mnt/kiwix", read_only = true },
-      ]
-    },
     # iGPU QuickSync via /dev/dri passthrough, by PCI path so it is the Intel
     # device on every node (msi's renderD128 is the Quadro); gids are the CT-side
     # render (991) and video (44) groups of the Ubuntu 26.04 template. Library on the plex

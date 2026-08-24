@@ -156,8 +156,6 @@
       - name: pbs
         dest_path: /etc/infisical/secrets/pbs.env
         template_src: secrets/pbs.env.tpl.j2
-    portainer_agent_hosts:
-      - docker
   roles:
     - infisical_client
     - pbs_client

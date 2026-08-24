@@ -17,43 +17,6 @@
   tags:
     - nvidia-licensing
 
-- name: Configure docker VM
-  hosts: docker
-  become: true
-
-  vars_files:
-    - ../group_vars/all.yml
-  pre_tasks: *load_all_config
-  vars:
-    infisical_secret_paths: ["/shared", "/docker"]
-    infisical_agent_templates:
-      - name: pbs
-        dest_path: /etc/infisical/secrets/pbs.env
-        template_src: secrets/pbs.env.tpl.j2
-      - name: docker
-        dest_path: /etc/infisical/secrets/docker.env
-        template_src: secrets/docker.env.tpl.j2
-      # TODO: Authentik disabled — env template has quoting bug with base64 values containing +
-      # - name: docker-authentik
-      #   dest_path: /etc/infisical/secrets/docker-authentik.env
-      #   template_src: secrets/docker-authentik.env.tpl.j2
-      #   post_command: "docker compose -f /opt/authentik/docker-compose.yml up -d --force-recreate authentik-server authentik-worker"
-      - name: docker-valheim
-        dest_path: /etc/infisical/secrets/docker-valheim.env
-        template_src: secrets/docker-valheim.env.tpl.j2
-        post_command: "docker compose -f /opt/docker/docker-compose.yml up -d --force-recreate valheim"
-  roles:
-    - infisical_client
-    - dns_config
-    - pbs_client
-    - docker
-    - portainer_agent
-    # - authentik  # TODO: disabled — env template quoting bug
-    - rsyslog_client
-    - telegraf
-  tags:
-    - docker
-
 - name: Configure plex VM
   hosts: plex
   become: true

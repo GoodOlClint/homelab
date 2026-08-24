@@ -175,6 +175,11 @@ games-migrate:
 games-kuma:
 	@kubernetes/games/deploy.sh kuma
 
+# Fleet-root terraform passthrough with the TF_VAR_* exports (raw terraform hangs prompting for them);
+# the retirement step is `make tf ARGS='state rm <address>'` (ADR 0028: stopped, never destroyed)
+tf:
+	@cd terraform && terraform $(ARGS)
+
 # PVE backup jobs (B3): apply only the job resources after editing
 # `backup_jobs` in vars.auto.tfvars — never a bare apply while old-shape
 # guests are unmanaged by state (ADR 0028).
@@ -252,7 +257,7 @@ endif
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/docker-config.yml --limit $(VM)
 
 # === Ansible Playbooks ===
-.PHONY: ansible ansible-all ansible-infra ansible-services ansible-pfsense docker-deploy docker-config update update-dns expand-disk
+.PHONY: ansible ansible-all ansible-infra ansible-services ansible-pfsense docker-config update update-dns expand-disk
 
 ansible-all:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/site.yml $(if $(TAGS),--tags $(TAGS))
@@ -265,9 +270,6 @@ ansible-services:
 
 ansible-pfsense:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/pfsense.yaml ansible/playbooks/pfsense.yml
-
-docker-deploy:
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/docker.yml
 
 # update-all.yml is hosts:all with parallel reboot-if-required and no serial
 # batching — against the cluster it can reboot every PVE node and both DNS
