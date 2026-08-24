@@ -41,7 +41,7 @@ Additional VLANs not shown: infrastructure, vpn, work, iot, sonos, vivint, guest
 - **DNS**: BIND9 (authoritative) + AdGuard Home (filtering) = split DNS
 - **Monitoring**: OpenObserve + Grafana + Prometheus + 7 exporters + Uptime Kuma on the Talos cluster (`kubernetes/monitoring/`, ADR 0036)
 - **Media**: Plex (GPU transcoding) + *arr stack + Synology NAS (NFS)
-- **Containers**: Valheim (+ status sidecars), Kiwix
+- **Games**: Valheim (+ PlayFab status sidecar) on a MetalLB UDP LB and Kiwix over NFS, on the Talos cluster (`kubernetes/games/`, ADR 0038)
 - **Secrets**: Infisical (self-hosted vault) with per-VM machine identities; SOPS/age for bootstrap only (no runtime fallback)
 - **Backup**: Proxmox Backup Server with nightly cron jobs
 - **VPS Relay**: Encrypted WireGuard tunnel forwarding Plex, Valheim, mobile WireGuard
@@ -220,7 +220,6 @@ All VMs are defined in `terraform/vm-configs.tf` and provisioned with cloud-init
 | unifi | 100 | mgmt | 4 | 4 GB | 50 GB | -- | UniFi Controller |
 | proxmox-backup | 101 | mgmt, services, storage | 4 | 4 GB | 20 GB | -- | Proxmox Backup Server |
 | adguard1 / adguard2 | 251 / 252 | services | 2 | 2 GB | 10 GB | -- | AdGuard Home LXC pair, one per MS-01, keepalived VIP (ADR 0029) |
-| docker | 104 | mgmt, services, storage | 4 | 16 GB | 100 GB | NVIDIA | Container workloads (Valheim, Authentik, etc.) |
 | infisical | 105 | mgmt, services | 4 | 4 GB | 30 GB | -- | Self-hosted secret vault |
 | nvidia-licensing | 107 | mgmt, services | 2 | 2 GB | 20 GB | -- | NVIDIA GRID license server (FastAPI DLS) |
 | plex | 108 | mgmt, services, storage | 8 | 32 GB | 100 GB | NVIDIA | Plex Media Server (hardware transcoding) |
@@ -303,17 +302,9 @@ One Deployment per service in the `plex-services` namespace (`make talos-plex-se
 
 The NAS media tree reaches the pods through a kubelet-mounted NFS PersistentVolume; a nightly CronJob pushes `pg_dumpall` output to PBS (`databases` namespace) via the in-tree `proxmox-backup-client` image (`make plex-pbs-image`).
 
-### Docker VM Services
+### Games (cluster namespace `games`)
 
-Active containers on the docker VM:
-
-| Container | Ports | Purpose |
-|-----------|-------|---------|
-| Valheim | UDP 2456-2458 | Dedicated game server (forwarded via VPS) |
-| Authentik | -- | SSO/OIDC identity provider (separate Compose stack) |
-| Kiwix | 8090 | Offline Wikipedia |
-| BOINC | 7080-7081 | Distributed computing (GPU-accelerated) |
-| Portainer | 9000 | Container management UI |
+`make talos-games` (ADR 0038): one `valheim` pod — the crossplay dedicated server, the `valheim-status` PlayFab lobby sidecar (keyed by server name, serves `status.json` for Uptime Kuma) — with UDP 2456-2458 on a MetalLB LoadBalancer (services offset 67, `externalTrafficPolicy: Local`) that the VPS relay/pfSense forward targets; `kiwix.<domain>` serves the NAS ZIM library through a read-only NFS PV. `make games-migrate FROM=<ip>` is the one-off, player-gated state copy; `make games-kuma` repoints the Kuma row.
 
 ### Infisical Secret Vault (infisical VM)
 
@@ -334,7 +325,7 @@ Self-hosted secret management platform deployed via Docker Compose:
 
 ### Talos Kubernetes services plane (`kubernetes/`)
 
-Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-manager (`homelab-ca`), Zot pull-through registry, ARC CI runners (ADR 0034), Traefik ingress + the Infisical Kubernetes operator + **homepage** (ADR 0035 — `make talos-ingress`, `make talos-infisical`, `make talos-homepage`), and the **monitoring stack** (ADR 0036 — `make talos-monitoring`, `make monitoring-migrate`, `make monitoring-users`) and the **plex-services stack** (ADR 0037 — `make talos-plex-services`, `make plex-services-migrate`, `make plex-pbs-image`). Each `kubernetes/<component>/deploy.sh` renders with `helm template | kubectl apply`; runtime secrets are `InfisicalSecret` CRDs; images pull through `registry.<domain>`.
+Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-manager (`homelab-ca`), Zot pull-through registry, ARC CI runners (ADR 0034), Traefik ingress + the Infisical Kubernetes operator + **homepage** (ADR 0035 — `make talos-ingress`, `make talos-infisical`, `make talos-homepage`), and the **monitoring stack** (ADR 0036 — `make talos-monitoring`, `make monitoring-migrate`, `make monitoring-users`) the **plex-services stack** (ADR 0037 — `make talos-plex-services`, `make plex-services-migrate`, `make plex-pbs-image`), and the **games stack** (ADR 0038 — `make talos-games`, `make games-migrate`, `make games-kuma`). Each `kubernetes/<component>/deploy.sh` renders with `helm template | kubectl apply`; runtime secrets are `InfisicalSecret` CRDs; images pull through `registry.<domain>`.
 
 ## Ansible Roles
 
@@ -406,7 +397,6 @@ Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-m
 | services.yml | All service VMs | Media, Docker, Plex, NVIDIA licensing |
 | pfsense.yml | pfSense | DHCP scopes + RFC 2136 DNS registration |
 | vps.yml | VPS | WireGuard, nftables, hardening, monitoring agents |
-| docker.yml | Docker VM | Docker daemon + Authentik |
 | unifi.yml | UniFi VM | UniFi Controller deployment |
 | docker-config.yml | Service VMs | Lightweight compose+config deploy (no full role) |
 | update-all.yml | All + VPS | OS patching (apt/apk) |
@@ -588,7 +578,6 @@ All `ansible-*` targets support `TAGS=<tag>` to filter by play-level tags (e.g.,
 | `ansible-infra` | Run infrastructure playbook only |
 | `ansible-services` | Run services playbook only |
 | `ansible-pfsense` | Run pfSense playbook (DHCP + DNS registration) |
-| `docker-deploy` | Run docker playbook only |
 | `update` | OS patching. Gated: bare `make update` errors until the serialized cluster-safe play lands — use `make update <vm>` for one host, `UNSAFE_UPDATE=true` for emergencies |
 | `update-dns` | Update DNS configuration |
 | `backup-finalize` | Register the PBS datastore as PVE storage (once, after PBS provisioning; prerequisite for `backup_jobs` terraform applies) |
