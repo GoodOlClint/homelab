@@ -45,38 +45,9 @@ migrate() {
   kubectl -n "$NS" rollout status deploy valheim --timeout=900s
 }
 
-kuma() {
-  kubectl -n monitoring scale deploy uptime-kuma --replicas=0
-  kubectl -n monitoring wait --for=delete pod -l app=uptime-kuma --timeout=120s || true
-  kubectl -n monitoring delete pod kuma-edit --ignore-not-found >/dev/null
-  sub <<'EOT' | kubectl apply -f -
-apiVersion: v1
-kind: Pod
-metadata: {name: kuma-edit, namespace: monitoring}
-spec:
-  restartPolicy: Never
-  containers:
-    - name: edit
-      image: ${REGISTRY}/public.ecr.aws/docker/library/alpine:latest
-      command: [sh, -c, "apk add --no-cache sqlite >/dev/null && touch /ready && sleep infinity"]
-      readinessProbe: {exec: {command: [test, -f, /ready]}, periodSeconds: 2}
-      volumeMounts:
-        - {name: kuma, mountPath: /uptime-kuma}
-  volumes:
-    - {name: kuma, persistentVolumeClaim: {claimName: uptime-kuma}}
-EOT
-  kubectl -n monitoring wait --for=condition=Ready pod/kuma-edit --timeout=120s
-  kubectl -n monitoring exec kuma-edit -- sqlite3 /uptime-kuma/data/kuma.db "
-    update monitor set url='http://valheim-status.games.svc.cluster.local:8081/status.json', json_path='online', json_path_operator='==', expected_value='true' where name='Valheim — PlayFab lobby';
-    select name, url, json_path, expected_value from monitor where name='Valheim — PlayFab lobby';"
-  kubectl -n monitoring delete pod kuma-edit
-  kubectl -n monitoring scale deploy uptime-kuma --replicas=1
-  kubectl -n monitoring rollout status deploy uptime-kuma --timeout=180s
-}
 
 case "${1:-}" in
   migrate) migrate "${2:-}"; exit ;;
-  kuma) kuma; exit ;;
 esac
 
 ns "$NS"

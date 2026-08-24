@@ -1,0 +1,68 @@
+---
+# Uptime Kuma monitors + the ntfy channel, declared here and applied through the
+# goodolclint.uptime_kuma collection (ADR 0011, amended 2026-08-24). Targets derive
+# from the inventory and vlans.yaml; Kuma itself is kubernetes/monitoring/.
+- name: Uptime Kuma configuration
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - ../group_vars/all.yml
+  pre_tasks:
+    - name: Load all configuration and secrets
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/full_pre_tasks.yml"
+      tags: [always]
+  vars:
+    _domain: "{{ network_data.domain_suffix }}"
+    _redirects: ["200-299", "300-399"]
+    uptime_kuma_api_url: "https://uptime-kuma.{{ _domain }}"
+    uptime_kuma_validate_certs: false
+    uptime_kuma_api_username: "{{ uptime_kuma_admin_user | default('goodolclint') }}"
+    uptime_kuma_api_password: "{{ secrets.monitoring.uptime_kuma_admin_password }}"
+    uptime_kuma_notifications:
+      - name: ntfy (homelab alerts)
+        notification_type: ntfy
+        is_default: true
+        apply_existing: true
+        notification_config:
+          ntfyserverurl: https://ntfy.sh
+          ntfytopic: "{{ secrets.monitoring.alert_ntfy_topic }}"
+          ntfyPriority: 5
+          ntfyPriorityDown: 5
+          ntfyAuthenticationMethod: none
+    uptime_kuma_monitor_defaults:
+      interval: 60
+      retry_interval: 60
+      max_retries: 2
+      timeout: 16
+      notification_names: ["ntfy (homelab alerts)"]
+    uptime_kuma_monitors:
+      - {name: "AdGuard — DNS resolution", monitor_type: dns, hostname: google.com, port: 53, dns_resolve_type: A,
+         dns_resolve_server: "{{ network_data.dns_server.dns_ipv4 }}"}
+      - {name: "BIND9 — DNS resolution", monitor_type: dns, port: 53, dns_resolve_type: A,
+         hostname: "ns.{{ network_data.vlans[network_data.management_vlan].domain_prefix }}.{{ _domain }}",
+         dns_resolve_server: "{{ network_data.dns_server.bind_ipv4 }}"}
+      - {name: "AdGuard — web UI", monitor_type: http, url: "http://{{ network_data.dns_server.dns_ipv4 }}:3000"}
+      - {name: Plex, monitor_type: http, url: "https://{{ hostvars['plex'].service_ip }}:32400/identity", ignore_tls: true}
+      - {name: Tautulli, monitor_type: http, url: "http://tautulli.plex-services.svc.cluster.local:8181/status", accepted_statuscodes: "{{ _redirects }}"}
+      - {name: Jellyseerr, monitor_type: http, url: "http://seerr.plex-services.svc.cluster.local:5055", accepted_statuscodes: "{{ _redirects }}"}
+      - {name: Grafana, monitor_type: http, url: "https://grafana.{{ _domain }}", ignore_tls: true, accepted_statuscodes: "{{ _redirects }}"}
+      - {name: OpenObserve, monitor_type: http, url: "https://openobserve.{{ _domain }}/healthz", ignore_tls: true}
+      - {name: Prometheus, monitor_type: http, url: "https://prometheus.{{ _domain }}/-/healthy", ignore_tls: true}
+      - {name: Alertmanager, monitor_type: http, url: "https://alertmanager.{{ _domain }}/-/healthy", ignore_tls: true}
+      - {name: "AxoSyslog — syslog TCP 5514", monitor_type: port, hostname: "{{ openobserve_listen_host }}", port: 5514, max_retries: 1}
+      - {name: Infisical, monitor_type: http, url: "http://{{ hostvars['infisical'].service_ip }}:8080", accepted_statuscodes: "{{ _redirects }}"}
+      - {name: "Proxmox Backup Server", monitor_type: http, url: "https://{{ hostvars['proxmox-backup'].service_ip }}:8007", ignore_tls: true, accepted_statuscodes: "{{ _redirects }}"}
+      - {name: "UniFi controller", monitor_type: port, hostname: "{{ hostvars['unifi'].ansible_host }}", port: 11443}
+      - {name: "apt-cacher-ng — proxy TCP 3142", monitor_type: port, hostname: "{{ hostvars['apt-cache'].service_ip }}", port: 3142}
+      - {name: Homepage, monitor_type: http, url: "https://homepage.{{ _domain }}", ignore_tls: true, accepted_statuscodes: "{{ _redirects }}"}
+      - {name: "VPS — public IP", monitor_type: ping, hostname: vps.clintflix.tv}
+      - {name: "VPS — WireGuard tunnel peer", monitor_type: ping, hostname: "{{ vps_wg_tunnel.tunnel_address.split('/')[0] }}"}
+      - {name: "Cloudflare Tunnel — Tautulli", monitor_type: http, url: "https://tautulli.clintflix.tv", interval: 120, accepted_statuscodes: "{{ _redirects }}"}
+      - {name: Sonarr, monitor_type: http, url: "http://sonarr.plex-services.svc.cluster.local:8989/ping", accepted_statuscodes: "{{ _redirects }}"}
+      - {name: Radarr, monitor_type: http, url: "http://radarr.plex-services.svc.cluster.local:7878/ping", accepted_statuscodes: "{{ _redirects }}"}
+      - {name: Sabnzbd, monitor_type: http, url: "http://sabnzbd.plex-services.svc.cluster.local:8080/api?mode=version", accepted_statuscodes: "{{ _redirects }}"}
+      - {name: "Valheim — PlayFab lobby", monitor_type: json-query, url: "http://valheim-status.games.svc.cluster.local:8081/status.json",
+         json_path: online, json_path_operator: "==", expected_value: "true"}
+  roles:
+    - goodolclint.uptime_kuma.uptime_kuma

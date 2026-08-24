@@ -18,6 +18,7 @@
   delegate_to: localhost
   become: false
   run_once: true
+  check_mode: false
 
 # Read root-level secrets (/)
 - name: Read root secrets from Infisical
@@ -31,6 +32,7 @@
   delegate_to: localhost
   become: false
   run_once: true
+  check_mode: false
 
 # Read shared secrets (/shared) — merged flat into root
 - name: Read shared secrets from Infisical
@@ -44,6 +46,7 @@
   delegate_to: localhost
   become: false
   run_once: true
+  check_mode: false
   failed_when: false
 
 # Read nested path secrets — each becomes a nested dict in secrets fact
@@ -72,6 +75,7 @@
   delegate_to: localhost
   become: false
   run_once: true
+  check_mode: false
   failed_when: false
 
 # Build the secrets fact matching secrets.sops.yml structure
@@ -81,8 +85,8 @@
       {{ _flat | combine(_nested_dicts) }}
   vars:
     # Root + shared → flat keys (all secret names must already be lowercase)
-    _root_items: "{{ (_infisical_root.secrets | default({})) | dict2items }}"
-    _shared_items: "{{ (_infisical_shared.secrets | default({})) | dict2items }}"
+    _root_items: "{{ (_infisical_root.secrets | default({}, true)) | dict2items }}"
+    _shared_items: "{{ (_infisical_shared.secrets | default({}, true)) | dict2items }}"
     _flat: "{{ dict((_root_items + _shared_items) | map(attribute='key') | list | zip((_root_items + _shared_items) | map(attribute='value') | list)) }}"
     # Nested paths → dict keyed by folder name (hyphens→underscores), secrets as-is
     # Filter to results that have a secrets dict (skip paths that don't exist yet)

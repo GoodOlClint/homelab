@@ -65,43 +65,10 @@ migrate() {
   kubectl -n "$NS" rollout status deploy --timeout=600s
 }
 
-kuma() {
-  kubectl -n monitoring scale deploy uptime-kuma --replicas=0
-  kubectl -n monitoring wait --for=delete pod -l app=uptime-kuma --timeout=120s || true
-  kubectl -n monitoring delete pod kuma-edit --ignore-not-found >/dev/null
-  sub <<'EOF' | kubectl apply -f -
-apiVersion: v1
-kind: Pod
-metadata: {name: kuma-edit, namespace: monitoring}
-spec:
-  restartPolicy: Never
-  containers:
-    - name: edit
-      image: ${REGISTRY}/public.ecr.aws/docker/library/alpine:latest
-      command: [sh, -c, "apk add --no-cache sqlite >/dev/null && touch /ready && sleep infinity"]
-      readinessProbe: {exec: {command: [test, -f, /ready]}, periodSeconds: 2}
-      volumeMounts:
-        - {name: kuma, mountPath: /uptime-kuma}
-  volumes:
-    - {name: kuma, persistentVolumeClaim: {claimName: uptime-kuma}}
-EOF
-  kubectl -n monitoring wait --for=condition=Ready pod/kuma-edit --timeout=120s
-  kubectl -n monitoring exec kuma-edit -- sqlite3 /uptime-kuma/data/kuma.db "
-    update monitor set url='http://tautulli.plex-services.svc.cluster.local:8181/status' where name='Tautulli';
-    update monitor set url='http://seerr.plex-services.svc.cluster.local:5055' where name='Jellyseerr';
-    update monitor set url='http://sonarr.plex-services.svc.cluster.local:8989/ping' where name='Sonarr';
-    update monitor set url='http://radarr.plex-services.svc.cluster.local:7878/ping' where name='Radarr';
-    update monitor set url='http://sabnzbd.plex-services.svc.cluster.local:8080/api?mode=version' where name='Sabnzbd';
-    select name, url from monitor where name in ('Tautulli','Jellyseerr','Sonarr','Radarr','Sabnzbd');"
-  kubectl -n monitoring delete pod kuma-edit
-  kubectl -n monitoring scale deploy uptime-kuma --replicas=1
-  kubectl -n monitoring rollout status deploy uptime-kuma --timeout=180s
-}
 
 case "${1:-}" in
   smoke) smoke; exit ;;
   migrate) migrate "${2:-}"; exit ;;
-  kuma) kuma; exit ;;
 esac
 
 ns "$NS"

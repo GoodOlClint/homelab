@@ -18,6 +18,9 @@ collections:
     version: ">=1.0.0"
   - name: pfsensible.core
     version: ">=0.7.0"
+  - name: https://github.com/GoodOlClint/ansible-collection-uptime_kuma.git
+    type: git
+    version: v0.2.1
 roles:
   - name: geerlingguy.docker
     version: "8.0.0"

@@ -33,19 +33,12 @@ migrate() {
     echo "== rsync $s"
     kubectl -n "$NS" exec migrate -- sh -c "mkdir -p /$s/data && rsync -a --delete --bwlimit=80m --info=progress2 -e 'ssh -o StrictHostKeyChecking=no' root@$old:/var/lib/monitoring/$s/ /$s/data/"
   done
-  # Kuma's rows for the moved services follow the move (the seeder's own mechanism: sqlite, Kuma stopped).
-  kubectl -n "$NS" exec migrate -- sqlite3 /uptime-kuma/data/kuma.db "
-    update monitor set url='https://$GRAFANA_HOST', ignore_tls=1 where name='Grafana';
-    update monitor set url='https://$OO_HOST/healthz', ignore_tls=1 where name='OpenObserve';
-    update monitor set url='https://$PROM_HOST/-/healthy', ignore_tls=1 where name='Prometheus';
-    update monitor set url='https://$AM_HOST/-/healthy', ignore_tls=1 where name='Alertmanager';
-    update monitor set hostname='$SYSLOG_IP' where name='AxoSyslog — syslog TCP 5514';
-    select name, coalesce(url, hostname) from monitor where name in ('Grafana','OpenObserve','Prometheus','Alertmanager','AxoSyslog — syslog TCP 5514');"
   kubectl -n "$NS" delete pod migrate
   ssh "root@$old" "sed -i '/ $tag\$/d' ~/.ssh/authorized_keys"
   rm -f "$key" "$key.pub"
   kubectl -n "$NS" scale deploy --all --replicas=1
   kubectl -n "$NS" rollout status deploy --timeout=300s
+  (cd "$ROOT" && make -s uptime-kuma)
 }
 [ "${1:-}" = migrate ] && { migrate "${2:-}"; exit; }
 

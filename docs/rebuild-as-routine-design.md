@@ -84,7 +84,7 @@ Everything below is already decided in the plan/ADR 0004 — this consolidates i
 5. minio: `mc mirror` copy-out → new data volume.
 6. doge: retired 2026-08-22 — nothing to carry.
 7. docker-legacy: Valheim world data → new data volume.
-8. Kuma (optional, cheap): sqlite copy if the uptime record is wanted; monitors re-seed regardless.
+8. Kuma (optional, cheap): sqlite copy if the uptime record is wanted; monitors converge from `make uptime-kuma` regardless (ADR 0011 amendment).
 9. Manual: pfSense DHCP dual-resolver change; AdGuard admin password seeded into Infisical **before** the first AdGuard LXC build so both instances deploy with known creds.
 10. Dropped deliberately: OpenObserve history, lancache cache, AdGuard stats, DDNS journals.
 
