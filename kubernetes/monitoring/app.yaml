@@ -436,6 +436,7 @@ kind: CronJob
 metadata: {name: uptimerobot-heartbeat, namespace: monitoring}
 spec:
   schedule: "* * * * *"
+  suspend: false   # declared so a redeploy re-arms a job that was suspended by hand
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 1
