@@ -1,6 +1,6 @@
 ---
 - name: Configure backup clients
-  hosts: plex,plex-services,docker
+  hosts: plex,docker
   become: true
   vars_files:
     - ../group_vars/all.yml

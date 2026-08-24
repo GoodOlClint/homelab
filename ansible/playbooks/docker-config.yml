@@ -14,7 +14,6 @@
     - ../roles/authentik/defaults/main.yml
     - ../roles/infisical/defaults/main.yml
     - ../roles/lancache/defaults/main.yml
-    - ../roles/plex_services/defaults/main.yml
     - ../roles/minio/defaults/main.yml
 
   pre_tasks:
@@ -27,36 +26,6 @@
       when: inventory_hostname == 'lancache'
 
   tasks:
-    # --- plex-services ---
-    - name: Deploy plex-services docker-compose
-      ansible.builtin.template:
-        src: "{{ playbook_dir }}/../roles/plex_services/templates/docker-compose.yml.j2"
-        dest: /opt/plex-services/docker-compose.yml
-        owner: root
-        group: root
-        mode: '0600'
-      register: plex_services_compose
-      when: inventory_hostname == 'plex-services'
-
-    - name: Deploy recyclarr configuration
-      ansible.builtin.template:
-        src: "{{ playbook_dir }}/../roles/plex_services/templates/recyclarr.yml.j2"
-        dest: /opt/plex-services/recyclarr/recyclarr.yml
-        owner: "{{ plex_services['recyclarr'].PUID }}"
-        group: "{{ plex_services_group }}"
-        mode: '0640'
-      register: plex_services_recyclarr
-      when: inventory_hostname == 'plex-services'
-
-    - name: Restart plex-services containers
-      community.docker.docker_compose_v2:
-        project_src: /opt/plex-services
-        state: present
-        recreate: always
-      when:
-        - inventory_hostname == 'plex-services'
-        - plex_services_compose is changed or plex_services_recyclarr is changed
-
     # --- docker (legacy) ---
     - name: Install the PlayFab lobby query script for valheim-status
       ansible.builtin.copy:

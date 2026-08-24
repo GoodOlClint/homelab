@@ -15,7 +15,7 @@ locals {
   # assign the next free number (1..31) and NEVER renumber an existing volume.
   data_volumes = {
     plex          = { index = 1, size_gb = 150 } # Library dir, 62 GB measured 2026-08-21
-    plex_services = { index = 2, size_gb = 40 }  # arr configs 3 GB + postgres 0.6 GB + dumps, measured 2026-08-21
+    plex_services = { index = 2, size_gb = 40 }  # retired with LXC 206 (ADR 0037, state moved to cluster PVCs); slot stays until the decommission sweep
     openobserve   = { index = 3, size_gb = 100 } # retired with LXC 203 (ADR 0036, history moved to cluster PVCs); slot stays until the decommission sweep
     docker        = { index = 4, size_gb = 20 }  # Valheim config 0.5 GB + server/world backups 3.3 GB, measured 2026-08-21
     control       = { index = 5, size_gb = 10 }  # MeshCentral data/files + Portainer state (ADR 0030)
@@ -202,27 +202,6 @@ locals {
       data_volume = { name = "plex", path = "/var/lib/plexmediaserver" }
       bind_mounts = [
         { source = "/mnt/nas/plex/data/media", path = "/mnt/media", read_only = true },
-      ]
-    },
-    # docker-on-LXC (nesting + keyctl). Configs, postgres data dir and the
-    # pg_dump timer's output ride the data volume (ADR 0015); media is the
-    # node's /mnt/nas/plex/data bind-mounted rw (ADR 0017) — the arrs write it.
-    # SABnzbd's par2 scratch lives on the rootfs (/mnt/scratch).
-    {
-      name         = "plex-services"
-      type         = "lxc"
-      node_name    = "ms-01a"
-      vm_id        = 206 # old 106 + 100 (ADR 0028)
-      vlans        = ["vlan40"]
-      ip_offset    = 106
-      cpu_cores    = 4
-      memory_mb    = 8192
-      disk_size_gb = 64
-      keyctl       = true
-      media_idmap  = true
-      data_volume  = { name = "plex_services", path = "/opt/plex-services" }
-      bind_mounts = [
-        { source = "/mnt/nas/plex/data", path = "/mnt/data" },
       ]
     },
     {

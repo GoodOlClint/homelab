@@ -157,9 +157,7 @@
         dest_path: /etc/infisical/secrets/pbs.env
         template_src: secrets/pbs.env.tpl.j2
     portainer_agent_hosts:
-      - plex-services
       - docker
-      - openobserve
   roles:
     - infisical_client
     - pbs_client
