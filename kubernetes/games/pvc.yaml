@@ -1,0 +1,5 @@
+# Valheim config (worlds, in-image backups, lists) + the server install, subPath config/ and data/.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: valheim, namespace: games}
+spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 20Gi}}}

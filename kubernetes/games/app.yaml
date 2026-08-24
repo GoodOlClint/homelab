@@ -1,0 +1,149 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: valheim
+  namespace: games
+  annotations: {secrets.infisical.com/auto-reload: "true"}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: valheim}}
+  template:
+    metadata:
+      labels: {app: valheim}
+      annotations: {checksum/config: "${CONFIG_HASH}"}
+    spec:
+      enableServiceLinks: false
+      # The server only writes the world on a clean SIGINT/SIGTERM; the image's shutdown waits 29s before escalating and supervisord allows 90s.
+      terminationGracePeriodSeconds: 120
+      affinity: {nodeAffinity: {preferredDuringSchedulingIgnoredDuringExecution: [{weight: 100, preference: {matchExpressions: [{key: kubernetes.io/hostname, operator: NotIn, values: [talos-cp-w]}]}}]}}
+      containers:
+        - name: valheim
+          image: ${REGISTRY}/ghcr.io/community-valheim-tools/valheim-server:latest
+          securityContext: {capabilities: {add: [SYS_NICE]}}
+          ports:
+            - {containerPort: 2456, protocol: UDP}
+            - {containerPort: 2457, protocol: UDP}
+            - {containerPort: 2458, protocol: UDP}
+            - {containerPort: 80}
+            - {containerPort: 9001}
+          env:
+            - {name: TZ, value: "${TZ}"}
+            - {name: SUPERVISOR_HTTP, value: "true"}
+            - {name: SUPERVISOR_HTTP_USER, value: admin}
+            - {name: SUPERVISOR_HTTP_PASS, valueFrom: {secretKeyRef: {name: valheim-secrets, key: SUPERVISOR_HTTP_PASS}}}
+            - {name: STATUS_HTTP, value: "true"}
+            - {name: SERVER_NAME, value: "Homelab Valheim"}
+            - {name: WORLD_NAME, value: HomeWorld2}
+            - {name: SERVER_PASS, valueFrom: {secretKeyRef: {name: valheim-secrets, key: SERVER_PASS}}}
+            - {name: SERVER_PUBLIC, value: "false"}
+            - {name: CROSSPLAY, value: "true"}
+            # -modifier args apply on every start and are written into the world's .fwl on save; undo with one start of -resetmodifiers.
+            - {name: SERVER_ARGS, value: "-preset normal -modifier portals casual -modifiers deathpenalty easy"}
+            - {name: DISCORD_WEBHOOK, valueFrom: {secretKeyRef: {name: valheim-secrets, key: DISCORD_WEBHOOK}}}
+            # The join code rotates on every restart; PlayFab can replace it seconds after "registered with", so post on both lines.
+            - {name: VALHEIM_LOG_FILTER_CONTAINS_JoinCode, value: "registered with join code"}
+            - {name: VALHEIM_LOG_FILTER_CONTAINS_NewJoinCode, value: "Created new join code"}
+            - {name: ON_VALHEIM_LOG_FILTER_CONTAINS_JoinCode, value: '{ read l; c=$(printf %s "$l" | grep -oE "join code [0-9]+" | grep -oE "[0-9]+$"); [ -n "$DISCORD_WEBHOOK" ] && [ -n "$c" ] || exit 0; curl -sfSL -X POST -H "Content-Type: application/json" -d "{\"content\":\"Valheim is up - join code **$c**\"}" "$DISCORD_WEBHOOK"; }'}
+            - {name: ON_VALHEIM_LOG_FILTER_CONTAINS_NewJoinCode, value: '{ read l; c=$(printf %s "$l" | grep -oE "join code [0-9]+" | grep -oE "[0-9]+$"); [ -n "$DISCORD_WEBHOOK" ] && [ -n "$c" ] || exit 0; curl -sfSL -X POST -H "Content-Type: application/json" -d "{\"content\":\"Valheim join code changed - use **$c**\"}" "$DISCORD_WEBHOOK"; }'}
+            - {name: BACKUPS_ENABLED, value: "true"}
+            - {name: BACKUPS_CRON, value: "0 */6 * * *"}
+            - {name: BACKUPS_MAX_COUNT, value: "10"}
+            - {name: UPDATE_CRON, value: "0 4 * * *"}
+          volumeMounts:
+            - {name: state, mountPath: /config, subPath: config}
+            - {name: state, mountPath: /opt/valheim, subPath: data}
+            - {name: status, mountPath: /status, readOnly: true}
+          # Replaces autoheal: the PlayFab lobby is the only liveness signal under crossplay (no A2S). A stale or
+          # offline status.json for 10 minutes restarts the server, which the image turns into a clean save.
+          livenessProbe:
+            exec: {command: [sh, -c, 'find /status/status.json -mmin -3 | grep -q . && grep -q "\"online\": true" /status/status.json']}
+            initialDelaySeconds: 900
+            periodSeconds: 60
+            failureThreshold: 10
+        - name: valheim-status
+          image: ${REGISTRY}/public.ecr.aws/docker/library/node:22-alpine
+          env:
+            - {name: NAME, value: "Homelab Valheim"}
+            - {name: INTERVAL, value: "60"}
+          # Exit 0 (online) and 1 (no lobby) both print JSON; only an API error (exit 2) leaves the file untouched.
+          command: [sh, -c, 'while true; do node /app/valheim-playfab-status.mjs --name "$NAME" > /srv/status.json.tmp 2>/dev/null; [ -s /srv/status.json.tmp ] && mv /srv/status.json.tmp /srv/status.json; sleep "$INTERVAL"; done']
+          volumeMounts:
+            - {name: script, mountPath: /app, readOnly: true}
+            - {name: status, mountPath: /srv}
+        - name: valheim-status-web
+          image: ${REGISTRY}/public.ecr.aws/docker/library/busybox:stable
+          command: [httpd, -f, -p, "8081", -h, /srv]
+          ports: [{containerPort: 8081}]
+          volumeMounts:
+            - {name: status, mountPath: /srv, readOnly: true}
+      volumes:
+        - {name: state, persistentVolumeClaim: {claimName: valheim}}
+        - {name: status, emptyDir: {}}
+        - {name: script, configMap: {name: valheim-status}}
+---
+# The game address: one LB IP for the pfSense forward and the server's lobby record; Local policy keeps the player's source IP.
+apiVersion: v1
+kind: Service
+metadata:
+  name: valheim
+  namespace: games
+  annotations: {metallb.io/loadBalancerIPs: "${VALHEIM_IP}"}
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  selector: {app: valheim}
+  ports:
+    - {name: game, port: 2456, protocol: UDP}
+    - {name: query, port: 2457, protocol: UDP}
+    - {name: aux, port: 2458, protocol: UDP}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: valheim-status, namespace: games}
+spec: {selector: {app: valheim}, ports: [{port: 8081}]}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: valheim-supervisor, namespace: games}
+spec: {selector: {app: valheim}, ports: [{port: 9001}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kiwix
+  namespace: games
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: kiwix}}
+  template:
+    metadata: {labels: {app: kiwix}}
+    spec:
+      enableServiceLinks: false
+      affinity: {nodeAffinity: {preferredDuringSchedulingIgnoredDuringExecution: [{weight: 100, preference: {matchExpressions: [{key: kubernetes.io/hostname, operator: NotIn, values: [talos-cp-w]}]}}]}}
+      containers:
+        - name: kiwix
+          image: ${REGISTRY}/ghcr.io/kiwix/kiwix-serve:latest
+          args: ["*.zim"]
+          ports: [{containerPort: 8080}]
+          env:
+            - {name: TZ, value: "${TZ}"}
+          volumeMounts:
+            - {name: zims, mountPath: /data, subPath: kiwix, readOnly: true}
+          readinessProbe: {httpGet: {path: /, port: 8080}, initialDelaySeconds: 10, periodSeconds: 15}
+      volumes:
+        - {name: zims, persistentVolumeClaim: {claimName: kiwix, readOnly: true}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: kiwix, namespace: games}
+spec: {selector: {app: kiwix}, ports: [{port: 8080}]}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata: {name: kiwix, namespace: games}
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: kiwix.${DOMAIN}
+      http: {paths: [{path: /, pathType: Prefix, backend: {service: {name: kiwix, port: {number: 8080}}}}]}

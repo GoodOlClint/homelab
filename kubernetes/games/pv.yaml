@@ -1,0 +1,20 @@
+# The NAS docker export as a read-only kubelet-mounted NFS PV (ADR 0037 shape); Kiwix reads subPath kiwix.
+apiVersion: v1
+kind: PersistentVolume
+metadata: {name: kiwix-zims}
+spec:
+  capacity: {storage: 1Ti}
+  accessModes: [ReadOnlyMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: [nfsvers=4.1, hard, noatime, rsize=1048576, wsize=1048576, nconnect=4, ro]
+  nfs: {server: "${SYNOLOGY_STORAGE}", path: /volume1/docker, readOnly: true}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: kiwix, namespace: games}
+spec:
+  accessModes: [ReadOnlyMany]
+  storageClassName: ""
+  volumeName: kiwix-zims
+  resources: {requests: {storage: 1Ti}}

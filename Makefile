@@ -167,6 +167,14 @@ plex-pbs-image:
 	docker build --platform linux/amd64 -t registry.$$DOMAIN/homelab/proxmox-backup-client:trixie kubernetes/plex-services/pbs-client && \
 	docker push registry.$$DOMAIN/homelab/proxmox-backup-client:trixie
 
+# P4d (ADR 0038): Valheim + PlayFab sidecar on a MetalLB UDP LB (offset 67), Kiwix over NFS; player-gated migration from 204
+talos-games:
+	@kubernetes/games/deploy.sh
+games-migrate:
+	@kubernetes/games/deploy.sh migrate $(FROM)
+games-kuma:
+	@kubernetes/games/deploy.sh kuma
+
 # PVE backup jobs (B3): apply only the job resources after editing
 # `backup_jobs` in vars.auto.tfvars — never a bare apply while old-shape
 # guests are unmanaged by state (ADR 0028).

@@ -1,0 +1,16 @@
+# Throwaway pod for `deploy.sh migrate`: mounts the valheim PVC at its root and rsyncs 204's
+# config + server install into it over ssh (key handed in via kubectl exec, never a Secret).
+apiVersion: v1
+kind: Pod
+metadata: {name: migrate, namespace: games}
+spec:
+  restartPolicy: Never
+  containers:
+    - name: migrate
+      image: ${REGISTRY}/public.ecr.aws/docker/library/alpine:latest
+      command: [sh, -c, "apk add --no-cache rsync openssh-client >/dev/null && touch /ready && sleep infinity"]
+      readinessProbe: {exec: {command: [test, -f, /ready]}, periodSeconds: 2}
+      volumeMounts:
+        - {name: valheim, mountPath: /valheim}
+  volumes:
+    - {name: valheim, persistentVolumeClaim: {claimName: valheim}}
