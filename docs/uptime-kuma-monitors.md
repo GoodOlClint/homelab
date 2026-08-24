@@ -24,8 +24,8 @@ Targets use services-VLAN addresses; the real values live in the gitignored `net
 | BIND9 — DNS resolution | DNS | `ns.<vlan>.<internal-zone>` A via BIND9 | 60s |
 | AdGuard — web UI | HTTP | AdGuard `:3000` | 60s |
 | Plex | HTTP | Plex `:32400/identity`, TLS ignored | 60s |
-| Tautulli | HTTP | plex-services `:8181` | 60s |
-| Jellyseerr | HTTP | plex-services `:5055` | 60s |
+| Tautulli | HTTP | `tautulli.plex-services.svc.cluster.local:8181/status` (in-cluster, ADR 0037) | 60s |
+| Jellyseerr | HTTP | `seerr.plex-services.svc.cluster.local:5055` (in-cluster, ADR 0037) | 60s |
 | Grafana | HTTP | `https://grafana.<domain>`, TLS ignored (homelab-ca) | 60s |
 | OpenObserve | HTTP | `https://openobserve.<domain>/healthz`, TLS ignored | 60s |
 | Prometheus | HTTP | `https://prometheus.<domain>/-/healthy`, TLS ignored | 60s |
@@ -39,9 +39,9 @@ Targets use services-VLAN addresses; the real values live in the gitignored `net
 | VPS — public IP | Ping | VPS reserved IP | 60s |
 | VPS — WireGuard tunnel peer | Ping | VPS tunnel address | 60s |
 | Cloudflare Tunnel — Tautulli | HTTP | `https://tautulli.<public-domain>` | 120s |
-| Sonarr | HTTP | plex-services `:8989` | 60s |
-| Radarr | HTTP | plex-services `:7878` | 60s |
-| Sabnzbd | HTTP | plex-services `:8080` | 60s |
+| Sonarr | HTTP | `sonarr.plex-services.svc.cluster.local:8989/ping` (in-cluster, ADR 0037) | 60s |
+| Radarr | HTTP | `radarr.plex-services.svc.cluster.local:7878/ping` (in-cluster, ADR 0037) | 60s |
+| Sabnzbd | HTTP | `sabnzbd.plex-services.svc.cluster.local:8080/api?mode=version` (in-cluster, ADR 0037) | 60s |
 | Valheim — PlayFab lobby | JSON query | docker `:8081/status.json`, `online == true` (the `valheim-status` sidecar, keyed on the PlayFab entity ID; re-pointed 2026-08-23) | 60s |
 
 Defaults for every monitor: 2 retries (1 for AxoSyslog, so the syslog path trips fast), 60s retry interval, 16s timeout, accepted status `200-299` — widened to `300-399` for services that redirect to a login page.

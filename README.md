@@ -20,7 +20,7 @@ graph TD
     PF --> MEDIA[Media VLAN]
 
     MGMT --- M1[dns<br/>adguard<br/>unifi<br/>proxmox-backup<br/>infisical]
-    SVC --- S1[docker<br/>plex<br/>plex-services<br/>nvidia-licensing]
+    SVC --- S1[docker<br/>plex<br/>nvidia-licensing]
     CORE --- C1[Clients<br/>Work / IoT<br/>Sonos / Guest / Vivint]
     STOR --- ST1[Synology NAS<br/>NFS / iSCSI<br/>jumbo frames]
     MEDIA --- ME1[Plex / Media<br/>services]
@@ -222,7 +222,6 @@ All VMs are defined in `terraform/vm-configs.tf` and provisioned with cloud-init
 | adguard1 / adguard2 | 251 / 252 | services | 2 | 2 GB | 10 GB | -- | AdGuard Home LXC pair, one per MS-01, keepalived VIP (ADR 0029) |
 | docker | 104 | mgmt, services, storage | 4 | 16 GB | 100 GB | NVIDIA | Container workloads (Valheim, Authentik, etc.) |
 | infisical | 105 | mgmt, services | 4 | 4 GB | 30 GB | -- | Self-hosted secret vault |
-| plex-services | 106 | mgmt, services, storage | 4 | 4 GB | 256 GB | -- | *arr stack, PostgreSQL, Jellyseerr |
 | nvidia-licensing | 107 | mgmt, services | 2 | 2 GB | 20 GB | -- | NVIDIA GRID license server (FastAPI DLS) |
 | plex | 108 | mgmt, services, storage | 8 | 32 GB | 100 GB | NVIDIA | Plex Media Server (hardware transcoding) |
 | dns1 / dns2 | 218 / 219 | services | 2 | 1 GB | 10 GB | -- | BIND9 authoritative LXC pair (primary + AXFR secondary), one per MS-01, keepalived VIP (ADR 0003/0029) |
@@ -285,27 +284,25 @@ Prometheus also monitors DNS resolution across VLAN zones, HTTP endpoints, ICMP 
 - PBS backup (nightly at 2 AM via cron)
 - External access via VPS WireGuard relay (see [docs/pfsense-wireguard-vps-peer.md](docs/pfsense-wireguard-vps-peer.md))
 
-### Media Automation (plex-services VM)
+### Media Automation (Talos cluster, `kubernetes/plex-services/`)
 
-Docker Compose services managing the *arr stack:
+One Deployment per service in the `plex-services` namespace (`make talos-plex-services`, ADR 0037); UIs are `sonarr|radarr|lidarr|prowlarr|bazarr|sabnzbd|tautulli|seerr.<domain>` through Traefik:
 
-| Container | Purpose |
+| Service | Purpose |
 |-----------|---------|
 | Sonarr | TV series management |
 | Radarr | Movie management |
 | Prowlarr | Indexer management |
 | Bazarr | Subtitle management |
 | Lidarr | Music management |
-| Readarr | Ebook management |
-| SABnzbd | Usenet downloader |
+| SABnzbd | Usenet downloader (ceph-rbd unpack scratch) |
 | Tautulli | Plex usage statistics |
-| Jellyseerr | Media request management |
+| Seerr | Media request management |
 | Recyclarr | *arr quality profile sync |
 | Cloudflared | Cloudflare Tunnel |
 | PostgreSQL 17 | Shared database for *arr services |
-| Portainer | Container management UI |
 
-NFS mount from Synology for media data. PBS backup (nightly, separate namespace for databases).
+The NAS media tree reaches the pods through a kubelet-mounted NFS PersistentVolume; a nightly CronJob pushes `pg_dumpall` output to PBS (`databases` namespace) via the in-tree `proxmox-backup-client` image (`make plex-pbs-image`).
 
 ### Docker VM Services
 
@@ -339,7 +336,7 @@ Self-hosted secret management platform deployed via Docker Compose:
 
 ### Talos Kubernetes services plane (`kubernetes/`)
 
-Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-manager (`homelab-ca`), Zot pull-through registry, ARC CI runners (ADR 0034), Traefik ingress + the Infisical Kubernetes operator + **homepage** (ADR 0035 — `make talos-ingress`, `make talos-infisical`, `make talos-homepage`), and the **monitoring stack** (ADR 0036 — `make talos-monitoring`, `make monitoring-migrate`, `make monitoring-users`). Each `kubernetes/<component>/deploy.sh` renders with `helm template | kubectl apply`; runtime secrets are `InfisicalSecret` CRDs; images pull through `registry.<domain>`.
+Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-manager (`homelab-ca`), Zot pull-through registry, ARC CI runners (ADR 0034), Traefik ingress + the Infisical Kubernetes operator + **homepage** (ADR 0035 — `make talos-ingress`, `make talos-infisical`, `make talos-homepage`), and the **monitoring stack** (ADR 0036 — `make talos-monitoring`, `make monitoring-migrate`, `make monitoring-users`) and the **plex-services stack** (ADR 0037 — `make talos-plex-services`, `make plex-services-migrate`, `make plex-pbs-image`). Each `kubernetes/<component>/deploy.sh` renders with `helm template | kubectl apply`; runtime secrets are `InfisicalSecret` CRDs; images pull through `registry.<domain>`.
 
 ## Ansible Roles
 
@@ -365,7 +362,6 @@ Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-m
 |------|-------------|
 | plex | Plex Media Server installation, NFS mounts, PBS backup |
 | plex_certificate | Let's Encrypt TLS via DNS-01 (Cloudflare), PKCS#12 conversion |
-| plex_services | *arr stack Docker Compose deployment with PostgreSQL |
 | docker | Docker daemon, NVIDIA container toolkit, container workloads |
 | authentik | Authentik SSO/OIDC identity provider (Docker Compose) |
 | nvidia | NVIDIA GRID vGPU driver installation |
@@ -451,7 +447,7 @@ Secrets are organized into per-VM paths:
 | `/shared` | All service VMs | PBS backup token, PBS fingerprint |
 | `/monitoring` | k8s `monitoring` + `homepage` | OpenObserve root password, Grafana admin, Proxmox/UniFi/PBS monitoring tokens |
 | `/plex` | plex | Plex token, TLS certificate password, SMB credentials, Cloudflare token |
-| `/plex-services` | plex-services | PostgreSQL password, Cloudflared tunnel token, Valheim password |
+| `/plex-services` | k8s `plex-services` namespace (InfisicalSecret) | PostgreSQL + arr DB passwords, arr API keys, Cloudflared tunnel token, usenet credentials |
 | `/docker` | docker | Cloudflared tunnel token |
 | `/infrastructure` | dns, proxmox-backup | BIND TSIG key, PBS admin password, UniFi credentials |
 | `/vps` | VPS (via Ansible) | WireGuard keys, tunnel addresses |
