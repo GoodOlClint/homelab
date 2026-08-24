@@ -1,0 +1,79 @@
+# P4d change plan — the games host (Valheim + PlayFab status sidecar, Kiwix) onto the Talos cluster, retire LXC 204
+
+Status: **Approved 2026-08-24 (operator); building.** Decision record: [ADR 0038](decisions/0038-p4d-the-games-host-moves-to-the-cluster-valheim-on-a-metallb-udp-lb-with-local-policy-the-playfab-status-sidecar-keyed-by-server-name-in-the-same-pod-kiwix-zims-via-an-nfs-pv-meshcentral-stays-on-control.md). Follows [P4c](talos-p4c-plex-services-plan.md) / [ADR 0037](decisions/0037-p4c-plex-services-moves-to-the-cluster-media-rides-a-kubelet-mounted-nfs-pv-postgres-keeps-a-pbs-dump-lane-via-a-locally-built-client-image.md) (the reusable P4 shape); honours [ADR 0030](decisions/0030-three-management-planes-vlan10-out-of-band-vlan30-hypervisor-with-pdm-pbs-apt-cache-pxe-vlan40-services.md) (MeshCentral does not move — gate A, operator 2026-08-24), [ADR 0013](decisions/0013-vps-tunnel-peers-over-reserved-ipv4-mtu-is-measured-per-address-family.md) (the relay path), [ADR 0034](decisions/0034-p3b-metallb-l2-on-a-reserved-vlan40-slice-zot-behind-an-internal-cert-manager-ca-arc-scale-sets-as-hostnetwork-dind-pods-pinned-to-one-node-and-a-cronjob-reaper.md)/[0035](decisions/0035-p4a-traefik-ingress-on-one-lb-ip-with-a-wildcard-internal-cert-the-infisical-kubernetes-operator-is-the-secret-path-and-homepage-is-the-first-zot-templated-ref.md) (LB pool, ingress, secrets, registry), [ADR 0015](decisions/0015-durable-state-rides-detached-ceph-data-volumes-the-guest-rootfs-is-disposable.md)/[0020](decisions/0020-detached-data-volumes-ride-a-single-never-started-holder-vm-not-a-holder-ct.md) (holder volume idx 4 preserved), [ADR 0028](decisions/0028-greenfield-replace-builds-final-form-guests-beside-the-restored-copies-under-vmid-old-100-after-pruning-the-fleet-state-of-every-proxmox-resource.md) (204 stopped, never destroyed).
+
+## Gate A — MeshCentral (settled)
+
+ADR 0030 stands. The P4 row's "MeshCentral → games host" entry was a plan-doc error and is struck; MeshCentral stays on `control` 212 (vlan10). No ADR change.
+
+## Existing state (mapped 2026-08-24)
+
+**The guest.** docker = LXC 204 on ms-01a, vlan40 offset 104, 4 cores / 8 GB, rootfs 32 GB, Ubuntu 26.04, `keyctl`, data volume `docker` (holder idx 4, 20 GB, `/opt/docker`, 3.8 GB used), node bind `/mnt/nas/docker/kiwix` → `/mnt/kiwix` ro (Synology `<storage-vlan>:/volume1/docker`, 20 ZIMs, 538 GB). Six containers: `valheim` (`ghcr.io/community-valheim-tools/valheim-server:latest`, UDP 2456–2458, `:8080`→80 status page — answers only an A2S timeout under crossplay, `:9002`→9001 supervisor; `stop_grace_period 120s`; `cap_add sys_nice`; world `HomeWorld2`, `SERVER_PUBLIC=false`, `CROSSPLAY=true`, `-preset normal -modifier portals casual -modifiers deathpenalty easy`; 6-hourly in-image backups ×10; nightly 04:00 update cron; two Discord log-filter hooks posting the join code), `valheim-status` (node:22-alpine running `files/valheim-playfab-status.mjs --entity-id B0F9749E68C6707E` every 60 s into `/srv/status.json`), `valheim-status-web` (busybox httpd `:8081`), `autoheal` (docker socket), `kiwix` (`ghcr.io/kiwix/kiwix-serve:latest` `:8090`→8080, `*.zim`), `portainer-agent`. Host side: `docker_pbs_backup.sh` cron (02:30, container configs → PBS ns `services`), telegraf docker input, rsyslog.
+
+**Data.** `/opt/docker/valheim/config` 477 MB (`worlds_local` 174 MB — `HomeWorld2.db` 30 MB last saved 13:59:49 UTC, `HomeWorld.db` the retired world; `backups` 304 MB; admin/banned/permitted lists; `prefs`); `/opt/docker/valheim/data` 3.3 GB (`server` 1.7 GB + `dl` 1.7 GB steamcmd cache = the server install); `status` 8 KB.
+
+**Live status (14:07 UTC).** `status.json`: `online: true, players: 0, maxPlayers: 10, version 0.221.12, joinCode 071464, ip <house WAN>:2456, entityId B0F9749E68C6707E, lobbyCreated 2026-08-24T00:26:43Z`. The server log shows a PlayFab network error at 07:33 followed by a rejoin — the zombie class autoheal existed for.
+
+**Paths that must follow the move.** VPS `vps_nftables` DNATs UDP 2456–2458 to the pfSense tunnel IP (`nft list ruleset` lines 77/91, verified) — unchanged by this plan. **pfSense carries no Valheim forward** (config.xml: 0 hits for 2456; only Plex 32400 on WAN + WG_VPS) — the direct-IP path has been dead since cutover; players join via the PlayFab relay. Operator chose to add the forward during the build.
+
+**Monitoring/UX.** Kuma row 23 "Valheim — PlayFab lobby" targets `204:8080/status.json` `platform == playfab` — **DOWN now** (the upstream image's status page has no `platform`; the doc's "re-pointed to `:8081`" note never reached the DB). homepage Other → Kiwix at `http://${DOCKER}:8090`; Prometheus `blackbox-ping` pings `${DOCKER}`. Both `${DOCKER}` uses die when 204 leaves `vms.yaml`.
+
+**Secrets** (`/docker`): `valheim_server_password`, `valheim_supervisor_password` (both role-generated), `valheim_discord_webhook` (external); `authentik_*` (dead stack). Delivered by 3 agent templates today; only `valheim` consumes them.
+
+**Wiring to remove with 204.** `roles/docker`, `roles/authentik` (disabled, referenced by `docker.yml` + `docker-config.yml`), services.yml `docker` play/tag, `playbooks/docker.yml`, the docker section of `docker-config.yml`, `backup-clients.yml` + `refresh-identity.yml` + `update-all.yml` host lists, `portainer_agent_hosts: [docker]` in the control play, telegraf template `inventory_hostname == 'docker'` blocks, the 3 agent templates, `vm-configs.tf` block + `backup_jobs` vmid 204.
+
+## Decisions
+
+1. **Tree/namespace:** `kubernetes/games/` → namespace `games`, `make talos-games`, `make games-migrate FROM=<204 address>`, `make games-kuma`. Two Deployments: `valheim` (3 containers) and `kiwix`.
+2. **Valheim pod:** `strategy: Recreate`, `terminationGracePeriodSeconds: 120`, `enableServiceLinks: false`, `sys_nice` capability, node affinity away from `talos-cp-w`. Env verbatim from the compose (`SERVER_NAME`, `WORLD_NAME`, `SERVER_PUBLIC`, `CROSSPLAY`, `SERVER_ARGS`, `STATUS_HTTP`, `SUPERVISOR_HTTP*`, `BACKUPS_*`, `UPDATE_CRON`, the two `VALHEIM_LOG_FILTER_CONTAINS_*` hooks — a bare `$` is fine in a k8s manifest, no `$$`), secrets via `secretKeyRef`. Sidecar `valheim-status` (`node:22-alpine`, script from a ConfigMap, `--name "<SERVER_NAME>"`, 60 s loop, writes `/srv/status.json`) + `valheim-status-web` (busybox httpd `:8081`) share an `emptyDir`. **Liveness on the server container** (replaces autoheal): exec `find /status/status.json -mmin -3 | grep -q . && grep -q '"online": true' /status/status.json`, `initialDelaySeconds 900` (steam update + PlayFab registration), `periodSeconds 60`, `failureThreshold 10`. A restart is a SIGTERM the image turns into a clean save.
+3. **Game address:** Service `valheim` `type: LoadBalancer`, `metallb.io/loadBalancerIPs` = services offset **67** (`subnet_ip 67`, next free after syslog 66), ports 2456–2458/UDP, `externalTrafficPolicy: Local`. Supervisor `:9001` and status `:8081` are ClusterIP Services (`valheim-supervisor`, `valheim-status`).
+4. **Sidecar port:** `valheim-playfab-status.mjs` gains `--name <server name>` (filter `string_key5 eq '<name>' and string_key2 eq 'True'`); the newest-lobby rule handles the pre-migration orphan. `--entity-id` stays as an optional flag. The script moves to `kubernetes/games/valheim-playfab-status.mjs` (the role copy is deleted with the role).
+5. **State:** PVC `valheim` 20 Gi ceph-rbd, mounted `subPath: config` at `/config` and `subPath: data` at `/opt/valheim`. Kiwix: PV `kiwix-zims` NFS (`${SYNOLOGY_STORAGE}:/volume1/docker`, fleet mount options, `ReadOnlyMany`) + PVC, mounted `subPath: kiwix` at `/data` read-only; `kiwix-serve` args `--port 8080 *.zim` as today.
+6. **Secrets:** `InfisicalSecret games` on `/docker` → managed Secret `valheim-secrets` with `SERVER_PASS`, `SUPERVISOR_HTTP_PASS`, `DISCORD_WEBHOOK`; `secrets.infisical.com/auto-reload` on the Deployment.
+7. **Kiwix UI:** Ingress `kiwix.<domain>` → `.65`, AdGuard rewrite from `deploy.sh`. (No ingress for Valheim's status page or supervisor.)
+8. **Migration = `deploy.sh migrate <204 address>`, player-gated:** scale `valheim` to 0; poll `http://204:8081/status.json` until `players == 0` (refuse to proceed otherwise, 60 s loop, logs each read); `docker compose stop valheim valheim-status` on 204 (clean SIGINT → save); migrate pod (alpine + rsync, key via `kubectl exec`) rsyncs `/opt/docker/valheim/config/` → `/valheim/config/` and `/opt/docker/valheim/data/` → `/valheim/data/`; scale to 1; rollout wait; print the new server log's `PlayFab local entity ID` / `registered with join code` lines and the new `status.json`.
+9. **Monitoring/UX repoint:** Kuma row 23 → `http://valheim-status.games.svc.cluster.local:8081/status.json`, json path `online`, expected `true` (`deploy.sh kuma`, the P4c sqlite mechanism; confirmed green before retirement); homepage Kiwix tile → `https://kiwix.<domain>`; `blackbox-ping` drops `${DOCKER}` (Kuma covers the pod); `make talos-homepage` + `make talos-monitoring`.
+10. **pfSense (operator UI):** Firewall › NAT › Port Forward on **WG_VPS**: UDP, destination WG_VPS address, ports 2456–2458, redirect target `.67`, redirect ports 2456–2458, with the associated pass rule. Verified afterwards by `grep 2456 /conf/config.xml` from the workstation. Docs table in `pfsense-wireguard-vps-peer.md` corrected (target = the games LB, and a note that the rule was absent 2026-08-21 → 2026-08-24).
+11. **Images** `${REGISTRY}/…`: `ghcr.io/community-valheim-tools/valheim-server:latest`, `docker.io/library/node:22-alpine`, `docker.io/library/busybox:stable`, `ghcr.io/kiwix/kiwix-serve:latest` (ADR 0016 latest-tags rule).
+12. **Retire 204 exactly as 206:** `pct stop 204` + `onboot 0`, `terraform state rm 'module.vms.proxmox_virtual_environment_container.containers["docker"]'`, out of `vm-configs.tf` + `backup_jobs` (`make backup-jobs`), delete `roles/docker` + `roles/authentik`, the services.yml play + tag, `playbooks/docker.yml`, the `docker-config.yml` section, the 3 agent templates, host-list entries, `portainer_agent_hosts` → `[]` (the stale "docker" endpoint in Portainer's DB is a UI delete), telegraf conditionals; `make inventory`; holder volume idx 4 stays (comment updated).
+13. **Not in scope:** the Infisical PKI swap, Valheim mods/BepInEx, the second-world revert, Portainer endpoint cleanup beyond the inventory var, any A2S-based check (does not exist under crossplay).
+
+## Changes
+
+| # | Change | Files |
+|---|---|---|
+| 1 | `kubernetes/games/`: `deploy.sh` (+ `migrate` player-gated, `kuma`), `pv.yaml` (kiwix NFS PV/PVC), `pvc.yaml`, `secrets.yaml`, `app.yaml` (2 Deployments, 4 Services incl. the UDP LB, 1 Ingress), `migrate.yaml`, `valheim-playfab-status.mjs` (`--name`) | `kubernetes/games/**` |
+| 2 | Makefile: `talos-games`, `games-migrate FROM=<ip>`, `games-kuma` | `Makefile` |
+| 3 | homepage Kiwix tile → ingress hostname; blackbox-ping drops `${DOCKER}` | `kubernetes/homepage/config/services.yaml`, `kubernetes/monitoring/config/prometheus.yml`, both `deploy.sh` comments |
+| 4 | Retire 204 (decision 12) | `terraform/vm-configs.tf`, `terraform/vars.auto.tfvars`, `ansible/**` |
+| 5 | Docs: plan row, CLAUDE.md (pipelines, make targets, tags, folder table, MetalLB offsets), README, Kuma doc + example json, pfSense doc, memory | `docs/**`, `CLAUDE.md`, `README.md`, `network-data/uptime-kuma-monitors.example.json` |
+
+## Sequencing
+
+1. `kubernetes/games/` written; `make talos-games` deploys against an empty PVC — the server pod will start downloading the game (harmless; it is scaled to 0 by the migrate step anyway) — Kiwix serves the NFS ZIMs at `kiwix.<domain>` (this is the NFS gate), the LB gets `.67`, the InfisicalSecret is Ready.
+2. `make games-migrate FROM=<204>`: player gate (log shows `players: 0`), clean stop on 204, rsync config + data, scale up; watch the new pod's log for `Load world HomeWorld2` / `registered with join code` / `PlayFab local entity ID`; `status.json` at the new Service shows `online: true`, a `lobbyCreated` after the migration, a join code, `players: 0`.
+3. Operator adds the pfSense forward → `.67`; verified in config.xml. VPS DNAT re-verified.
+4. `make games-kuma` (row green), homepage + monitoring redeploy (Kiwix tile green).
+5. Retire 204 + cleanup, `make inventory`, `make plan` + `make talos-plan` clean; docs; small commits per row.
+
+## Test bar / Definition of Done
+
+- Migration log: `players: 0` read from `204:8081/status.json` before `docker compose stop valheim`.
+- New pod log: the copied world loaded (world file mtime ≥ 13:59:49 UTC preserved on the PVC; log line naming `HomeWorld2`), `registered with join code`, `PlayFab local entity ID`.
+- `curl http://valheim-status.games.svc:8081/status.json` (via a pod or port-forward): `online: true`, `lobbyCreated` > migration time, `joinCode` set, `players: 0`.
+- `kubectl -n games get svc valheim` shows `.67`; `nft list ruleset` on the VPS still DNATs 2456–2458 → pfSense; pfSense config.xml carries the forward → `.67`.
+- `curl https://kiwix.<domain>/ --cacert kubernetes/.secrets/homelab-ca.crt` → 200 via `.65` and lists ZIMs.
+- `kubectl -n games describe pods | grep Image:` → all `registry.<domain>/…`; `InfisicalSecret` Ready; no `kubectl create secret`.
+- Kuma row 23 UP at the new URL; homepage Kiwix tile green.
+- `pct status 204` stopped, `onboot: 0`; absent from `vm-configs.tf`, `vms.yaml`, `backup_jobs`; `make plan` + `make talos-plan` show no docker drift.
+- The actual join path (PlayFab relay + the direct-IP forward) is unverifiable without a client — operator's test.
+- Rollback: 204 intact — `pct start 204`, `docker compose up -d`, revert the Kuma/homepage edits, pfSense forward removed.
+
+## Risks
+
+- **World loss window:** only what a player did since the last periodic save if the gate were bypassed — the gate polls players and a clean stop forces a save, so the window is zero for an empty server.
+- **PlayFab entity rotation:** expected on the new pod; the by-name sidecar makes it irrelevant, and the Discord hook posts the new join code.
+- **Liveness false positives:** a PlayFab API outage looks like `online: false`; 10 minutes of failures before a restart, same exposure autoheal had.
+- **Local policy + MetalLB L2:** the LB is announced from the node holding the pod; on rescheduling the announcement moves with it (gratuitous ARP) — same mechanism syslog `.66` already relies on.
+- **NFS PV on the docker export:** the plex export is proven (P4c); the docker export is the same server/options, gated by Kiwix answering in step 1.
+- **Kuma boolean query:** `online == true` compared as a string by Kuma's json-query; verified green before the row is declared done, fallback is the sidecar emitting `platform: playfab`.
