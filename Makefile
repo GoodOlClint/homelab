@@ -66,7 +66,7 @@ export PATH := $(CURDIR)/.venv/bin:$(PATH)
 
 init:
 	@python3 -m venv .venv
-	@. .venv/bin/activate && pip install pyyaml infisicalsdk ansible 'proxmoxer>=2.3' requests bcrypt
+	@. .venv/bin/activate && pip install pyyaml infisicalsdk ansible 'proxmoxer>=2.3' requests bcrypt 'python-socketio[client]>=5.0'
 	@cd terraform && terraform init
 	@cd ansible && ansible-galaxy install -r requirements.yml --force
 
@@ -158,8 +158,6 @@ plex-services-smoke:
 	@kubernetes/plex-services/deploy.sh smoke
 plex-services-migrate:
 	@kubernetes/plex-services/deploy.sh migrate $(FROM)
-plex-services-kuma:
-	@kubernetes/plex-services/deploy.sh kuma
 # Build + push the pg-backup CronJob's proxmox-backup-client image (the registry's one local push);
 # re-run when the PBS server major rolls (client suite tracks the Debian base)
 plex-pbs-image:
@@ -172,8 +170,6 @@ talos-games:
 	@kubernetes/games/deploy.sh
 games-migrate:
 	@kubernetes/games/deploy.sh migrate $(FROM)
-games-kuma:
-	@kubernetes/games/deploy.sh kuma
 
 # Fleet-root terraform passthrough with the TF_VAR_* exports (raw terraform hangs prompting for them);
 # the retirement step is `make tf ARGS='state rm <address>'` (ADR 0028: stopped, never destroyed)
@@ -462,7 +458,7 @@ clean-ssh:
 # globally — that would clobber the main project's endpoint from its tfvars).
 # hosts-apply is deliberately INTERACTIVE (no auto-approve): a host-networking apply
 # can drop connectivity, so review the plan and confirm by hand.
-.PHONY: node-iso node-bootstrap hosts-plan hosts-apply proxmox-hosts nut-clients
+.PHONY: node-iso node-bootstrap hosts-plan hosts-apply proxmox-hosts uptime-kuma apt-proxy nut-clients
 
 # Bake a node's answer file (+ optional ISO): make node-iso NODE=crete [ISO=/path/pve-9.iso]
 node-iso:
@@ -514,7 +510,16 @@ hosts-apply:
 # hosts-apply. Needs ansible/inventory/proxmox.yaml (see proxmox.example.yml)
 # and the WP2 fields in network-data/local/host-bindings.yaml.
 proxmox-hosts:
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/proxmox.yaml ansible/playbooks/proxmox-hosts.yml $(if $(LIMIT),--limit $(LIMIT),) $(if $(TAGS),--tags $(TAGS),)
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/proxmox.yaml $(if $(wildcard ansible/inventory/vms.yaml),-i ansible/inventory/vms.yaml,) ansible/playbooks/proxmox-hosts.yml $(if $(LIMIT),--limit $(LIMIT),) $(if $(TAGS),--tags $(TAGS),)
+
+# Uptime Kuma monitors + ntfy channel via the goodolclint.uptime_kuma collection (ADR 0011).
+# CHECK=1 runs check mode with diff — the acceptance test is 0 changes.
+uptime-kuma:
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook ansible/playbooks/uptime-kuma.yml $(if $(CHECK),--check --diff,)
+
+# apt Proxy-Auto-Detect on every node + guest (ADR 0021 client half).
+apt-proxy:
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/apt-proxy.yml $(if $(LIMIT),--limit $(LIMIT),)
 
 # NUT upsmon secondaries on the physical hosts (nut_clients inventory group).
 # Server side is the pfSense NUT package — see docs/pfsense-nut.md.

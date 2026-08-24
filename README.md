@@ -582,6 +582,8 @@ All `ansible-*` targets support `TAGS=<tag>` to filter by play-level tags (e.g.,
 | `update-dns` | Update DNS configuration |
 | `backup-finalize` | Register the PBS datastore as PVE storage (once, after PBS provisioning; prerequisite for `backup_jobs` terraform applies) |
 | `expand-disk` | Expand root filesystem on service VMs |
+| `uptime-kuma` | Converge Uptime Kuma monitors + the ntfy channel from `ansible/playbooks/uptime-kuma.yml` (`goodolclint.uptime_kuma` collection; `CHECK=1` for check mode) |
+| `apt-proxy` | Point apt on every node and guest at the apt-cacher-ng cache via `Proxy-Auto-Detect` (falls back to `DIRECT` when the cache is down; `LIMIT=<host>`) |
 | `nut-clients` | Deploy NUT `upsmon` secondaries to the physical hosts (`nut_clients` inventory group; server is the pfSense NUT package — see `docs/pfsense-nut.md`) |
 
 ### Secrets
@@ -697,6 +699,6 @@ homelab/
 | [docs/authentik-setup.md](docs/authentik-setup.md) | Authentik SSO/OIDC configuration |
 | [docs/cloudflare-tunnel-setup.md](docs/cloudflare-tunnel-setup.md) | Cloudflare Tunnel integration |
 | [docs/key-rotation-procedure.md](docs/key-rotation-procedure.md) | WireGuard key rotation procedure |
-| [docs/uptime-kuma-monitors.md](docs/uptime-kuma-monitors.md) | Uptime Kuma monitor configuration |
+| [docs/uptime-kuma-monitors.md](docs/uptime-kuma-monitors.md) | Uptime Kuma monitors (Ansible-managed, `make uptime-kuma`) |
 | [docs/uptimerobot-setup.md](docs/uptimerobot-setup.md) | UptimeRobot external monitoring |
 | [docs/bandwidth-planning.md](docs/bandwidth-planning.md) | Network bandwidth planning |

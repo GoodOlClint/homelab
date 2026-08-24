@@ -1,0 +1,78 @@
+# P5 change plan — real DNS on a flat public zone, Let's Encrypt for the ingress, two authentik realms, Jellyfin
+
+Decision record: [ADR 0040](decisions/0040-p5-real-dns-on-a-flat-public-domain-zone-bind-fed-by-nsupdate-external-dns-adguard-forwards-rewrites-retired-let-s-encrypt-dns-01-wildcards-as-traefik-s-default-cert-two-authentik-realms-split-by-audience-jellyfin-over-the-vps-relay-with-ldap-auth.md). Implements [ADR 0006](decisions/0006-dns-names-are-the-access-layer-static-ips-remain-iac-plumbing.md) and the wildcard half of [ADR 0007](decisions/0007-hybrid-cert-model-infisical-pki-for-the-fleet-le-wildcard-for-browser-facing.md). Status: **approved 2026-08-24**, P5a next. Each phase is its own approval gate and its own small commits.
+
+Domains are bindings: `<service domain>` and `<media domain>` below are `vlans.yaml` keys (`service_domain`, `media_domain`), never literals in tracked files. The security guardrail is extended to block both.
+
+## Existing state (mapped 2026-08-24)
+
+- AdGuard pair (VIP) answers every internal name from 43 rewrites (10 stale: openobserve/docker/plex-services/homepage/github-runner/squid/mcp/nvidia-* on retired guests). Upstreams are public resolvers plus `[/<vlan>.<domain_suffix>/]<bind VIP>` forwards for the seven zones.
+- BIND pair (dns1 primary, dns2 AXFR secondary, VIP) serves seven per-VLAN forward zones + reverse zones, each holding only `SOA`/`NS`/`ns A`; `allow-update { key dhcp-update-key }` (hmac-sha256, Infisical `/infrastructure/bind_tsig_key_secret`), `allow-update-forwarding` on the secondary, zone files written initial-only. No PTRs anywhere; pfSense DHCP DDNS never configured.
+- Cluster: Traefik on services offset 65 with a single default `Certificate` (`*.<domain>`, `*.<services zone>`, `<domain>`) from `homelab-ca`; every app Ingress is a plain host rule; hostnames become AdGuard rewrites via `make adguard-rewrite` inside each `deploy.sh`. `DOMAIN` everywhere = `nodes.json .domain` = `module.network.domain_suffix` = `vlans.yaml domain_suffix`.
+- Certs: `homelab-ca` = Infisical-signed intermediate (ADR 0039); Kuma carries `ignore_tls` on six monitors because of it. Cloudflare: one zone in Terraform (`cloudflare_zone_id`, media domain: `vps`/`plex` A+AAAA), token `bootstrap.cloudflare_api_token`; a second copy of a DNS token lives in Infisical `/plex/cloudflare_dns_api_token` for `plex_certificate`.
+- External paths: Cloudflare tunnel (`cloudflared` in `plex-services`, token-configured, routes hand-set in the dashboard) for tautulli/seerr; VPS relay (Vultr reserved IP → WireGuard → pfSense DNAT) for Plex 32400 and Valheim UDP.
+- authentik: a previous docker-LXC attempt died on compose env quoting; the `/docker` `authentik_*` keys are dead. Nothing runs today.
+
+## Decisions (settled with the operator 2026-08-24)
+
+Flat naming only · additive rollout, `.internal` retired last · Jellyfin over the VPS relay on 443 · full scope (DNS, certs, both realms, Jellyfin) · two authentik instances, not brands · external realm through the tunnel · internal realm LAN/VPN only. Rationale and rejected paths in ADR 0040.
+
+## Changes by phase
+
+### P5a — the zone (`<service domain>` on BIND, fed by nsupdate + external-dns, AdGuard forwards)
+
+1. `vlans.yaml`: `service_domain`, `media_domain`; `full_pre_tasks` exposes them; `terraform/modules/network` outputs `service_domain` → `talos_nodes.domain` (cluster-facing name) while `domain_suffix` keeps driving the legacy `dns_zones` until P5e. `security_guardrails.sh` blocks both new bindings.
+2. `bind9` role: one flat forward zone `<service domain>` (initial-only shell, same macro, `allow-update` by the TSIG key) beside the per-VLAN zones; reverse zones unchanged.
+3. `vlans.yaml` `public_records` (today: `vpn` → WAN IPv4, the WireGuard endpoint — the only record on the public zone). Terraform imports the existing Cloudflare `vpn` record and owns it from that binding; the same list feeds the internal zone (next step) so LAN clients resolve `vpn.<service domain>` identically. **Operator question at P5a start:** is the WAN address static? If it is DDNS-updated, the public record stays out of Terraform and the DDNS client also updates BIND (the TSIG path already exists).
+4. New shared task `ansible/tasks/dns_records.yml` (`community.general.nsupdate`, TSIG, against the primary): for every inventory guest an `A name.<service domain> → service_ip` and its PTR; nodes from `proxmox.yaml` (mgmt), the PVE VIP, the AdGuard/BIND VIPs, the MetalLB LB names that are not Ingress-backed (registry, syslog, valheim). Runs from the `dns` play and a new `make dns-records`; idempotent by nature (nsupdate compares).
+5. `kubernetes/external-dns/` (`make talos-dns`): RFC 2136 provider → BIND primary, TSIG from an `InfisicalSecret` on `/infrastructure`, `--txt-owner-id` set, sources `ingress` + `service`, domain filter `<service domain>`,`<media domain>`. Every existing Ingress gets its `A` record without change.
+6. `adguard` role: conditional forwards `[/<service domain>/]<bind VIP>` and `[/<media domain>/]<bind VIP>` (the media domain's *internal* view: `jellyfin.<media domain>` must resolve to Traefik on the LAN, not the VPS); rewrite variables deleted; `make adguard-rewrite` and its `deploy.sh` callers deleted. The stale rewrites die with the config regeneration (`make build adguard`, one instance at a time per ADR 0029) — or the API in the interim.
+
+### P5b — certificates (Let's Encrypt DNS-01, Traefik default cert)
+
+1. `cloudflare_dns_api_token` re-homed: bootstrap `external_secrets` → Infisical `/infrastructure`; `plex_certificate` reads it there; the `/plex` copy deleted. Token scope: DNS edit on both zones.
+2. `kubernetes/cert-manager/`: `ClusterIssuer letsencrypt` (ACME, DNS-01 Cloudflare, token via `InfisicalSecret`), staging issuer for the first run. `kubernetes/traefik/certificate.yaml` → `dnsNames: ["*.<service domain>", "*.<media domain>"]`, `issuerRef letsencrypt`; `homelab-ca` stays the issuer for nothing browser-facing (registry unchanged).
+3. Every `deploy.sh` `DOMAIN` now renders `<service domain>` hostnames; the old `<domain_suffix>` Ingress hosts stay as a second rule until P5e (Traefik serves both; the LE cert covers only the new names, so old names keep the `homelab-ca` cert via a second Certificate). Kuma rows lose `ignore_tls` and move to the new names (`make uptime-kuma`).
+4. Terraform: second Cloudflare zone (data source by name, both zones), `jellyfin.<media domain>` A/AAAA (unproxied) → VPS reserved IP, staged now, used in P5d.
+
+### P5c — authentik, both realms
+
+1. `kubernetes/authentik/` deploys the helm chart twice from one tree with a realm parameter: namespaces `authentik` (internal) and `authentik-ext` (external); each = server + worker + Postgres + Redis, ceph-rbd PVCs, `InfisicalSecret` on `/authentik` resp. `/authentik-ext` (`secret_key`, `postgres_password`, `bootstrap_password`, `bootstrap_token` — generated by `make talos-authentik` through the API, ADR 0035 pattern), PBS `pg_dumpall` CronJob reusing `homelab/proxmox-backup-client` (ADR 0037).
+2. Internal: Ingress `auth.<service domain>`; proxy outpost as a Deployment; Traefik `ForwardAuth` middleware `authentik@kubernetescrd`; apps opt in by annotation (arr stack, Homepage, Kuma, Kiwix, Tautulli). OIDC providers for Grafana (native), Portainer, MeshCentral, PDM, PVE, PBS — the last two configured through the API/Terraform where bpg supports it (`proxmox_virtual_environment_realm` is not in bpg; PVE/PBS OIDC realms are hand steps documented in the runbook).
+3. External: Service only (no Ingress); a tunnel route `auth.<media domain>` → `authentik-ext-server:80` added in the Cloudflare dashboard (documented, like the existing routes); LDAP outpost Deployment + ClusterIP for Jellyfin; groups `family`, `admins`; enrollment/recovery flows with the family in mind.
+4. Machine-to-machine traffic is untouched: arr↔arr, Seerr↔arr, Prometheus scrapes all use in-cluster svc DNS, never the ingress.
+
+### P5d — Jellyfin
+
+1. `kubernetes/jellyfin/` (`make talos-jellyfin`): Deployment on ceph-rbd `config` PVC, the arr stack's NFS PV mounted read-only at `/data`, Ingress `jellyfin.<media domain>`; LDAP plugin against `authentik-ext` LDAP outpost (bind DN + password from `/authentik-ext`); SSO plugin optional for web.
+2. External path: VPS `vps_wireguard` DNAT 443 → pfSense tunnel IP; pfSense pass + port-forward WG_VPS TCP 443 → Traefik LB (hand step, [pfsense-wireguard-vps-peer.md](pfsense-wireguard-vps-peer.md) gains the row); Cloudflare A/AAAA from P5b. Traefik presents the LE `*.<media domain>` cert.
+3. Seerr: switch auth to Jellyfin (UI, operator); Kuma row; Homepage tile.
+
+### P5e — retire the `.internal` suffix (`domain_suffix`)
+
+1. Flip `domain_suffix` to `<service domain>`; delete the per-VLAN forward zones from `dns_zones` (keep reverse), `dns_config` search domain, telegraf/adguard references, the second Ingress host rule and the `homelab-ca` browser Certificate; `registry.<service domain>` re-issued from `homelab-ca` (name change only) and `make talos-trust` re-applied.
+2. Rewrite count on both AdGuard instances = 0; `docs/uptime-kuma-monitors.md`, `CLAUDE.md`, README updated; ADR 0035/0029 amendments recorded.
+
+## Sequencing and gates
+
+P5a → P5b → P5c → P5d → P5e, each committed separately and each ending with its DoD evidenced before the next starts. P5c's internal realm can land before P5d; P5d needs P5b (cert) and P5c-external (LDAP). P5e is last and optional to defer.
+
+## Test bar / Definition of Done
+
+| Phase | Fails before / passes after |
+|---|---|
+| P5a | `dig +short vpn.<service domain> @<adguard VIP>` = the WAN address (public record mirrored); `dig +short grafana.<service domain> @<adguard VIP>` answers the Traefik LB **with the rewrite for that name absent**; `dig -x <any fleet service_ip>` returns `name.<service domain>`; `dig pdm.<service domain> @<bind VIP>` answers without AdGuard; second `make dns-records` = 0 changed; external-dns log shows one owner TXT per Ingress and no flapping over 10 min |
+| P5b | `curl https://grafana.<service domain>` verifies with the system trust store on a device with no homelab root; `make uptime-kuma CHECK=1` = 0 changes with every `ignore_tls` removed; cert-manager `Certificate` Ready with LE issuer; old `.internal` names still answer |
+| P5c | Grafana login = authentik OIDC, local admin disabled; `sonarr.<service domain>` unauthenticated → 302 to `auth.<service domain>`, authenticated → app; Prowlarr→Sonarr sync still works (svc DNS); `https://auth.<media domain>` reachable from a phone on cellular, passkey registration succeeds; both Postgres dumps land on PBS ns `databases` (snapshot recency) |
+| P5d | A family test account logs into Jellyfin from Roku/Android TV with LDAP credentials; `https://jellyfin.<media domain>` from cellular direct-plays a 4K file without Cloudflare in the path (`curl -sI` shows the LE cert, no `cf-ray`); Seerr login with the same account |
+| P5e | `grep -c "domain:"` rewrites on both AdGuard instances = 0; `dig grafana.<domain_suffix>` = NXDOMAIN; `security_guardrails.sh` still blocks both bindings; fleet `make ansible-all` 0 changed |
+
+## Risks
+
+- **Two writers on one zone** (nsupdate + external-dns): disjoint record sets by construction; external-dns owns only names carrying its TXT. Verify by deleting an Ingress and watching only its record go.
+- **AdGuard-first is now load-bearing for resolution, not only for poisoning.** ADR 0029's VIP pair covers it; a device on a public resolver simply cannot reach internal names — document, do not paper over.
+- **The `.internal` dual-run** means two Certificates on Traefik for a while; the LE one must be the default store or old names win the SNI fallback.
+- **Cloudflare token blast radius**: one token edits both public zones; scope it to DNS:edit on those two zones only and rotate at P5e.
+- **authentik external is internet-facing 24/7**: tunnel only, Cloudflare WAF rules on `/if/admin`, admin account with passkey, no operator reuse of the family realm for infrastructure.
+- **Jellyfin transcoding** is CPU on Talos VMs; direct-play first, GPU is a separate decision.
+- **PVE/PBS OIDC realms are hand-configured** (bpg has no realm resource) — runbook steps, not IaC, per ADR 0005's precedent.
