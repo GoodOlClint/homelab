@@ -24,7 +24,9 @@ spec:
             - {name: POSTGRES_DB, value: qstick}
             - {name: POSTGRES_PASSWORD, valueFrom: {secretKeyRef: {name: plex-services-secrets, key: POSTGRES_PASSWORD}}}
           volumeMounts:
-            - {name: data, mountPath: /var/lib/postgresql, subPath: data}
+            # data/data = the PGDATA tree itself (uid 999), matching the old compose bind — the
+            # migrated parent dir is uid 2012 and unsearchable for the postgres user.
+            - {name: data, mountPath: /var/lib/postgresql/data, subPath: data/data}
           readinessProbe: {exec: {command: [pg_isready, -U, qstick]}, initialDelaySeconds: 10, periodSeconds: 10}
       volumes:
         - {name: data, persistentVolumeClaim: {claimName: postgres}}
@@ -233,6 +235,8 @@ spec:
     spec:
       enableServiceLinks: false
       affinity: {nodeAffinity: {preferredDuringSchedulingIgnoredDuringExecution: [{weight: 100, preference: {matchExpressions: [{key: kubernetes.io/hostname, operator: NotIn, values: [talos-cp-w]}]}}]}}
+      # fsGroup so the scratch PVC is writable for the dropped-privilege uid 2003 (s6 chowns /config only).
+      securityContext: {fsGroup: 2000, fsGroupChangePolicy: OnRootMismatch}
       containers:
         - name: sabnzbd
           image: ${REGISTRY}/ghcr.io/hotio/sabnzbd:testing
@@ -246,7 +250,7 @@ spec:
             - {name: config, mountPath: /config, subPath: data}
             - {name: media, mountPath: /data, subPath: data}
             - {name: scratch, mountPath: /scratch, subPath: data}
-          readinessProbe: {httpGet: {path: /api?mode=version, port: 8080}, initialDelaySeconds: 15, periodSeconds: 10}
+          readinessProbe: {httpGet: {path: "/api?mode=version", port: 8080}, initialDelaySeconds: 15, periodSeconds: 10}
       volumes:
         - {name: config, persistentVolumeClaim: {claimName: sabnzbd}}
         - {name: media, persistentVolumeClaim: {claimName: media}}
@@ -308,7 +312,7 @@ spec:
       # Reaps the image's zombies — the compose file ran it with init: true.
       shareProcessNamespace: true
       affinity: {nodeAffinity: {preferredDuringSchedulingIgnoredDuringExecution: [{weight: 100, preference: {matchExpressions: [{key: kubernetes.io/hostname, operator: NotIn, values: [talos-cp-w]}]}}]}}
-      securityContext: {runAsUser: 2009, runAsGroup: 2000}
+      securityContext: {runAsUser: 2009, runAsGroup: 2000, fsGroup: 2000, fsGroupChangePolicy: OnRootMismatch}
       containers:
         - name: seerr
           image: ${REGISTRY}/ghcr.io/seerr-team/seerr:latest
@@ -349,7 +353,7 @@ spec:
     spec:
       enableServiceLinks: false
       affinity: {nodeAffinity: {preferredDuringSchedulingIgnoredDuringExecution: [{weight: 100, preference: {matchExpressions: [{key: kubernetes.io/hostname, operator: NotIn, values: [talos-cp-w]}]}}]}}
-      securityContext: {runAsUser: 2010, runAsGroup: 2000}
+      securityContext: {runAsUser: 2010, runAsGroup: 2000, fsGroup: 2000, fsGroupChangePolicy: OnRootMismatch}
       containers:
         - name: recyclarr
           image: ${REGISTRY}/ghcr.io/recyclarr/recyclarr:8
@@ -403,7 +407,7 @@ spec:
     spec:
       enableServiceLinks: false
       affinity: {nodeAffinity: {preferredDuringSchedulingIgnoredDuringExecution: [{weight: 100, preference: {matchExpressions: [{key: kubernetes.io/hostname, operator: NotIn, values: [talos-cp-w]}]}}]}}
-      securityContext: {runAsUser: 2013, runAsGroup: 2000}
+      securityContext: {runAsUser: 2013, runAsGroup: 2000, fsGroup: 2000, fsGroupChangePolicy: OnRootMismatch}
       containers:
         - name: libation
           # Pinned (ADR 0018): CLI-only installs skip GUI-run migrations.
@@ -449,7 +453,8 @@ spec:
             - name: pbs-push
               image: ${REGISTRY}/homelab/proxmox-backup-client:trixie
               imagePullPolicy: IfNotPresent
-              command: [sh, -ec, 'proxmox-backup-client namespace create databases 2>/dev/null || true; proxmox-backup-client backup plex-services-postgres.pxar:/backups --ns databases --backup-id plex-services-postgres']
+              # The trailing snapshot list is the verification signal: judge this lane by snapshot recency in the log, never by exit code.
+              command: [sh, -ec, 'proxmox-backup-client namespace create databases 2>/dev/null || true; proxmox-backup-client backup plex-services-postgres.pxar:/backups --ns databases --backup-id plex-services-postgres; proxmox-backup-client snapshot list --ns databases | tail -5']
               env:
                 - {name: PBS_REPOSITORY, value: "${PBS_REPOSITORY}"}
                 - {name: PBS_PASSWORD, valueFrom: {secretKeyRef: {name: pbs-secrets, key: PBS_PASSWORD}}}
