@@ -2,7 +2,8 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata: {name: openobserve, namespace: monitoring}
-spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 60Gi}}}
+# Sized for inodes, not bytes: ext4 gets one inode per 16 KiB and OpenObserve's stream/ holds ~3.5M small parquet files (60 Gi = 3.9M inodes filled up).
+spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 120Gi}}}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

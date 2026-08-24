@@ -31,7 +31,7 @@ migrate() {
   kubectl -n "$NS" exec -i migrate -- sh -c 'mkdir -p /root/.ssh && cat > /root/.ssh/id_ed25519 && chmod 600 /root/.ssh/id_ed25519' < "$key"
   for s in openobserve prometheus grafana uptime-kuma alertmanager; do
     echo "== rsync $s"
-    kubectl -n "$NS" exec migrate -- sh -c "mkdir -p /$s/data && rsync -aH --delete --info=progress2 -e 'ssh -o StrictHostKeyChecking=no' root@$old:/var/lib/monitoring/$s/ /$s/data/"
+    kubectl -n "$NS" exec migrate -- sh -c "mkdir -p /$s/data && rsync -a --delete --bwlimit=80m --info=progress2 -e 'ssh -o StrictHostKeyChecking=no' root@$old:/var/lib/monitoring/$s/ /$s/data/"
   done
   # Kuma's rows for the moved services follow the move (the seeder's own mechanism: sqlite, Kuma stopped).
   kubectl -n "$NS" exec migrate -- sqlite3 /uptime-kuma/data/kuma.db "
