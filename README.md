@@ -41,7 +41,7 @@ Additional VLANs not shown: infrastructure, vpn, work, iot, sonos, vivint, guest
 - **DNS**: BIND9 (authoritative) + AdGuard Home (filtering) = split DNS
 - **Monitoring**: OpenObserve + Grafana + Prometheus + 7 exporters + Uptime Kuma on the Talos cluster (`kubernetes/monitoring/`, ADR 0036)
 - **Media**: Plex (GPU transcoding) + *arr stack + Synology NAS (NFS)
-- **Containers**: Valheim, Authentik SSO, Kiwix, BOINC, Portainer, Dogecoin
+- **Containers**: Valheim (+ status sidecars), Kiwix
 - **Secrets**: Infisical (self-hosted vault) with per-VM machine identities; SOPS/age for bootstrap only (no runtime fallback)
 - **Backup**: Proxmox Backup Server with nightly cron jobs
 - **VPS Relay**: Encrypted WireGuard tunnel forwarding Plex, Valheim, mobile WireGuard
@@ -314,7 +314,6 @@ Active containers on the docker VM:
 | Kiwix | 8090 | Offline Wikipedia |
 | BOINC | 7080-7081 | Distributed computing (GPU-accelerated) |
 | Portainer | 9000 | Container management UI |
-| Dogecoin | 22555 | Dogecoin full node |
 
 ### Infisical Secret Vault (infisical VM)
 

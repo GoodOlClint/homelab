@@ -111,7 +111,3 @@
         icon: kiwix.svg
         href: http://${DOCKER}:8090
         description: Offline Wikipedia
-    - Dogecoin Node:
-        icon: si-dogecoin
-        href: http://${DOCKER}:3000
-        description: Crypto Full Node
