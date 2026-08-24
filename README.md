@@ -19,7 +19,7 @@ graph TD
     PF --> STOR[Storage VLAN<br/>MTU 9000]
     PF --> MEDIA[Media VLAN]
 
-    MGMT --- M1[dns<br/>adguard<br/>unifi<br/>openobserve<br/>proxmox-backup<br/>infisical]
+    MGMT --- M1[dns<br/>adguard<br/>unifi<br/>proxmox-backup<br/>infisical]
     SVC --- S1[docker<br/>plex<br/>plex-services<br/>nvidia-licensing]
     CORE --- C1[Clients<br/>Work / IoT<br/>Sonos / Guest / Vivint]
     STOR --- ST1[Synology NAS<br/>NFS / iSCSI<br/>jumbo frames]
@@ -39,7 +39,7 @@ Additional VLANs not shown: infrastructure, vpn, work, iot, sonos, vivint, guest
 ### Key Services
 
 - **DNS**: BIND9 (authoritative) + AdGuard Home (filtering) = split DNS
-- **Monitoring**: OpenObserve + Grafana + Prometheus + 8 exporters + Uptime Kuma
+- **Monitoring**: OpenObserve + Grafana + Prometheus + 7 exporters + Uptime Kuma on the Talos cluster (`kubernetes/monitoring/`, ADR 0036)
 - **Media**: Plex (GPU transcoding) + *arr stack + Synology NAS (NFS)
 - **Containers**: Valheim, Authentik SSO, Kiwix, BOINC, Portainer, Dogecoin
 - **Secrets**: Infisical (self-hosted vault) with per-VM machine identities; SOPS/age for bootstrap only (no runtime fallback)
@@ -220,7 +220,6 @@ All VMs are defined in `terraform/vm-configs.tf` and provisioned with cloud-init
 | unifi | 100 | mgmt | 4 | 4 GB | 50 GB | -- | UniFi Controller |
 | proxmox-backup | 101 | mgmt, services, storage | 4 | 4 GB | 20 GB | -- | Proxmox Backup Server |
 | adguard1 / adguard2 | 251 / 252 | services | 2 | 2 GB | 10 GB | -- | AdGuard Home LXC pair, one per MS-01, keepalived VIP (ADR 0029) |
-| openobserve | 103 | mgmt, services | 4 | 12 GB | 50 GB | -- | Monitoring stack (OpenObserve, Grafana, Prometheus) |
 | docker | 104 | mgmt, services, storage | 4 | 16 GB | 100 GB | NVIDIA | Container workloads (Valheim, Authentik, etc.) |
 | infisical | 105 | mgmt, services | 4 | 4 GB | 30 GB | -- | Self-hosted secret vault |
 | plex-services | 106 | mgmt, services, storage | 4 | 4 GB | 256 GB | -- | *arr stack, PostgreSQL, Jellyseerr |
@@ -243,23 +242,22 @@ All VMs are defined in `terraform/vm-configs.tf` and provisioned with cloud-init
 
 ## Services
 
-### Monitoring Stack (openobserve VM)
+### Monitoring stack (Talos cluster, `kubernetes/monitoring/`)
 
-Docker Compose services on the openobserve VM:
+One Deployment per service in the `monitoring` namespace (`make talos-monitoring`, ADR 0036); UIs are `grafana|openobserve|prometheus|alertmanager|uptime-kuma.<domain>` through Traefik, syslog/netconsole ingestion is a MetalLB address at services offset 66:
 
-| Container | Port | Purpose |
+| Service | Port | Purpose |
 |-----------|------|---------|
 | OpenObserve | 5080 | Log + metric aggregation |
 | Grafana | 3000 | Dashboards and visualization |
 | Prometheus | 9090 | Metric scraping and remote write to OpenObserve |
 | Blackbox Exporter | 9115 | DNS/HTTP/ICMP/TLS probes |
-| Node Exporter | 9100 | Host metrics |
 | Proxmox VE Exporter | 9221 | Hypervisor metrics |
 | Speedtest Exporter | 9798 | Internet speed tests |
 | SNMP Exporter | 9116 | Synology NAS metrics |
 | UniFi Poller | 9130 | Network infrastructure metrics |
 | PBS Exporter | 10019 | Backup server metrics |
-| AxoSyslog | 5514/6514 | Syslog receiver (UDP+TCP+TLS) |
+| AxoSyslog | 5514/6514, 5515 | Syslog receiver (UDP+TCP+TLS) + raw netconsole, on the offset-66 LoadBalancer |
 | Uptime Kuma | 3001 | Status page and uptime monitoring |
 
 ```mermaid
@@ -341,7 +339,7 @@ Self-hosted secret management platform deployed via Docker Compose:
 
 ### Talos Kubernetes services plane (`kubernetes/`)
 
-Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-manager (`homelab-ca`), Zot pull-through registry, ARC CI runners (ADR 0034), Traefik ingress + the Infisical Kubernetes operator + **homepage** (ADR 0035 — `make talos-ingress`, `make talos-infisical`, `make talos-homepage`). Each `kubernetes/<component>/deploy.sh` renders with `helm template | kubectl apply`; runtime secrets are `InfisicalSecret` CRDs; images pull through `registry.<domain>`.
+Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-manager (`homelab-ca`), Zot pull-through registry, ARC CI runners (ADR 0034), Traefik ingress + the Infisical Kubernetes operator + **homepage** (ADR 0035 — `make talos-ingress`, `make talos-infisical`, `make talos-homepage`), and the **monitoring stack** (ADR 0036 — `make talos-monitoring`, `make monitoring-migrate`, `make monitoring-users`). Each `kubernetes/<component>/deploy.sh` renders with `helm template | kubectl apply`; runtime secrets are `InfisicalSecret` CRDs; images pull through `registry.<domain>`.
 
 ## Ansible Roles
 
@@ -354,8 +352,6 @@ Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-m
 | bind9 | BIND9 authoritative DNS server with dynamic zone generation |
 | adguard | AdGuard Home DNS filtering and ad-blocking |
 | dns_config | Per-VM DNS resolver configuration (resolv.conf) |
-| monitoring | Full monitoring stack (OpenObserve, Grafana, Prometheus, exporters) |
-| openobserve_dashboards | Grafana dashboard provisioning |
 | monitoring_users | Service account provisioning for monitoring |
 | proxmox_backup | Proxmox Backup Server configuration |
 | unifi | UniFi Controller deployment |
@@ -404,7 +400,6 @@ Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-m
 | Role | Description |
 |------|-------------|
 | geerlingguy.docker | Docker CE installation |
-| juju4.openobserve | OpenObserve base installation |
 | infisical.vault | Infisical login and secret reading modules |
 | mitre.yedit | YAML/XML editing utilities |
 
@@ -414,7 +409,7 @@ Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-m
 |----------|---------|---------|
 | site.yml | All | Full deployment (imports infrastructure + services) |
 | bootstrap.yml | AdGuard + Infisical | First-time deployment -- AdGuard DNS + Infisical vault + secret seeding |
-| infrastructure.yml | DNS, AdGuard, OpenObserve, PBS | Phase 1: core services, Phase 2: monitoring clients |
+| infrastructure.yml | DNS, AdGuard, PBS | Phase 1: core services, Phase 2: monitoring clients |
 | services.yml | All service VMs | Media, Docker, Plex, NVIDIA licensing |
 | pfsense.yml | pfSense | DHCP scopes + RFC 2136 DNS registration |
 | vps.yml | VPS | WireGuard, nftables, hardening, monitoring agents |
@@ -454,7 +449,7 @@ Secrets are organized into per-VM paths:
 | Path | Consumers | Examples |
 |------|-----------|---------|
 | `/shared` | All service VMs | PBS backup token, PBS fingerprint |
-| `/monitoring` | openobserve | OpenObserve root password, Grafana admin, Proxmox/UniFi/PBS monitoring tokens |
+| `/monitoring` | k8s `monitoring` + `homepage` | OpenObserve root password, Grafana admin, Proxmox/UniFi/PBS monitoring tokens |
 | `/plex` | plex | Plex token, TLS certificate password, SMB credentials, Cloudflare token |
 | `/plex-services` | plex-services | PostgreSQL password, Cloudflared tunnel token, Valheim password |
 | `/docker` | docker | Cloudflared tunnel token |

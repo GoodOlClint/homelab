@@ -4,7 +4,7 @@ Uptime Kuma is the **internal** reachability lane ([ADR 0011](decisions/0011-two
 
 The outside-in view is UptimeRobot's job, from outside the network — see [uptimerobot-setup.md](uptimerobot-setup.md). That split is settled.
 
-Kuma runs on the monitoring VM at port 3001 and is configured through its web UI, hand-managed per the ADR-0005 precedent for UI-configured tools. **This document describes what currently exists, not what is recommended.**
+Kuma runs on the Talos cluster (`kubernetes/monitoring/`, ADR 0036) at `https://uptime-kuma.<domain>` and is configured through its web UI, hand-managed per the ADR-0005 precedent for UI-configured tools. **This document describes what currently exists, not what is recommended.**
 
 ## Notification channel
 
@@ -26,11 +26,11 @@ Targets use services-VLAN addresses; the real values live in the gitignored `net
 | Plex | HTTP | Plex `:32400/identity`, TLS ignored | 60s |
 | Tautulli | HTTP | plex-services `:8181` | 60s |
 | Jellyseerr | HTTP | plex-services `:5055` | 60s |
-| Grafana | HTTP | monitoring `:3000` | 60s |
-| OpenObserve | HTTP | monitoring `:5080/healthz` | 60s |
-| Prometheus | HTTP | monitoring `:9090/-/healthy` | 60s |
-| Alertmanager | HTTP | monitoring `:9093/-/healthy` | 60s |
-| AxoSyslog — syslog TCP 5514 | TCP port | monitoring `:5514` | 60s |
+| Grafana | HTTP | `https://grafana.<domain>`, TLS ignored (homelab-ca) | 60s |
+| OpenObserve | HTTP | `https://openobserve.<domain>/healthz`, TLS ignored | 60s |
+| Prometheus | HTTP | `https://prometheus.<domain>/-/healthy`, TLS ignored | 60s |
+| Alertmanager | HTTP | `https://alertmanager.<domain>/-/healthy`, TLS ignored | 60s |
+| AxoSyslog — syslog TCP 5514 | TCP port | syslog LB (services offset 66) `:5514` | 60s |
 | Infisical | HTTP | infisical `:8080` | 60s |
 | Proxmox Backup Server | HTTP | pbs `:8007`, TLS ignored | 60s |
 | UniFi controller | TCP port | unifi `:11443` | 60s |
@@ -57,14 +57,17 @@ Defaults for every monitor: 2 retries (1 for AxoSyslog, so the syslog path trips
 
 ## Rebuilding
 
-Kuma keeps everything in `/var/lib/monitoring/uptime-kuma/kuma.db` on the openobserve guest (the ADR 0015 data volume). **That path must be in the backup set** — the Ansible role creates the directory but no monitor configuration.
+Kuma keeps everything in `kuma.db` on the `uptime-kuma` ceph-rbd PVC (namespace `monitoring`, mounted at `/app/data`). Nothing in `kubernetes/monitoring/` creates monitors; the 2026-08-23 move carried the database over from LXC 203 (`make monitoring-migrate`) and repointed the five self-monitors above with SQL, the seeder's own mechanism.
 
 To reseed a fresh Kuma (after creating the admin account through the UI on first visit):
 
 ```bash
-scp scripts/seed_uptime_kuma.py network-data/local/uptime-kuma-monitors.json <monitoring-vm>:/tmp/
-ssh <monitoring-vm>
-sudo python3 /tmp/seed_uptime_kuma.py /tmp/uptime-kuma-monitors.json "<ntfy-topic>"
+kubectl -n monitoring scale deploy/uptime-kuma --replicas=0
+REGISTRY=registry.<domain> envsubst < kubernetes/monitoring/migrate.yaml | kubectl apply -f -   # a throwaway pod mounting the PVC
+kubectl -n monitoring cp scripts/seed_uptime_kuma.py migrate:/seed.py
+kubectl -n monitoring cp network-data/local/uptime-kuma-monitors.json migrate:/targets.json
+kubectl -n monitoring exec migrate -- env KUMA_DB=/uptime-kuma/data/kuma.db python3 /seed.py /targets.json "<ntfy-topic>"
+kubectl -n monitoring delete pod migrate && kubectl -n monitoring scale deploy/uptime-kuma --replicas=1
 sudo docker restart uptime-kuma      # Kuma loads monitors from the DB at boot
 ```
 
