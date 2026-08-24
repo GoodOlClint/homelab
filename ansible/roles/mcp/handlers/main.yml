@@ -1,6 +1,0 @@
----
-- name: restart mempalace
-  ansible.builtin.systemd:
-    name: mempalace
-    state: restarted
-    daemon_reload: true

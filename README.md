@@ -229,7 +229,6 @@ All VMs are defined in `terraform/vm-configs.tf` and provisioned with cloud-init
 | minio | 112 | mgmt, services, storage | 4 | 4 GB | 20 GB | -- | MinIO object storage |
 | github-runner | 113 | mgmt, services | 4 | 8 GB | 50 GB | -- | GitHub Actions self-hosted runner |
 | squid | 114 | mgmt, services, openclaw | 2 | 2 GB | 20 GB | -- | Squid forward proxy (SSL bump) |
-| mcp | 115 | mgmt, services | 4 | 8 GB | 200 GB | -- | MCP servers (MemPalace vector memory) |
 | apt-cache | 116 | mgmt, services | 2 | 2 GB | 100 GB | -- | apt-cacher-ng fleet package cache (ADR 0021) |
 
 **IP addressing:**
@@ -368,7 +367,6 @@ Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-m
 | nvidia_licensing | FastAPI DLS license server |
 | github_runner | GitHub Actions self-hosted runner for CI integration tests |
 | squid | Squid forward proxy with SSL bump for OpenClaw VLAN |
-| mcp | MCP server host (MemPalace ChromaDB vector memory) |
 | lancache | LAN game cache server |
 
 ### VPS
