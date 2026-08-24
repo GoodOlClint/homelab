@@ -191,3 +191,6 @@ terraform/worklab-campaign/
 ansible/roles/*.*/
 kubernetes/talos/.secrets/
 kubernetes/.secrets/
+
+# InfisicalSecret CRDs (key references only, no values) — ADR 0035
+!kubernetes/*/secrets.yaml
