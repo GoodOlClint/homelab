@@ -27,3 +27,10 @@
         name: infisical
         state: present
         update_cache: true
+
+- name: Infisical repo over plain http (cached via acng remap, ADR 0021)
+  ansible.builtin.replace:
+    path: /etc/apt/sources.list.d/infisical-cli.list
+    regexp: 'https://artifacts-cli\.infisical\.com'
+    replace: 'http://artifacts-cli.infisical.com'
+  failed_when: false

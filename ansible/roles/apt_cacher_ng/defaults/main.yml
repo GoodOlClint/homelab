@@ -1,5 +1,5 @@
 ---
-apt_cacher_ng_port: 3142
+apt_cacher_ng_port: 3142 # must match apt_proxy_port (roles/apt_proxy)
 
 # Backend order for the built-in Ubuntu remap: fast mirror first (measured
 # 2026-08-04: 8.9/9.2/3.9 MB/s vs archive's 0/4.5/0), canonical archive as

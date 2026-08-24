@@ -1,0 +1,25 @@
+---
+- name: Install the apt proxy auto-detect probe
+  ansible.builtin.template:
+    src: apt-proxy-detect.sh.j2
+    dest: /usr/local/bin/apt-proxy-detect
+    mode: '0755'
+  when: apt_proxy_host | length > 0
+
+- name: Point apt at the probe
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/01proxy
+    content: |
+      Acquire::http::Proxy-Auto-Detect "/usr/local/bin/apt-proxy-detect";
+      Acquire::https::Proxy-Auto-Detect "/usr/local/bin/apt-proxy-detect";
+    mode: '0644'
+  when: apt_proxy_host | length > 0
+
+- name: Remove the apt proxy config when no cache is known
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/apt/apt.conf.d/01proxy
+    - /usr/local/bin/apt-proxy-detect
+  when: apt_proxy_host | length == 0

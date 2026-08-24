@@ -1,0 +1,9 @@
+---
+# Fleet-wide apt proxy auto-detect (ADR 0021): nodes, worklab, and every guest.
+# Steady state also rides proxmox_host (nodes) and cloud-init (VM first boot);
+# this is the one-shot rollout and the path for LXC guests.
+- name: apt proxy auto-detect
+  hosts: all
+  become: true
+  roles:
+    - apt_proxy

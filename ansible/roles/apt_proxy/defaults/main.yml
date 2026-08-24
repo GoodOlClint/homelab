@@ -1,0 +1,5 @@
+---
+# Fleet package cache (ADR 0021). Empty host = no cache known (Day-1 hosts run
+# before vms.yaml exists) → the drop-in is removed and apt goes direct.
+apt_proxy_host: "{{ hostvars['apt-cache'].ansible_host | default('') }}"
+apt_proxy_port: 3142

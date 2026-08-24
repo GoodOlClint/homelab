@@ -65,7 +65,7 @@
   ansible.builtin.deb822_repository:
     name: influxdata
     types: [deb]
-    uris: https://repos.influxdata.com/debian
+    uris: http://repos.influxdata.com/debian
     suites: stable
     components: [main]
     signed_by: /etc/apt/keyrings/influxdata.asc

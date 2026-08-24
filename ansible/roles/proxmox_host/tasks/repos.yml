@@ -52,6 +52,10 @@
     signed_by: /usr/share/keyrings/proxmox-archive-keyring.gpg
   register: _ceph_nosub_repo
 
+- name: apt proxy auto-detect (ADR 0021)
+  ansible.builtin.include_role:
+    name: apt_proxy
+
 - name: Refresh apt after source changes
   ansible.builtin.apt:
     update_cache: true
