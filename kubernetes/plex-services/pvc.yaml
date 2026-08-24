@@ -1,0 +1,67 @@
+# One ceph-rbd volume per stateful service (ADR 0036 shape); pods mount subPath `data` so ext4's lost+found stays outside the app tree.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: postgres, namespace: plex-services}
+spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 10Gi}}}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: sonarr, namespace: plex-services}
+spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 5Gi}}}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: radarr, namespace: plex-services}
+spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 10Gi}}}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: lidarr, namespace: plex-services}
+spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 2Gi}}}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: prowlarr, namespace: plex-services}
+spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 1Gi}}}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: bazarr, namespace: plex-services}
+spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 1Gi}}}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: sabnzbd, namespace: plex-services}
+spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 1Gi}}}
+---
+# SAB unpack scratch: bounded so a queue can never pressure a Talos node (ADR 0037); expandable.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: sab-scratch, namespace: plex-services}
+spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 60Gi}}}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: tautulli, namespace: plex-services}
+spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 2Gi}}}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: seerr, namespace: plex-services}
+spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 1Gi}}}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: recyclarr, namespace: plex-services}
+spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 1Gi}}}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: libation, namespace: plex-services}
+spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 1Gi}}}
+---
+# pg_dumpall staging + the migrated dump history; the CronJob pushes it to PBS nightly.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: backups, namespace: plex-services}
+spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 5Gi}}}

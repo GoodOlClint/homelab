@@ -8,44 +8,44 @@
         icon: tautulli.svg
         href: https://tautulli.clintflix.tv
         description: Plex Statistics
-        widget: {type: tautulli, url: "http://${PLEX_SERVICES}:8181", key: "{{HOMEPAGE_VAR_TAUTULLI_KEY}}"}
+        widget: {type: tautulli, url: "http://tautulli.plex-services.svc:8181", key: "{{HOMEPAGE_VAR_TAUTULLI_KEY}}"}
     - Seerr:
         icon: jellyseerr.svg
         href: https://request.clintflix.tv
         description: Media Requests
-        widget: {type: jellyseerr, url: "http://${PLEX_SERVICES}:5055", key: "{{HOMEPAGE_VAR_SEERR_KEY}}"}
+        widget: {type: jellyseerr, url: "http://seerr.plex-services.svc:5055", key: "{{HOMEPAGE_VAR_SEERR_KEY}}"}
 
 - Downloads:
     - Sonarr:
         icon: sonarr.svg
-        href: http://${PLEX_SERVICES}:8989
+        href: https://sonarr.${DOMAIN}
         description: TV Series
-        widget: {type: sonarr, url: "http://${PLEX_SERVICES}:8989", key: "{{HOMEPAGE_VAR_SONARR_KEY}}"}
+        widget: {type: sonarr, url: "http://sonarr.plex-services.svc:8989", key: "{{HOMEPAGE_VAR_SONARR_KEY}}"}
     - Radarr:
         icon: radarr.svg
-        href: http://${PLEX_SERVICES}:7878
+        href: https://radarr.${DOMAIN}
         description: Movies
-        widget: {type: radarr, url: "http://${PLEX_SERVICES}:7878", key: "{{HOMEPAGE_VAR_RADARR_KEY}}"}
+        widget: {type: radarr, url: "http://radarr.plex-services.svc:7878", key: "{{HOMEPAGE_VAR_RADARR_KEY}}"}
     - Lidarr:
         icon: lidarr.svg
-        href: http://${PLEX_SERVICES}:8686
+        href: https://lidarr.${DOMAIN}
         description: Music
-        widget: {type: lidarr, url: "http://${PLEX_SERVICES}:8686", key: "{{HOMEPAGE_VAR_LIDARR_KEY}}"}
+        widget: {type: lidarr, url: "http://lidarr.plex-services.svc:8686", key: "{{HOMEPAGE_VAR_LIDARR_KEY}}"}
     - Prowlarr:
         icon: prowlarr.svg
-        href: http://${PLEX_SERVICES}:9696
+        href: https://prowlarr.${DOMAIN}
         description: Indexer Manager
-        widget: {type: prowlarr, url: "http://${PLEX_SERVICES}:9696", key: "{{HOMEPAGE_VAR_PROWLARR_KEY}}"}
+        widget: {type: prowlarr, url: "http://prowlarr.plex-services.svc:9696", key: "{{HOMEPAGE_VAR_PROWLARR_KEY}}"}
     - Bazarr:
         icon: bazarr.svg
-        href: http://${PLEX_SERVICES}:6767
+        href: https://bazarr.${DOMAIN}
         description: Subtitles
-        widget: {type: bazarr, url: "http://${PLEX_SERVICES}:6767", key: "{{HOMEPAGE_VAR_BAZARR_KEY}}"}
+        widget: {type: bazarr, url: "http://bazarr.plex-services.svc:6767", key: "{{HOMEPAGE_VAR_BAZARR_KEY}}"}
     - SABnzbd:
         icon: sabnzbd.svg
-        href: http://${PLEX_SERVICES}:8080
+        href: https://sabnzbd.${DOMAIN}
         description: Usenet Downloads
-        widget: {type: sabnzbd, url: "http://${PLEX_SERVICES}:8080", key: "{{HOMEPAGE_VAR_SABNZBD_KEY}}"}
+        widget: {type: sabnzbd, url: "http://sabnzbd.plex-services.svc:8080", key: "{{HOMEPAGE_VAR_SABNZBD_KEY}}"}
 
 - Monitoring:
     - Grafana:

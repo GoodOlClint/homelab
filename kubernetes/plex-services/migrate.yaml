@@ -1,0 +1,38 @@
+# Throwaway pod for `deploy.sh migrate`: mounts every stateful PVC at its root and rsyncs the
+# old guest's trees into <pvc>/data over ssh (key handed in via kubectl exec, never a Secret).
+apiVersion: v1
+kind: Pod
+metadata: {name: migrate, namespace: plex-services}
+spec:
+  restartPolicy: Never
+  containers:
+    - name: migrate
+      image: ${REGISTRY}/public.ecr.aws/docker/library/alpine:latest
+      command: [sh, -c, "apk add --no-cache rsync openssh-client >/dev/null && touch /ready && sleep infinity"]
+      readinessProbe: {exec: {command: [test, -f, /ready]}, periodSeconds: 2}
+      volumeMounts:
+        - {name: postgres, mountPath: /postgres}
+        - {name: sonarr, mountPath: /sonarr}
+        - {name: radarr, mountPath: /radarr}
+        - {name: lidarr, mountPath: /lidarr}
+        - {name: prowlarr, mountPath: /prowlarr}
+        - {name: bazarr, mountPath: /bazarr}
+        - {name: sabnzbd, mountPath: /sabnzbd}
+        - {name: tautulli, mountPath: /tautulli}
+        - {name: seerr, mountPath: /seerr}
+        - {name: recyclarr, mountPath: /recyclarr}
+        - {name: libation, mountPath: /libation}
+        - {name: backups, mountPath: /backups}
+  volumes:
+    - {name: postgres, persistentVolumeClaim: {claimName: postgres}}
+    - {name: sonarr, persistentVolumeClaim: {claimName: sonarr}}
+    - {name: radarr, persistentVolumeClaim: {claimName: radarr}}
+    - {name: lidarr, persistentVolumeClaim: {claimName: lidarr}}
+    - {name: prowlarr, persistentVolumeClaim: {claimName: prowlarr}}
+    - {name: bazarr, persistentVolumeClaim: {claimName: bazarr}}
+    - {name: sabnzbd, persistentVolumeClaim: {claimName: sabnzbd}}
+    - {name: tautulli, persistentVolumeClaim: {claimName: tautulli}}
+    - {name: seerr, persistentVolumeClaim: {claimName: seerr}}
+    - {name: recyclarr, persistentVolumeClaim: {claimName: recyclarr}}
+    - {name: libation, persistentVolumeClaim: {claimName: libation}}
+    - {name: backups, persistentVolumeClaim: {claimName: backups}}

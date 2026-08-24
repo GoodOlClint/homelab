@@ -1,0 +1,192 @@
+# Recyclarr v8 configuration — TRaSH Guide quality profiles (ADR 0037)
+# Mounted as a ConfigMap item at /config/recyclarr.yml; secrets.yml comes from the InfisicalSecret.
+# Syncs quality profiles to Sonarr and Radarr on CRON_SCHEDULE (@daily)
+
+sonarr:
+  sonarr:
+    base_url: http://sonarr:8989
+    api_key: !secret sonarr_api_key
+    delete_old_custom_formats: true
+
+    media_naming:
+      series: plex-tvdb
+      season: default
+      episodes:
+        rename: true
+        standard: default
+        daily: default
+        anime: default
+
+    quality_definition:
+      type: series
+
+    quality_profiles:
+      - trash_id: 72dae194fc92bf828f32cde7744e51a1
+        reset_unmatched_scores:
+          enabled: true
+      - trash_id: 9d142234e45d6143785ac55f5a9e8dc9
+        reset_unmatched_scores:
+          enabled: true
+        qualities:
+          - name: WEB 1080p
+            qualities:
+              - WEBDL-1080p
+              - WEBRip-1080p
+          - name: Bluray-1080p
+          - name: HDTV-1080p
+          - name: WEB 720p
+            qualities:
+              - WEBDL-720p
+              - WEBRip-720p
+          - name: Bluray-720p
+          - name: HDTV-720p
+          - name: SDTV
+
+    custom_format_groups:
+      add:
+        - trash_id: 158188097a58d7687dee647e04af0da3
+
+    custom_formats:
+      - trash_ids:
+          - 85c61753df5da1fb2aab6f2a47426b09
+          - 9c11cd3f07101cdba90a2d81cf0e56b4
+          - 82d40da2bc6923f41e14394075dd4b03
+        assign_scores_to:
+          - name: WEB-1080p
+            score: -10000
+      - trash_ids:
+          - 47435ece6b99a0b477caf360e79ba0bb
+        assign_scores_to:
+          - name: WEB-1080p
+            score: -10000
+      - trash_ids:
+          - 15a05bc7c1a36e2b57fd628f8977e2fc
+        assign_scores_to:
+          - name: WEB-1080p
+            score: -10000
+      - trash_ids:
+          - 0d7824bb924701997f874e7ff7d4844a
+          - 9d00418ba386a083fbf4d58235fc37ef
+          - 1808e4b9cee74e064dfae3f1db99dbfe
+          - c429417a57ea8c41d57e6990a8b0033f
+        assign_scores_to:
+          - name: WEB-1080p
+            score: 0
+      - trash_ids:
+          - e6258996055b9fbab7e9cb2f75819294
+          - 58790d4e2fdcd9733aa7ae68ba2bb503
+          - d84935abd3f8556dcd51d4f27e22d0a6
+          - d0c516558625b04b363fa6c5c2c7cfd4
+        assign_scores_to:
+          - name: WEB-1080p
+      - trash_ids:
+          - ae575f95ab639ba5d15f663bf019e3e8
+        assign_scores_to:
+          - name: WEB-1080p
+            score: -500
+      - trash_ids:
+          - 69aa1e159f97d860440b04cd6d590c4f
+        assign_scores_to:
+          - name: WEB-1080p
+            score: -10000
+
+radarr:
+  radarr:
+    base_url: http://radarr:7878
+    api_key: !secret radarr_api_key
+    delete_old_custom_formats: true
+
+    media_naming:
+      folder: plex-tmdb
+      movie:
+        rename: true
+        standard: plex-tmdb
+
+    quality_definition:
+      type: movie
+
+    quality_profiles:
+      - trash_id: d1d67249d3890e49bc12e275d989a7e9
+        reset_unmatched_scores:
+          enabled: true
+      - trash_id: 64fb5f9858489bdac2af690e27c8f42f
+        reset_unmatched_scores:
+          enabled: true
+
+    custom_format_groups:
+      add:
+        - trash_id: f8bf8eab4617f12dfdbd16303d8da245
+
+    custom_formats:
+      - trash_ids:
+          - ed38b889b31be83fda192888e2286d83
+          - 90a6f9a284dff5103f6346090e6280c8
+          - ae9b7c9ebde1f3bd336a8cbd1ec4c5e5
+        assign_scores_to:
+          - name: HD Bluray + WEB
+            score: -10000
+          - name: UHD Bluray + WEB
+            score: -10000
+      - trash_ids:
+          - dc98083864ea246d05a42df0d05f81cc
+        assign_scores_to:
+          - name: HD Bluray + WEB
+            score: -10000
+          - name: UHD Bluray + WEB
+            score: -10000
+      - trash_ids:
+          - cae4ca30163749b891686f95532519bd
+        assign_scores_to:
+          - name: HD Bluray + WEB
+            score: -10000
+          - name: UHD Bluray + WEB
+            score: -10000
+      - trash_ids:
+          - 496f355514737f7d83bf7aa4d24f8169
+          - 2f22d89048b01681dde8afe203bf2e95
+          - 3cafb66171b47f226146a0770576870f
+          - dcf3ec6938fa32445f590a4da84256cd
+        assign_scores_to:
+          - name: HD Bluray + WEB
+            score: 0
+          - name: UHD Bluray + WEB
+            score: 0
+      - trash_ids:
+          - ed27ebfef2f323e964fb1f61391bcb35
+          - c20c8647f2746a1f4c4262b0fbbeeeae
+          - 5608c71bcebba0a5e666223bae8c9227
+        assign_scores_to:
+          - name: HD Bluray + WEB
+      - trash_ids:
+          - 4d74ac4c4db0b64bff6ce0cffef99bf0
+          - a58f517a70193f8e578056642178419d
+          - e71939fae578037e7aed3ee219bbe7c1
+        assign_scores_to:
+          - name: UHD Bluray + WEB
+      - trash_ids:
+          - c20f169ef63c5f40c2def54abaf4438e
+          - 403816d65392c79236dcb6dd591aeda4
+          - af94e0fe497124d1f9ce732069ec8c3b
+        assign_scores_to:
+          - name: HD Bluray + WEB
+          - name: UHD Bluray + WEB
+      - trash_ids:
+          - eecf3a857724171f968a66cb5719e152
+          - 9f6cbff8cfe4ebbc1bde14c7b7bec0de
+        assign_scores_to:
+          - name: HD Bluray + WEB
+          - name: UHD Bluray + WEB
+      - trash_ids:
+          - d6e9318c875905d6cfb5bee961afcea9
+        assign_scores_to:
+          - name: HD Bluray + WEB
+            score: -500
+          - name: UHD Bluray + WEB
+            score: -500
+      - trash_ids:
+          - 0dc8aec3bd1c47cd6c40c46ecd27e846
+        assign_scores_to:
+          - name: HD Bluray + WEB
+            score: -10000
+          - name: UHD Bluray + WEB
+            score: -10000

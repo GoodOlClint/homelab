@@ -151,6 +151,21 @@ monitoring-migrate:
 # the play tag (not a task tag) so its pre_tasks load; the UniFi half is skipped (never probe the controller with monitor creds)
 monitoring-users:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/infrastructure.yml --tags monitoring-users --skip-tags unifi-user
+# P4c (ADR 0037): plex-services stack; media via a kubelet-mounted NFS PV; pg dumps pushed to PBS
+talos-plex-services:
+	@kubernetes/plex-services/deploy.sh
+plex-services-smoke:
+	@kubernetes/plex-services/deploy.sh smoke
+plex-services-migrate:
+	@kubernetes/plex-services/deploy.sh migrate $(FROM)
+plex-services-kuma:
+	@kubernetes/plex-services/deploy.sh kuma
+# Build + push the pg-backup CronJob's proxmox-backup-client image (the registry's one local push);
+# re-run when the PBS server major rolls (client suite tracks the Debian base)
+plex-pbs-image:
+	@DOMAIN=$$(jq -r .domain kubernetes/talos/.secrets/nodes.json); \
+	docker build --platform linux/amd64 -t registry.$$DOMAIN/homelab/proxmox-backup-client:trixie kubernetes/plex-services/pbs-client && \
+	docker push registry.$$DOMAIN/homelab/proxmox-backup-client:trixie
 
 # PVE backup jobs (B3): apply only the job resources after editing
 # `backup_jobs` in vars.auto.tfvars — never a bare apply while old-shape

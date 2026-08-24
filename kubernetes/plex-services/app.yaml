@@ -1,0 +1,483 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: plex-services
+  annotations: {secrets.infisical.com/auto-reload: "true"}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: postgres}}
+  template:
+    metadata: {labels: {app: postgres}}
+    spec:
+      enableServiceLinks: false
+      affinity: {nodeAffinity: {preferredDuringSchedulingIgnoredDuringExecution: [{weight: 100, preference: {matchExpressions: [{key: kubernetes.io/hostname, operator: NotIn, values: [talos-cp-w]}]}}]}}
+      containers:
+        - name: postgres
+          # Major pinned: the data dir is a 17-format cluster.
+          image: ${REGISTRY}/docker.io/library/postgres:17
+          ports: [{containerPort: 5432}]
+          env:
+            - {name: TZ, value: "${TZ}"}
+            - {name: POSTGRES_USER, value: qstick}
+            - {name: POSTGRES_DB, value: qstick}
+            - {name: POSTGRES_PASSWORD, valueFrom: {secretKeyRef: {name: plex-services-secrets, key: POSTGRES_PASSWORD}}}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql, subPath: data}
+          readinessProbe: {exec: {command: [pg_isready, -U, qstick]}, initialDelaySeconds: 10, periodSeconds: 10}
+      volumes:
+        - {name: data, persistentVolumeClaim: {claimName: postgres}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: postgres, namespace: plex-services}
+spec: {selector: {app: postgres}, ports: [{port: 5432}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sonarr
+  namespace: plex-services
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: sonarr}}
+  template:
+    metadata: {labels: {app: sonarr}}
+    spec:
+      enableServiceLinks: false
+      affinity: {nodeAffinity: {preferredDuringSchedulingIgnoredDuringExecution: [{weight: 100, preference: {matchExpressions: [{key: kubernetes.io/hostname, operator: NotIn, values: [talos-cp-w]}]}}]}}
+      containers:
+        - name: sonarr
+          image: ${REGISTRY}/ghcr.io/hotio/sonarr:latest
+          ports: [{containerPort: 8989}]
+          env:
+            - {name: TZ, value: "${TZ}"}
+            - {name: PUID, value: "2002"}
+            - {name: PGID, value: "2000"}
+            - {name: UMASK, value: "002"}
+          volumeMounts:
+            - {name: config, mountPath: /config, subPath: data}
+            - {name: media, mountPath: /data, subPath: data}
+          readinessProbe: {httpGet: {path: /ping, port: 8989}, initialDelaySeconds: 15, periodSeconds: 10}
+      volumes:
+        - {name: config, persistentVolumeClaim: {claimName: sonarr}}
+        - {name: media, persistentVolumeClaim: {claimName: media}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: sonarr, namespace: plex-services}
+spec: {selector: {app: sonarr}, ports: [{port: 8989}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: radarr
+  namespace: plex-services
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: radarr}}
+  template:
+    metadata: {labels: {app: radarr}}
+    spec:
+      enableServiceLinks: false
+      affinity: {nodeAffinity: {preferredDuringSchedulingIgnoredDuringExecution: [{weight: 100, preference: {matchExpressions: [{key: kubernetes.io/hostname, operator: NotIn, values: [talos-cp-w]}]}}]}}
+      containers:
+        - name: radarr
+          image: ${REGISTRY}/ghcr.io/hotio/radarr:latest
+          ports: [{containerPort: 7878}]
+          env:
+            - {name: TZ, value: "${TZ}"}
+            - {name: PUID, value: "2001"}
+            - {name: PGID, value: "2000"}
+            - {name: UMASK, value: "002"}
+          volumeMounts:
+            - {name: config, mountPath: /config, subPath: data}
+            - {name: media, mountPath: /data, subPath: data}
+          readinessProbe: {httpGet: {path: /ping, port: 7878}, initialDelaySeconds: 15, periodSeconds: 10}
+      volumes:
+        - {name: config, persistentVolumeClaim: {claimName: radarr}}
+        - {name: media, persistentVolumeClaim: {claimName: media}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: radarr, namespace: plex-services}
+spec: {selector: {app: radarr}, ports: [{port: 7878}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lidarr
+  namespace: plex-services
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: lidarr}}
+  template:
+    metadata: {labels: {app: lidarr}}
+    spec:
+      enableServiceLinks: false
+      affinity: {nodeAffinity: {preferredDuringSchedulingIgnoredDuringExecution: [{weight: 100, preference: {matchExpressions: [{key: kubernetes.io/hostname, operator: NotIn, values: [talos-cp-w]}]}}]}}
+      containers:
+        - name: lidarr
+          image: ${REGISTRY}/ghcr.io/hotio/lidarr:latest
+          ports: [{containerPort: 8686}]
+          env:
+            - {name: TZ, value: "${TZ}"}
+            - {name: PUID, value: "2008"}
+            - {name: PGID, value: "2000"}
+            - {name: UMASK, value: "002"}
+          volumeMounts:
+            - {name: config, mountPath: /config, subPath: data}
+            - {name: media, mountPath: /data, subPath: data}
+          readinessProbe: {httpGet: {path: /ping, port: 8686}, initialDelaySeconds: 15, periodSeconds: 10}
+      volumes:
+        - {name: config, persistentVolumeClaim: {claimName: lidarr}}
+        - {name: media, persistentVolumeClaim: {claimName: media}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: lidarr, namespace: plex-services}
+spec: {selector: {app: lidarr}, ports: [{port: 8686}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prowlarr
+  namespace: plex-services
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: prowlarr}}
+  template:
+    metadata: {labels: {app: prowlarr}}
+    spec:
+      enableServiceLinks: false
+      affinity: {nodeAffinity: {preferredDuringSchedulingIgnoredDuringExecution: [{weight: 100, preference: {matchExpressions: [{key: kubernetes.io/hostname, operator: NotIn, values: [talos-cp-w]}]}}]}}
+      containers:
+        - name: prowlarr
+          image: ${REGISTRY}/ghcr.io/hotio/prowlarr:latest
+          ports: [{containerPort: 9696}]
+          env:
+            - {name: TZ, value: "${TZ}"}
+            - {name: PUID, value: "2005"}
+            - {name: PGID, value: "2000"}
+            - {name: UMASK, value: "002"}
+          volumeMounts:
+            - {name: config, mountPath: /config, subPath: data}
+          readinessProbe: {httpGet: {path: /ping, port: 9696}, initialDelaySeconds: 15, periodSeconds: 10}
+      volumes:
+        - {name: config, persistentVolumeClaim: {claimName: prowlarr}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: prowlarr, namespace: plex-services}
+spec: {selector: {app: prowlarr}, ports: [{port: 9696}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bazarr
+  namespace: plex-services
+  annotations: {secrets.infisical.com/auto-reload: "true"}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: bazarr}}
+  template:
+    metadata: {labels: {app: bazarr}}
+    spec:
+      enableServiceLinks: false
+      affinity: {nodeAffinity: {preferredDuringSchedulingIgnoredDuringExecution: [{weight: 100, preference: {matchExpressions: [{key: kubernetes.io/hostname, operator: NotIn, values: [talos-cp-w]}]}}]}}
+      containers:
+        - name: bazarr
+          image: ${REGISTRY}/ghcr.io/hotio/bazarr:latest
+          ports: [{containerPort: 6767}]
+          env:
+            - {name: TZ, value: "${TZ}"}
+            - {name: PUID, value: "2004"}
+            - {name: PGID, value: "2000"}
+            - {name: UMASK, value: "002"}
+            - {name: POSTGRES_ENABLED, value: "true"}
+            - {name: POSTGRES_HOST, value: postgres}
+            - {name: POSTGRES_PORT, value: "5432"}
+            - {name: POSTGRES_DATABASE, value: bazarr}
+            - {name: POSTGRES_USERNAME, value: bazarr}
+            - {name: POSTGRES_PASSWORD, valueFrom: {secretKeyRef: {name: plex-services-secrets, key: BAZARR_POSTGRES_PASSWORD}}}
+          volumeMounts:
+            - {name: config, mountPath: /config, subPath: data}
+            - {name: media, mountPath: /data, subPath: data}
+          readinessProbe: {httpGet: {path: /ping, port: 6767}, initialDelaySeconds: 20, periodSeconds: 10}
+      volumes:
+        - {name: config, persistentVolumeClaim: {claimName: bazarr}}
+        - {name: media, persistentVolumeClaim: {claimName: media}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: bazarr, namespace: plex-services}
+spec: {selector: {app: bazarr}, ports: [{port: 6767}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sabnzbd
+  namespace: plex-services
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: sabnzbd}}
+  template:
+    metadata: {labels: {app: sabnzbd}}
+    spec:
+      enableServiceLinks: false
+      affinity: {nodeAffinity: {preferredDuringSchedulingIgnoredDuringExecution: [{weight: 100, preference: {matchExpressions: [{key: kubernetes.io/hostname, operator: NotIn, values: [talos-cp-w]}]}}]}}
+      containers:
+        - name: sabnzbd
+          image: ${REGISTRY}/ghcr.io/hotio/sabnzbd:testing
+          ports: [{containerPort: 8080}]
+          env:
+            - {name: TZ, value: "${TZ}"}
+            - {name: PUID, value: "2003"}
+            - {name: PGID, value: "2000"}
+            - {name: UMASK, value: "002"}
+          volumeMounts:
+            - {name: config, mountPath: /config, subPath: data}
+            - {name: media, mountPath: /data, subPath: data}
+            - {name: scratch, mountPath: /scratch, subPath: data}
+          readinessProbe: {httpGet: {path: /api?mode=version, port: 8080}, initialDelaySeconds: 15, periodSeconds: 10}
+      volumes:
+        - {name: config, persistentVolumeClaim: {claimName: sabnzbd}}
+        - {name: media, persistentVolumeClaim: {claimName: media}}
+        - {name: scratch, persistentVolumeClaim: {claimName: sab-scratch}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: sabnzbd, namespace: plex-services}
+spec: {selector: {app: sabnzbd}, ports: [{port: 8080}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tautulli
+  namespace: plex-services
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: tautulli}}
+  template:
+    metadata: {labels: {app: tautulli}}
+    spec:
+      enableServiceLinks: false
+      affinity: {nodeAffinity: {preferredDuringSchedulingIgnoredDuringExecution: [{weight: 100, preference: {matchExpressions: [{key: kubernetes.io/hostname, operator: NotIn, values: [talos-cp-w]}]}}]}}
+      containers:
+        - name: tautulli
+          image: ${REGISTRY}/ghcr.io/hotio/tautulli:latest
+          ports: [{containerPort: 8181}]
+          env:
+            - {name: TZ, value: "${TZ}"}
+            - {name: PUID, value: "2006"}
+            - {name: PGID, value: "2000"}
+            - {name: UMASK, value: "002"}
+          volumeMounts:
+            - {name: config, mountPath: /config, subPath: data}
+          readinessProbe: {httpGet: {path: /status, port: 8181}, initialDelaySeconds: 15, periodSeconds: 10}
+      volumes:
+        - {name: config, persistentVolumeClaim: {claimName: tautulli}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: tautulli, namespace: plex-services}
+spec: {selector: {app: tautulli}, ports: [{port: 8181}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: seerr
+  namespace: plex-services
+  annotations: {secrets.infisical.com/auto-reload: "true"}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: seerr}}
+  template:
+    metadata: {labels: {app: seerr}}
+    spec:
+      enableServiceLinks: false
+      # Reaps the image's zombies — the compose file ran it with init: true.
+      shareProcessNamespace: true
+      affinity: {nodeAffinity: {preferredDuringSchedulingIgnoredDuringExecution: [{weight: 100, preference: {matchExpressions: [{key: kubernetes.io/hostname, operator: NotIn, values: [talos-cp-w]}]}}]}}
+      securityContext: {runAsUser: 2009, runAsGroup: 2000}
+      containers:
+        - name: seerr
+          image: ${REGISTRY}/ghcr.io/seerr-team/seerr:latest
+          ports: [{containerPort: 5055}]
+          env:
+            - {name: TZ, value: "${TZ}"}
+            - {name: DB_TYPE, value: postgres}
+            - {name: DB_HOST, value: postgres}
+            - {name: DB_PORT, value: "5432"}
+            - {name: DB_NAME, value: seerr}
+            - {name: DB_USER, value: seerr}
+            - {name: DB_PASS, valueFrom: {secretKeyRef: {name: plex-services-secrets, key: SEERR_DB_PASS}}}
+          volumeMounts:
+            - {name: config, mountPath: /app/config, subPath: data}
+          readinessProbe: {httpGet: {path: /api/v1/status, port: 5055}, initialDelaySeconds: 20, periodSeconds: 10}
+      volumes:
+        - {name: config, persistentVolumeClaim: {claimName: seerr}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: seerr, namespace: plex-services}
+spec: {selector: {app: seerr}, ports: [{port: 5055}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: recyclarr
+  namespace: plex-services
+  annotations: {secrets.infisical.com/auto-reload: "true"}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: recyclarr}}
+  template:
+    metadata:
+      labels: {app: recyclarr}
+      annotations: {checksum/config: "${CONFIG_HASH}"}
+    spec:
+      enableServiceLinks: false
+      affinity: {nodeAffinity: {preferredDuringSchedulingIgnoredDuringExecution: [{weight: 100, preference: {matchExpressions: [{key: kubernetes.io/hostname, operator: NotIn, values: [talos-cp-w]}]}}]}}
+      securityContext: {runAsUser: 2010, runAsGroup: 2000}
+      containers:
+        - name: recyclarr
+          image: ${REGISTRY}/ghcr.io/recyclarr/recyclarr:8
+          env:
+            - {name: TZ, value: "${TZ}"}
+            - {name: CRON_SCHEDULE, value: "@daily"}
+          volumeMounts:
+            - {name: data, mountPath: /config, subPath: data}
+            - {name: config, mountPath: /config/recyclarr.yml, subPath: recyclarr.yml}
+            - {name: secrets, mountPath: /config/secrets.yml, subPath: secrets.yml}
+      volumes:
+        - {name: data, persistentVolumeClaim: {claimName: recyclarr}}
+        - {name: config, configMap: {name: recyclarr-config}}
+        - {name: secrets, secret: {secretName: plex-services-secrets, items: [{key: secrets.yml, path: secrets.yml}]}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflared
+  namespace: plex-services
+  annotations: {secrets.infisical.com/auto-reload: "true"}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: cloudflared}}
+  template:
+    metadata: {labels: {app: cloudflared}}
+    spec:
+      enableServiceLinks: false
+      affinity: {nodeAffinity: {preferredDuringSchedulingIgnoredDuringExecution: [{weight: 100, preference: {matchExpressions: [{key: kubernetes.io/hostname, operator: NotIn, values: [talos-cp-w]}]}}]}}
+      containers:
+        - name: cloudflared
+          image: ${REGISTRY}/docker.io/cloudflare/cloudflared:latest
+          args: [tunnel, run]
+          env:
+            - {name: TZ, value: "${TZ}"}
+            - {name: TUNNEL_TOKEN, valueFrom: {secretKeyRef: {name: plex-services-secrets, key: TUNNEL_TOKEN}}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: libation
+  namespace: plex-services
+  annotations: {secrets.infisical.com/auto-reload: "true"}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: libation}}
+  template:
+    metadata: {labels: {app: libation}}
+    spec:
+      enableServiceLinks: false
+      affinity: {nodeAffinity: {preferredDuringSchedulingIgnoredDuringExecution: [{weight: 100, preference: {matchExpressions: [{key: kubernetes.io/hostname, operator: NotIn, values: [talos-cp-w]}]}}]}}
+      securityContext: {runAsUser: 2013, runAsGroup: 2000}
+      containers:
+        - name: libation
+          # Pinned (ADR 0018): CLI-only installs skip GUI-run migrations.
+          image: ${REGISTRY}/docker.io/rmcrackan/libation:13.7.10
+          env:
+            - {name: TZ, value: "${TZ}"}
+            - {name: SLEEP_TIME, value: "6h"}
+            - {name: LIBATION_MASTER_KEY, valueFrom: {secretKeyRef: {name: plex-services-secrets, key: LIBATION_MASTER_KEY}}}
+          volumeMounts:
+            - {name: config, mountPath: /config, subPath: data}
+            # ADR 0018: in-progress staging on the same export as the library, so the publish is a rename.
+            - {name: media, mountPath: /data, subPath: data/media/Audiobooks}
+            - {name: media, mountPath: /tmp, subPath: data/media/.libation-inprogress}
+      volumes:
+        - {name: config, persistentVolumeClaim: {claimName: libation}}
+        - {name: media, persistentVolumeClaim: {claimName: media}}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata: {name: pg-backup, namespace: plex-services}
+spec:
+  schedule: "0 2 * * *"
+  suspend: false
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          enableServiceLinks: false
+          initContainers:
+            - name: pgdump
+              image: ${REGISTRY}/docker.io/library/postgres:17
+              imagePullPolicy: IfNotPresent
+              command: [sh, -ec, 'f=/backups/pg_dumpall-$(date +%F).sql.gz; pg_dumpall -h postgres -U qstick | gzip > "$f.tmp" && mv "$f.tmp" "$f"; find /backups -name "pg_dumpall-*.sql.gz" -mtime +30 -delete']
+              env:
+                - {name: PGPASSWORD, valueFrom: {secretKeyRef: {name: plex-services-secrets, key: POSTGRES_PASSWORD}}}
+              volumeMounts:
+                - {name: backups, mountPath: /backups, subPath: data}
+          containers:
+            - name: pbs-push
+              image: ${REGISTRY}/homelab/proxmox-backup-client:trixie
+              imagePullPolicy: IfNotPresent
+              command: [sh, -ec, 'proxmox-backup-client namespace create databases 2>/dev/null || true; proxmox-backup-client backup plex-services-postgres.pxar:/backups --ns databases --backup-id plex-services-postgres']
+              env:
+                - {name: PBS_REPOSITORY, value: "${PBS_REPOSITORY}"}
+                - {name: PBS_PASSWORD, valueFrom: {secretKeyRef: {name: pbs-secrets, key: PBS_PASSWORD}}}
+                - {name: PBS_FINGERPRINT, valueFrom: {secretKeyRef: {name: pbs-secrets, key: PBS_FINGERPRINT}}}
+              volumeMounts:
+                - {name: backups, mountPath: /backups, subPath: data}
+          volumes:
+            - {name: backups, persistentVolumeClaim: {claimName: backups}}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata: {name: plex-services, namespace: plex-services}
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: sonarr.${DOMAIN}
+      http: {paths: [{path: /, pathType: Prefix, backend: {service: {name: sonarr, port: {number: 8989}}}}]}
+    - host: radarr.${DOMAIN}
+      http: {paths: [{path: /, pathType: Prefix, backend: {service: {name: radarr, port: {number: 7878}}}}]}
+    - host: lidarr.${DOMAIN}
+      http: {paths: [{path: /, pathType: Prefix, backend: {service: {name: lidarr, port: {number: 8686}}}}]}
+    - host: prowlarr.${DOMAIN}
+      http: {paths: [{path: /, pathType: Prefix, backend: {service: {name: prowlarr, port: {number: 9696}}}}]}
+    - host: bazarr.${DOMAIN}
+      http: {paths: [{path: /, pathType: Prefix, backend: {service: {name: bazarr, port: {number: 6767}}}}]}
+    - host: sabnzbd.${DOMAIN}
+      http: {paths: [{path: /, pathType: Prefix, backend: {service: {name: sabnzbd, port: {number: 8080}}}}]}
+    - host: tautulli.${DOMAIN}
+      http: {paths: [{path: /, pathType: Prefix, backend: {service: {name: tautulli, port: {number: 8181}}}}]}
+    - host: seerr.${DOMAIN}
+      http: {paths: [{path: /, pathType: Prefix, backend: {service: {name: seerr, port: {number: 5055}}}}]}

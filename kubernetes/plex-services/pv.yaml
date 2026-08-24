@@ -1,0 +1,22 @@
+# The NAS media tree as one kubelet-mounted NFS PV (ADR 0037, amending ADR 0017 for the services
+# plane): NFS terminates in the kubelet on the node's vlan20 leg, pods get a bind via subPath.
+# Server address enters via envsubst — never a tracked literal.
+apiVersion: v1
+kind: PersistentVolume
+metadata: {name: plex-media}
+spec:
+  capacity: {storage: 1Ti}
+  accessModes: [ReadWriteMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: [nfsvers=4.1, hard, noatime, rsize=1048576, wsize=1048576, nconnect=4]
+  nfs: {server: "${SYNOLOGY_STORAGE}", path: /volume1/plex}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: media, namespace: plex-services}
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: ""
+  volumeName: plex-media
+  resources: {requests: {storage: 1Ti}}
