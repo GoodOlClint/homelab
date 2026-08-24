@@ -4,13 +4,21 @@ ntfy notification channel. Idempotent: rows are matched by name and left alone i
 present. Run with the uptime-kuma container stopped, then start it — Kuma loads
 monitors from this table at boot.
 
-Usage: seed-kuma.py <targets.json> <ntfy-topic>
+Kuma runs on the cluster (ADR 0036); the image ships python3, so copy this script and the
+target list into the pod and run it there:
+
+    kubectl -n monitoring scale deploy/uptime-kuma --replicas=0   # (or run against a stopped copy)
+    kubectl -n monitoring cp scripts/seed_uptime_kuma.py migrate:/seed.py  # any pod mounting the PVC
+    kubectl -n monitoring exec migrate -- python3 /seed.py /targets.json <ntfy-topic>
+
+Usage: seed_uptime_kuma.py <targets.json> <ntfy-topic>   (DB path via the KUMA_DB env var)
 """
 import json
+import os
 import sqlite3
 import sys
 
-DB = "/var/lib/monitoring/uptime-kuma/kuma.db"
+DB = os.environ.get("KUMA_DB", "/app/data/kuma.db")
 NOTIFICATION_NAME = "ntfy (homelab alerts)"
 
 targets = json.load(open(sys.argv[1]))

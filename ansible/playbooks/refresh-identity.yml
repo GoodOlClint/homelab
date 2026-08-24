@@ -6,9 +6,9 @@
 #
 # Usage:
 #   make refresh-identity                              # check all hosts, only refresh unhealthy
-#   make refresh-identity LIMIT=openobserve            # check one host
+#   make refresh-identity LIMIT=docker            # check one host
 #   make refresh-identity FORCE=true                   # force refresh all regardless of health
-#   make refresh-identity LIMIT=openobserve FORCE=true # force refresh one host
+#   make refresh-identity LIMIT=docker FORCE=true # force refresh one host
 #   make refresh-identity TAGS=cleanup                 # only clean up orphaned identities
 #   make refresh-identity TAGS="cleanup,refresh"       # cleanup + check/refresh all
 
@@ -107,7 +107,7 @@
 # Checks agent health first — skips healthy hosts unless force=true
 # ============================================================
 - name: "Refresh: Re-provision Machine Identities on target VMs"
-  hosts: openobserve,docker,plex,plex-services
+  hosts: docker,plex,plex-services
   become: true
   serial: 1
   gather_facts: false

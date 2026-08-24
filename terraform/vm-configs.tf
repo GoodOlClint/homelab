@@ -16,7 +16,7 @@ locals {
   data_volumes = {
     plex          = { index = 1, size_gb = 150 } # Library dir, 62 GB measured 2026-08-21
     plex_services = { index = 2, size_gb = 40 }  # arr configs 3 GB + postgres 0.6 GB + dumps, measured 2026-08-21
-    openobserve   = { index = 3, size_gb = 100 } # OO stream 40 GB (db 1.8) + Prometheus TSDB 2.2 GB + Kuma/Grafana, measured 2026-08-21
+    openobserve   = { index = 3, size_gb = 100 } # retired with LXC 203 (ADR 0036, history moved to cluster PVCs); slot stays until the decommission sweep
     docker        = { index = 4, size_gb = 20 }  # Valheim config 0.5 GB + server/world backups 3.3 GB, measured 2026-08-21
     control       = { index = 5, size_gb = 10 }  # MeshCentral data/files + Portainer state (ADR 0030)
   }
@@ -78,21 +78,6 @@ locals {
       disk_size_gb = 10
     },
     # docker-on-LXC. OpenObserve parquet + metadata.sqlite, the Prometheus TSDB,
-    # Alertmanager state, Grafana and Uptime Kuma DBs all ride the data volume
-    # (ADR 0015) under one mount; the rootfs holds only compose + config.
-    {
-      name         = "openobserve"
-      type         = "lxc"
-      node_name    = "ms-01b"
-      vm_id        = 203 # old 103 + 100 (ADR 0028)
-      vlans        = ["vlan40"]
-      ip_offset    = 103
-      cpu_cores    = 4
-      memory_mb    = 12288
-      disk_size_gb = 20
-      keyctl       = true
-      data_volume  = { name = "openobserve", path = "/var/lib/monitoring" }
-    },
     {
       name         = "proxmox-backup"
       vm_id        = 201 # old 101 + 100 (ADR 0028)

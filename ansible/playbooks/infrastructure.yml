@@ -105,56 +105,6 @@
     - phase1
     - infisical
 
-- name: "Phase 1: Configure OpenObserve Monitoring VM"
-  hosts: openobserve
-  become: true
-  vars_files:
-    - ../group_vars/all.yml
-  pre_tasks: *load_all_config
-  vars:
-    infisical_secret_paths: ["/shared", "/monitoring"]
-    infisical_agent_templates:
-      - name: monitoring
-        dest_path: /etc/infisical/secrets/monitoring.env
-        template_src: secrets/monitoring.env.tpl.j2
-      - name: openobserve-password
-        dest_path: /etc/infisical/secrets/openobserve_password
-        template_src: secrets/openobserve-password.tpl.j2
-        mode: '0644'
-        post_command: "chmod 0644 /etc/infisical/secrets/openobserve_password"
-      - name: alert-ntfy-url
-        dest_path: /etc/infisical/secrets/alert-ntfy-url
-        template_src: secrets/alert-ntfy-url.tpl.j2
-        mode: '0644'
-        post_command: "chmod 0644 /etc/infisical/secrets/alert-ntfy-url && docker compose -f /opt/monitoring/docker-compose.yml up -d --force-recreate alertmanager"
-      - name: openobserve
-        dest_path: /etc/infisical/secrets/openobserve.env
-        template_src: secrets/openobserve.env.tpl.j2
-      - name: monitoring-grafana
-        dest_path: /etc/infisical/secrets/monitoring-grafana.env
-        template_src: secrets/monitoring-grafana.env.tpl.j2
-        post_command: "docker compose -f /opt/monitoring/docker-compose.yml up -d --force-recreate grafana"
-      - name: monitoring-proxmox-exporter
-        dest_path: /etc/infisical/secrets/monitoring-proxmox-exporter.env
-        template_src: secrets/monitoring-proxmox-exporter.env.tpl.j2
-        post_command: "docker compose -f /opt/monitoring/docker-compose.yml up -d --force-recreate proxmox-exporter"
-      - name: monitoring-unifi-poller
-        dest_path: /etc/infisical/secrets/monitoring-unifi-poller.env
-        template_src: secrets/monitoring-unifi-poller.env.tpl.j2
-        post_command: "docker compose -f /opt/monitoring/docker-compose.yml up -d --force-recreate unifi-poller"
-      - name: monitoring-pbs-exporter
-        dest_path: /etc/infisical/secrets/monitoring-pbs-exporter.env
-        template_src: secrets/monitoring-pbs-exporter.env.tpl.j2
-        post_command: "docker compose -f /opt/monitoring/docker-compose.yml up -d --force-recreate pbs-exporter"
-  roles:
-    - infisical_client
-    - dns_config
-    - monitoring
-    - portainer_agent
-  tags:
-    - phase1
-    - openobserve
-
 - name: "Phase 1: Configure proxmox-backup VM"
   hosts: proxmox-backup
   become: true
@@ -261,7 +211,7 @@
 # ============================================================
 
 - name: "Phase 2: Configure monitoring clients on all infrastructure VMs"
-  hosts: dns,adguard,infisical,openobserve,proxmox-backup,unifi,apt-cache
+  hosts: dns,adguard,infisical,proxmox-backup,unifi,apt-cache
   become: true
   vars_files:
     - ../group_vars/all.yml

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Validate axosyslog message routing against the real image, offline.
 
-Renders roles/monitoring/templates/axosyslog.conf.j2, swaps its OpenObserve
+Takes kubernetes/monitoring/config/axosyslog.conf, swaps its OpenObserve
 destinations for file() destinations, runs it in the real axosyslog container,
 fires one datagram per message class, and asserts each landed in the right
 stream with its text intact.
@@ -31,7 +31,7 @@ import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-TEMPLATE = REPO / "ansible/roles/monitoring/templates/axosyslog.conf.j2"
+TEMPLATE = REPO / "kubernetes/monitoring/config/axosyslog.conf"
 IMAGE = "ghcr.io/axoflow/axosyslog:latest"
 NAME = "axosyslog-routing-test"
 
@@ -72,10 +72,8 @@ CASES = [
 
 
 def render(dest: Path) -> None:
-    """Render the template. Its only Jinja variable is the OpenObserve user."""
-    src = TEMPLATE.read_text().replace(
-        "{{ openobserve_root_user_email }}", "test@example.com"
-    )
+    """The config carries no template variables (credentials are backtick env vars)."""
+    src = TEMPLATE.read_text()
     leftover = re.findall(r"\{\{.*?\}\}", src)
     if leftover:
         raise SystemExit(

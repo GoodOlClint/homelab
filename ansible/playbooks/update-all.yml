@@ -21,13 +21,12 @@
       when: ansible_os_family | default('') == 'Alpine'
 
 - name: Update all Docker containers (pull latest and recreate)
-  hosts: docker,plex-services,openobserve,infisical,lancache,minio
+  hosts: docker,plex-services,infisical,lancache,minio
   become: true
   vars:
     _compose_dirs:
       docker: /opt/docker
       plex-services: /opt/plex-services
-      openobserve: /opt/monitoring
       infisical: /opt/infisical
       lancache: /opt/lancache
       minio: /opt/minio

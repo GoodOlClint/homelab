@@ -8,7 +8,6 @@ adguard_rewrite_zone: vlan100
 # VMs to create DNS rewrites for (<hostname>.<zone> -> management IP)
 # Each entry must match an inventory hostname. VMs not in inventory are silently skipped.
 adguard_rewrite_vms:
-  - openobserve
   - proxmox-backup
   - docker
   - plex

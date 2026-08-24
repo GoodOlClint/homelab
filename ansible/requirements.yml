@@ -21,6 +21,4 @@ collections:
 roles:
   - name: geerlingguy.docker
     version: "8.0.0"
-  - name: juju4.openobserve
-    version: "0.10.0"
   - src: mitre.yedit

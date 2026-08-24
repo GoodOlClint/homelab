@@ -56,7 +56,7 @@
 {% endif %}
 
 # Docker Monitoring (for hosts with Docker)
-{% if inventory_hostname in ['openobserve', 'docker', 'plex-services'] %}
+{% if inventory_hostname in ['docker', 'plex-services'] %}
 [[inputs.docker]]
   endpoint = "unix:///var/run/docker.sock"
   gather_services = false
@@ -93,11 +93,6 @@
   urls = [
 {% if inventory_hostname == 'adguard' %}
     "http://127.0.0.1:3000",
-{% endif %}
-{% if inventory_hostname == 'openobserve' %}
-    "http://127.0.0.1:{{ openobserve_listen_port }}/healthz",
-    "http://127.0.0.1:3000/api/health",
-    "http://127.0.0.1:9090/-/healthy",
 {% endif %}
 {% if inventory_hostname == 'plex' %}
     "http://127.0.0.1:32400/web/index.html",
