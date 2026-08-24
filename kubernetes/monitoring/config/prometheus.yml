@@ -104,7 +104,6 @@ scrape_configs:
           - ${BIND}
           - ${ADGUARD}
           - ${PLEX}
-          - ${DOCKER}
           - 8.8.8.8
           - 1.1.1.1
     relabel_configs:

@@ -10,12 +10,12 @@ DOMAIN="$(j .domain)"
 export REGISTRY="registry.$DOMAIN" HOST_API="$(inf_host_api)" PROJECT_ID="$(inf_project_id)" SYSLOG_IP="$(subnet_ip 66)"
 export GRAFANA_HOST="grafana.$DOMAIN" OO_HOST="openobserve.$DOMAIN" PROM_HOST="prometheus.$DOMAIN" AM_HOST="alertmanager.$DOMAIN" KUMA_HOST="uptime-kuma.$DOMAIN"
 export PVE_API_HOST="$(sed -n 's/^virtual_environment_endpoint *= *"https\{0,1\}:\/\/\([^:"/]*\).*/\1/p' "$ROOT/terraform/vars.auto.tfvars")"
-eval "$(inv_env)"   # ADGUARD BIND PLEX DOCKER PBS UNIFI SYNOLOGY TZ ...
+eval "$(inv_env)"   # ADGUARD BIND PLEX PBS UNIFI SYNOLOGY TZ ...
 GEN="$(mktemp -d)"; trap 'rm -rf "$GEN"' EXIT
 eval "$("$ROOT/.venv/bin/python3" "$HERE/render.py" "$ROOT" "$GEN")"   # OO_EMAIL UNIFI_PORT SYNOLOGY_SNMP_COMMUNITY SMOKEPING_ARGS + $GEN/*.json
 export CONFIG_HASH="$(cat "$HERE"/config/* "$GEN"/*.json | shasum -a 256 | cut -c1-16)"
 # Only these are substituted — the configs carry $-syntax of their own (Grafana, Prometheus templates, syslog-ng macros).
-SUBST='${REGISTRY} ${HOST_API} ${PROJECT_ID} ${SYSLOG_IP} ${GRAFANA_HOST} ${OO_HOST} ${PROM_HOST} ${AM_HOST} ${KUMA_HOST} ${PVE_API_HOST} ${ADGUARD} ${BIND} ${PLEX} ${DOCKER} ${PBS} ${UNIFI} ${UNIFI_PORT} ${SYNOLOGY} ${SYNOLOGY_SNMP_COMMUNITY} ${SMOKEPING_ARGS} ${OO_EMAIL} ${TZ} ${CONFIG_HASH}'
+SUBST='${REGISTRY} ${HOST_API} ${PROJECT_ID} ${SYSLOG_IP} ${GRAFANA_HOST} ${OO_HOST} ${PROM_HOST} ${AM_HOST} ${KUMA_HOST} ${PVE_API_HOST} ${ADGUARD} ${BIND} ${PLEX} ${PBS} ${UNIFI} ${UNIFI_PORT} ${SYNOLOGY} ${SYNOLOGY_SNMP_COMMUNITY} ${SMOKEPING_ARGS} ${OO_EMAIL} ${TZ} ${CONFIG_HASH}'
 sub() { envsubst "$SUBST"; }
 
 migrate() {

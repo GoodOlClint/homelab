@@ -37,7 +37,7 @@ migrate() {
     echo "== rsync $s"
     kubectl -n "$NS" exec migrate -- sh -c "mkdir -p /valheim/$s && rsync -a --delete --bwlimit=80m --info=progress2 -e 'ssh -o StrictHostKeyChecking=no' root@$old:/opt/docker/valheim/$s/ /valheim/$s/"
   done
-  kubectl -n "$NS" exec migrate -- ls -l --time-style=full-iso /valheim/config/worlds_local/
+  kubectl -n "$NS" exec migrate -- ls -l --full-time /valheim/config/worlds_local/
   kubectl -n "$NS" delete pod migrate
   ssh "root@$old" "sed -i '/ $tag\$/d' ~/.ssh/authorized_keys"
   rm -f "$key" "$key.pub"

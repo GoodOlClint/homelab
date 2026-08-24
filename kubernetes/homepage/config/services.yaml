@@ -109,5 +109,5 @@
 - Other:
     - Kiwix:
         icon: kiwix.svg
-        href: http://${DOCKER}:8090
+        href: https://kiwix.${DOMAIN}
         description: Offline Wikipedia

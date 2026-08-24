@@ -20,5 +20,5 @@
   {"name": "Sonarr", "type": "http", "url": "http://<plex-services-vm-ip>:8989", "accepted_statuscodes": ["200-299", "300-399"]},
   {"name": "Radarr", "type": "http", "url": "http://<plex-services-vm-ip>:7878", "accepted_statuscodes": ["200-299", "300-399"]},
   {"name": "Sabnzbd", "type": "http", "url": "http://<plex-services-vm-ip>:8080", "accepted_statuscodes": ["200-299", "300-399"]},
-  {"name": "Valheim — PlayFab lobby", "type": "json-query", "url": "http://<docker-services-ip>:8080/status.json", "json_path": "platform", "json_path_operator": "==", "expected_value": "playfab"}
+  {"name": "Valheim — PlayFab lobby", "type": "json-query", "url": "http://valheim-status.games.svc.cluster.local:8081/status.json", "json_path": "online", "json_path_operator": "==", "expected_value": "true"}
 ]

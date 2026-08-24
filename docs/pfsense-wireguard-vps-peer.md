@@ -53,11 +53,13 @@ Allow traffic from VPS tunnel to reach internal services:
 | Action | Protocol | Source | Destination | Port | Description |
 |--------|----------|--------|-------------|------|-------------|
 | Pass | TCP | VPN transit subnet | Plex VM IP | 32400 | Plex via VPS |
-| Pass | UDP | VPN transit subnet | Docker VM IP | 2456-2458 | Valheim via VPS |
+| Pass | UDP | VPN transit subnet | Valheim LB IP (services offset 67, ADR 0038) | 2456-2458 | Valheim via VPS |
 | Pass | UDP | VPN transit subnet | WG_VPN address | 51820 | Mobile WG relay |
 | Pass | Any | VPN transit subnet | VPN VLAN subnet | * | Mobile VPN subnet |
 
 ### 5. NAT Rules (if needed)
+
+**Valheim needs a port forward, not just a pass rule** — Firewall › NAT › Port Forward on WG_VPS: UDP, destination *WG_VPS address* 2456–2458, redirect target = the Valheim MetalLB address (services offset 67), redirect ports 2456–2458, associated filter rule. This forward was found **absent** on 2026-08-24 (config.xml had no entry for 2456 since the cutover; players had been joining through the PlayFab relay only) and was re-added by hand as part of P4d. Verify from the workstation with `ssh ansible@<pfsense> grep -c 2456 /conf/config.xml` (non-zero). The VPS side (`vps_nftables` DNAT to the pfSense tunnel IP) does not change when the target moves.
 
 If Plex/Valheim are on different VLANs, ensure pfSense routes or NATs the traffic appropriately:
 
