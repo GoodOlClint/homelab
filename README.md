@@ -308,7 +308,8 @@ The NAS media tree reaches the pods through a kubelet-mounted NFS PersistentVolu
 
 Self-hosted secret management platform deployed via Docker Compose:
 
-- **Stack**: Infisical server (port 8080) + PostgreSQL 16 + Redis 7
+- **Stack**: Infisical server + PostgreSQL 16 + Redis 7, behind Caddy on 443 with a root-chained cert (ADR 0041)
+- **Machine URL**: `bootstrap_config.infisical_url` = `https://infisical.<service domain>` (ADR 0042) — every consumer (Ansible, the fleet agents, the Kubernetes operator, `lib.sh`, the scripts) derives from that one binding; 8080 is localhost-only once the binding is https (a greenfield `make bootstrap` writes the http URL and flips it after `make pki-hosts` + `make ansible infisical`). Python on the workstation trusts the root through `kubernetes/.secrets/ca-bundle.pem` (written by `make talos-certs`, exported by the Makefile), so run Ansible through `make`
 - **Machine identities**: Each service VM gets a unique identity (`{hostname}-vm`) with Universal Auth credentials stored in `/etc/infisical/`
 - **Infisical Agent**: Runs as a systemd service on each VM, authenticating with its machine identity and rendering secrets to environment files via Go templates
 - **Polling interval**: 60 seconds -- secret updates propagate within one minute
@@ -594,7 +595,7 @@ All `ansible-*` targets support `TAGS=<tag>` to filter by play-level tags (e.g.,
 |--------|-------------|
 | `infisical-seed` | Migrate secrets from SOPS to Infisical |
 | `infisical-backup` | Export Infisical secrets to SOPS format |
-| `infisical-restore` | Restore the vault from its newest PBS `databases/infisical` dump (ADR 0039); `HOST=`/`DIR=` point it at a throwaway stack for a rehearsal |
+| `infisical-restore` | Restore the vault from its newest PBS `databases/infisical` dump (ADR 0039; the dump also carries the vault's Caddy key + cert since ADR 0042, so a restored vault verifies at once); `HOST=`/`DIR=` point it at a throwaway stack for a rehearsal |
 | `infisical-organize` | Organize flat secrets into per-VM folders |
 | `refresh-identity` | Refresh Infisical machine identity credentials |
 | `plex-token` | Retrieve Plex authentication token |

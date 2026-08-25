@@ -7,7 +7,9 @@
 # BEFORE running `make bootstrap`:
 #   1. Fill in provider credentials (proxmox, vultr, cloudflare)
 #   2. Set infisical_admin_email
-#   3. Set infisical_url (http://<services_vlan_ip>:8080)
+#   3. Set infisical_url (http://<services_vlan_ip>:8080 — plain http until the PKI exists;
+#      after `make talos-certs`, `make pki-hosts` and `make ansible infisical` flip it to
+#      https://infisical.<service domain> with `sops --set` (ADR 0042) and re-run `make ansible-all`)
 #   4. Run: make bootstrap
 #
 # After bootstrap completes, run: make apply
@@ -15,7 +17,7 @@
 
 # Non-sensitive Infisical connection config (NOT encrypted by SOPS)
 bootstrap_config:
-  infisical_url: "REPLACE_ME"              # http://<services_ip>:8080
+  infisical_url: "REPLACE_ME"              # http://<services_ip>:8080 at bootstrap, https://infisical.<service domain> once the PKI exists
   infisical_project_id: "REPLACE_ME"       # Auto-populated by bootstrap
   infisical_org_id: "REPLACE_ME"           # Auto-populated by bootstrap
   infisical_admin_email: "REPLACE_ME"      # Your email address (required)
