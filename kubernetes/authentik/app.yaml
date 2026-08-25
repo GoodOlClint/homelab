@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: ${NS}
+  annotations: {secrets.infisical.com/auto-reload: "true"}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: postgres}}
+  template:
+    metadata: {labels: {app: postgres}}
+    spec:
+      enableServiceLinks: false
+      affinity: {nodeAffinity: {preferredDuringSchedulingIgnoredDuringExecution: [{weight: 100, preference: {matchExpressions: [{key: kubernetes.io/hostname, operator: NotIn, values: [talos-cp-w]}]}}]}}
+      containers:
+        - name: postgres
+          # Major pinned: the data dir is a 17-format cluster.
+          image: ${REGISTRY}/docker.io/library/postgres:17
+          ports: [{containerPort: 5432}]
+          env:
+            - {name: TZ, value: "${TZ}"}
+            - {name: POSTGRES_USER, value: authentik}
+            - {name: POSTGRES_DB, value: authentik}
+            - {name: POSTGRES_PASSWORD, valueFrom: {secretKeyRef: {name: authentik-secrets, key: POSTGRES_PASSWORD}}}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql/data, subPath: data}
+          readinessProbe: {exec: {command: [pg_isready, -U, authentik]}, initialDelaySeconds: 10, periodSeconds: 10}
+      volumes:
+        - {name: data, persistentVolumeClaim: {claimName: postgres}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: postgres, namespace: ${NS}}
+spec: {selector: {app: postgres}, ports: [{port: 5432}]}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata: {name: pg-backup, namespace: ${NS}}
+spec:
+  schedule: "20 2 * * *"
+  suspend: false
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          enableServiceLinks: false
+          initContainers:
+            - name: pgdump
+              image: ${REGISTRY}/docker.io/library/postgres:17
+              imagePullPolicy: IfNotPresent
+              command: [sh, -ec, 'f=/backups/pg_dumpall-$(date +%F).sql.gz; pg_dumpall -h postgres -U authentik | gzip > "$f.tmp" && mv "$f.tmp" "$f"; find /backups -name "pg_dumpall-*.sql.gz" -mtime +30 -delete']
+              env:
+                - {name: PGPASSWORD, valueFrom: {secretKeyRef: {name: authentik-secrets, key: POSTGRES_PASSWORD}}}
+              volumeMounts:
+                - {name: backups, mountPath: /backups, subPath: data}
+          containers:
+            - name: pbs-push
+              image: ${REGISTRY}/homelab/proxmox-backup-client:trixie
+              imagePullPolicy: IfNotPresent
+              # The trailing snapshot list is the verification signal: judge this lane by snapshot recency in the log, never by exit code.
+              command: [sh, -ec, 'proxmox-backup-client namespace create databases 2>/dev/null || true; proxmox-backup-client backup ${NS}-postgres.pxar:/backups --ns databases --backup-id ${NS}-postgres; proxmox-backup-client snapshot list --ns databases | tail -5']
+              env:
+                - {name: PBS_REPOSITORY, value: "${PBS_REPOSITORY}"}
+                - {name: PBS_PASSWORD, valueFrom: {secretKeyRef: {name: pbs-secrets, key: PBS_PASSWORD}}}
+                - {name: PBS_FINGERPRINT, valueFrom: {secretKeyRef: {name: pbs-secrets, key: PBS_FINGERPRINT}}}
+              volumeMounts:
+                - {name: backups, mountPath: /backups, subPath: data}
+          volumes:
+            - {name: backups, persistentVolumeClaim: {claimName: backups}}

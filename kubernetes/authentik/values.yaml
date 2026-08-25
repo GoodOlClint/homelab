@@ -1,0 +1,24 @@
+global:
+  image:
+    repository: ${REGISTRY}/ghcr.io/goauthentik/server
+    tag: "${CHART_VERSION}"
+  envFrom: [{secretRef: {name: authentik-secrets}}]
+  env:
+    - {name: AUTHENTIK_BOOTSTRAP_EMAIL, value: "${ACME_EMAIL}"}
+    - {name: AUTHENTIK_WEB__BASE_URL, value: "https://${HOST}"}
+    - {name: TZ, value: "${TZ}"}
+  affinity:
+    nodeAffinity:
+      type: soft
+      matchExpressions: [{key: kubernetes.io/hostname, operator: NotIn, values: [talos-cp-w]}]
+  deploymentAnnotations: {secrets.infisical.com/auto-reload: "true"}
+authentik:
+  postgresql: {host: postgres, name: authentik, user: authentik}
+  outposts:
+    container_image_base: ${REGISTRY}/ghcr.io/goauthentik/%(type)s:%(version)s
+blueprints:
+  configMaps: [authentik-blueprint]
+server:
+  deploymentStrategy: {type: Recreate}
+worker:
+  deploymentStrategy: {type: Recreate}

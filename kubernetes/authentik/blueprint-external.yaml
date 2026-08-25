@@ -1,0 +1,128 @@
+# External realm (family + operator): groups, the LDAP outpost Jellyfin binds to (authentik deploys it in this
+# namespace through the local Kubernetes service connection), an invitation-only enrollment flow and a
+# link-based recovery flow — no SMTP anywhere in the fleet, so nothing here sends mail.
+version: 1
+metadata: {name: homelab-external}
+entries:
+  - model: authentik_core.group
+    id: family
+    identifiers: {name: family}
+    attrs: {is_superuser: false}
+  - model: authentik_core.group
+    id: admins
+    identifiers: {name: admins}
+    attrs: {is_superuser: true}
+
+  - model: authentik_core.user
+    id: ldap-bind
+    identifiers: {username: ldapsvc}
+    attrs: {name: LDAP bind (Jellyfin), type: service_account, path: service-accounts, password: !Env LDAP_BIND_PASSWORD}
+  - model: authentik_outposts.kubernetesserviceconnection
+    id: k8s
+    identifiers: {name: Local Kubernetes Cluster}
+    attrs: {local: true}
+  - model: authentik_providers_ldap.ldapprovider
+    id: ldap
+    identifiers: {name: ldap}
+    attrs:
+      base_dn: DC=ldap,DC=goauthentik,DC=io
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-authentication-flow]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      bind_mode: cached
+      search_mode: cached
+      mfa_support: false
+    permissions:
+      - permission: authentik_providers_ldap.search_full_directory
+        user: !KeyOf ldap-bind
+  - model: authentik_core.application
+    identifiers: {slug: ldap}
+    attrs: {name: LDAP (Jellyfin), provider: !KeyOf ldap}
+  - model: authentik_outposts.outpost
+    identifiers: {name: ldap}
+    attrs:
+      type: ldap
+      providers: [!KeyOf ldap]
+      service_connection: !KeyOf k8s
+      config:
+        kubernetes_namespace: ${NS}
+        kubernetes_replicas: 1
+        kubernetes_service_type: ClusterIP
+        authentik_host: http://authentik-server.${NS}.svc:80
+
+  - model: authentik_stages_prompt.prompt
+    id: p-username
+    identifiers: {name: family-enrollment-username}
+    attrs: {field_key: username, label: Username, type: username, required: true, placeholder: Username, order: 0}
+  - model: authentik_stages_prompt.prompt
+    id: p-name
+    identifiers: {name: family-enrollment-name}
+    attrs: {field_key: name, label: Name, type: text, required: true, placeholder: Name, order: 1}
+  - model: authentik_stages_prompt.prompt
+    id: p-email
+    identifiers: {name: family-enrollment-email}
+    attrs: {field_key: email, label: Email, type: email, required: true, placeholder: Email, order: 2}
+  - model: authentik_stages_prompt.prompt
+    id: p-password
+    identifiers: {name: family-password}
+    attrs: {field_key: password, label: Password, type: password, required: true, placeholder: Password, order: 3}
+  - model: authentik_stages_prompt.prompt
+    id: p-password-repeat
+    identifiers: {name: family-password-repeat}
+    attrs: {field_key: password_repeat, label: Password (repeat), type: password, required: true, placeholder: Password (repeat), order: 4}
+
+  - model: authentik_stages_invitation.invitationstage
+    id: s-invite
+    identifiers: {name: family-enrollment-invitation}
+    attrs: {continue_flow_without_invitation: false}
+  - model: authentik_stages_prompt.promptstage
+    id: s-enroll-prompt
+    identifiers: {name: family-enrollment-prompt}
+    attrs: {fields: [!KeyOf p-username, !KeyOf p-name, !KeyOf p-email, !KeyOf p-password, !KeyOf p-password-repeat]}
+  - model: authentik_stages_user_write.userwritestage
+    id: s-enroll-write
+    identifiers: {name: family-enrollment-write}
+    attrs: {user_creation_mode: always_create, create_users_group: !KeyOf family}
+  - model: authentik_stages_user_login.userloginstage
+    id: s-login
+    identifiers: {name: family-login}
+  - model: authentik_flows.flow
+    id: f-enroll
+    identifiers: {slug: family-enrollment}
+    attrs: {name: Family enrollment, title: Create your account, designation: enrollment, authentication: require_unauthenticated}
+  - model: authentik_flows.flowstagebinding
+    identifiers: {target: !KeyOf f-enroll, stage: !KeyOf s-invite}
+    attrs: {order: 10}
+  - model: authentik_flows.flowstagebinding
+    identifiers: {target: !KeyOf f-enroll, stage: !KeyOf s-enroll-prompt}
+    attrs: {order: 20}
+  - model: authentik_flows.flowstagebinding
+    identifiers: {target: !KeyOf f-enroll, stage: !KeyOf s-enroll-write}
+    attrs: {order: 30}
+  - model: authentik_flows.flowstagebinding
+    identifiers: {target: !KeyOf f-enroll, stage: !KeyOf s-login}
+    attrs: {order: 40}
+
+  - model: authentik_stages_prompt.promptstage
+    id: s-recovery-prompt
+    identifiers: {name: family-recovery-prompt}
+    attrs: {fields: [!KeyOf p-password, !KeyOf p-password-repeat]}
+  - model: authentik_stages_user_write.userwritestage
+    id: s-recovery-write
+    identifiers: {name: family-recovery-write}
+    attrs: {user_creation_mode: never_create}
+  - model: authentik_flows.flow
+    id: f-recovery
+    identifiers: {slug: family-recovery}
+    attrs: {name: Family recovery, title: Set a new password, designation: recovery, authentication: none}
+  - model: authentik_flows.flowstagebinding
+    identifiers: {target: !KeyOf f-recovery, stage: !KeyOf s-recovery-prompt}
+    attrs: {order: 10}
+  - model: authentik_flows.flowstagebinding
+    identifiers: {target: !KeyOf f-recovery, stage: !KeyOf s-recovery-write}
+    attrs: {order: 20}
+  - model: authentik_flows.flowstagebinding
+    identifiers: {target: !KeyOf f-recovery, stage: !KeyOf s-login}
+    attrs: {order: 30}
+  - model: authentik_brands.brand
+    identifiers: {domain: authentik-default}
+    attrs: {flow_recovery: !KeyOf f-recovery}

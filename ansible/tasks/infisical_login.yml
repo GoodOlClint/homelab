@@ -71,6 +71,8 @@
     - squid
     - control
     - talos
+    - authentik
+    - authentik-ext
   register: _infisical_nested
   delegate_to: localhost
   become: false

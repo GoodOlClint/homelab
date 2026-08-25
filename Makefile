@@ -39,7 +39,7 @@ ifneq (,$(filter build rebuild plan ansible docker-config update,$(firstword $(M
 endif
 
 # === Core Operations ===
-.PHONY: talos-plan talos-build talos-secrets talos-apply talos-bootstrap talos-csi talos-smoke talos-lb talos-certs talos-registry talos-trust registry-smoke talos-arc talos-ingress talos-infisical infisical-smoke talos-homepage all apply plan init terraform-apply terraform-bootstrap inventory bootstrap ansible-bootstrap build rebuild rebuild-infisical data-volumes backup-jobs sdn-apply
+.PHONY: talos-authentik talos-plan talos-build talos-secrets talos-apply talos-bootstrap talos-csi talos-smoke talos-lb talos-certs talos-registry talos-trust registry-smoke talos-arc talos-ingress talos-infisical infisical-smoke talos-homepage all apply plan init terraform-apply terraform-bootstrap inventory bootstrap ansible-bootstrap build rebuild rebuild-infisical data-volumes backup-jobs sdn-apply
 
 all: apply
 
@@ -145,6 +145,9 @@ talos-homepage:
 # P5a (ADR 0040): external-dns publishes every Ingress host into the service zone over RFC 2136
 talos-dns:
 	@kubernetes/external-dns/deploy.sh
+# P5c (ADR 0040): authentik, both realms (REALM=internal|external for one); generates each realm's Infisical folder on first run
+talos-authentik:
+	@kubernetes/authentik/deploy.sh $(REALM)
 # P4b (ADR 0036): monitoring stack; axosyslog LB on services offset 66; history migration from the old guest
 talos-monitoring:
 	@kubernetes/monitoring/deploy.sh
