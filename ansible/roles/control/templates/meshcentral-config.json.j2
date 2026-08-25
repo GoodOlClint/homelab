@@ -11,7 +11,15 @@
     "": {
       "title": "{{ meshcentral_title }}",
       "newAccounts": {{ meshcentral_new_accounts | to_json }},
-      "amtManager": true
+      "amtManager": true,
+      "authStrategies": {
+        "oidc": {
+          "issuer": "https://auth.{{ service_domain }}/application/o/meshcentral/",
+          "clientid": "meshcentral",
+          "clientsecret": "{{ secrets.authentik.meshcentral_oidc_client_secret }}",
+          "newAccounts": true
+        }
+      }
     }
   }
 }

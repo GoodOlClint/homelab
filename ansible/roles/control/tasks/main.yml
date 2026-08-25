@@ -133,6 +133,47 @@
   when: item not in (_portainer_endpoints.json | map(attribute='Name') | list)
   tags: [control, portainer]
 
+- name: Read Portainer settings
+  ansible.builtin.uri:
+    url: "https://localhost:{{ portainer_port }}/api/settings"
+    validate_certs: false
+    headers:
+      Authorization: "Bearer {{ _portainer_auth.json.jwt }}"
+  register: _portainer_settings
+  tags: [control, portainer]
+
+# The client secret is write-only in Portainer's API, so a rotated secret needs a forced re-apply (change any other field).
+- name: Point Portainer login at authentik (OIDC, ADR 0040 P5c)
+  ansible.builtin.uri:
+    url: "https://localhost:{{ portainer_port }}/api/settings"
+    method: PUT
+    validate_certs: false
+    headers:
+      Authorization: "Bearer {{ _portainer_auth.json.jwt }}"
+    body_format: json
+    body:
+      AuthenticationMethod: 3
+      OAuthSettings:
+        ClientID: portainer
+        ClientSecret: "{{ secrets.authentik.portainer_oidc_client_secret }}"
+        AuthorizationURI: "https://auth.{{ service_domain }}/application/o/authorize/"
+        AccessTokenURI: "https://auth.{{ service_domain }}/application/o/token/"
+        ResourceURI: "https://auth.{{ service_domain }}/application/o/userinfo/"
+        LogoutURI: "https://auth.{{ service_domain }}/application/o/portainer/end-session/"
+        RedirectURI: "https://{{ inventory_hostname }}.{{ service_domain }}:{{ portainer_port }}/"
+        UserIdentifier: preferred_username
+        Scopes: "openid profile email"
+        OAuthAutoCreateUsers: true
+        DefaultTeamID: 0
+        SSO: true
+  no_log: true
+  changed_when: true
+  when: >-
+    _portainer_settings.json.AuthenticationMethod != 3
+    or _portainer_settings.json.OAuthSettings.AccessTokenURI != "https://auth." ~ service_domain ~ "/application/o/token/"
+    or _portainer_settings.json.OAuthSettings.RedirectURI != "https://" ~ inventory_hostname ~ "." ~ service_domain ~ ":" ~ portainer_port ~ "/"
+  tags: [control, portainer]
+
 - name: List Portainer admin access tokens
   ansible.builtin.uri:
     url: "https://localhost:{{ portainer_port }}/api/users/1/tokens"

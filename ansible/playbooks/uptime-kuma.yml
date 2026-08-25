@@ -54,7 +54,9 @@
       - {name: "Proxmox Backup Server", monitor_type: port, hostname: "{{ hostvars['proxmox-backup'].service_ip }}", port: 8007}
       - {name: "UniFi controller", monitor_type: port, hostname: "{{ hostvars['unifi'].ansible_host }}", port: 11443}
       - {name: "apt-cacher-ng — proxy TCP 3142", monitor_type: port, hostname: "{{ hostvars['apt-cache'].service_ip }}", port: 3142}
-      - {name: Homepage, monitor_type: http, url: "https://homepage.{{ service_domain }}", accepted_statuscodes: "{{ _redirects }}"}
+      - {name: Homepage, monitor_type: http, url: "http://homepage.homepage.svc.cluster.local", accepted_statuscodes: "{{ _redirects }}"}
+      - {name: "authentik — internal realm", monitor_type: http, url: "https://auth.{{ service_domain }}/-/health/ready/"}
+      - {name: "authentik — external realm", monitor_type: http, url: "http://authentik-server.authentik-ext.svc.cluster.local/-/health/ready/"}
       - {name: "VPS — public IP", monitor_type: ping, hostname: "vps.{{ media_domain }}"}
       - {name: "VPS — WireGuard tunnel peer", monitor_type: ping, hostname: "{{ vps_wg_tunnel.tunnel_address.split('/')[0] }}"}
       - {name: "Cloudflare Tunnel — Tautulli", monitor_type: http, url: "https://tautulli.{{ media_domain }}", interval: 120, accepted_statuscodes: "{{ _redirects }}"}
