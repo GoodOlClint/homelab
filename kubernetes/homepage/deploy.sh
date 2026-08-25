@@ -8,7 +8,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 eval "$(inv_env)"   # PLEX CONTROL PBS UNIFI INFISICAL ADGUARD SYNOLOGY TZ SERVICE_DOMAIN HOST_ALIAS
 export DOMAIN="$SERVICE_DOMAIN" HOST="homepage.$SERVICE_DOMAIN" REGISTRY="registry.$(j .domain)" HOST_API="$(inf_host_api)" PROJECT_ID="$(inf_project_id)" GATEWAY="$(j .gateway)"
 export PVE_API="$(sed -n "s/^virtual_environment_endpoint *= *\"\([^\"]*\)\".*/\1/p" "$ROOT/terraform/vars.auto.tfvars")"
-export HOSTS="$HOST,$HOST_ALIAS"
+export HOSTS="$HOST,$HOST_ALIAS,homepage.$NS.svc.cluster.local"   # the svc name is the Kuma row (the ingress host sits behind forward-auth)
 
 ns "$NS"
 kubectl create configmap homepage-config -n "$NS" --dry-run=client -o yaml \

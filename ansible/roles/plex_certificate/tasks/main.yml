@@ -86,11 +86,30 @@
     - certificate
     - tls
 
-# Step 5: Run deploy hook immediately (first-time setup)
-- name: Run deploy hook to create initial PKCS#12 certificate
+- name: Check the PKCS#12 bundle against the live certificate
+  ansible.builtin.stat:
+    path: "{{ plex_pfx_path }}"
+  register: plex_pfx_file
+  tags:
+    - plex
+    - certificate
+    - tls
+
+- name: Check the live certificate's mtime
+  ansible.builtin.stat:
+    path: "{{ plex_cert_dir }}/fullchain.pem"
+    follow: true
+  register: plex_live_cert
+  tags:
+    - plex
+    - certificate
+    - tls
+
+# Re-pack whenever the bundle predates the certificate (re-issue, restored guest): Plex silently falls back to plex.direct on a stale one.
+- name: Run deploy hook to (re)create the PKCS#12 certificate
   ansible.builtin.command:
     cmd: "{{ plex_certbot_deploy_hook }}"
-  when: not plex_cert_file.stat.exists
+  when: not plex_pfx_file.stat.exists or plex_pfx_file.stat.mtime < plex_live_cert.stat.mtime
   tags:
     - plex
     - certificate

@@ -21,7 +21,7 @@ One channel, shared with Alertmanager: **ntfy** (`ntfy (homelab alerts)`, type `
 | AdGuard — DNS resolution | DNS | `google.com` A via the AdGuard VIP |
 | BIND9 — DNS resolution | DNS | `ns.<mgmt zone>` A via the BIND VIP |
 | AdGuard — web UI | HTTP | AdGuard VIP `:3000` |
-| Plex | HTTP | plex `:32400/identity` over plain HTTP (Plex allows it unless secure connections are *Required*) |
+| Plex | HTTP | `https://plex.<media domain>:32400/identity` — the Let's Encrypt cert `plex_certificate` installs; Plex has secure connections *Required*, so plain HTTP from the network gets an empty reply |
 | Tautulli / Jellyseerr / Sonarr / Radarr / Sabnzbd | HTTP | in-cluster `*.plex-services.svc.cluster.local` (ADR 0037) |
 | Grafana / OpenObserve / Prometheus / Alertmanager | HTTP | `https://<name>.<service domain>` through Traefik (Let's Encrypt, verified) |
 | AxoSyslog — syslog TCP 5514 | TCP port | syslog LB (`openobserve_listen_host`) |
