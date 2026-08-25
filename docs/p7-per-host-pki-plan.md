@@ -1,0 +1,89 @@
+# P7 — per-host PKI: every fleet host serves a `Homelab Root CA` cert, every managed guest and node trusts the root
+
+- **Status:** APPROVED 2026-08-25 (brownfield-gate interview; build in progress)
+- **Decision record:** [ADR 0041](decisions/0041-p7-per-host-certs-are-acme-dns-01-against-infisical-through-bind-s-dynamic-update-path-on-a-scoped-tsig-key-pbs-fingerprint-pins-retire-infisical-s-own-cert-is-api-issued-behind-caddy.md) (amends ADR 0039's "HTTP-01" and ADR 0007's per-host clause; resolves the WP8 leftovers)
+- **Inputs:** [plan §WP8](ms01-cluster-iac-plan.md#wp8--pki--certs-adr-0007), ADR 0007 / 0039 / 0040, kickoff `homelab-p7-per-host-pki-20260826`
+- **Tranche shape:** serial (`PARALLEL: no`), small commits on `nut-client`, no push
+
+## 1. Existing state (mapped 2026-08-25)
+
+| Surface | Today | Finding |
+|---|---|---|
+| Infisical PKI | project `homelab-pki`, root `Homelab Root CA` (secp384r1, 2046, pathlen 1); no policy/profile/application | Deployed image is **v0.162.24** (rolled at P6). Its ACME server offers **HTTP-01 and DNS-01** for DNS names (wildcards DNS-01 only, IP identifiers HTTP-01 only) — the 2026-08-24 "HTTP-01 only" gate finding is outdated. Enrollment is per *application × profile* (`PUT …/enrollment/acme` with `skipEabBinding`, `skipDnsOwnershipVerification`; `…/enrollment/api` for CSR issuance). `POST /api/v1/cert-manager/certificates` with a host CSR issues a 1-year leaf with DNS **and IP** SANs signed directly by the root (probed live with throwaway objects, deleted after). Applications need the org's *active* cert-manager project set — now set to `homelab-pki` (a stray empty "Certificate Manager" project from 2026-08-21 also exists; harmless). |
+| PVE nodes (9.2) | self-signed `pve-ssl.pem`; hosts root `insecure = true`; fleet root endpoint = the VIP **IP** | Native ACME supports EAB and the `dns_nsupdate` acme.sh plugin (`NSUPDATE_SERVER/KEY/ZONE`, key = a *file path*); `LWP::UserAgent` verifies the directory TLS against the system store. bpg 0.111.1 (installed) has `proxmox_acme_account`, `proxmox_acme_dns_plugin`, `proxmox_acme_certificate` (per-node order/renew; `pve-daily-update` renews). A node serves **one** cert, no SNI. |
+| PBS 4.2.5 | self-signed, fingerprint pinned in every guest's `pbs-client.env` (Infisical `/shared/pbs_fingerprint`), the PVE `pbs` storage entry (`server` = vlan20 IP), the restore script, two k8s CronJobs | Native ACME (`acme account register`, `acme plugin add dns … --api nsupdate`, `node update --acme account=… --acmedomain0 domain=…,plugin=…`, `acme cert order`; `proxmox-backup-daily-update.timer` renews) — **no EAB**. `nsupdate` (bind9-dnsutils) not installed. |
+| PDM 1.1.7 | self-signed `auth/api.pem` | Native ACME, same CLI shape (`proxmox-datacenter-manager-admin acme …`), daily-update timer, **no EAB**; the CLI has no `node update` — the acme domain config lands in `/etc/proxmox-datacenter-manager/node.cfg` (verify at build). |
+| Infisical VM | plain HTTP on 8080 only; `SITE_URL=http://<ip>:8080`; every consumer uses `bootstrap_config.infisical_url` (http) | ACME directory URLs are derived from `SITE_URL`, so ACME clients follow whatever scheme it carries. Infisical cannot ACME against itself (directory TLS chicken-and-egg). |
+| control (LXC, vlan10) | Portainer 9443 + MeshCentral 443 self-signed; MeshCentral also binds 80 (redirect) | certbot 4.0 + `python3-certbot-dns-rfc2136` available. |
+| Root trust | Talos nodes trust the root for the registry only; no guest/node trusts it | Debian 13 / Ubuntu 26.04 `ca-certificates` → `update-ca-certificates`; Debian's certifi uses the system store, so certbot inherits it. macOS keychain holds the root but **unmarked as trusted** (`security verify-cert` → `CSSMERR_TP_NOT_TRUSTED`); bpg on darwin cannot take `SSL_CERT_FILE`. |
+| Network | — | vlan40 → vlan30/vlan10 port 80 already passes pfSense (connection refused, not timeout). Not needed by DNS-01 anyway. |
+| BIND | one TSIG key (`/infrastructure/bind_tsig_key_secret`) authorised for the whole zone (`allow-update`); external-dns and `dns_records` use it | A DNS-01 client needs only `_acme-challenge.<name> TXT` — BIND `update-policy` can scope a second key to that. |
+
+Rejected on facts (interview): escrowing a VIP cert in Infisical (pveproxy serves one cert, so the VIP name has to be a SAN on the per-node cert — DNS-01 gives that directly); HTTP-01 (cannot validate `pve.<domain>` on non-VIP-holders, needs port 80 free on control, and keeps IP SANs impossible for PBS); API issuance for everything (no daemon-side renewal, contradicts the operator's "automate with ACME"); EAB (two of four native clients cannot do it; a per-application HMAC shared by all hosts adds nothing on a LAN whose DNS is ours).
+
+## 2. Decisions (interview 2026-08-25)
+
+1. **ACME DNS-01 for every host with a native client** — PVE nodes (bpg), PBS, PDM, control (certbot `dns-rfc2136`). Directory = `https://infisical.<service domain>/api/v1/cert-manager/acme/applications/<app>/profiles/<profile>/directory`, one application `fleet-hosts`, one profile `fleet-hosts` (root CA, 365-day leaves, EC P-256 / ECDSA-SHA384, `server_auth`), **no EAB** (`skipEabBinding: true`), DNS ownership verification **on**.
+2. **The challenge record is written through BIND's dynamic-update path on a second, scoped TSIG key** `acme` (`update-policy { grant acme wildcard _acme-challenge.*.<zone>. TXT; }`, the existing key keeps `zonesub ANY`). Infisical validates by resolving the TXT with `ACME_DNS_RESOLVER_SERVERS` = the BIND VIP (an internal authoritative server, not a public resolver — ADR 0012 unaffected; it also sidesteps AdGuard's negative cache).
+3. **Node certs carry `<node>.<domain>` + `pve.<domain>`**, so both Terraform roots point at `https://pve.<service domain>:8006` with `insecure = false`. worklab (not a cluster member) keeps `insecure = true` on the `proxmox.worklab` alias — parked.
+4. **PBS fingerprint pins retire** (operator: "drop pins now"): guests, the PVE storage entry, the restore script and the k8s CronJobs verify PBS through the root + SAN. `PBS_REPOSITORY` and the storage entry's `server` become `proxmox-backup.<service domain>` (resolves to the vlan30 leg; nodes reach it over the same 10G bond as vlan20 — the vlan20 leg stays for the Synology iSCSI LUN). `/shared/pbs_fingerprint` stops being written.
+5. **Infisical's own cert is the one non-ACME path**: the `infisical` role generates key + CSR on the VM, has the workstation POST it to `/cert-manager/certificates` (API enrollment on the same application), and a **Caddy** container terminates TLS on 443 (`infisical.<service domain>`) in front of the app; **8080 stays** for every machine consumer (the `infisical_url` flip is a follow-on). `SITE_URL` → `https://infisical.<service domain>`. Re-issue when < 30 days remain or the SAN drifts.
+6. **Root distribution** = one role `ca_trust` (`/usr/local/share/ca-certificates/homelab-root-ca.crt` from `kubernetes/.secrets/homelab-ca.crt`, `update-ca-certificates`), included by `proxmox_host` and by every guest play, plus a one-shot fleet play `make ca-trust` (both inventories, worklab included).
+7. **Scope = the DoD six + control**; UniFi stays self-signed (parked: "UniFi OS cert import spike"); `plex_certificate` is unchanged — no second LE DNS-01 consumer exists, so kickoff item 4 is a recorded no-op.
+
+## 3. Change plan
+
+### Files / surfaces
+
+| # | Surface | Change |
+|---|---|---|
+| A | `ansible/roles/bind9` | second TSIG key `acme` (secret generated into `/infrastructure/acme_tsig_key_secret`), `update-policy` grants replacing `allow-update` on the forward zones (main key `zonesub ANY`, `acme` `wildcard _acme-challenge.*.<zone>. TXT`), key file shipped to both instances; DDNS forwarding unchanged |
+| B | `scripts/pki_hosts.sh` + `make pki-hosts` | idempotent by name via `kubernetes/lib.sh` `inf`: set active project, policy `fleet-hosts`, profile `fleet-hosts`, application `fleet-hosts`, ACME + API enrollments; writes `/infrastructure/acme_directory_url` and `terraform/hosts/pki.auto.tfvars` (gitignored — carries the domain) |
+| C | `ansible/roles/ca_trust` + `playbooks/ca-trust.yml` + `make ca-trust` | root into the system store; wired into `proxmox_host/tasks/main.yml` and the guest plays in `infrastructure.yml`/`services.yml` |
+| D | `ansible/roles/infisical` | Caddy service + `Caddyfile` (443 → app:8080, `tls` from files), `SITE_URL` https, `ACME_DNS_RESOLVER_SERVERS`, API-issued cert tasks (openssl key/CSR on the VM, `uri` POST from localhost with the login token, 30-day re-issue guard) |
+| E | `terraform/hosts/acme.tf` + `provider.tf` + Makefile | `proxmox_acme_account.infisical` (contact `acme_email`), `proxmox_acme_dns_plugin.bind` (`api = "nsupdate"`, `NSUPDATE_SERVER` = BIND VIP, `NSUPDATE_KEY = /etc/pve/priv/acme/tsig.key`, `NSUPDATE_ZONE`), `proxmox_acme_certificate` per node (`<node>.<domain>`, `pve.<domain>`, `plugin = bind`); `insecure = false`; `hosts-plan` default `ENDPOINT` = `https://pve.<domain>:8006/` |
+| F | `ansible/roles/proxmox_host/tasks/acme.yml` | `run_once`: `/etc/pve/priv/acme/tsig.key` (pmxcfs, cluster-wide) from `secrets.infrastructure.acme_tsig_key_secret`; `proxmox-hosts.yml` loads secrets only when Infisical answers (Day-1 stays Infisical-free) |
+| G | `ansible/roles/proxmox_backup` | `bind9-dnsutils`, TSIG key file, `acme account register` / `plugin add` / `node update --acme … --acmedomain0` / `acme cert order` (each guarded by its own read-back), fingerprint tasks deleted |
+| H | `ansible/roles/pdm` | same as G with `proxmox-datacenter-manager-admin` (node config via API or `node.cfg`, settled at build) |
+| I | `ansible/roles/cert_client` (new, generic) | certbot + `python3-certbot-dns-rfc2136`, credentials ini (BIND VIP, key `acme`), `certbot certonly --dns-rfc2136 --server <directory> -d <fqdn>` (stat-guarded, like `plex_certificate`), deploy hook per consumer; `certbot.timer` renews. First consumer: `control` (Portainer `--sslcert/--sslkey` via compose `command`, MeshCentral `webserver-cert-public.crt`/`-private.key` in `meshcentral-data`; MeshCentral's `80:80` mapping dropped) |
+| J | Pin retirement | `pbs_client` (`pbs_server_host` → FQDN, `PBS_FINGERPRINT` gone from `pbs_env.j2` + the verify task), `infisical_client/templates/secrets/pbs.env.tpl.j2`, `playbooks/backup-finalize.yml` (`pbs_pve_server` → FQDN, no `--fingerprint`; its recreate path handles the server change), `scripts/infisical_pbs_restore.sh`, `infisical_pbs_backup.sh.j2`, `kubernetes/plex-services` + `kubernetes/authentik` CronJob secrets/env (PBS host → FQDN), the `proxmox-backup-client` image gains the root (`make plex-pbs-image`), CLAUDE.md folder table |
+| K | Fleet root `terraform/provider.tf` + `vars.auto.tfvars` (gitignored) | `insecure = false`, endpoint `https://pve.<domain>:8006`; `talos.tf` worklab alias stays insecure with a comment |
+| L | Docs | ADR 0041; consequence notes on ADR 0007 / 0039 / 0040; plan §WP8 + P7 row + Parked row; CLAUDE.md (canonical pipelines, folder table, make targets, What Never To Do); README make targets; `docs/uptime-kuma-monitors.md` if rows change |
+
+### Sequence (each step ends with its own check; a failing step stops the tranche)
+
+0. Baseline: `git status` clean, `make infisical-backup` (fresh SOPS export), note PBS `databases/infisical` snapshot recency.
+1. **A** — `make ansible dns` (both instances); check: `nsupdate -k <acme key>` can add/delete `_acme-challenge.probe.<domain> TXT` and is refused for an A record; `make dns-records` = 0 changed.
+2. **B** — `make pki-hosts`; check: second run creates nothing; `curl -s <directory>` from the workstation over 8080 lists `newOrder`; `/infrastructure/acme_directory_url` present.
+3. **C** — `make ca-trust`; check: `openssl verify -CAfile /etc/ssl/certs/ca-certificates.crt` of the root passes on a node, a VM, an LXC and worklab; second run 0 changed.
+4. **D** — `make ansible infisical`; check: `openssl s_client -connect infisical.<domain>:443 -CAfile kubernetes/.secrets/homelab-ca.crt` → `Verify return code: 0`; `/api/status` still answers on 8080; agents unaffected (`journalctl -u infisical-agent` on a guest).
+5. **Operator hand step (gates 6):** mark the root trusted in the macOS login keychain (`security add-trusted-cert -r trustRoot -k ~/Library/Keychains/login.keychain-db kubernetes/.secrets/homelab-ca.crt`) — `security verify-cert -c kubernetes/.secrets/homelab-ca.crt` must print `successful`.
+6. **F + E** — `make proxmox-hosts TAGS=acme`, then `make hosts-apply ENDPOINT=https://pve.<domain>:8006/` (interactive); check per node: `openssl s_client -connect <node>:8006` verifies with SANs `<node>.<domain>` + `pve.<domain>`; `make hosts-plan` clean with `insecure = false`; **K** then `make plan` = no changes.
+7. **G + J** — `make ansible proxmox-backup` (cert first, then the pin removal renders), `make backup-finalize` (storage entry recreated on the FQDN without a fingerprint), `make plex-pbs-image`, `make talos-plex-services` + `make talos-authentik`, `make ansible-all`; check: `curl https://proxmox-backup.<domain>:8007/` from a guest and a node without `-k`; `proxmox-backup-client snapshot list` on a guest with no `PBS_FINGERPRINT` in its env; `pvesm status --storage pbs` active; the next nightly CronJob run succeeds (snapshot recency).
+8. **H** — `make ansible pdm`; check `openssl s_client -connect pdm.<domain>:8443`.
+9. **I** — `make ansible control`; check Portainer 9443 + MeshCentral 443 verify; `certbot renew --dry-run` passes.
+10. Renewal proof: `pvenode acme cert renew --force` on one node (real re-issue, pveproxy reload), `proxmox-backup-manager acme cert order --force` on PBS (then re-run `make ansible-all` to prove nothing pins the old cert), `certbot renew --dry-run` on control.
+11. `make ansible-all` twice — second run 0 changed, recap reaches `plex`; `make plan` = no changes; `make uptime-kuma CHECK=1` = 0.
+12. **L** docs + commits; next kickoff via the kickoff skill.
+
+### Definition of done (from the kickoff, plus the interview additions)
+
+- `openssl s_client -CAfile kubernetes/.secrets/homelab-ca.crt` → `Verify return code: 0 (ok)` for each node `:8006` (SANs include `pve.<domain>`), PBS `:8007`, PDM `:8443`, Infisical `:443`, control `:9443` and `:443`.
+- `curl https://proxmox-backup.<domain>:8007/` without `-k` succeeds from a managed guest and from a node; no `PBS_FINGERPRINT` remains in any rendered file, storage entry, script or manifest.
+- `make hosts-plan` and `make plan` clean with `insecure = false` in both providers (endpoint `https://pve.<domain>:8006`).
+- Renewal proven on one PVE node, PBS and control; `make ansible-all` second run = 0 changed; `make uptime-kuma CHECK=1` = 0.
+
+### Risks and how they are held
+
+- **Pin retirement is fleet-wide** (every guest's backup lane, the PVE storage entry, two CronJobs). Ordering holds it: root trusted everywhere (3) → PBS on a CA cert (7) → pins removed in the same play run; the old pin keeps working until then. Roll back = re-add `--fingerprint` on the storage entry and the `pbs_fingerprint` render (one commit revert).
+- **Terraform on the Mac** needs keychain trust (step 5); until then `insecure = false` breaks every plan. The commit for **K/E** lands only after step 5 is verified.
+- **DNS-01 timing:** Infisical resolves the TXT at the BIND VIP directly; clients wait the plugin's `validation-delay` (30 s default) — first order per host may take a minute.
+- **PDM node config path** is unverified (no CLI setter); build-time fallback is writing `node.cfg`.
+- **PBS traffic path** moves from the vlan20 IP to the vlan30 name (same bond, same switch); if throughput regresses, an A record for the vlan20 leg (`pbs-storage.<domain>`) restores it without re-pinning.
+- **Infisical is now a runtime dependency of renewals** (already true for the cluster CA); existing certs outlive an outage; Kuma HTTP monitors on the six UIs carry cert-expiry notification (rows added in `uptime-kuma.yml`).
+
+### Out of scope (recorded)
+
+- `infisical_url` → https for machine consumers (agents, k8s operator `caRef`, `lib.sh`): follow-on tranche.
+- UniFi OS cert import; worklab's cert; `PBS_INSECURE` on the k8s pbs-exporter and blackbox `http_2xx_insecure` modules (monitoring can drop them once the root is in those images — parked with the `infisical_url` flip).
+- Generalising `plex_certificate` (no second LE consumer).

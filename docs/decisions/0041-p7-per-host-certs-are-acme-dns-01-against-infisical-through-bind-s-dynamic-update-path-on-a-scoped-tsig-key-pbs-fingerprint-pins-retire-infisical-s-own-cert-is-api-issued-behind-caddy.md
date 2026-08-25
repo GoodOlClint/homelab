@@ -1,0 +1,42 @@
+# ADR 0041 — P7: per-host certs are ACME DNS-01 against Infisical through BIND's dynamic-update path on a scoped TSIG key, PBS fingerprint pins retire, Infisical's own cert is API-issued behind Caddy
+
+- **Status:** Accepted (operator "Approved — build it", 2026-08-25)
+- **Date:** 2026-08-25
+- **Deciders:** operator + agent
+- **Context source:** [docs/p7-per-host-pki-plan.md](../p7-per-host-pki-plan.md) · amends [ADR 0039](0039-wp8-an-infisical-internal-root-signs-cert-manager-s-homelab-ca-intermediate-acme-http-01-stays-for-per-host-certs-the-pbs-postgres-dump-is-the-ca-s-dr-path.md) ("ACME HTTP-01 is the per-host path") and the per-host clause of [ADR 0007](0007-hybrid-cert-model-infisical-pki-for-the-fleet-le-wildcard-for-browser-facing.md); consumes [ADR 0040](0040-p5-real-dns-on-a-flat-public-domain-zone-bind-fed-by-nsupdate-external-dns-adguard-forwards-rewrites-retired-let-s-encrypt-dns-01-wildcards-as-traefik-s-default-cert-two-authentik-realms-split-by-audience-jellyfin-over-the-vps-relay-with-ldap-auth.md)'s dynamic-update zone
+
+## Context
+
+ADR 0007 put the fleet on an internal CA with per-host certs over ACME and ADR 0039 landed the root (`Homelab Root CA` in Infisical) for the cluster, leaving the hosts — PVE nodes, PBS, PDM, Infisical itself — on self-signed certs and every Terraform provider on `insecure = true`. ADR 0039 recorded Infisical's ACME server as HTTP-01 only. The P7 map found the deployed Infisical (v0.162.24 after the P6 roll) offers **DNS-01** as well, that PVE, PBS and PDM all ship the `dns_nsupdate` acme.sh plugin with a daily renewal timer, and that PBS's and PDM's native clients have no EAB support.
+
+HTTP-01 has a structural problem here: a PVE node serves one certificate with no SNI, and the operator reaches the cluster through a keepalived VIP (`pve.<service domain>`), so the VIP name has to be a SAN on every node's cert — HTTP-01 for that name only ever answers on the node holding the VIP. Escrowing a VIP cert in Infisical (interview question) does not change that: there is still one cert per node. DNS-01 validates through a TXT record and has no such constraint; the fleet already owns its zone through BIND dynamic updates (ADR 0040), so every host can write `_acme-challenge` records with `nsupdate`.
+
+PBS is pinned by certificate fingerprint on every guest, on the PVE storage entry, in the restore script and in two cluster CronJobs; a fingerprint rotates with every renewal and a stale pin makes `proxmox-backup-client` hang (CLAUDE.md). Infisical serves plain HTTP on 8080 and cannot obtain its own cert over ACME (the directory would be served by the cert it is trying to get). The operator wants issuance and renewal automated by the products' own ACME clients wherever one exists.
+
+## Decision
+
+1. **Per-host certs are ACME DNS-01 against Infisical.** One Certificate Manager application `fleet-hosts` with one profile `fleet-hosts` (root-signed 365-day EC P-256 leaves, `server_auth`), ACME enrollment with **no EAB** (`skipEabBinding: true`) and DNS ownership verification on; `scripts/pki_hosts.sh` (`make pki-hosts`) creates all of it idempotently by name with the fleet machine identity and publishes the directory URL (`/infrastructure/acme_directory_url`, `terraform/hosts/pki.auto.tfvars`). PVE nodes enroll through bpg (`proxmox_acme_account` / `proxmox_acme_dns_plugin` `nsupdate` / `proxmox_acme_certificate` per node) in `terraform/hosts/`; PBS and PDM through their native clients from their roles; guests with no native client through a generic `cert_client` role (certbot `dns-rfc2136`), control first. Renewal is the product's daily timer, never Ansible.
+2. **The challenge record rides BIND's dynamic-update path on a second TSIG key `acme`** that an `update-policy` limits to `_acme-challenge.*.<zone>. TXT`; the existing key keeps the whole zone. The key file lives on each enrolling host (`/etc/pve/priv/acme/tsig.key` on the cluster, role-owned paths elsewhere), the secret in Infisical `/infrastructure/acme_tsig_key_secret` (owner: `bind9`). Infisical resolves the TXT at the BIND VIP (`ACME_DNS_RESOLVER_SERVERS`) — an internal authoritative server, so ADR 0012 stands.
+3. **Node certs carry `<node>.<domain>` and `pve.<domain>`**; both Terraform roots point at `https://pve.<service domain>:8006` with `insecure = false`. The workstation trusts the root through the macOS keychain (bpg on darwin reads no `SSL_CERT_FILE`).
+4. **PBS fingerprint pins retire.** Guests, the PVE `pbs` storage entry, the restore script and the CronJobs verify PBS through the root and its SAN; `PBS_REPOSITORY` / the entry's `server` become `proxmox-backup.<service domain>` (the vlan30 leg; the vlan20 leg stays for the Synology LUN). `/shared/pbs_fingerprint` is no longer written. The `proxmox-backup-client` image bakes the root.
+5. **Infisical's own cert is the one API-issued path**: the `infisical` role generates the key and CSR on the VM, the workstation posts the CSR to `/cert-manager/certificates` (API enrollment on the same application), and a **Caddy** container serves it on 443 as `infisical.<service domain>`; `SITE_URL` becomes that https origin so ACME directory URLs are trusted. **8080 stays** for every machine consumer; flipping `infisical_url` is a later tranche.
+6. **Root distribution** is one role, `ca_trust` (`update-ca-certificates` from `kubernetes/.secrets/homelab-ca.crt`), included by `proxmox_host` and every guest play, with `make ca-trust` as the fleet-wide one-shot. Talos keeps `make talos-trust`.
+
+## Rejected alternatives
+
+- **HTTP-01 (ADR 0039's shape).** Cannot put the VIP name on non-VIP-holder nodes, cannot give PBS IP SANs, needs port 80 free on every enrolling host (control's MeshCentral holds it), and Infisical's own cert would still need the API path. DNS-01 removes all four.
+- **Escrow a VIP cert in Infisical and let nodes pull it.** One cert per node, no SNI — the VIP name must be a SAN on the ACME cert anyway; escrow adds a pull script and an Infisical identity on every node for nothing DNS-01 does not already give.
+- **API issuance (CSR → `/cert-manager/certificates`) for every host.** Proven live and simplest in code, but renewal then rides Ansible run cadence instead of the products' daily timers; kept only where no ACME client can work (Infisical itself).
+- **EAB.** PBS and PDM cannot present it; a per-application HMAC shared by every host on a LAN whose DNS we own adds no authorisation. DNS ownership verification stays on instead.
+- **Reuse the zone-wide TSIG key for challenges.** A compromised host could then rewrite any record; the scoped key costs one `update-policy` line.
+- **Keep the PBS fingerprint pins and republish on renewal.** Every native renewal rotates the pin silently; the only safe pin is no pin once the root is trusted.
+- **Skip ownership verification (`skipDnsOwnershipVerification`) with EAB.** Turns EAB into the sole gate for issuing any name in the zone, which two clients cannot present.
+- **LE wildcard on the hosts.** ADR 0007 rejected sharing one key across every host and the operator's DoD names the internal root.
+
+## Consequences
+
+- Amends ADR 0039 ("ACME HTTP-01 is the per-host path" → DNS-01) and ADR 0007 (root distribution and per-host ACME land; the "lego/certbot role" is `cert_client`, certbot with `dns-rfc2136`). The 2026-08-24 "HTTP-01 only" gate finding is superseded by the v0.162.24 probe.
+- New surfaces: `scripts/pki_hosts.sh`, `ansible/roles/ca_trust`, `ansible/roles/cert_client`, `terraform/hosts/acme.tf`, a Caddy service in the `infisical` role, `/infrastructure/acme_tsig_key_secret` + `acme_directory_url`. BIND's forward zones move from `allow-update` to `update-policy`.
+- Forbidden from now: a fingerprint pin on any PBS consumer; `insecure = true` on a cluster provider; a hand-written cert on a fleet host; a third TSIG key for anything but its own scoped grant.
+- Infisical is a runtime dependency of every renewal (as it already is for the cluster CA); existing certs outlive an outage. Kuma monitors on the six UIs carry cert-expiry notification.
+- Open after P7: `infisical_url` → https for agents, the Kubernetes operator (`caRef`) and `lib.sh`; worklab's cert (the `proxmox.worklab` alias stays insecure); UniFi OS cert import; dropping `PBS_INSECURE` / `http_2xx_insecure` in the monitoring stack once those images carry the root.
