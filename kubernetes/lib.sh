@@ -28,6 +28,23 @@ inf_token() {
 inf_get() { # path key
   infisical secrets get "$2" --plain --env prod --projectId "$(inf_project_id)" --domain "$(inf_host_api)" --token "$(inf_token)" --path "$1"
 }
+# Infisical REST helpers for deploy scripts that own a folder (authentik, jellyfin): the folder is created
+# and each key generated once — hex values only, so nothing downstream ever has to quote them.
+inf() { # path [curl args...]
+  : "${_INF_TOK:=$(inf_token)}"
+  curl -sS "$(inf_host_api)$1" -H "authorization: Bearer $_INF_TOK" -H 'content-type: application/json' "${@:2}"
+}
+ensure_folder() { # name
+  local id; id="$(inf_project_id)"
+  inf "/v1/folders?workspaceId=$id&environment=prod&path=/" | jq -e --arg n "$1" '.folders[] | select(.name==$n)' >/dev/null ||
+    inf /v1/folders -d "$(jq -n --arg id "$id" --arg n "$1" '{workspaceId:$id,environment:"prod",name:$n,path:"/"}')" >/dev/null
+}
+ensure_secret() { # key bytes comment — folder from $FOLDER
+  local id; id="$(inf_project_id)"
+  [ "$(inf "/v3/secrets/raw/$1?workspaceId=$id&environment=prod&secretPath=/$FOLDER" -o /dev/null -w '%{http_code}')" = 200 ] && return
+  inf "/v3/secrets/raw/$1" -d "$(jq -n --arg id "$id" --arg p "/$FOLDER" --arg v "$(openssl rand -hex "$2")" --arg c "$3" \
+    '{workspaceId:$id,environment:"prod",secretPath:$p,secretValue:$v,secretComment:$c}')" >/dev/null && echo "generated /$FOLDER/$1"
+}
 # Fleet addresses for app configs: `export NAME=service_ip` per inventory guest (upper-snake), plus
 # ADGUARD/BIND (the VIPs), SYNOLOGY, TZ, ACME_EMAIL, the ADR 0040 domains (SERVICE_DOMAIN = every app hostname,
 # MEDIA_DOMAIN, INTERNAL_ZONES, HOST_ALIAS = home.<service domain>) and the legacy SERVICES_ZONE — eval the output.

@@ -16,18 +16,6 @@ export CHART_VERSION=2026.8.0
 SUBST='${NS} ${HOST} ${DOMAIN} ${DOMAIN_RE} ${REGISTRY} ${HOST_API} ${PROJECT_ID} ${FOLDER} ${TZ} ${ACME_EMAIL} ${PBS_REPOSITORY} ${CHART_VERSION}'
 sub() { envsubst "$SUBST"; }
 
-API="$(inf_host_api)" TOK="$(inf_token)"
-inf() { curl -sS "$API$1" -H "authorization: Bearer $TOK" -H 'content-type: application/json' "${@:2}"; }
-ensure_folder() {
-  inf "/v1/folders?workspaceId=$PROJECT_ID&environment=prod&path=/" | jq -e --arg n "$1" '.folders[] | select(.name==$n)' >/dev/null ||
-    inf /v1/folders -d "$(jq -n --arg id "$PROJECT_ID" --arg n "$1" '{workspaceId:$id,environment:"prod",name:$n,path:"/"}')" >/dev/null
-}
-ensure_secret() { # key bytes comment — hex values only, so nothing downstream ever has to quote them
-  [ "$(inf "/v3/secrets/raw/$1?workspaceId=$PROJECT_ID&environment=prod&secretPath=/$FOLDER" -o /dev/null -w '%{http_code}')" = 200 ] && return
-  inf "/v3/secrets/raw/$1" -d "$(jq -n --arg id "$PROJECT_ID" --arg p "/$FOLDER" --arg v "$(openssl rand -hex "$2")" --arg c "$3" \
-    '{workspaceId:$id,environment:"prod",secretPath:$p,secretValue:$v,secretComment:$c}')" >/dev/null && echo "generated /$FOLDER/$1"
-}
-
 helm repo add authentik https://charts.goauthentik.io >/dev/null 2>&1 || true
 helm repo update authentik >/dev/null
 
