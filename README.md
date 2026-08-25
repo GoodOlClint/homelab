@@ -318,7 +318,7 @@ Self-hosted secret management platform deployed via Docker Compose:
 
 ### Other Services
 
-- **UniFi Controller** (unifi VM) -- Network management for UniFi switches and APs
+- **UniFi Controller** (unifi VM) -- Network management for UniFi switches and APs; the console on 11443 serves a root-chained `fleet-hosts` cert (certbot via `cert_client`, deploy hook into the `uosserver` podman volume + `nginx -s reload`, ADR 0041)
 - **Proxmox Backup Server** (proxmox-backup VM) -- VM backup with deduplication
 - **NVIDIA Licensing Server** (nvidia-licensing VM) -- FastAPI DLS for GRID vGPU drivers
 
@@ -586,6 +586,7 @@ All `ansible-*` targets support `TAGS=<tag>` to filter by play-level tags (e.g.,
 | `apt-proxy` | Point apt on every node and guest at the apt-cacher-ng cache via `Proxy-Auto-Detect` (falls back to `DIRECT` when the cache is down; `LIMIT=<host>`) |
 | `pki-hosts` | ADR 0041: Infisical `fleet-hosts` policy/profile/application + ACME (DNS-01) and API enrollment under the RSA intermediate `Homelab Hosts CA`; publishes the directory URL to `/infrastructure` |
 | `ca-trust` | ADR 0041: install the Homelab Root CA into every node's, worklab's and guest's trust store (`LIMIT=<host>`) |
+| `proxmox-hosts LIMIT=worklab` | ADR 0041: worklab's root-chained node cert (its own name only, no `pve` SAN) — the `proxmox.worklab` Terraform alias verifies it |
 | `refresh` | Refresh Terraform state + outputs so `make plan` reads clean after a guest's interfaces change |
 | `nut-clients` | Deploy NUT `upsmon` secondaries to the physical hosts (`nut_clients` inventory group; server is the pfSense NUT package — see `docs/pfsense-nut.md`) |
 
