@@ -18,7 +18,7 @@
   ansible.builtin.shell: |
     set -o pipefail
     k={{ api_cert_dir }}/key.pem; c={{ api_cert_dir }}/cert.pem
-    [ -s "$k" ] && openssl pkey -in "$k" -noout -text 2>/dev/null | head -1 | grep -q RSA || { echo key; exit 0; }
+    [ -s "$k" ] && openssl pkey -in "$k" -noout -text 2>/dev/null | grep -q '^modulus:' || { echo key; exit 0; }
     [ -s "$c" ] || { echo missing; exit 0; }
     openssl x509 -in "$c" -noout -checkend 2592000 >/dev/null || { echo expiring; exit 0; }
     openssl verify -CAfile /usr/local/share/ca-certificates/homelab-root-ca.crt -untrusted "$c" "$c" >/dev/null 2>&1 || { echo untrusted; exit 0; }
