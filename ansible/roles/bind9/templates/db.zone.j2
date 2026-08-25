@@ -1,10 +1,10 @@
-$TTL    604800
+$TTL    300
 @       IN      SOA     ns.{{ zone_name }}. admin.{{ zone_name }}. (
                               {{ ansible_facts['date_time']['epoch'] }}         ; Serial
                          604800         ; Refresh
                           86400         ; Retry
                         2419200         ; Expire
-                         604800 )       ; Negative Cache TTL
+                            300 )       ; Negative Cache TTL
 ;
 @       IN      NS      ns.{{ zone_name }}.
 ns      IN      A       {{ zone_dns_ip }}

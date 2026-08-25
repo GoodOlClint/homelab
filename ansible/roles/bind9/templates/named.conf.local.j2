@@ -1,5 +1,5 @@
 
-// TSIG key for pfSense DHCP dynamic DNS updates (RFC 2136)
+// TSIG key for RFC 2136 updates (Ansible dns_records, external-dns, pfSense)
 key "dhcp-update-key" {
     algorithm hmac-sha256;
     secret "{{ secrets.infrastructure.bind_tsig_key_secret }}";
@@ -12,22 +12,24 @@ zone "{{ name }}" {
     type primary;
     file "/var/lib/bind/db.{{ name }}";
     allow-update { key "dhcp-update-key"; };
+    // external-dns reads the zone by signed AXFR before every reconcile
+    allow-transfer { key "dhcp-update-key";{% for s in secondaries %} {{ s }};{% endfor %} };
 {% if secondaries %}
-    allow-transfer { {{ secondaries | join('; ') }}; };
     also-notify { {{ secondaries | join('; ') }}; };
 {% endif %}
 {% else %}
     type secondary;
     file "/var/cache/bind/db.{{ name }}";
     primaries { {{ hostvars[bind9_instances[0]].ansible_host }}; };
+    allow-transfer { key "dhcp-update-key"; };
     // DDNS lands on the VIP, which may sit on a secondary: forward to the primary
     allow-update-forwarding { any; };
 {% endif %}
 };
 {% endmacro %}
-// Forward zones — one per VLAN served by BIND
-{% for vlan, z in dns_zones.items() %}
-{{ zone(z.zone) }}
+// Forward zones — one per VLAN plus the flat public-domain zones (ADR 0040)
+{% for z in bind9_forward_zones %}
+{{ zone(z) }}
 {% endfor %}
 
 // Reverse zones — PTR records for each VLAN subnet

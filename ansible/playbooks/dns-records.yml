@@ -1,0 +1,21 @@
+---
+# make dns-records — push every inventory-derived name into the flat service zone
+# (ADR 0040). Loads both inventories (guests + nodes) and host-bindings for the PVE VIP.
+- name: Service-zone DNS records
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - ../group_vars/all.yml
+  pre_tasks:
+    - name: Load all configuration and secrets
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/full_pre_tasks.yml"
+      tags: [always]
+    - name: Load host bindings (PVE VIP)
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../../network-data/local/host-bindings.yaml"
+        name: host_bindings
+      tags: [always]
+  tasks:
+    - name: Publish the records
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/dns_records.yml"

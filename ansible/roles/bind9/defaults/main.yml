@@ -16,3 +16,8 @@ bind9_vrrp_router_id: 15
 # `stopped` stages keepalived installed+configured without claiming the VIP —
 # for the swap beside a restored copy that still holds the address.
 bind9_vip_state: started
+
+# Flat public-domain zones (ADR 0040): the keys of vlans.yaml internal_zones, served
+# beside the per-VLAN zones. Records in every forward zone are dynamic updates only.
+bind9_flat_zones: "{{ internal_zones | default({}) | list }}"
+bind9_forward_zones: "{{ (dns_zones.values() | map(attribute='zone') | list) + bind9_flat_zones }}"

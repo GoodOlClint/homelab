@@ -67,8 +67,8 @@
 - name: Check if forward zone files exist
   when: bind9_primary
   ansible.builtin.stat:
-    path: "/var/lib/bind/db.{{ item.value.zone }}"
-  loop: "{{ dns_zones | dict2items }}"
+    path: "/var/lib/bind/db.{{ item }}"
+  loop: "{{ bind9_forward_zones }}"
   register: forward_zone_files_stat
   tags:
     - bind9
@@ -78,11 +78,11 @@
 - name: Create forward zone files (only if they don't exist)
   ansible.builtin.template:
     src: db.zone.j2
-    dest: "/var/lib/bind/db.{{ item.item.value.zone }}"
+    dest: "/var/lib/bind/db.{{ item.item }}"
     mode: '0644'
   vars:
-    zone_name: "{{ item.item.value.zone }}"
-    zone_dns_ip: "{{ item.item.value.dns_ip }}"
+    zone_name: "{{ item.item }}"
+    zone_dns_ip: "{{ bind9_vip_ipv4 }}"
   loop: "{{ forward_zone_files_stat.results | default([]) }}"
   when: bind9_primary and not item.stat.exists
   notify: Restart bind9
@@ -95,11 +95,11 @@
 - name: Set ownership of forward zone files
   when: bind9_primary
   ansible.builtin.file:
-    path: "/var/lib/bind/db.{{ item.value.zone }}"
+    path: "/var/lib/bind/db.{{ item }}"
     owner: bind
     group: bind
     mode: '0644'
-  loop: "{{ dns_zones | dict2items }}"
+  loop: "{{ bind9_forward_zones }}"
   tags:
     - bind9
     - dns
@@ -208,7 +208,7 @@
   ansible.builtin.shell: |
     loaded=0
     failed=0
-    for zone in {{ dns_zones.values() | map(attribute='zone') | join(' ') }}; do
+    for zone in {{ bind9_forward_zones | join(' ') }}; do
       if rndc zonestatus "$zone" > /dev/null 2>&1; then
         loaded=$((loaded + 1))
       else

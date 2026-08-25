@@ -1,10 +1,10 @@
-$TTL    604800
+$TTL    300
 @       IN      SOA     ns.{{ forward_zone }}. admin.{{ forward_zone }}. (
                               {{ ansible_facts['date_time']['epoch'] }}         ; Serial
                          604800         ; Refresh
                           86400         ; Retry
                         2419200         ; Expire
-                         604800 )       ; Negative Cache TTL
+                            300 )       ; Negative Cache TTL
 ;
 @       IN      NS      ns.{{ forward_zone }}.
 53      IN      PTR     ns.{{ forward_zone }}.

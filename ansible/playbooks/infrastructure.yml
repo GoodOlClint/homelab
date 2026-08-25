@@ -67,12 +67,23 @@
   become: true
   vars_files:
     - ../group_vars/all.yml
-  pre_tasks: &load_all_config
-    - name: Load all configuration and secrets
+  pre_tasks:
+    - &load_all_config_task
+      name: Load all configuration and secrets
       ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/full_pre_tasks.yml"
+      tags: [always]
+    - name: Load host bindings (PVE VIP for the service zone)
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../../network-data/local/host-bindings.yaml"
+        name: host_bindings
       tags: [always]
   roles:
     - bind9
+  post_tasks:
+    - name: Publish the service-zone records (ADR 0040)
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/dns_records.yml"
+      when: inventory_hostname == groups['dns'][0]
+      tags: [dns-records]
   tags:
     - phase1
     - dns
@@ -82,7 +93,8 @@
   become: true
   vars_files:
     - ../group_vars/all.yml
-  pre_tasks: *load_all_config
+  pre_tasks:
+    - *load_all_config_task
   roles:
     - adguard
   tags:
@@ -94,7 +106,8 @@
   become: true
   vars_files:
     - ../group_vars/all.yml
-  pre_tasks: *load_all_config
+  pre_tasks:
+    - *load_all_config_task
   roles:
     - dns_config
     - geerlingguy.docker
@@ -110,7 +123,8 @@
   become: true
   vars_files:
     - ../group_vars/all.yml
-  pre_tasks: *load_all_config
+  pre_tasks:
+    - *load_all_config_task
   roles:
     - dns_config
     - proxmox_backup
@@ -123,7 +137,8 @@
   become: true
   vars_files:
     - ../group_vars/all.yml
-  pre_tasks: *load_all_config
+  pre_tasks:
+    - *load_all_config_task
   roles:
     - dns_config
     - unifi
@@ -136,7 +151,8 @@
   become: true
   vars_files:
     - ../group_vars/all.yml
-  pre_tasks: *load_all_config
+  pre_tasks:
+    - *load_all_config_task
   roles:
     - dns_config
     - apt_cacher_ng
@@ -149,7 +165,8 @@
   become: true
   vars_files:
     - ../group_vars/all.yml
-  pre_tasks: *load_all_config
+  pre_tasks:
+    - *load_all_config_task
   vars:
     infisical_secret_paths: ["/shared", "/control"]
     infisical_agent_templates:
@@ -171,7 +188,8 @@
   become: true
   vars_files:
     - ../group_vars/all.yml
-  pre_tasks: *load_all_config
+  pre_tasks:
+    - *load_all_config_task
   roles:
     - pdm
     - rsyslog_client
@@ -211,7 +229,8 @@
   become: true
   vars_files:
     - ../group_vars/all.yml
-  pre_tasks: *load_all_config
+  pre_tasks:
+    - *load_all_config_task
   roles:
     - rsyslog_client
     - telegraf
@@ -229,7 +248,8 @@
   gather_facts: false
   vars_files:
     - ../group_vars/all.yml
-  pre_tasks: *load_all_config
+  pre_tasks:
+    - *load_all_config_task
   roles:
     - role: monitoring_users
       tags:

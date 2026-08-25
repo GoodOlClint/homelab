@@ -142,6 +142,9 @@ infisical-smoke:
 	@kubernetes/infisical/deploy.sh smoke
 talos-homepage:
 	@kubernetes/homepage/deploy.sh
+# P5a (ADR 0040): external-dns publishes every Ingress host into the service zone over RFC 2136
+talos-dns:
+	@kubernetes/external-dns/deploy.sh
 # P4b (ADR 0036): monitoring stack; axosyslog LB on services offset 66; history migration from the old guest
 talos-monitoring:
 	@kubernetes/monitoring/deploy.sh
@@ -284,9 +287,10 @@ endif
 adguard-pause:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/adguard-pause.yml -e "adguard_pause_minutes=$(or $(MINUTES),10)"
 
-# Add a DNS rewrite on BOTH resolver instances (config template is initial-only; live edits go via API)
-adguard-rewrite:
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/adguard-rewrite.yml -e "adguard_rewrite_domain=$(DOMAIN) adguard_rewrite_answer=$(ANSWER)"
+# Push every inventory-derived name (guests, nodes, VIPs, MetalLB addresses, mirrored
+# public records) into the flat service zone over RFC 2136 (ADR 0040). Second run = 0 changed.
+dns-records:
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/dns-records.yml
 
 update-dns:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/update-dns.yml

@@ -1,0 +1,107 @@
+---
+# Every name in the flat service zone is an RFC 2136 update against the BIND primary
+# (ADR 0040, implementing ADR 0006): fleet guests and nodes (A + PTR), the resolver /
+# BIND / PVE VIPs, the cluster's non-Ingress MetalLB addresses, and the public zone's
+# records mirrored inward. nsupdate compares before writing, so a re-run is 0 changed.
+# Needs the full_pre_tasks facts (+ host_bindings for the PVE VIP); runs on localhost.
+- name: Build the service-zone record set
+  ansible.builtin.set_fact:
+    _dns_primary: "{{ hostvars[groups['dns'][0]].ansible_host }}"
+    _dns_a: "{{ (_hosts + _vips + _lbs) | unique(attribute='name') }}"
+  vars:
+    dns_lb_offsets:
+      registry: 64
+      ingress: 65
+      syslog: "{{ monitoring_syslog_offset }}"
+      valheim: 67
+    _hosts: >-
+      {%- set out = [] -%}
+      {%- for h in groups['all'] | difference(['localhost']) if hostvars[h].ansible_host is defined -%}
+      {{- out.append({'name': h, 'ip': hostvars[h].service_ip | default(hostvars[h].ansible_host)}) -}}
+      {%- endfor -%}
+      {{ out }}
+    _vips: >-
+      {{ [{'name': 'adguard', 'ip': network_data.dns_server.dns_ipv4},
+          {'name': 'dns', 'ip': network_data.dns_server.bind_ipv4}]
+         + ([{'name': 'pve', 'ip': host_bindings.cluster.vip_cidr.split('/')[0]}] if host_bindings is defined else []) }}
+    _lbs: >-
+      {%- set out = [] -%}
+      {%- for n, o in dns_lb_offsets.items() -%}
+      {{- out.append({'name': n, 'ip': services_vlan_prefix ~ o}) -}}
+      {%- endfor -%}
+      {{ out }}
+  run_once: true
+
+- name: Look up the public copy of each mirrored record
+  ansible.builtin.set_fact:
+    _dns_mirror: >-
+      {{ _dns_mirror | default([]) + [
+        {'zone': item.0.key, 'name': item.1, 'type': 'A',
+         'answers': lookup('community.general.dig', item.1 ~ '.' ~ item.0.key ~ './A', '@' ~ dns_public_resolver, real_empty=true, wantlist=true)},
+        {'zone': item.0.key, 'name': item.1, 'type': 'AAAA',
+         'answers': lookup('community.general.dig', item.1 ~ '.' ~ item.0.key ~ './AAAA', '@' ~ dns_public_resolver, real_empty=true, wantlist=true)}
+      ] }}
+  vars:
+    dns_public_resolver: 1.1.1.1
+  loop: "{{ internal_zones | dict2items | subelements('value') }}"
+  loop_control:
+    label: "{{ item.1 }}.{{ item.0.key }}"
+  run_once: true
+
+- name: Forward records — name.{{ service_domain }} → address
+  community.general.nsupdate:
+    server: "{{ _dns_primary }}"
+    key_name: dhcp-update-key
+    key_algorithm: hmac-sha256
+    key_secret: "{{ secrets.infrastructure.bind_tsig_key_secret }}"
+    protocol: tcp
+    zone: "{{ service_domain }}"
+    record: "{{ item.name }}"
+    type: A
+    value: "{{ item.ip }}"
+    ttl: 300
+  loop: "{{ _dns_a }}"
+  loop_control:
+    label: "{{ item.name }} → {{ item.ip }}"
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: Reverse records — PTR in the per-VLAN reverse zones
+  community.general.nsupdate:
+    server: "{{ _dns_primary }}"
+    key_name: dhcp-update-key
+    key_algorithm: hmac-sha256
+    key_secret: "{{ secrets.infrastructure.bind_tsig_key_secret }}"
+    protocol: tcp
+    zone: "{{ item.ip.split('.')[2] }}.{{ ipv4_prefix_reversed }}.in-addr.arpa"
+    record: "{{ item.ip.split('.')[3] }}"
+    type: PTR
+    value: "{{ item.name }}.{{ service_domain }}."
+    ttl: 300
+  loop: "{{ _dns_a | unique(attribute='ip') }}"
+  loop_control:
+    label: "{{ item.ip }} → {{ item.name }}"
+  when: item.ip.split('.')[2] | int in (dns_zones.values() | map(attribute='vlan_id') | list)
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: Public records mirrored inward
+  community.general.nsupdate:
+    server: "{{ _dns_primary }}"
+    key_name: dhcp-update-key
+    key_algorithm: hmac-sha256
+    key_secret: "{{ secrets.infrastructure.bind_tsig_key_secret }}"
+    protocol: tcp
+    zone: "{{ item.zone }}"
+    record: "{{ item.name }}"
+    type: "{{ item.type }}"
+    value: "{{ item.answers }}"
+    ttl: 300
+  loop: "{{ _dns_mirror | selectattr('answers') | list }}"
+  loop_control:
+    label: "{{ item.name }}.{{ item.zone }} {{ item.type }} → {{ item.answers | join(', ') }}"
+  delegate_to: localhost
+  become: false
+  run_once: true
