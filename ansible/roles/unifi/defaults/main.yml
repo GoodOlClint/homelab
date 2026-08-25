@@ -12,3 +12,6 @@ unifi_firewall_allowed_ips:
   - "{{ internal_network_cidr }}"
   - "10.0.0.0/8"
   - "192.168.0.0/16"
+
+# nginx inside the uosserver container reads its cert pair from this podman volume path
+unifi_core_config_dir: /home/uosserver/.local/share/containers/storage/volumes/uosserver_data/_data/unifi-core/config

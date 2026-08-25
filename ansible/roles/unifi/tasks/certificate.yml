@@ -1,0 +1,27 @@
+---
+# ADR 0041: UniFi OS Server serves /data/unifi-core/config/unifi-core.{crt,key} from nginx
+# inside the uosserver container; the podman volume holds them on the host. The certbot
+# deploy hook installs the fleet-hosts cert there and reloads nginx. The cmp re-runs it when
+# UniFi OS regenerates its self-signed pair (an update), since certbot only fires on renewal.
+- name: Fleet-hosts certificate (certbot, DNS-01 via BIND)
+  ansible.builtin.include_role:
+    name: cert_client
+  vars:
+    cert_client_deploy_hook: |-
+      install -o uosserver -g uosserver -m 0644 "$RENEWED_LINEAGE/fullchain.pem" {{ unifi_core_config_dir }}/unifi-core.crt
+      install -o uosserver -g uosserver -m 0600 "$RENEWED_LINEAGE/privkey.pem" {{ unifi_core_config_dir }}/unifi-core.key
+      cd /tmp && sudo -u uosserver podman exec uosserver nginx -s reload
+
+- name: Compare the served certificate with the issued one
+  ansible.builtin.command:
+    cmd: cmp -s {{ unifi_core_config_dir }}/unifi-core.crt /etc/letsencrypt/live/{{ inventory_hostname }}.{{ service_domain }}/fullchain.pem
+  register: _unifi_cert_cmp
+  changed_when: _unifi_cert_cmp.rc == 1
+  failed_when: _unifi_cert_cmp.rc > 1
+
+- name: Install the issued certificate
+  ansible.builtin.command:
+    cmd: /etc/letsencrypt/renewal-hooks/deploy/{{ inventory_hostname }}.sh
+  environment:
+    RENEWED_LINEAGE: /etc/letsencrypt/live/{{ inventory_hostname }}.{{ service_domain }}
+  when: _unifi_cert_cmp is changed
