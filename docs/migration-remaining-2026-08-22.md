@@ -33,6 +33,7 @@ Days 0–3 are done: 3-node PVE 9 cluster + Ceph (8 OSDs, HEALTH_OK), VIP, resto
 | doge | not restored | LXC + data vol | dogecoin node was dropped from docker 204 (f70e0ce) — confirm it is retired, not just deferred |
 
 ### B. Decommission sweep (after a week of stable replacements)
+**RUN 2026-08-25:** `qm destroy <id> --purge 1 --destroy-unreferenced-disks 1` (105 unprotected first) for 101–109, 111, 113–117 and `pct destroy` for the retired docker-LXCs 203/204/206/211 — the holder volumes `vm-900-disk-1/2/3` they mounted were skipped by ownership and `rbd ls` still lists `vm-900-disk-0..4`; no terraform-state, HA, replication or backup-job reference existed for any of them (`nightly-fleet`/`pbs-self` unchanged). **Left: 100 (restored unifi, stopped)** — the operator's `qm destroy 100 --purge 1 --destroy-unreferenced-disks 1` on ms-01a; `rbd -p ceph-rbd ls | grep vm-100-` = 0 afterwards. PBS snapshots for the swept VMIDs (plus 112 minio and the W-rehearsal 1000) were deliberately kept — retention review is a separate decision.
 - Stopped restored copies: 100, 101, 102, 103, 104, 105, 106, 108, 109, 111 — `qm destroy` + PBS retention review.
 - Retired for good: nvidia-licensing 107, squid 114 (still in `vm-configs.tf` and `backup_jobs` vmids), lancache 110 (ADR 0021; VM def + role + NFS share + AdGuard/homepage refs).
 - `backup_jobs` vmids still list 113/114/115/116/117 — re-author as the replacements land; apply has NOT been run since the VMID moves (memory: "backup_jobs still NOT applied").
