@@ -1,6 +1,6 @@
 # ADR 0007 — Hybrid cert model: Infisical PKI for the fleet, LE wildcard for browser-facing
 
-- **Status:** Accepted — verification gate resolved by [ADR 0039](0039-wp8-an-infisical-internal-root-signs-cert-manager-s-homelab-ca-intermediate-acme-http-01-stays-for-per-host-certs-the-pbs-postgres-dump-is-the-ca-s-dr-path.md) (2026-08-24; DR requirement amended there: the PBS Postgres dump, not `make infisical-backup`, covers CA keys)
+- **Status:** Accepted — wildcard half implemented by ADR 0040 P5b (2026-08-25: cert-manager `letsencrypt` DNS-01 over Cloudflare issues Traefik's default cert; the fleet/registry plane stays on `homelab-ca`); verification gate resolved by [ADR 0039](0039-wp8-an-infisical-internal-root-signs-cert-manager-s-homelab-ca-intermediate-acme-http-01-stays-for-per-host-certs-the-pbs-postgres-dump-is-the-ca-s-dr-path.md) (2026-08-24; DR requirement amended there: the PBS Postgres dump, not `make infisical-backup`, covers CA keys)
 - **Date:** 2026-07-10
 - **Deciders:** operator (interview 2026-07-10)
 - **Context source:** docs/ms01-cluster-iac-plan.md · ADR 0006 (names drive the need for certs)

@@ -1,6 +1,6 @@
 # ADR 0012 — Internal DNS must not be poisoned by public resolvers: AdGuard-first base, durable networkd drop-ins
 
-- **Status:** Accepted — amended for containers by [ADR 0029](0029-adguard-is-an-lxc-pair-behind-a-keepalived-vip-container-resolv-conf-is-terraform-owned-adguard-only-except-on-the-resolver-cts.md) (CT resolv.conf is Terraform-owned; the drop-in mechanism stays VM-only)
+- **Status:** Accepted — amended for containers by [ADR 0029](0029-adguard-is-an-lxc-pair-behind-a-keepalived-vip-container-resolv-conf-is-terraform-owned-adguard-only-except-on-the-resolver-cts.md) (CT resolv.conf is Terraform-owned; the drop-in mechanism stays VM-only) Scoped exception (ADR 0040 P5b, 2026-08-25): cert-manager's DNS-01 self-check queries public resolvers only (`dns01RecursiveNameserversOnly`) — the AdGuard → BIND chain answers the service zone authoritatively and never sees the `_acme-challenge` TXT; no other component may bypass AdGuard.
 - **Date:** 2026-07-27
 - **Deciders:** operator + agent (session 2026-07-27)
 - **Context source:** ADR 0011 Consequences (exporter repairs) · ansible/roles/dns_config/ · network-data/vlans.yaml

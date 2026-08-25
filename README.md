@@ -325,7 +325,7 @@ Self-hosted secret management platform deployed via Docker Compose:
 
 ### Talos Kubernetes services plane (`kubernetes/`)
 
-Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-manager (`homelab-ca`, an intermediate signed by the Infisical root — ADR 0039), Zot pull-through registry, ARC CI runners (ADR 0034), Traefik ingress + the Infisical Kubernetes operator + **homepage** (ADR 0035 — `make talos-ingress`, `make talos-infisical`, `make talos-homepage`), and the **monitoring stack** (ADR 0036 — `make talos-monitoring`, `make monitoring-migrate`, `make monitoring-users`) the **plex-services stack** (ADR 0037 — `make talos-plex-services`, `make plex-services-migrate`, `make plex-pbs-image`), the **games stack** (ADR 0038 — `make talos-games`, `make games-migrate`, `make games-kuma`), and **external-dns** (ADR 0040 — `make talos-dns`: Ingress hosts on `<service domain>` become BIND records; AdGuard rewrites are gone). Each `kubernetes/<component>/deploy.sh` renders with `helm template | kubectl apply`; runtime secrets are `InfisicalSecret` CRDs; images pull through `registry.<domain>`.
+Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-manager (`homelab-ca`, an intermediate signed by the Infisical root — ADR 0039; plus `letsencrypt` DNS-01 via Cloudflare for Traefik's default wildcard — ADR 0040), Zot pull-through registry, ARC CI runners (ADR 0034), Traefik ingress + the Infisical Kubernetes operator + **homepage** (ADR 0035 — `make talos-ingress`, `make talos-infisical`, `make talos-homepage`), and the **monitoring stack** (ADR 0036 — `make talos-monitoring`, `make monitoring-migrate`, `make monitoring-users`) the **plex-services stack** (ADR 0037 — `make talos-plex-services`, `make plex-services-migrate`, `make plex-pbs-image`), the **games stack** (ADR 0038 — `make talos-games`, `make games-migrate`, `make games-kuma`), and **external-dns** (ADR 0040 — `make talos-dns`: Ingress hosts on `<service domain>` become BIND records; AdGuard rewrites are gone). Each `kubernetes/<component>/deploy.sh` renders with `helm template | kubectl apply`; runtime secrets are `InfisicalSecret` CRDs; images pull through `registry.<domain>`.
 
 ## Ansible Roles
 
@@ -350,7 +350,7 @@ Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-m
 | Role | Description |
 |------|-------------|
 | plex | Plex Media Server installation, NFS mounts, PBS backup |
-| plex_certificate | Let's Encrypt TLS via DNS-01 (Cloudflare), PKCS#12 conversion |
+| plex_certificate | Let's Encrypt TLS via DNS-01 (Cloudflare token from Infisical `/infrastructure`, account email = `all.yml` `acme_email`), PKCS#12 conversion |
 | docker | Docker daemon, NVIDIA container toolkit, container workloads |
 | authentik | Authentik SSO/OIDC identity provider (Docker Compose) |
 | nvidia | NVIDIA GRID vGPU driver installation |

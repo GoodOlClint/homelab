@@ -1,7 +1,7 @@
 # ADR 0035 — P4a: Traefik ingress on one LB IP with a wildcard internal cert, the Infisical Kubernetes operator is the secret path, and homepage is the first Zot-templated ref
 
 - **Status:** Accepted (approved 2026-08-23)
-- **Amended:** ADR 0040 (P5a, 2026-08-25): Ingress hostnames are external-dns records in the flat service zone, not AdGuard rewrites; legacy names redirect via `kubernetes/traefik/legacy-redirect.yaml`.
+- **Amended:** ADR 0040 (P5a, 2026-08-25): Ingress hostnames are external-dns records in the flat service zone, not AdGuard rewrites; legacy names redirect via `kubernetes/traefik/legacy-redirect.yaml`. P5b (2026-08-25): the default TLS store's certificate is a Let's Encrypt wildcard from the `letsencrypt` ClusterIssuer, with a second `homelab-ca` Certificate (`legacy-tls`) in the store's `certificates` list for the legacy names.
 - **Date:** 2026-08-23
 - **Deciders:** operator + agent
 - **Context source:** P4a brownfield gate, [docs/talos-p4a-homepage-plan.md](../talos-p4a-homepage-plan.md); closes the deferral in [ADR 0031](0031-a-three-node-talos-kubernetes-cluster-becomes-the-services-plane-and-the-bootstrap-tier-stays-on-proxmox.md); builds [ADR 0022](0022-container-images-pull-through-a-fleet-local-registry-via-templated-refs-the-registry-rebuilds-itself-from-upstream.md), [ADR 0034](0034-p3b-metallb-l2-on-a-reserved-vlan40-slice-zot-behind-an-internal-cert-manager-ca-arc-scale-sets-as-hostnetwork-dind-pods-pinned-to-one-node-and-a-cronjob-reaper.md)
