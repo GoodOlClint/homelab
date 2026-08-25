@@ -229,8 +229,15 @@ endif
 # that path discards the PKI root and every identity (make bootstrap is for an
 # empty fleet only). The first site.yml pass is allowed to fail: once the Phase 1
 # play has the empty stack answering, a later play's secrets login gets 401 —
-# the restore fixes that and the second pass must be clean.
+# the restore fixes that and the second pass must be clean. The dump is taken
+# right before the replace (after an ansible pass so the vault's own PBS creds
+# are current): restoring an older snapshot rewinds every secret rotated since
+# it — P6 restored a pre-PBS-roll dump and /shared came back with the dead token.
 rebuild-infisical:
+	@echo "Taking a fresh vault dump on the running VM (a restore rewinds /shared to the snapshot)..."
+	@$(MAKE) ansible VM=infisical
+	@VM_IP=$$($(VENV_PYTHON) -c "import yaml; print(yaml.safe_load(open('ansible/inventory/vms.yaml'))['all']['hosts']['infisical']['ansible_host'])"); \
+		ssh -o BatchMode=yes "$$VM_IP" 'sudo /usr/local/bin/infisical_pbs_backup.sh | tail -3'
 	@echo "Removing Infisical VM protection via the cluster API..."
 	@PVE=$$($(VENV_PYTHON) -c "import yaml; print(next(iter(yaml.safe_load(open('ansible/inventory/proxmox.yaml'))['proxmox']['hosts'].values()))['ansible_host'])"); \
 		ssh -o BatchMode=yes "root@$$PVE" 'pvesh get /cluster/resources --type vm --output-format json' \

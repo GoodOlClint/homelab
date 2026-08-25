@@ -29,3 +29,4 @@ Guest OS images (Ubuntu cloud image, LXC templates) are **pinned by explicit ver
 - CLAUDE.md's Greenfield Philosophy line is scoped in the same edit window: `latest` applies to Docker tags; OS images are pinned per this ADR.
 - Image bumps are now visible, reviewable commits — the rebuild schedule is the operator's, and stale-image risk is accepted between deliberate rolls.
 - A clean `plan` becomes an enforceable invariant: any unexplained guest-replacement diff is a bug to fix, not noise to ignore.
+- P6 (2026-08-25) was the first whole-fleet roll under this rule: a one-line snippet change showed exactly the six VMs as `must be replaced` and they rolled one at a time (`make rebuild <vm>`); resolute stayed on 20260731 because it was still the newest serial, Debian 13 bumped to 20260819-2575. Runbook: [p6-vm-roll-plan.md](../p6-vm-roll-plan.md).
