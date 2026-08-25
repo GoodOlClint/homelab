@@ -10,6 +10,7 @@ nft_tunnel_peer_ip_v6: "{{ vps_wg_tunnel.peer_ip_v6 | default('') }}"
 # Port forwarding rules (public → pfSense via WireGuard tunnel)
 nft_forward_rules:
   - { proto: tcp, port: 32400, comment: "Plex" }
+  - { proto: tcp, port: 443, comment: "Jellyfin" }
   - { proto: udp, port: "2456-2458", comment: "Valheim" }
   - { proto: udp, port: 51820, comment: "Mobile WireGuard" }
 

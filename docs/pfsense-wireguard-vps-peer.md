@@ -53,6 +53,7 @@ Allow traffic from VPS tunnel to reach internal services:
 | Action | Protocol | Source | Destination | Port | Description |
 |--------|----------|--------|-------------|------|-------------|
 | Pass | TCP | VPN transit subnet | Plex VM IP | 32400 | Plex via VPS |
+| Pass | TCP | VPN transit subnet | Traefik LB IP (services offset 65, ADR 0040 P5d) | 443 | Jellyfin via VPS |
 | Pass | UDP | VPN transit subnet | Valheim LB IP (services offset 67, ADR 0038) | 2456-2458 | Valheim via VPS |
 | Pass | UDP | VPN transit subnet | WG_VPN address | 51820 | Mobile WG relay |
 | Pass | Any | VPN transit subnet | VPN VLAN subnet | * | Mobile VPN subnet |
@@ -60,6 +61,8 @@ Allow traffic from VPS tunnel to reach internal services:
 ### 5. NAT Rules (if needed)
 
 **Valheim needs a port forward, not just a pass rule** — Firewall › NAT › Port Forward on WG_VPS: UDP, destination *WG_VPS address* 2456–2458, redirect target = the Valheim MetalLB address (services offset 67), redirect ports 2456–2458, associated filter rule. This forward was found **absent** on 2026-08-24 (config.xml had no entry for 2456 since the cutover; players had been joining through the PlayFab relay only) and was re-added by hand as part of P4d. Verify from the workstation with `ssh ansible@<pfsense> grep -c 2456 /conf/config.xml` (non-zero). The VPS side (`vps_nftables` DNAT to the pfSense tunnel IP) does not change when the target moves.
+
+**Jellyfin (ADR 0040 P5d) is the same shape as Valheim** — Firewall › NAT › Port Forward on WG_VPS: TCP, destination *WG_VPS address* 443, redirect target = the Traefik MetalLB address (services offset 65), redirect port 443, associated filter rule. The VPS side (`vps_nftables` DNAT 443 → the pfSense tunnel IP, Vultr firewall rule `jellyfin`/`jellyfin_v6`) is Ansible/Terraform-owned; this row is the hand step. Verify with `ssh ansible@<pfsense> grep -c '<local-port>443</local-port>' /conf/config.xml` (non-zero), then from the VPS `curl -sI --resolve jellyfin.<media domain>:443:<VPS reserved IPv4> https://jellyfin.<media domain>/health` = 200 with no `cf-ray`.
 
 If Plex/Valheim are on different VLANs, ensure pfSense routes or NATs the traffic appropriately:
 

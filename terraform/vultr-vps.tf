@@ -87,6 +87,17 @@ resource "vultr_firewall_rule" "plex" {
   notes             = "Plex media streaming"
 }
 
+# Jellyfin over the relay (ADR 0040 P5d) — TLS terminates on Traefik behind pfSense
+resource "vultr_firewall_rule" "jellyfin" {
+  firewall_group_id = vultr_firewall_group.vps.id
+  protocol          = "tcp"
+  ip_type           = "v4"
+  subnet            = "0.0.0.0"
+  subnet_size       = 0
+  port              = "443"
+  notes             = "Jellyfin via Traefik (HTTPS)"
+}
+
 # Valheim game server
 resource "vultr_firewall_rule" "valheim" {
   firewall_group_id = vultr_firewall_group.vps.id
@@ -155,6 +166,17 @@ resource "vultr_firewall_rule" "plex_v6" {
   subnet_size       = 0
   port              = "32400"
   notes             = "Plex media streaming — IPv6"
+}
+
+# Jellyfin over the relay (IPv6)
+resource "vultr_firewall_rule" "jellyfin_v6" {
+  firewall_group_id = vultr_firewall_group.vps.id
+  protocol          = "tcp"
+  ip_type           = "v6"
+  subnet            = "::"
+  subnet_size       = 0
+  port              = "443"
+  notes             = "Jellyfin via Traefik (HTTPS) — IPv6"
 }
 
 # Valheim game server (IPv6)
