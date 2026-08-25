@@ -68,6 +68,10 @@
         description: Status Monitoring
 
 - Infrastructure:
+    - Authentik:
+        icon: authentik.svg
+        href: https://auth.${DOMAIN}
+        description: SSO (internal realm)
     - Portainer:
         icon: portainer.svg
         href: https://${CONTROL}:9443

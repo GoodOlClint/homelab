@@ -466,7 +466,10 @@ spec:
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
-metadata: {name: plex-services, namespace: plex-services}
+metadata:
+  name: plex-services
+  namespace: plex-services
+  annotations: {traefik.ingress.kubernetes.io/router.middlewares: authentik-forward-auth@kubernetescrd}
 spec:
   ingressClassName: traefik
   rules:
@@ -484,5 +487,13 @@ spec:
       http: {paths: [{path: /, pathType: Prefix, backend: {service: {name: sabnzbd, port: {number: 8080}}}}]}
     - host: tautulli.${DOMAIN}
       http: {paths: [{path: /, pathType: Prefix, backend: {service: {name: tautulli, port: {number: 8181}}}}]}
+---
+# Seerr keeps its own (Plex) login and is also reached through the tunnel: no forward-auth.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata: {name: seerr, namespace: plex-services}
+spec:
+  ingressClassName: traefik
+  rules:
     - host: seerr.${DOMAIN}
       http: {paths: [{path: /, pathType: Prefix, backend: {service: {name: seerr, port: {number: 5055}}}}]}
