@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # plex-services stack on the cluster (ADR 0037): the arr suite + postgres + Libation, media via a
 # kubelet-mounted NFS PV, one InfisicalSecret on /plex-services (+ /shared for the PBS CronJob),
-# UIs through Traefik. Subcommands:
+# UIs through Traefik. The four *arr apps run authenticationMethod=external: Traefik's authentik
+# forward-auth is the login, so the in-cluster Services answer unauthenticated — only pods reach them
+# (MetalLB exposes Traefik alone). Subcommands:
 #   deploy.sh smoke              — NFS PV gate: mount + write test before anything migrates
 #   deploy.sh migrate <old ip>   — copy the old guest's /opt/plex-services trees into the PVCs
 #   deploy.sh kuma               — repoint the five Kuma rows at the in-cluster Services
@@ -79,4 +81,13 @@ sub < "$HERE/app.yaml" | kubectl apply -f -
 for i in $(seq 30); do kubectl -n "$NS" get secret plex-services-secrets >/dev/null 2>&1 && break; sleep 2; done
 # Pre-migration the db-backed pods crashloop until their data lands — the rollout wait is advisory.
 kubectl -n "$NS" rollout status deploy --timeout=300s || true
+# app:port:apiversion — the key is the pod's own config.xml ApiKey; PUT only when the method differs.
+for spec in sonarr:8989:v3 radarr:7878:v3 lidarr:8686:v1 prowlarr:9696:v1; do
+  IFS=: read -r app port ver <<< "$spec"
+  api="K=\$(sed -n 's|.*<ApiKey>\(.*\)</ApiKey>.*|\1|p' /config/config.xml); curl -s -H \"X-Api-Key: \$K\" -H 'content-type: application/json' localhost:$port/api/$ver/config/host"
+  host="$(kubectl -n "$NS" exec "deploy/$app" -- sh -c "$api")"
+  if [ "$(jq -r .authenticationMethod <<< "$host")" = external ]; then echo "$app: auth already external"; continue; fi
+  out="$(jq '.authenticationMethod = "external"' <<< "$host" | kubectl -n "$NS" exec -i "deploy/$app" -- sh -c "$api/$(jq -r .id <<< "$host") -X PUT -d @- -w '\n%{http_code}'")"
+  case "${out##*$'\n'}" in 2*) echo "$app: auth -> external" ;; *) echo "$app: PUT config/host failed: $out" >&2; exit 1 ;; esac
+done
 echo "plex-services UIs at https://{sonarr,radarr,lidarr,prowlarr,bazarr,sabnzbd,tautulli,seerr}.$DOMAIN"
