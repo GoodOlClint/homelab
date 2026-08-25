@@ -353,11 +353,11 @@
     body_format: json
     body: {name: "{{ item.name }}", data: "{{ _live | combine(item, recursive=true) }}"}
   vars:
-    _live: "{{ (_adguard_clients.json.clients | default([]) | selectattr('name', '==', item.name) | first | default({})) }}"
+    _live: "{{ ((_adguard_clients.json.clients | default([]) | selectattr('name', '==', item.name) | list) + [{}]) | first }}"
   loop: "{{ adguard_clients }}"
   loop_control:
     label: "{{ item.name }}"
-  when: _live and (_live | combine(item, recursive=true)) != _live
+  when: _live | length > 0 and (_live | combine(item, recursive=true)) != _live
   changed_when: true
   tags: [adguard, dns, config]
 
