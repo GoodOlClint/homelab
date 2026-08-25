@@ -1,6 +1,6 @@
 # P6 — the deliberate VM roll (change plan)
 
-- **Status:** approved by the operator 2026-08-25 (brownfield-gate; interview answers folded in)
+- **Status:** LANDED 2026-08-25 (approved the same day; as-built deviations at the end)
 - **Decides:** nothing new. ADR 0016 (pinned + rolled images), ADR 0021 (the apt-proxy probe rides the next roll), ADR 0025 (PBS on Debian 13), ADR 0039 (the PBS dump is the vault's DR path), ADR 0040 (`domain_suffix` retires with the next VM roll) already decide it; this plan records the interview outcomes as consequence notes on those ADRs.
 - **Tracker:** [ms01-cluster-iac-plan.md](ms01-cluster-iac-plan.md) P6 row. Kickoff `homelab-p6-vm-roll-20260826`.
 
@@ -86,3 +86,16 @@ No AdGuard rewrite (none exists; `make dns-records` is unchanged because hostnam
 ## Definition of done
 
 `git grep domain_suffix -- . ':!docs/'` = 0; `make plan` = no changes; each of the six VMs: `hostname -f` on the service domain and `Proxy-Auto-Detect` in `apt-config dump` (fails today on all six); `make ansible-all` second run = 0 changed, recap reaches `plex`; PBS lists a snapshot per new VMID and a `databases/infisical` snapshot newer than the roll; the wl-resolute rehearsal answered `/api/status`; `git grep -i lancache -- . ':!docs/'` = only the ADR-filename link; the `netconsole` stream shows a hostname; `terraform test` in the VM module passes; push notification "P6 ready for operator testing".
+
+## As-built (2026-08-25) — deviations from the plan above
+
+- **DR gate:** rehearsal on `wl-resolute` passed first try (snapshot `host/infisical/2026-08-25T06:30:02Z` → 1 org → `/api/status` 200 → `/shared` read). The refreshed SOPS export grew from 12 to 18 folders / 84 secrets.
+- **Cloudflare AAAA:** the "drift" was pure formatting — Cloudflare compresses, Vultr reports a 4-digit group — so the apply changed nothing and the plan showed it again. Fixed for good with `cidrhost("${v6}/128", 0)` in `cloudflare-dns.tf`.
+- **First rebuild aborted** after destroying 216: bpg's SSH client refuses a `known_hosts` line with an empty hostname (line 183, left by an earlier `ssh-keygen -R`). Recovery was `make build apt-cache` (the VM was out of state, so `-replace` no longer applied). Delete malformed lines before a roll.
+- **A bare `terraform plan` outside `make`** prompts for `TF_VAR_*` on stdin and holds the state lock while it waits — always go through `make plan` / `make tf ARGS=`.
+- **PBS:** `make rebuild proxmox-backup` died at its `inventory` step because PVE dropped `pbs-self` with VMID 201 (the CLAUDE.md bullet); recovery = `terraform state rm`, `make inventory`, `make ansible proxmox-backup`, `make backup-finalize`, `make backup-jobs`. The rotated token/fingerprint propagated through the agents and the three cluster `InfisicalSecret`s within minutes; `make infisical-backup` had to be re-taken so the restore script's PBS creds were current.
+- **Infisical:** the first `site.yml` pass after the replace ends 401 once the empty stack answers (a later play's secrets login) — benign, the recipe now tolerates it. **The restored 06:30Z dump pre-dated the PBS rotation**, so `/shared` came back with the dead token and `pbs_client`'s verify step hung on the fingerprint prompt (11 min; `timeout` does not end it). Fixed by PATCHing the two keys from `secrets.sops.yml`; `make rebuild-infisical` now takes a fresh dump right before the replace. `refresh-identity` found every identity healthy — nothing re-issued, the PKI root untouched.
+- **PVE prunes a destroyed VMID from every backup job** (`nightly-fleet` lost 205); `make rebuild` now ends with `make backup-jobs`.
+- **UniFi:** wizard restore by the operator; `make unifi-plan` converged to no changes against the restored controller. **pdm:** remotes + authentik realm remain operator hand steps.
+- **netconsole:** proven with a KERN_ERR line from ms-01a → `host: ms-01a`, `source_ip` beside it.
+- Observed, not P6's: `nightly-fleet` does not include `pdm` 220 or `control` 212 (`backup_jobs` in `vars.auto.tfvars`); PDM's own snapshot this session was on-demand.
