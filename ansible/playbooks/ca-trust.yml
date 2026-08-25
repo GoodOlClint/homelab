@@ -1,0 +1,9 @@
+---
+# Fleet-wide trust root (ADR 0041): nodes, worklab and every guest. Steady state
+# also rides proxmox_host (nodes) and the Phase 0 play in infrastructure.yml (guests);
+# this is the one-shot rollout across both inventories.
+- name: Fleet trust root
+  hosts: all
+  become: true
+  roles:
+    - ca_trust

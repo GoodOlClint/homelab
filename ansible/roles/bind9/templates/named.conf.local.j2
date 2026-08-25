@@ -5,13 +5,22 @@ key "dhcp-update-key" {
     secret "{{ secrets.infrastructure.bind_tsig_key_secret }}";
 };
 
+// ACME DNS-01 clients (ADR 0041): TXT records only, every fleet host holds this key
+key "acme-key" {
+    algorithm hmac-sha256;
+    secret "{{ secrets.infrastructure.acme_tsig_key_secret }}";
+};
+
 {% set secondaries = bind9_instances[1:] | map('extract', hostvars, 'ansible_host') | list %}
 {% macro zone(name) %}
 zone "{{ name }}" {
 {% if bind9_primary %}
     type primary;
     file "/var/lib/bind/db.{{ name }}";
-    allow-update { key "dhcp-update-key"; };
+    update-policy {
+        grant dhcp-update-key zonesub ANY;
+        grant acme-key wildcard *.{{ name }}. TXT;
+    };
     // external-dns reads the zone by signed AXFR before every reconcile
     allow-transfer { key "dhcp-update-key";{% for s in secondaries %} {{ s }};{% endfor %} };
 {% if secondaries %}

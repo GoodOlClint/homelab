@@ -1,0 +1,14 @@
+---
+# Fleet trust root (ADR 0041): the Infisical internal root exported by `make talos-certs`.
+- name: Install the Homelab Root CA into the system trust store
+  ansible.builtin.copy:
+    src: "{{ ca_trust_root_file }}"
+    dest: /usr/local/share/ca-certificates/homelab-root-ca.crt
+    mode: "0644"
+  register: _ca_trust_root
+  tags: [ca-trust]
+
+- name: Update the CA bundle
+  ansible.builtin.command: update-ca-certificates
+  when: _ca_trust_root is changed
+  tags: [ca-trust]

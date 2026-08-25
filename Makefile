@@ -482,7 +482,7 @@ clean-ssh:
 # globally — that would clobber the main project's endpoint from its tfvars).
 # hosts-apply is deliberately INTERACTIVE (no auto-approve): a host-networking apply
 # can drop connectivity, so review the plan and confirm by hand.
-.PHONY: node-iso node-bootstrap hosts-plan hosts-apply proxmox-hosts uptime-kuma apt-proxy nut-clients
+.PHONY: node-iso node-bootstrap hosts-plan hosts-apply proxmox-hosts uptime-kuma apt-proxy nut-clients ca-trust pki-hosts
 
 # Bake a node's answer file (+ optional ISO): make node-iso NODE=crete [ISO=/path/pve-9.iso]
 node-iso:
@@ -549,6 +549,14 @@ apt-proxy:
 # Server side is the pfSense NUT package — see docs/pfsense-nut.md.
 nut-clients:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/proxmox.yaml ansible/playbooks/nut-clients.yml $(if $(LIMIT),--limit $(LIMIT),)
+
+# ADR 0041: the Infisical root into every node's, worklab's and guest's trust store (both inventories, LIMIT=).
+ca-trust:
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/ca-trust.yml $(if $(LIMIT),--limit $(LIMIT),)
+
+# ADR 0041: Infisical PKI policy/profile/application + ACME/API enrollment for the fleet hosts (idempotent by name).
+pki-hosts:
+	@bash scripts/pki_hosts.sh
 
 # === UniFi plane — terraform/unifi/ (WP5, ADR 0005) ============================
 # Separate root: the unifi provider connects to the controller at plan time, so

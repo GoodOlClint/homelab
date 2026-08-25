@@ -62,6 +62,15 @@
 # Phase 1: Bootstrap core services (no monitoring clients)
 # ============================================================
 
+- name: "Phase 0: Fleet trust root (ADR 0041)"
+  hosts: all
+  become: true
+  roles:
+    - ca_trust
+  tags:
+    - phase1
+    - ca-trust
+
 - name: "Phase 1: Configure dns VM (BIND9)"
   hosts: dns
   become: true

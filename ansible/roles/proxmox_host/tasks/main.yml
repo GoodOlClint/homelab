@@ -6,6 +6,8 @@
 # Resolver + apt sources first: a fresh answer-file node cannot resolve or
 # install anything until these land, and every later task file needs both.
 - ansible.builtin.import_tasks: repos.yml
+- ansible.builtin.import_role:
+    name: ca_trust
 - ansible.builtin.import_tasks: network.yml
 - ansible.builtin.import_tasks: cluster.yml
 - ansible.builtin.import_tasks: qdevice.yml

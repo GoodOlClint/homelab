@@ -1,0 +1,2 @@
+---
+ca_trust_root_file: "{{ playbook_dir }}/../../kubernetes/.secrets/homelab-ca.crt"
