@@ -20,7 +20,7 @@ collections:
     version: ">=0.7.0"
   - name: https://github.com/GoodOlClint/ansible-collection-uptime_kuma.git
     type: git
-    version: v0.2.1
+    version: b1627c0c0c4c7f2532375e59b4bd1c9408e8119a
 roles:
   - name: geerlingguy.docker
     version: "8.0.0"
