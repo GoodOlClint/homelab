@@ -1,6 +1,6 @@
 # Cloudflare Tunnel — Application Mapping
 
-The cloudflared container runs in the plex-services docker-compose. It exposes lightweight web dashboards through Cloudflare Tunnel.
+`cloudflared` runs in the `plex-services` namespace on the cluster (ADR 0037); routes are hand-set in the dashboard and target in-cluster Service DNS.
 
 ## Through Cloudflare Tunnel
 
@@ -8,7 +8,7 @@ These services are HTTP-based dashboards, within Cloudflare ToS:
 
 | Subdomain | Target | Port | Notes |
 |-----------|--------|------|-------|
-| `auth.<domain>` | Docker VM (Authentik) | 9443 | SSO identity provider |
+| `auth.<media domain>` | `authentik-server.authentik-ext.svc.cluster.local` | 80 | external authentik realm (ADR 0040 P5c, [authentik-setup.md](authentik-setup.md)) |
 | `tautulli.<domain>` | plex-services VM | 8181 | Plex analytics |
 | `requests.<domain>` | plex-services VM | 5055 | Jellyseerr media requests |
 | `grafana.<domain>` | Monitoring VM | 3000 | Dashboards |

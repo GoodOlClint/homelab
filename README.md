@@ -325,7 +325,7 @@ Self-hosted secret management platform deployed via Docker Compose:
 
 ### Talos Kubernetes services plane (`kubernetes/`)
 
-Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-manager (`homelab-ca`, an intermediate signed by the Infisical root — ADR 0039; plus `letsencrypt` DNS-01 via Cloudflare for Traefik's default wildcard — ADR 0040), Zot pull-through registry, ARC CI runners (ADR 0034), Traefik ingress + the Infisical Kubernetes operator + **homepage** (ADR 0035 — `make talos-ingress`, `make talos-infisical`, `make talos-homepage`), and the **monitoring stack** (ADR 0036 — `make talos-monitoring`, `make monitoring-migrate`, `make monitoring-users`) the **plex-services stack** (ADR 0037 — `make talos-plex-services`, `make plex-services-migrate`, `make plex-pbs-image`), the **games stack** (ADR 0038 — `make talos-games`, `make games-migrate`, `make games-kuma`), and **external-dns** (ADR 0040 — `make talos-dns`: Ingress hosts on `<service domain>` become BIND records; AdGuard rewrites are gone). Each `kubernetes/<component>/deploy.sh` renders with `helm template | kubectl apply`; runtime secrets are `InfisicalSecret` CRDs; images pull through `registry.<domain>`.
+Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-manager (`homelab-ca`, an intermediate signed by the Infisical root — ADR 0039; plus `letsencrypt` DNS-01 via Cloudflare for Traefik's default wildcard — ADR 0040), Zot pull-through registry, ARC CI runners (ADR 0034), Traefik ingress + the Infisical Kubernetes operator + **homepage** (ADR 0035 — `make talos-ingress`, `make talos-infisical`, `make talos-homepage`), and the **monitoring stack** (ADR 0036 — `make talos-monitoring`, `make monitoring-migrate`, `make monitoring-users`) the **plex-services stack** (ADR 0037 — `make talos-plex-services`, `make plex-services-migrate`, `make plex-pbs-image`), the **games stack** (ADR 0038 — `make talos-games`, `make games-migrate`, `make games-kuma`), **external-dns** (ADR 0040 — `make talos-dns`: Ingress hosts on `<service domain>` become BIND records; AdGuard rewrites are gone), and **authentik** (ADR 0040 P5c — `make talos-authentik`: `auth.<service domain>` for Traefik forward-auth + OIDC, `auth.<media domain>` through the tunnel with an LDAP outpost for Jellyfin). Each `kubernetes/<component>/deploy.sh` renders with `helm template | kubectl apply`; runtime secrets are `InfisicalSecret` CRDs; images pull through `registry.<domain>`.
 
 ## Ansible Roles
 
@@ -352,7 +352,6 @@ Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-m
 | plex | Plex Media Server installation, NFS mounts, PBS backup |
 | plex_certificate | Let's Encrypt TLS via DNS-01 (Cloudflare token from Infisical `/infrastructure`, account email = `all.yml` `acme_email`), PKCS#12 conversion |
 | docker | Docker daemon, NVIDIA container toolkit, container workloads |
-| authentik | Authentik SSO/OIDC identity provider (Docker Compose) |
 | nvidia | NVIDIA GRID vGPU driver installation |
 | nvidia_licensing | FastAPI DLS license server |
 | github_runner | GitHub Actions self-hosted runner for CI integration tests |
@@ -458,7 +457,7 @@ If Infisical is unreachable, Ansible **fails with a clear error**. There is no S
 | Backup | Runtime | PBS admin password, backup tokens, monitoring tokens |
 | Service passwords | Runtime | PostgreSQL, Plex SMB, Valheim server password |
 | API tokens | Runtime | Cloudflare DNS token, Cloudflared tunnel token |
-| SSO | Runtime | Authentik secret key, Authentik PostgreSQL password |
+| SSO | Runtime | authentik secret keys, Postgres passwords, bootstrap creds, per-app OIDC client secrets (`/authentik`, `/authentik-ext`) |
 | TLS | Runtime | Plex PKCS#12 certificate password |
 | DNS | Runtime | BIND9 TSIG key for RFC 2136 dynamic updates |
 | GeoIP | Runtime | MaxMind license key (optional) |
@@ -557,6 +556,7 @@ The Makefile is the primary operational interface.
 | `adguard-pause MINUTES=n` | Pause AdGuard filtering on every resolver instance for n minutes (default 10) |
 | `dns-records` | Push guests, nodes, VIPs, MetalLB names and the mirrored public records into `<service domain>` on BIND (nsupdate, TSIG); second run = 0 changed |
 | `talos-dns` | external-dns on the cluster: every Ingress host becomes an A record in the service zone over RFC 2136 (ADR 0040) |
+| `talos-authentik` | authentik, both realms (`REALM=internal\|external` for one): generates each realm's Infisical folder on first run, applies the blueprint; internal = Traefik forward-auth + OIDC providers, external = LDAP outpost for Jellyfin (ADR 0040 P5c) |
 
 ### Targeted Operations
 
@@ -697,7 +697,7 @@ homelab/
 | [docs/pfsense-wireguard-mobile-peers.md](docs/pfsense-wireguard-mobile-peers.md) | Mobile WireGuard client configuration |
 | [docs/pfsense-firewall-rules.md](docs/pfsense-firewall-rules.md) | pfSense firewall rules reference |
 | [docs/split-dns-adguard.md](docs/split-dns-adguard.md) | AdGuard + BIND9 split DNS setup |
-| [docs/authentik-setup.md](docs/authentik-setup.md) | Authentik SSO/OIDC configuration |
+| [docs/authentik-setup.md](docs/authentik-setup.md) | authentik: both realms, tunnel route, PVE/PBS/PDM realm hand steps, family enrollment |
 | [docs/cloudflare-tunnel-setup.md](docs/cloudflare-tunnel-setup.md) | Cloudflare Tunnel integration |
 | [docs/key-rotation-procedure.md](docs/key-rotation-procedure.md) | WireGuard key rotation procedure |
 | [docs/uptime-kuma-monitors.md](docs/uptime-kuma-monitors.md) | Uptime Kuma monitors (Ansible-managed, `make uptime-kuma`) |

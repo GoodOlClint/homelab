@@ -1,49 +1,40 @@
-# Authentik SSO — Post-Deployment Setup
+# authentik — two realms on the cluster (ADR 0040 P5c)
 
-After deploying Authentik containers via `make docker-deploy`, configure via the web UI.
+`make talos-authentik` deploys `kubernetes/authentik/` twice from one tree (`REALM=internal|external` for one). Everything declarative lives in the realm's blueprint (`blueprint-internal.yaml`, `blueprint-external.yaml`), applied by the worker at deploy time; the steps below are the parts that live outside the repo (other products' UIs, the Cloudflare dashboard) or are per-person.
 
-## Initial Setup
+| | Internal realm | External realm |
+|---|---|---|
+| Namespace / Infisical folder | `authentik` / `/authentik` | `authentik-ext` / `/authentik-ext` |
+| URL | `https://auth.<service domain>` (Ingress, LAN/VPN only) | `https://auth.<media domain>` (Cloudflare tunnel, no Ingress) |
+| Users | operator | family + operator |
+| Consumers | Traefik forward-auth (arr stack, Homepage, Kiwix, Tautulli), OIDC: Grafana, Portainer, MeshCentral, PDM, PVE, PBS | LDAP outpost → Jellyfin (P5d), Seerr via Jellyfin accounts |
+| Admin login | `akadmin` / Infisical `/authentik/bootstrap_password` | `akadmin` / Infisical `/authentik-ext/bootstrap_password` |
+| API token | `/authentik/bootstrap_token` | `/authentik-ext/bootstrap_token` |
+| Postgres dump | nightly 02:20 → PBS ns `databases`, backup-id `authentik-postgres` | same, `authentik-ext-postgres` |
 
-1. Navigate to `https://<docker-vm-ip>:9443/if/flow/initial-setup/`
-2. Create the admin account with a strong local password (break-glass account, independent of Plex)
+Both admins should register a passkey (user settings → MFA devices → WebAuthn) and the external `akadmin` password must never be reused for anything on the LAN.
 
-## Plex Authentication Source
+## External realm — tunnel route (Cloudflare dashboard)
 
-1. Go to **Directory > Federation & Social login > Create > Plex Source**
-2. Name: "Plex"
-3. Enter your Plex account credentials to obtain the client identifier
-4. Enable **"Allow friends to authenticate"** to let Plex friends log in
-5. Under **"Allowed servers"**, add your Plex server name to restrict access to your server's friends only
+Zero Trust → Networks → Tunnels → the plex-services tunnel → Public Hostname → add `auth.<media domain>` → `HTTP` → `authentik-server.authentik-ext.svc.cluster.local:80`. Add a WAF rule blocking `/if/admin/` and `/api/` from outside the LAN's egress address once the family is enrolled. Test from a phone on cellular: `https://auth.<media domain>` shows the login page and passkey registration succeeds.
 
-## User Groups
+## External realm — enrolling a family member
 
-1. Create group **"Plex Users"** — default group for Plex-authenticated users
-2. Create group **"Admin"** — add only your account
-3. Map the Plex source to auto-assign the "Plex Users" group on login
+Admin → Directory → Invitations → create, flow `family-enrollment`, single use, expiry a few days. Send the link; the person picks a username/password and lands in the `family` group. Password reset: Directory → Users → the user → *Create recovery link* (flow `family-recovery`; no mail is sent anywhere, hand the link over).
 
-## Application & Provider Setup
+Jellyfin (P5d) binds as `cn=ldapsvc,ou=users,dc=ldap,dc=goauthentik,dc=io` with `/authentik-ext/ldap_bind_password` against `ak-outpost-ldap.authentik-ext.svc:389`, base DN `dc=ldap,dc=goauthentik,dc=io`; the outpost Deployment is created and rolled by authentik itself (Kubernetes service connection), never by a manifest in this repo.
 
-For each protected app, create a Proxy Provider (Forward Auth mode) and linked Application:
+## Internal realm — consumers outside the cluster
 
-| Application | Internal URL | Access Group |
-|-------------|-------------|-------------|
-| Tautulli | `http://<plex-services-vm>:8181` | Plex Users |
-| Jellyseerr | `http://<plex-services-vm>:5055` | Plex Users |
-| Grafana | `http://<monitoring-vm>:3000` | Admin |
-| OpenObserve | `http://<monitoring-vm>:5080` | Admin |
-| Uptime Kuma | `http://<monitoring-vm>:3001` | Admin |
+Client IDs equal the app name; each secret is Infisical `/authentik/<app>_oidc_client_secret`; issuer `https://auth.<service domain>/application/o/<app>/`, discovery at `…/.well-known/openid-configuration`.
 
-## Cloudflare Access Integration
+- **Grafana, Portainer, MeshCentral**: wired by the repo (`kubernetes/monitoring/app.yaml` env; the `control` role's Portainer settings task and MeshCentral `config.json`). Portainer keeps `/#!/internal-auth` as the local-admin door; Grafana's login form is disabled (basic auth stays on for the homepage widget); MeshCentral shows an OIDC button beside its local login.
+- **PVE** (hand step, bpg has no realm resource): Datacenter → Permissions → Realms → Add → OpenID Connect: issuer URL as above (`pve`), client ID `pve`, client key from Infisical, autocreate users on, username claim `username`. Then grant the autocreated `<user>@authentik` a role. The provider accepts any `https://<node>.<service domain>:8006` redirect.
+- **PBS** (hand step): Configuration → Access Control → Realms → Add → OpenID; same fields with `pbs`; redirect `https://proxmox-backup.<service domain>:8007`.
+- **PDM** (hand step): Access Control → Realms → OpenID Connect; same fields with `pdm`; redirect `https://pdm.<service domain>:8443`.
 
-1. In Authentik, create a **generic OAuth2/OIDC provider** for Cloudflare Access
-2. Note the client ID, client secret, and OIDC discovery URL
-3. In Cloudflare Zero Trust dashboard:
-   - Go to **Settings > Authentication > Add new > OpenID Connect**
-   - Enter Authentik's OIDC endpoints
-   - For each tunneled application, create an Access Policy requiring authentication via the Authentik IdP
-4. Auth flow: User → Cloudflare Access → Authentik → "Sign in with Plex" → OIDC token → Cloudflare grants access
+Forward-auth: any Ingress opts in with `traefik.ingress.kubernetes.io/router.middlewares: authentik-forward-auth@kubernetescrd` (domain mode — one session cookie on `<service domain>`). The arr apps still show their own login form behind it; set each to *Authentication: External* in its UI to drop the second prompt. Uptime Kuma deliberately stays outside forward-auth: `make uptime-kuma` drives it over socket.io from the workstation and a redirect breaks the handshake; it keeps its own login.
 
-## Fallback Authentication
+## Rebuild
 
-- **Admin account** has a local password (set during initial setup) — works even if plex.tv is down
-- **Regular users** depend on Plex auth; if plex.tv is down, they wait (acceptable — Tautulli/Jellyseerr need Plex anyway)
+A realm rebuild is `kubectl delete ns` + `make talos-authentik REALM=…`; the Infisical folder survives, so every secret and client secret stays stable and the consumers need nothing. Data comes back from the PBS dump: restore `pg_dumpall-<date>.sql.gz` from ns `databases` and `psql -U authentik -f` into the fresh Postgres before the server starts (or after, then restart both Deployments). Verify the lane by snapshot recency on PBS, never by the CronJob's exit code.

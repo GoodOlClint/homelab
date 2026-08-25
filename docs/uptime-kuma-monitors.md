@@ -14,7 +14,7 @@ One channel, shared with Alertmanager: **ntfy** (`ntfy (homelab alerts)`, type `
 
 ## Monitors
 
-23 monitors — the authoritative list is the playbook. No monitor ignores TLS (ADR 0040 forbids it on Traefik-fronted apps; the ingress cert is Let's Encrypt since P5b). Per-monitor defaults: 60 s interval, 2 retries (1 for AxoSyslog, so the syslog path trips fast), 60 s retry interval, 16 s timeout, accepted status `200-299` — widened to `300-399` for services that redirect to a login page.
+25 monitors — the authoritative list is the playbook. No monitor ignores TLS (ADR 0040 forbids it on Traefik-fronted apps; the ingress cert is Let's Encrypt since P5b). Per-monitor defaults: 60 s interval, 2 retries (1 for AxoSyslog, so the syslog path trips fast), 60 s retry interval, 16 s timeout, accepted status `200-299` — widened to `300-399` for services that redirect to a login page.
 
 | Monitor | Type | Target |
 |---------|------|--------|
@@ -29,7 +29,9 @@ One channel, shared with Alertmanager: **ntfy** (`ntfy (homelab alerts)`, type `
 | Proxmox Backup Server | TCP port | pbs `:8007` (vlan30 since the re-home; self-signed cert, so no HTTP check until the per-host ACME lands) |
 | UniFi controller | TCP port | unifi `:11443` |
 | apt-cacher-ng — proxy TCP 3142 | TCP port | apt-cache `:3142` |
-| Homepage | HTTP | `https://homepage.<service domain>` (on the cluster, ADR 0035) |
+| Homepage | HTTP | in-cluster `homepage.homepage.svc.cluster.local` (the ingress host sits behind forward-auth since P5c) |
+| authentik — internal realm | HTTP | `https://auth.<service domain>/-/health/ready/` through Traefik |
+| authentik — external realm | HTTP | in-cluster `authentik-server.authentik-ext.svc.cluster.local/-/health/ready/` (the tunnel path is the operator's phone test until P5d adds a row) |
 | VPS — public IP | Ping | `vps.<media domain>` |
 | VPS — WireGuard tunnel peer | Ping | VPS tunnel address (`vps_wg_tunnel.tunnel_address`) |
 | Cloudflare Tunnel — Tautulli | HTTP | `https://tautulli.<media domain>`, 120 s |

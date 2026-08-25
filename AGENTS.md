@@ -97,12 +97,13 @@ Each Infisical folder is owned by the role that generates/provisions its secrets
 | `/monitoring` | monitoring, monitoring_users, proxmox_backup | openobserve, homepage | grafana_admin_password, openobserve_root_user_pass, unifi_monitoring_password, pbs_api_token, proxmox_token_value | uptimerobot_heartbeat_url, alert_ntfy_topic |
 | `/plex` | plex, plex_certificate | plex, homepage | plex_token, plex_smb_pass, plex_cert_pfx_password | cloudflare_dns_api_token |
 | `/plex-services` | plex_services | plex-services, homepage | postgres_password, *_db_password (×6), arr_admin_password, *_api_key (×8) | cloudflared_tunnel_token, usenet_*, nzb*_api_key, opensubtitlescom_* |
-| `/docker` | docker, authentik | docker | valheim_server_password, valheim_supervisor_password, authentik_secret_key, authentik_postgres_password | valheim_discord_webhook |
+| `/docker` | — (values pre-exist; `kubernetes/games/` consumes via `InfisicalSecret`) | k8s `games` | valheim_server_password, valheim_supervisor_password | valheim_discord_webhook |
+| `/authentik`, `/authentik-ext` | `make talos-authentik` (deploy.sh through the Infisical API, no Ansible role) | k8s `authentik` / `authentik-ext`, `monitoring` (grafana secret) | secret_key, postgres_password, bootstrap_password, bootstrap_token, *_oidc_client_secret (internal), ldap_bind_password (external) | — |
 | `/vps` | vps_wireguard | — (no agent) | vps_wg_private_key | maxmind_license_key |
 | `/pfsense` | — (manual ref) | — (no agent) | — | cloudflare_dns_api_token, bind_tsig_key_secret |
 | `/pbs` | proxmox_backup | — (no agent) | pbs_admin_password, pbs_backup_user_password | — |
 | `/infrastructure` | bind9 | — (no agent) | bind_tsig_key_secret | unifi_admin_password, synology_admin_password |
-| `/homepage` | — (user-provided only) | homepage | — | adguard_*, unifi_*, authentik_token, portainer_api_key |
+| `/homepage` | — (user-provided only) | homepage | — | adguard_*, unifi_*, portainer_api_key |
 | `/minio` | minio | minio | minio_root_password | — |
 | `/github-runner` | github_runner | — (no agent) | — | github_app_id, github_app_private_key, github_app_installation_id |
 | `/squid` | squid | — (no agent) | squid_ca_private_key, squid_ca_cert_pem | — |

@@ -43,7 +43,6 @@ These exist only inside Infisical + the DR export. **Before any wipe (plan WP0):
 |---|---|
 | `github-runner/github_app_id`, `github_app_private_key`, `github_app_installation_id` | GitHub → App settings (private key can be regenerated, IDs are visible there) |
 | `homepage/adguard_*`, `homepage/unifi_*` | service admin creds — regenerate naturally as those services rebuild |
-| `homepage/authentik_token` | Authentik admin UI (service currently disabled — may be moot) |
 
 ## Maintenance
 
