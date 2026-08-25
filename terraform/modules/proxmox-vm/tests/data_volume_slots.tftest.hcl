@@ -21,7 +21,7 @@ variables {
   ssh_public_key_path         = "./tests/fixtures/test_key.pub"
   virtual_environment_storage = "local"
   virtual_machine_username    = "test"
-  domain_suffix               = "test.internal"
+  service_domain              = "test.internal"
   vm_configurations           = []
 
   cloud_image = {

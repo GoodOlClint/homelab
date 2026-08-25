@@ -6,6 +6,10 @@ module "network" {
   proxmox_nodes   = coalesce(var.proxmox_nodes, [var.virtual_environment_node])
 }
 
+locals {
+  apt_cache = one([for v in local.vm_configurations : v if v.name == "apt-cache"])
+}
+
 # All VMs using the shared Proxmox VM module
 module "vms" {
   source = "./modules/proxmox-vm"
@@ -24,7 +28,12 @@ module "vms" {
   virtual_machine_password_hash = var.virtual_machine_password_hash
   virtual_machine_timezone      = var.virtual_machine_timezone
   ssh_public_key_path           = var.ssh_public_key_path
-  domain_suffix                 = module.network.domain_suffix
+  service_domain                = module.network.service_domain
+
+  # The apt cache's address derived from its own guest definition (ADR 0021):
+  # cloud-init cannot read the inventory, and the VM module cannot read its own
+  # runtime addresses without a cycle.
+  apt_proxy_host = local.apt_cache == null ? "" : cidrhost(module.network.vlans[local.apt_cache.vlans[0]].subnet, local.apt_cache.ip_offset)
 
   # IPv6 configuration
   ipv6_config = var.ipv6_config

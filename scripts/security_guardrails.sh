@@ -74,11 +74,11 @@ RFC1918_REGEX='(^|[^0-9.])(10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|172\.(1[6-9]|2
 ULA_REGEX='(^|[^0-9a-fA-F:])fd[0-9a-fA-F]{2}:[0-9a-fA-F:]+'
 MAC_REGEX='([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}'
 SUPERNET_ALLOW='10\.0\.0\.0/8|172\.16\.0\.0/12|192\.168\.0\.0/16'
-# Site domains (the .internal suffix plus the public service/media domains, ADR 0040)
+# Site domains (the public service/media domains, ADR 0040)
 # are bindings too — one grep pattern per line.
 INTERNAL_DOMAINS=""
 if [[ -f network-data/vlans.yaml ]]; then
-  INTERNAL_DOMAINS=$(sed -nE 's/^(domain_suffix|service_domain|media_domain): *"([^"]*)".*/\2/p' network-data/vlans.yaml | grep -v REPLACE_WITH || true)
+  INTERNAL_DOMAINS=$(sed -nE 's/^(service_domain|media_domain): *"([^"]*)".*/\2/p' network-data/vlans.yaml | grep -v REPLACE_WITH || true)
 fi
 
 added_lines() {

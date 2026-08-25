@@ -65,7 +65,7 @@ variable "vm_configurations" {
     disk_size_gb   = optional(number, 10)          # Primary/rootfs disk size in GB
     disk_storage   = optional(string, null)        # Storage pool for disk (uses primary_disk_storage if null)
     hostname       = optional(string, null)        # Custom hostname (uses name if null)
-    fqdn           = optional(string, null)        # Custom FQDN (uses name.domain_suffix if null)
+    fqdn           = optional(string, null)        # Custom FQDN (uses name.service_domain if null)
     protected      = optional(bool, false)         # Proxmox guest protection — prevents accidental deletion
     # LXC-only options
     unprivileged = optional(bool, true)  # Unprivileged container (LXC only)
@@ -249,9 +249,20 @@ variable "create_cloud_image" {
   default     = true
 }
 
-variable "domain_suffix" {
+variable "service_domain" {
   type        = string
-  description = "cloud-init FQDN domain for the VM fleet — pinned like an OS image (ADR 0016): a change replaces every VM, so it moves to the service domain only with a deliberate roll"
+  description = "cloud-init FQDN domain for the VM fleet = the flat service zone (ADR 0040); the snippet is pinned like an OS image (ADR 0016), so a change here replaces every VM"
+}
+
+variable "apt_proxy_host" {
+  type        = string
+  default     = ""
+  description = "Fleet apt cache address baked into cloud-init as a Proxy-Auto-Detect probe with DIRECT fallback (ADR 0021) — first-boot packages ride the cache when it answers, the WAN otherwise. Empty = no probe"
+}
+
+variable "apt_proxy_port" {
+  type    = number
+  default = 3142
 }
 
 # Packer template configuration

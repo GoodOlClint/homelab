@@ -18,6 +18,29 @@ users:
 %{ if timezone != "" }
 timezone: ${timezone}
 %{ endif }
+%{ if apt_proxy_host != "" }
+write_files:
+  - path: /usr/local/bin/apt-proxy-detect
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      # apt Proxy-Auto-Detect (ADR 0021). The DIRECT branch is load-bearing: first
+      # boot on a cold cutover must work with no cache present — never replace this
+      # with a hard Acquire::http::Proxy. https:// sources go DIRECT (acng only
+      # CONNECTs the PassThroughPattern hosts); cacheable https repos are flipped to
+      # http:// at the source and remapped on the cache.
+      case "$1" in https://*) echo DIRECT; exit 0 ;; esac
+      if timeout 1 bash -c "exec 3<>/dev/tcp/${apt_proxy_host}/${apt_proxy_port}" 2>/dev/null; then
+        echo "http://${apt_proxy_host}:${apt_proxy_port}"
+      else
+        echo "DIRECT"
+      fi
+  - path: /etc/apt/apt.conf.d/01proxy
+    permissions: '0644'
+    content: |
+      Acquire::http::Proxy-Auto-Detect "/usr/local/bin/apt-proxy-detect";
+      Acquire::https::Proxy-Auto-Detect "/usr/local/bin/apt-proxy-detect";
+%{ endif }
 packages:
     - qemu-guest-agent
 runcmd:

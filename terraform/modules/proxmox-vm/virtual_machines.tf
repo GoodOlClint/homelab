@@ -139,7 +139,7 @@ locals {
     ? cidrhost(local.merged_vlans[var.services_vlan].subnet, vm_config.ip_offset)
     : (contains(vm_config.vlans, var.management_vlan) || vm_config.ip_offset == null
       ? local.vm_management_ips[vm_config.name]
-      : cidrhost(local.merged_vlans[vm_config.vlans[0]].subnet, vm_config.ip_offset))
+    : cidrhost(local.merged_vlans[vm_config.vlans[0]].subnet, vm_config.ip_offset))
   }
 }
 # Generate cloud-init user data files for each VM (only when not using Packer)
@@ -152,12 +152,14 @@ resource "proxmox_virtual_environment_file" "user_data" {
 
   source_raw {
     data = templatefile("${path.module}/templates/user-data.yaml.tmpl", {
-      hostname      = coalesce(each.value.hostname, each.value.name)
-      fqdn          = coalesce(each.value.fqdn, "${each.value.name}.${var.domain_suffix}")
-      username      = var.virtual_machine_username
-      ssh_key       = trimspace(data.local_file.ssh_public_key.content)
-      timezone      = var.virtual_machine_timezone
-      password_hash = var.virtual_machine_password_hash
+      hostname       = coalesce(each.value.hostname, each.value.name)
+      fqdn           = coalesce(each.value.fqdn, "${each.value.name}.${var.service_domain}")
+      username       = var.virtual_machine_username
+      ssh_key        = trimspace(data.local_file.ssh_public_key.content)
+      timezone       = var.virtual_machine_timezone
+      password_hash  = var.virtual_machine_password_hash
+      apt_proxy_host = var.apt_proxy_host
+      apt_proxy_port = var.apt_proxy_port
     })
     file_name = "${each.value.name}-user-data.yaml"
   }

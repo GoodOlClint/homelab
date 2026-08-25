@@ -96,9 +96,9 @@ variable "cloud_images" {
     # PVE's iso datastore rejects a .qcow2 extension, so file_name renames it
     # to .img on the way in — the payload is qcow2 either way.
     debian13 = {
-      url                = "https://cloud.debian.org/images/cloud/trixie/20260810-2566/debian-13-genericcloud-amd64-20260810-2566.qcow2"
-      file_name          = "debian-13-genericcloud-amd64-20260810.img"
-      checksum           = "0ce1f1d675733027d3e17a4665cb95e1d7173bdf67fb8a87ff822ff5ee025bc2a90ecb270465ef395755e41c868b40072eb9ac493810196d9cf68f941afb93dc"
+      url                = "https://cloud.debian.org/images/cloud/trixie/20260819-2575/debian-13-genericcloud-amd64-20260819-2575.qcow2"
+      file_name          = "debian-13-genericcloud-amd64-20260819.img"
+      checksum           = "77429b411b39b43f914dc9d14bf34aa315489a1a12b5429f72e5b483bdda23c65698d33443c85d3f3ad7c3a0828ae60845406d6b99646342554d17abae29c2a3"
       checksum_algorithm = "sha512"
     }
     # Image Factory nocloud build with the qemu-guest-agent extension (ADR 0033);

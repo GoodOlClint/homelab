@@ -30,7 +30,7 @@ unifi_api_url  = "https://your_unifi_controller:8443"
 unifi_site     = "default"
 
 # Note: VM configurations are defined in vm-configs.tf
-# Note: domain_suffix is sourced from network-data/vlans.yaml (canonical source of truth)
+# Note: service_domain (the cloud-init FQDN domain) is sourced from network-data/vlans.yaml (canonical source of truth)
 # VLAN definitions are in network-data/vlans.yaml (shared canonical source)
 
 # Vultr VPS Configuration
