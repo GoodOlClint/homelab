@@ -41,25 +41,25 @@
          hostname: "ns.{{ service_domain }}",
          dns_resolve_server: "{{ network_data.dns_server.bind_ipv4 }}"}
       - {name: "AdGuard — web UI", monitor_type: http, url: "http://{{ network_data.dns_server.dns_ipv4 }}:3000"}
-      - {name: Plex, monitor_type: http, url: "https://plex.{{ media_domain }}:32400/identity"}
-      - {name: Jellyfin, monitor_type: http, url: "https://jellyfin.{{ media_domain }}/health"}
+      - {name: Plex, monitor_type: http, url: "https://plex.{{ media_domain }}:32400/identity", expiry_notification: true}
+      - {name: Jellyfin, monitor_type: http, url: "https://jellyfin.{{ media_domain }}/health", expiry_notification: true}
       - {name: Tautulli, monitor_type: http, url: "http://tautulli.plex-services.svc.cluster.local:8181/status", accepted_statuscodes: "{{ _redirects }}"}
       - {name: Jellyseerr, monitor_type: http, url: "http://seerr.plex-services.svc.cluster.local:5055", accepted_statuscodes: "{{ _redirects }}"}
-      - {name: Grafana, monitor_type: http, url: "https://grafana.{{ service_domain }}", accepted_statuscodes: "{{ _redirects }}"}
-      - {name: OpenObserve, monitor_type: http, url: "https://openobserve.{{ service_domain }}/healthz"}
-      - {name: Prometheus, monitor_type: http, url: "https://prometheus.{{ service_domain }}/-/healthy"}
-      - {name: Alertmanager, monitor_type: http, url: "https://alertmanager.{{ service_domain }}/-/healthy"}
+      - {name: Grafana, monitor_type: http, url: "https://grafana.{{ service_domain }}", accepted_statuscodes: "{{ _redirects }}", expiry_notification: true}
+      - {name: OpenObserve, monitor_type: http, url: "https://openobserve.{{ service_domain }}/healthz", expiry_notification: true}
+      - {name: Prometheus, monitor_type: http, url: "https://prometheus.{{ service_domain }}/-/healthy", expiry_notification: true}
+      - {name: Alertmanager, monitor_type: http, url: "https://alertmanager.{{ service_domain }}/-/healthy", expiry_notification: true}
       - {name: "AxoSyslog — syslog TCP 5514", monitor_type: port, hostname: "{{ openobserve_listen_host }}", port: 5514, max_retries: 1}
-      - {name: Infisical, monitor_type: http, url: "https://infisical.{{ service_domain }}", accepted_statuscodes: "{{ _redirects }}"}
+      - {name: Infisical, monitor_type: http, url: "https://infisical.{{ service_domain }}", accepted_statuscodes: "{{ _redirects }}", expiry_notification: true}
       - {name: "Proxmox Backup Server", monitor_type: port, hostname: "{{ hostvars['proxmox-backup'].service_ip }}", port: 8007}
       - {name: "UniFi controller", monitor_type: port, hostname: "{{ hostvars['unifi'].ansible_host }}", port: 11443}
       - {name: "apt-cacher-ng — proxy TCP 3142", monitor_type: port, hostname: "{{ hostvars['apt-cache'].service_ip }}", port: 3142}
       - {name: Homepage, monitor_type: http, url: "http://homepage.homepage.svc.cluster.local", accepted_statuscodes: "{{ _redirects }}"}
-      - {name: "authentik — internal realm", monitor_type: http, url: "https://auth.{{ service_domain }}/-/health/ready/"}
+      - {name: "authentik — internal realm", monitor_type: http, url: "https://auth.{{ service_domain }}/-/health/ready/", expiry_notification: true}
       - {name: "authentik — external realm", monitor_type: http, url: "http://authentik-server.authentik-ext.svc.cluster.local/-/health/ready/"}
       - {name: "VPS — public IP", monitor_type: ping, hostname: "vps.{{ media_domain }}"}
       - {name: "VPS — WireGuard tunnel peer", monitor_type: ping, hostname: "{{ vps_wg_tunnel.tunnel_address.split('/')[0] }}"}
-      - {name: "Cloudflare Tunnel — Tautulli", monitor_type: http, url: "https://tautulli.{{ media_domain }}", interval: 120, accepted_statuscodes: "{{ _redirects }}"}
+      - {name: "Cloudflare Tunnel — Tautulli", monitor_type: http, url: "https://tautulli.{{ media_domain }}", interval: 120, accepted_statuscodes: "{{ _redirects }}", expiry_notification: true}
       - {name: Sonarr, monitor_type: http, url: "http://sonarr.plex-services.svc.cluster.local:8989/ping", accepted_statuscodes: "{{ _redirects }}"}
       - {name: Radarr, monitor_type: http, url: "http://radarr.plex-services.svc.cluster.local:7878/ping", accepted_statuscodes: "{{ _redirects }}"}
       - {name: Sabnzbd, monitor_type: http, url: "http://sabnzbd.plex-services.svc.cluster.local:8080/api?mode=version", accepted_statuscodes: "{{ _redirects }}"}

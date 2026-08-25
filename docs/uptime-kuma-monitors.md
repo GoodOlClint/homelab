@@ -14,7 +14,9 @@ One channel, shared with Alertmanager: **ntfy** (`ntfy (homelab alerts)`, type `
 
 ## Monitors
 
-25 monitors — the authoritative list is the playbook. No monitor ignores TLS (ADR 0040 forbids it on Traefik-fronted apps; the ingress cert is Let's Encrypt since P5b). Per-monitor defaults: 60 s interval, 2 retries (1 for AxoSyslog, so the syslog path trips fast), 60 s retry interval, 16 s timeout, accepted status `200-299` — widened to `300-399` for services that redirect to a login page.
+26 monitors — the authoritative list is the playbook. No monitor ignores TLS (ADR 0040 forbids it on Traefik-fronted apps; the ingress cert is Let's Encrypt since P5b). Per-monitor defaults: 60 s interval, 2 retries (1 for AxoSyslog, so the syslog path trips fast), 60 s retry interval, 16 s timeout, accepted status `200-299` — widened to `300-399` for services that redirect to a login page.
+
+**Certificate expiry is a second opinion here, not a Kuma responsibility.** The nine TLS-fronted monitors (Plex, Jellyfin, Grafana, OpenObserve, Prometheus, Alertmanager, Infisical, authentik — internal realm, Cloudflare Tunnel — Tautulli) carry `expiry_notification: true` (collection v0.3.1, P10 item 3), so Kuma pings ntfy on Uptime Kuma's own expiry schedule as well. The owner of expiry stays the metrics lane per ADR 0011: `blackbox-tls` → `TLSCertExpiringSoon` in Prometheus/Alertmanager, verifying against the fleet root since P9. The flag is unset on every other row (svc-DNS http, port, ping, dns, json) — the module leaves an unset value alone, so nothing there is touched.
 
 | Monitor | Type | Target |
 |---------|------|--------|
@@ -26,8 +28,8 @@ One channel, shared with Alertmanager: **ntfy** (`ntfy (homelab alerts)`, type `
 | Tautulli / Jellyseerr / Sonarr / Radarr / Sabnzbd | HTTP | in-cluster `*.plex-services.svc.cluster.local` (ADR 0037) |
 | Grafana / OpenObserve / Prometheus / Alertmanager | HTTP | `https://<name>.<service domain>` through Traefik (Let's Encrypt, verified) |
 | AxoSyslog — syslog TCP 5514 | TCP port | syslog LB (`openobserve_listen_host`) |
-| Infisical | HTTP | infisical `:8080` |
-| Proxmox Backup Server | TCP port | pbs `:8007` (vlan30 since the re-home; self-signed cert, so no HTTP check until the per-host ACME lands) |
+| Infisical | HTTP | `https://infisical.<service domain>` (Caddy on 443 since P8, ADR 0042; the API-issued `fleet-hosts` cert) |
+| Proxmox Backup Server | TCP port | pbs `:8007` (vlan30 since the re-home; a port check is enough for reachability, the cert is `blackbox-tls`'s job) |
 | UniFi controller | TCP port | unifi `:11443` |
 | apt-cacher-ng — proxy TCP 3142 | TCP port | apt-cache `:3142` |
 | Homepage | HTTP | in-cluster `homepage.homepage.svc.cluster.local` (the ingress host sits behind forward-auth since P5c) |
