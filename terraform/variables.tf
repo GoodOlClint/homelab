@@ -238,11 +238,6 @@ variable "cloudflare_api_token" {
   sensitive   = true
 }
 
-variable "cloudflare_zone_id" {
-  type        = string
-  description = "Cloudflare zone ID for clintflix.tv"
-}
-
 # Which plane carries SSH/Ansible access to guests (audit 2026-08-10 / ADR 0017).
 # "management" = vlan10 IPs (the live dual-homed fleet). Flip to "services" in
 # vars.auto.tfvars at cutover, when guests are single-homed on the services VLAN

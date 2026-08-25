@@ -328,7 +328,9 @@ VPS_TF_TARGETS := \
 	-target=cloudflare_dns_record.vps \
 	-target=cloudflare_dns_record.plex \
 	-target=cloudflare_dns_record.vps_ipv6 \
-	-target=cloudflare_dns_record.plex_ipv6
+	-target=cloudflare_dns_record.plex_ipv6 \
+	-target=cloudflare_dns_record.jellyfin \
+	-target=cloudflare_dns_record.jellyfin_ipv6
 
 vps-deploy:
 	@echo "Phase 1: Provisioning VPS with SSH access..."

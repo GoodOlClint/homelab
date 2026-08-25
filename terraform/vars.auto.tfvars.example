@@ -43,7 +43,6 @@ vps_provisioning   = false                       # Set true only during initial 
 
 # Cloudflare Configuration
 cloudflare_api_token = "YOUR_CLOUDFLARE_API_TOKEN_HERE"  # Use environment variable: TF_VAR_cloudflare_api_token
-cloudflare_zone_id   = "YOUR_CLOUDFLARE_ZONE_ID_HERE"    # Zone ID for clintflix.tv
 
 # Standalone worklab PVE — temporary third Talos control plane (ADR 0033)
 worklab_endpoint = "https://192.168.100.2:8006"

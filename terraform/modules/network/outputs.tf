@@ -43,3 +43,13 @@ output "network_data" {
   description = "Raw parsed YAML data (for consumers that need full metadata like dhcp_enabled, client_isolation, etc.)"
   value       = local.network_data
 }
+
+output "service_domain" {
+  description = "Flat internal zone on the operator-owned public domain (ADR 0040)"
+  value       = local.network_data.service_domain
+}
+
+output "media_domain" {
+  description = "Public media domain (Cloudflare zone for the VPS relay / Jellyfin records)"
+  value       = local.network_data.media_domain
+}
