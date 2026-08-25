@@ -16,3 +16,5 @@ service:
 providers:
   kubernetesIngress:
     publishedService: {enabled: true}
+  kubernetesCRD:
+    allowCrossNamespace: true
