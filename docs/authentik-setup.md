@@ -22,7 +22,15 @@ Zero Trust → Networks → Tunnels → the plex-services tunnel → Public Host
 
 Admin → Directory → Invitations → create, flow `family-enrollment`, single use, expiry a few days. Send the link; the person picks a username/password and lands in the `family` group. Password reset: Directory → Users → the user → *Create recovery link* (flow `family-recovery`; no mail is sent anywhere, hand the link over).
 
-Jellyfin (P5d) binds as `cn=ldapsvc,ou=users,dc=ldap,dc=goauthentik,dc=io` with `/authentik-ext/ldap_bind_password` against `ak-outpost-ldap.authentik-ext.svc:389`, base DN `dc=ldap,dc=goauthentik,dc=io`; the outpost Deployment is created and rolled by authentik itself (Kubernetes service connection), never by a manifest in this repo.
+Jellyfin binds as `cn=ldapsvc,ou=users,dc=ldap,dc=goauthentik,dc=io` with `/authentik-ext/ldap_bind_password` against `ak-outpost-ldap.authentik-ext.svc:389`, base DN `dc=ldap,dc=goauthentik,dc=io`; the outpost Deployment is created and rolled by authentik itself (Kubernetes service connection), never by a manifest in this repo.
+
+## External realm — Jellyfin (P5d)
+
+`make talos-jellyfin` (`kubernetes/jellyfin/`) owns everything Jellyfin-side: the first-run wizard, the LDAP-Auth plugin install and its configuration, and the Movies/TV/Music libraries are driven through the API from inside the pod, so nothing is set in the Jellyfin UI. The plugin admits members of `family` or `admins` (search filter on `memberOf`), makes `admins` Jellyfin administrators, creates the Jellyfin user on first login (`CreateUsersFromLdap`) with every library enabled, and password changes stay in authentik (`AllowPassChange: false` — use the recovery link). The local `admin` account (Infisical `/jellyfin/admin_password`) exists only for the API and as the break-glass login.
+
+- A family member's first Jellyfin login is their authentik username + password on any client (web, Roku, Android TV, Swiftfin) — the LDAP outpost caches users, so an account enrolled seconds ago may take a refresh cycle to be accepted.
+- `https://jellyfin.<media domain>` resolves to Traefik on the LAN (BIND serves the media zone internally) and to the VPS relay from outside (Cloudflare unproxied A/AAAA → VPS DNAT 443 → pfSense WG_VPS forward → Traefik); the pfSense forward row is in [pfsense-wireguard-vps-peer.md](pfsense-wireguard-vps-peer.md).
+- Seerr: Settings → General → switch the account backend to Jellyfin (`http://jellyfin.jellyfin.svc:8096`, sign in with an `admins` member) so family accounts request with the same credentials.
 
 ## Internal realm — consumers outside the cluster
 

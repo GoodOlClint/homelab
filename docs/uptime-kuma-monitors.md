@@ -22,6 +22,7 @@ One channel, shared with Alertmanager: **ntfy** (`ntfy (homelab alerts)`, type `
 | BIND9 — DNS resolution | DNS | `ns.<mgmt zone>` A via the BIND VIP |
 | AdGuard — web UI | HTTP | AdGuard VIP `:3000` |
 | Plex | HTTP | `https://plex.<media domain>:32400/identity` — the Let's Encrypt cert `plex_certificate` installs; Plex has secure connections *Required*, so plain HTTP from the network gets an empty reply |
+| Jellyfin | HTTP | `https://jellyfin.<media domain>/health` through Traefik (Let's Encrypt `*.<media domain>`, ADR 0040 P5d); no via-VPS row, same reason as Plex |
 | Tautulli / Jellyseerr / Sonarr / Radarr / Sabnzbd | HTTP | in-cluster `*.plex-services.svc.cluster.local` (ADR 0037) |
 | Grafana / OpenObserve / Prometheus / Alertmanager | HTTP | `https://<name>.<service domain>` through Traefik (Let's Encrypt, verified) |
 | AxoSyslog — syslog TCP 5514 | TCP port | syslog LB (`openobserve_listen_host`) |
