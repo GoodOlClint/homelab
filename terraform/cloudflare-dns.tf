@@ -27,11 +27,18 @@ resource "cloudflare_dns_record" "plex" {
   comment = "Plex TLS endpoint — managed by Terraform"
 }
 
+# Cloudflare stores AAAA content RFC 5952-compressed while Vultr reports the
+# address with 4-digit groups; without canonicalizing, every plan shows the
+# three records as changed forever.
+locals {
+  vps_ipv6 = cidrhost("${vultr_instance.vps.v6_main_ip}/128", 0)
+}
+
 resource "cloudflare_dns_record" "vps_ipv6" {
   zone_id = local.media_zone_id
   name    = "vps.${module.network.media_domain}"
   type    = "AAAA"
-  content = vultr_instance.vps.v6_main_ip
+  content = local.vps_ipv6
   ttl     = 300
   proxied = false
   comment = "VPS WireGuard relay IPv6 — managed by Terraform"
@@ -41,7 +48,7 @@ resource "cloudflare_dns_record" "plex_ipv6" {
   zone_id = local.media_zone_id
   name    = "plex.${module.network.media_domain}"
   type    = "AAAA"
-  content = vultr_instance.vps.v6_main_ip
+  content = local.vps_ipv6
   ttl     = 300
   proxied = false
   comment = "Plex TLS endpoint IPv6 — managed by Terraform"
@@ -61,7 +68,7 @@ resource "cloudflare_dns_record" "jellyfin_ipv6" {
   zone_id = local.media_zone_id
   name    = "jellyfin.${module.network.media_domain}"
   type    = "AAAA"
-  content = vultr_instance.vps.v6_main_ip
+  content = local.vps_ipv6
   ttl     = 300
   proxied = false
   comment = "Jellyfin over the VPS relay IPv6 (P5d) — managed by Terraform"
