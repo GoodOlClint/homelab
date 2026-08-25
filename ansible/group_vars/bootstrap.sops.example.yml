@@ -53,16 +53,13 @@ bootstrap:
 external_secrets:
   # /infrastructure — Ansible-time infrastructure credentials
   infrastructure:
+    cloudflare_dns_api_token: "REPLACE_ME"   # DNS:edit on the service + media zones (cert-manager DNS-01, plex_certificate)
     unifi_admin_password: "REPLACE_ME"
     synology_admin_password: "REPLACE_ME"
 
   # /monitoring — Monitoring stack external credentials
   monitoring:
     uptimerobot_heartbeat_url: "REPLACE_ME"
-
-  # /plex — Plex VM external credentials
-  plex:
-    cloudflare_dns_api_token: "REPLACE_ME"
 
   # /plex-services — Plex-services external credentials
   plex_services:

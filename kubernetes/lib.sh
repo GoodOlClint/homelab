@@ -29,7 +29,7 @@ inf_get() { # path key
   infisical secrets get "$2" --plain --env prod --projectId "$(inf_project_id)" --domain "$(inf_host_api)" --token "$(inf_token)" --path "$1"
 }
 # Fleet addresses for app configs: `export NAME=service_ip` per inventory guest (upper-snake), plus
-# ADGUARD/BIND (the VIPs), SYNOLOGY, TZ, the ADR 0040 domains (SERVICE_DOMAIN = every app hostname,
+# ADGUARD/BIND (the VIPs), SYNOLOGY, TZ, ACME_EMAIL, the ADR 0040 domains (SERVICE_DOMAIN = every app hostname,
 # MEDIA_DOMAIN, INTERNAL_ZONES, HOST_ALIAS = home.<service domain>) and the legacy SERVICES_ZONE — eval the output.
 inv_env() {
   "$ROOT/.venv/bin/python3" - "$ROOT" <<'PY'
@@ -45,6 +45,7 @@ print(f"export ADGUARD={net['dns_server']['dns_ipv4']}")
 print(f"export BIND={net['dns_server']['bind_ipv4']}")
 print(f"export SYNOLOGY={g['synology_host']}")
 print(f"export TZ={g['timezone']}")
+print(f"export ACME_EMAIL={g['acme_email']}")
 print(f"export SERVICE_DOMAIN={net['service_domain']}")
 print(f"export MEDIA_DOMAIN={net['media_domain']}")
 print(f"export INTERNAL_ZONES='{' '.join(net['internal_zones'])}'")

@@ -1,7 +1,7 @@
 ---
 # Let's Encrypt certificate for Plex
-plex_cert_domain: "plex.clintflix.tv"
-plex_cert_email: "goodolclint@gmail.com"
+plex_cert_domain: "plex.{{ media_domain }}"
+plex_cert_email: "{{ acme_email }}"
 
 # Paths
 plex_cert_dir: "/etc/letsencrypt/live/{{ plex_cert_domain }}"
