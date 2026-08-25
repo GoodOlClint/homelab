@@ -28,12 +28,8 @@ targets = [
 ]
 json.dump(targets, open(f"{out}/telegraf.json", "w"), indent=1)
 
-dns = net["dns_server"]
 json.dump(
-    [{"targets": [dns["dns_ipv4"]],
-      "labels": {"zone": f"{net['vlans'][v]['domain_prefix']}.{net['domain_suffix']}",
-                 "vlan": f"vlan{net['vlans'][v]['id']}"}}
-     for v in dns["zone_vlans"]],
+    [{"targets": [net["dns_server"]["dns_ipv4"]], "labels": {"zone": z}} for z in net["internal_zones"]],
     open(f"{out}/blackbox-dns.json", "w"), indent=1)
 
 tpl = jinja2.Template(open(f"{here}/dashboards/smokeping.json.j2").read())

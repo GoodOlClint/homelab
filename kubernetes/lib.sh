@@ -47,7 +47,7 @@ ensure_secret() { # key bytes comment — folder from $FOLDER
 }
 # Fleet addresses for app configs: `export NAME=service_ip` per inventory guest (upper-snake), plus
 # ADGUARD/BIND (the VIPs), SYNOLOGY, TZ, ACME_EMAIL, the ADR 0040 domains (SERVICE_DOMAIN = every app hostname,
-# MEDIA_DOMAIN, INTERNAL_ZONES, HOST_ALIAS = home.<service domain>) and the legacy SERVICES_ZONE — eval the output.
+# MEDIA_DOMAIN, INTERNAL_ZONES, HOST_ALIAS = home.<service domain>) — eval the output.
 inv_env() {
   "$ROOT/.venv/bin/python3" - "$ROOT" <<'PY'
 import sys, yaml
@@ -68,6 +68,5 @@ print(f"export MEDIA_DOMAIN={net['media_domain']}")
 print(f"export INTERNAL_ZONES='{' '.join(net['internal_zones'])}'")
 print(f"export INTERNAL_ZONES_YAML='{', '.join(net['internal_zones'])}'")
 print(f"export HOST_ALIAS=home.{net['service_domain']}")
-print(f"export SERVICES_ZONE={net['vlans']['services']['domain_prefix']}.{net['domain_suffix']}")
 PY
 }
