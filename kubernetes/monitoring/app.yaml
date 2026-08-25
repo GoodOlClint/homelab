@@ -199,9 +199,12 @@ spec:
           args: [--config.file=/config/blackbox.yml]
           ports: [{containerPort: 9115}]
           env: [{name: TZ, value: "${TZ}"}]
-          volumeMounts: [{name: config, mountPath: /config}]
+          volumeMounts:
+            - {name: config, mountPath: /config}
+            - {name: homelab-root-ca, mountPath: /etc/ssl/certs/homelab-root-ca.crt, subPath: homelab-ca.crt, readOnly: true}
       volumes:
         - {name: config, configMap: {name: blackbox-config}}
+        - {name: homelab-root-ca, configMap: {name: homelab-root-ca}}
 ---
 apiVersion: v1
 kind: Service
@@ -360,9 +363,12 @@ spec:
             - {name: PBS_USERNAME, value: monitoring@pbs}
             - {name: PBS_API_TOKEN_NAME, value: monitoring-token}
             - {name: PBS_API_TOKEN, valueFrom: {secretKeyRef: {name: monitoring-secrets, key: PBS_API_TOKEN}}}
-            - {name: PBS_INSECURE, value: "true"}
             - {name: PBS_TIMEOUT, value: 5s}
             - {name: PBS_LOGLEVEL, value: info}
+          volumeMounts:
+            - {name: homelab-root-ca, mountPath: /etc/ssl/certs/homelab-root-ca.crt, subPath: homelab-ca.crt, readOnly: true}
+      volumes:
+        - {name: homelab-root-ca, configMap: {name: homelab-root-ca}}
 ---
 apiVersion: v1
 kind: Service

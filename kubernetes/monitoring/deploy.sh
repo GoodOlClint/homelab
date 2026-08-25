@@ -48,6 +48,7 @@ cm prometheus-config --from-file="$HERE/config/prometheus.yml" --from-file="$HER
 cm prometheus-targets --from-file="$GEN/telegraf.json" --from-file="$GEN/blackbox-dns.json"
 cm alertmanager-config --from-file="$HERE/config/alertmanager.yml"
 cm blackbox-config --from-file="$HERE/config/blackbox.yml"
+cm homelab-root-ca --from-file="$SECRETS/homelab-ca.crt"
 cm snmp-config --from-file="$HERE/config/snmp.yml"
 cm axosyslog-config --from-file=syslog-ng.conf="$HERE/config/axosyslog.conf"
 cm grafana-provisioning --from-file="$HERE/config/grafana-datasource.yml" --from-file="$HERE/config/grafana-dashboards.yml"

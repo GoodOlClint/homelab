@@ -103,7 +103,7 @@
         widget: {type: unifi, url: "https://${UNIFI}:11443", username: "{{HOMEPAGE_VAR_UNIFI_USERNAME}}", password: "{{HOMEPAGE_VAR_UNIFI_PASSWORD}}"}
     - Infisical:
         icon: infisical.svg
-        href: http://${INFISICAL}:8080
+        href: https://infisical.${DOMAIN}
         description: Secrets Management
     - pfSense:
         icon: pfsense.svg

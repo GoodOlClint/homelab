@@ -25,7 +25,7 @@ DIR="${DIR:-/opt/infisical}"
 SNAPSHOT="${SNAPSHOT:-}"
 
 [ -x "$VENV_PYTHON" ] || { echo "ERROR: .venv not found. Run: make init"; exit 1; }
-for cmd in sops infisical ssh; do command -v "$cmd" >/dev/null || { echo "ERROR: $cmd not found"; exit 1; }; done
+for cmd in sops ssh; do command -v "$cmd" >/dev/null || { echo "ERROR: $cmd not found"; exit 1; }; done
 [ -f "$SOPS_FILE" ] || { echo "ERROR: $SOPS_FILE not found — run make infisical-backup while the vault is up"; exit 1; }
 
 inv() { "$VENV_PYTHON" -c "import yaml,sys; print(yaml.safe_load(open('$INVENTORY'))['all']['hosts'][sys.argv[1]]['ansible_host'])" "$1"; }
@@ -47,7 +47,8 @@ echo "Restoring ${SNAPSHOT:-newest databases/infisical snapshot} into $SSH_USER@
 {
     printf 'export PBS_REPOSITORY=%q PBS_PASSWORD=%q\n' \
         "backup@pbs!backup-token@${PBS_HOST}:synology" "$PBS_PASSWORD"
-    printf 'EXPECT_KEY=%q EXPECT_AUTH=%q DIR=%q SNAPSHOT=%q\n' "$ENCRYPTION_KEY" "$AUTH_SECRET" "$DIR" "$SNAPSHOT"
+    printf 'EXPECT_KEY=%q EXPECT_AUTH=%q DIR=%q SNAPSHOT=%q CLIENT_ID=%q CLIENT_SECRET=%q PROJECT_ID=%q\n' \
+        "$ENCRYPTION_KEY" "$AUTH_SECRET" "$DIR" "$SNAPSHOT" "$CLIENT_ID" "$CLIENT_SECRET" "$PROJECT_ID"
     cat <<'REMOTE'
 set -euo pipefail
 TMP=$(mktemp -d /tmp/infisical-restore.XXXXXX)
@@ -70,6 +71,12 @@ AUTH=$(grep -m1 '^AUTH_SECRET=' "$ENV_FILE" | cut -d= -f2-)
 [ "$KEY" = "$EXPECT_KEY" ] || { echo "ERROR: the dump's ENCRYPTION_KEY differs from bootstrap.sops.yml — fix the bootstrap file first"; exit 1; }
 [ "$AUTH" = "$EXPECT_AUTH" ] || { echo "ERROR: the dump's AUTH_SECRET differs from bootstrap.sops.yml — fix the bootstrap file first"; exit 1; }
 
+if [ -f "$COMPOSE" ] && [ -s "$TMP/dump/tls/cert.pem" ]; then
+    mkdir -p "$DIR/tls"
+    install -m 0600 "$TMP/dump/tls/key.pem" "$DIR/tls/key.pem"
+    install -m 0644 "$TMP/dump/tls/cert.pem" "$DIR/tls/cert.pem"
+    RESTORED_TLS=1
+fi
 if [ ! -f "$COMPOSE" ]; then
     echo "no compose file in $DIR — writing a throwaway stack (rehearsal)"
     mkdir -p "$DIR/postgres" "$DIR/redis"
@@ -110,19 +117,25 @@ ORGS=$(docker exec infisical-postgres psql -U infisical -d infisical -tAc 'selec
 echo "restored: $ORGS organization(s)"
 [ "$ORGS" -gt 0 ]
 docker compose -f "$COMPOSE" up -d
+if [ -n "${RESTORED_TLS:-}" ]; then
+    docker compose -f "$COMPOSE" restart caddy
+    echo "tls: restored the vault's certificate from the dump"
+fi
+UP=
 for _ in $(seq 60); do
-    curl -sf http://localhost:8080/api/status >/dev/null && { echo "/api/status: 200"; exit 0; }
+    curl -sf http://localhost:8080/api/status >/dev/null && { UP=1; break; }
     sleep 5
 done
-echo "ERROR: /api/status never answered"; exit 1
+[ -n "$UP" ] || { echo "ERROR: /api/status never answered"; exit 1; }
+echo "/api/status: 200"
+
+# 8080 is localhost-only once the binding is https (ADR 0042), so the proof read runs here.
+TOKEN=$(curl -sfS -X POST http://localhost:8080/api/v1/auth/universal-auth/login -H 'content-type: application/json' \
+    -d "{\"clientId\":\"$CLIENT_ID\",\"clientSecret\":\"$CLIENT_SECRET\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["accessToken"])')
+[ -n "$TOKEN" ] || { echo "ERROR: universal-auth login failed against the restored vault"; exit 1; }
+COUNT=$(curl -sfS "http://localhost:8080/api/v3/secrets/raw?workspaceId=$PROJECT_ID&environment=prod&secretPath=/shared" \
+    -H "authorization: Bearer $TOKEN" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["secrets"]))')
+[ "$COUNT" -gt 0 ] || { echo "ERROR: /shared read back 0 secrets"; exit 1; }
+echo "OK: identity login + /shared read ($COUNT secrets) on $(hostname)"
 REMOTE
 } | ssh -o BatchMode=yes "$SSH_USER@$HOST" sudo bash -s
-
-echo "Reading one secret back with the bootstrap machine identity..."
-TOKEN=$(infisical login --method=universal-auth --client-id="$CLIENT_ID" --client-secret="$CLIENT_SECRET" \
-    --domain="http://$HOST:8080/api" --silent --plain 2>/dev/null | tail -1)
-[ -n "$TOKEN" ] || { echo "ERROR: universal-auth login failed against the restored vault"; exit 1; }
-COUNT=$(infisical secrets --path /shared --env prod --projectId "$PROJECT_ID" --domain "http://$HOST:8080/api" --token "$TOKEN" -o json 2>/dev/null \
-    | "$VENV_PYTHON" -c 'import json,sys; print(len(json.load(sys.stdin) or []))')
-[ "$COUNT" -gt 0 ] || { echo "ERROR: /shared read back 0 secrets"; exit 1; }
-echo "OK: identity login + /shared read ($COUNT secrets) against $HOST"

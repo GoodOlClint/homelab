@@ -69,6 +69,13 @@ ENVEOF
 chmod 600 "$BACKUP_DIR/encryption_material_${TIMESTAMP}.env"
 log "Successfully backed up encryption material"
 
+# The Caddy cert + key: a restored vault must verify over https before any play can re-issue them (ADR 0042)
+if [ -s "{{ infisical_tls_dir }}/key.pem" ] && [ -s "{{ infisical_tls_dir }}/cert.pem" ]; then
+    mkdir -p "$BACKUP_DIR/tls"
+    cp "{{ infisical_tls_dir }}/key.pem" "{{ infisical_tls_dir }}/cert.pem" "$BACKUP_DIR/tls/"
+    chmod 600 "$BACKUP_DIR/tls/key.pem"
+fi
+
 # --- Back up PostgreSQL ---
 log "Backing up Infisical PostgreSQL database..."
 

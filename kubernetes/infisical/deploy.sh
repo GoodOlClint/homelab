@@ -24,7 +24,7 @@ spec:
     - {secretName: smoke, secretNamespace: $NS, creationPolicy: Owner}
 EOT
   for i in $(seq 30); do kubectl -n "$NS" get secret smoke >/dev/null 2>&1 && break; sleep 2; done
-  kubectl -n "$NS" get secret smoke -o jsonpath='{.data}' | jq -r 'keys[]' | grep -q pbs_fingerprint && echo "infisical operator smoke: PASS"
+  kubectl -n "$NS" get secret smoke -o jsonpath='{.data}' | jq -r 'keys[]' | grep -q pbs_backup_token && echo "infisical operator smoke: PASS"
   kubectl -n "$NS" delete infisicalsecret smoke >/dev/null
 }
 [ "${1:-}" = smoke ] && { smoke; exit; }
@@ -32,6 +32,7 @@ EOT
 helm repo add infisical-helm-charts https://dl.cloudsmith.io/public/infisical/helm-charts/helm/charts/ >/dev/null 2>&1 || true
 helm repo update infisical-helm-charts >/dev/null
 ns "$NS"
+kubectl create configmap homelab-root-ca -n "$NS" --from-file="$SECRETS/homelab-ca.crt" --dry-run=client -o yaml | kubectl apply -f -
 if ! kubectl -n "$NS" get secret infisical-universal-auth >/dev/null 2>&1; then
   kubectl -n "$NS" create secret generic infisical-universal-auth \
     --from-literal=clientId="$(sops -d --extract '["bootstrap"]["infisical_client_id"]' "$B")" \

@@ -31,6 +31,7 @@ PROJ=$(inf /v1/workspace | jq -r '.workspaces[] | select(.type=="cert-manager" a
 CA=$(inf "/v1/cert-manager/ca?projectId=$PROJ" | jq -r '.certificateAuthorities[] | select(.name=="homelab-root-ca") | .id')
 [ -n "$CA" ] || CA=$(inf "/v1/cert-manager/ca/internal?projectId=$PROJ" -d "$(jq -n --arg na "$(plus_years 20)" --arg alg EC_secp384r1 '{name:"homelab-root-ca",status:"active",configuration:{type:"root",friendlyName:"Homelab Root CA",commonName:"Homelab Root CA",organization:"homelab",keyAlgorithm:$alg,keySource:"infisical",maxPathLength:1,notAfter:$na}}')" | jq -r .id)
 inf "/v1/cert-manager/ca/internal/$CA/certificate" | jq -r .certificate > "$ROOT_CRT"
+cat "$("$ROOT/.venv/bin/python3" -c 'import certifi; print(certifi.where())')" "$ROOT_CRT" > "$SECRETS/ca-bundle.pem"   # python trust on the workstation (ADR 0042)
 echo "root CA $CA exported to $ROOT_CRT"
 
 # Re-sign only when the cluster's intermediate is not the root's child (absent, self-signed, or a rotated root).

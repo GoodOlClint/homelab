@@ -4,7 +4,7 @@ services:
     container_name: infisical
     restart: unless-stopped
     ports:
-      - "{{ infisical_port }}:8080"
+      - "{{ '127.0.0.1:' if bootstrap_config.infisical_url | default('') is match('https://') else '' }}{{ infisical_port }}:8080"
     environment:
       - ENCRYPTION_KEY={{ infisical_encryption_key }}
       - AUTH_SECRET={{ infisical_auth_secret }}

@@ -1,5 +1,9 @@
 hostAPI: ${HOST_API}
 controllerManager:
+  extraVolumes:
+    - {name: homelab-root-ca, configMap: {name: homelab-root-ca}}
   manager:
     image:
       repository: ${REGISTRY}/docker.io/infisical/kubernetes-operator
+    extraVolumeMounts:
+      - {name: homelab-root-ca, mountPath: /etc/ssl/certs/homelab-root-ca.crt, subPath: homelab-ca.crt, readOnly: true}

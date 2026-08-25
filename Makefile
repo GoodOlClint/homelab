@@ -6,6 +6,14 @@
 VENV_PYTHON := $(CURDIR)/.venv/bin/python3
 export PATH := $(CURDIR)/.venv/bin:$(PATH)
 
+# Python clients (ansible uri, infisicalsdk/requests, proxmoxer) trust certifi only; the fleet root
+# rides a certifi+root bundle written by make talos-certs (ADR 0042). Go/curl use the keychain.
+CA_BUNDLE := $(CURDIR)/kubernetes/.secrets/ca-bundle.pem
+ifneq ($(wildcard $(CA_BUNDLE)),)
+export SSL_CERT_FILE := $(CA_BUNDLE)
+export REQUESTS_CA_BUNDLE := $(CA_BUNDLE)
+endif
+
 # === Bootstrap Secrets ===
 # Read bootstrap secrets and export as TF_VAR_ environment variables.
 # Supports both SOPS-encrypted and plaintext YAML (for pre-SOPS setup).

@@ -50,7 +50,7 @@
       - {name: Prometheus, monitor_type: http, url: "https://prometheus.{{ service_domain }}/-/healthy"}
       - {name: Alertmanager, monitor_type: http, url: "https://alertmanager.{{ service_domain }}/-/healthy"}
       - {name: "AxoSyslog — syslog TCP 5514", monitor_type: port, hostname: "{{ openobserve_listen_host }}", port: 5514, max_retries: 1}
-      - {name: Infisical, monitor_type: http, url: "http://{{ hostvars['infisical'].service_ip }}:8080", accepted_statuscodes: "{{ _redirects }}"}
+      - {name: Infisical, monitor_type: http, url: "https://infisical.{{ service_domain }}", accepted_statuscodes: "{{ _redirects }}"}
       - {name: "Proxmox Backup Server", monitor_type: port, hostname: "{{ hostvars['proxmox-backup'].service_ip }}", port: 8007}
       - {name: "UniFi controller", monitor_type: port, hostname: "{{ hostvars['unifi'].ansible_host }}", port: 11443}
       - {name: "apt-cacher-ng — proxy TCP 3142", monitor_type: port, hostname: "{{ hostvars['apt-cache'].service_ip }}", port: 3142}
