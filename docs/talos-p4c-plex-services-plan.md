@@ -16,7 +16,7 @@ Status: **Built 2026-08-24.** Deviations from the plan below: non-root pods (see
 |---|---|---|
 | homepage Media group (8 widgets + hrefs) | `kubernetes/homepage/config/services.yaml` `${PLEX_SERVICES}` from `inv_env` — **breaks when 206 leaves `vms.yaml`** (same trap as P4b) | widget urls → in-cluster svc DNS (plain HTTP, no CA issue); hrefs → the new ingress hostnames; same commit as the retirement |
 | Uptime Kuma rows: Tautulli, Jellyseerr, Sonarr, Radarr, Sabnzbd | `kuma.db` (on the cluster since P4b) | sqlite row edits with uptime-kuma scaled to 0 (the seeder's mechanism), targets → svc DNS |
-| Cloudflare tunnel (tautulli.clintflix.tv, requests.clintflix.tv) | cloudflared container; dashboard routes by container name `tautulli:8181` / `seerr:5055` | cloudflared becomes a Deployment in the namespace; Services keep the compose names so the bare-name routes resolve via the pod's search domain — no dashboard change |
+| Cloudflare tunnel (tautulli/requests.<media domain>) | cloudflared container; dashboard routes by container name `tautulli:8181` / `seerr:5055` | cloudflared becomes a Deployment in the namespace; Services keep the compose names so the bare-name routes resolve via the pod's search domain — no dashboard change |
 | Prometheus telegraf target | `kubernetes/monitoring/render.py` file_sd from `vms.yaml` | auto-drops; re-run `make talos-monitoring` after `make inventory` |
 | Plex 208 | reads the same NAS media tree directly | untouched — nothing in P4c moves media |
 | `backup_jobs.nightly-fleet` vmid 206, `portainer_agent_hosts`, `adguard_rewrite_vms`, `backup-clients.yml` hosts, `docker-config.yml` section, `update-all.yml`/`refresh-identity.yml` (inventory-driven), services.yml play + `plex-services` tag, role + 7 agent templates, `host_vars/plex-services*.yml` | repo references | retirement commit |
@@ -53,7 +53,7 @@ Status: **Built 2026-08-24.** Deviations from the plan below: non-root pods (see
 1. `make plex-pbs-image` (build + push the client image); `kubernetes/plex-services/` written; NFS PV smoke pod (write + read a file under `/data/usenet`, delete it). Abort here if kubelet NFS fails.
 2. `make talos-plex-services` deploys against empty PVCs (db-backed pods may crashloop until data lands — expected); Ingress + InfisicalSecrets verified.
 3. `make plex-services-migrate FROM=<206 address>`: compose down on 206 (workstation-driven), rsync all trees into the PVCs, scale up → arr UIs show existing library, postgres has pre-migration rows, Libation logged in.
-4. Kuma rows repointed (uptime-kuma scaled 0, sqlite, scale up); homepage config updated + `make talos-homepage`; Cloudflare tunnel checked at `tautulli.clintflix.tv`.
+4. Kuma rows repointed (uptime-kuma scaled 0, sqlite, scale up); homepage config updated + `make talos-homepage`; Cloudflare tunnel checked at `tautulli.<media domain>`.
 5. SABnzbd test download → lands under the NAS path Plex 208 reads; trigger the backup CronJob once → new snapshot on the PBS datastore.
 6. Retire 206 + cleanup; `make inventory`; `make talos-monitoring` (telegraf target re-render); `make plan` + `make talos-plan` clean; docs; small commits per row.
 
@@ -62,7 +62,7 @@ Status: **Built 2026-08-24.** Deviations from the plan below: non-root pods (see
 - `curl https://<svc>.<d>/ping --cacert kubernetes/.secrets/homelab-ca.crt` → 200 via `.65` for sonarr/radarr/lidarr/prowlarr/bazarr; equivalent status endpoints for sabnzbd (`/api?mode=version`), tautulli (`/status`), seerr (`/api/v1/status`).
 - Sonarr/Radarr series/movie counts match pre-migration; `select count(*)` on a sonarr table shows pre-2026-08-23 rows; Libation still authenticated (its next scheduled scan runs clean, `AccountsSettings.json` untouched).
 - SABnzbd test download completes to `/data/usenet/complete/...` and the file is visible on the NAS path Plex 208 mounts.
-- homepage arr widgets green at the new URLs; the 5 Kuma rows green; `https://tautulli.clintflix.tv` answers through the tunnel.
+- homepage arr widgets green at the new URLs; the 5 Kuma rows green; `https://tautulli.<media domain>` answers through the tunnel.
 - `kubectl -n plex-services describe pods | grep Image:` → all `registry.<d>/…`; both InfisicalSecrets Ready.
 - The backup CronJob triggered once → `proxmox-backup-client snapshot list --ns databases` shows a fresh `plex-services-postgres` snapshot (recency, not exit code).
 - `pct status 206` stopped, `onboot: 0`; absent from `vm-configs.tf`, `vms.yaml`, `backup_jobs`; `make plan` + `make talos-plan` show no plex-services drift.

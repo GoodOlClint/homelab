@@ -23,7 +23,7 @@ These use the VPS WireGuard relay instead:
 
 | Service | Why Not Tunnel | Access Method |
 |---------|---------------|---------------|
-| Plex media streaming | ToS violation for media traffic | `plex.clintflix.tv:32400` via VPS relay |
+| Plex media streaming | ToS violation for media traffic | `plex.<media domain>:32400` via VPS relay |
 | Valheim game server | UDP, not HTTP | VPS relay UDP 2456-2458 |
 | Mobile WireGuard | UDP relay | VPS relay UDP 51820 |
 

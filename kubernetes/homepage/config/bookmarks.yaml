@@ -11,10 +11,10 @@
           href: https://uptimerobot.com/dashboard
     - Plex (External):
         - icon: plex.svg
-          href: https://plex.clintflix.tv:32400/web
+          href: https://plex.${MEDIA_DOMAIN}:32400/web
     - Requests (External):
         - icon: jellyseerr.svg
-          href: https://request.clintflix.tv
+          href: https://request.${MEDIA_DOMAIN}
     - Tautulli (External):
         - icon: tautulli.svg
-          href: https://tautulli.clintflix.tv
+          href: https://tautulli.${MEDIA_DOMAIN}

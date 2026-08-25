@@ -189,7 +189,7 @@ scrape_configs:
       module: [tls_connect]
     static_configs:
       - targets:
-          - plex.clintflix.tv:32400
+          - plex.${MEDIA_DOMAIN}:32400
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target

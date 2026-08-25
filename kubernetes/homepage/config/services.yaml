@@ -1,17 +1,17 @@
 - Media:
     - Plex:
         icon: plex.svg
-        href: https://plex.clintflix.tv:32400/web
+        href: https://plex.${MEDIA_DOMAIN}:32400/web
         description: Media Server
         widget: {type: plex, url: "https://${PLEX}:32400", key: "{{HOMEPAGE_VAR_PLEX_TOKEN}}"}
     - Tautulli:
         icon: tautulli.svg
-        href: https://tautulli.clintflix.tv
+        href: https://tautulli.${MEDIA_DOMAIN}
         description: Plex Statistics
         widget: {type: tautulli, url: "http://tautulli.plex-services.svc:8181", key: "{{HOMEPAGE_VAR_TAUTULLI_KEY}}"}
     - Seerr:
         icon: jellyseerr.svg
-        href: https://request.clintflix.tv
+        href: https://request.${MEDIA_DOMAIN}
         description: Media Requests
         widget: {type: jellyseerr, url: "http://seerr.plex-services.svc:5055", key: "{{HOMEPAGE_VAR_SEERR_KEY}}"}
 

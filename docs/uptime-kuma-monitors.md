@@ -4,7 +4,7 @@ Uptime Kuma is the **internal** reachability lane ([ADR 0011](decisions/0011-two
 
 The outside-in view is UptimeRobot's job, from outside the network — see [uptimerobot-setup.md](uptimerobot-setup.md). That split is settled.
 
-Kuma runs on the Talos cluster (`kubernetes/monitoring/`, ADR 0036) at `https://uptime-kuma.<domain>`. **Its configuration is Ansible-managed**: every monitor and the notification channel are declared in [ansible/playbooks/uptime-kuma.yml](../ansible/playbooks/uptime-kuma.yml) and applied through the [`goodolclint.uptime_kuma`](https://github.com/GoodOlClint/ansible-collection-uptime_kuma) collection (`make uptime-kuma`; `CHECK=1` for check mode with diff). Targets derive from the inventory and `vlans.yaml`, so a guest re-home is a re-run, not a UI edit. The admin login is `goodolclint` with Infisical `/monitoring/uptime_kuma_admin_password`.
+Kuma runs on the Talos cluster (`kubernetes/monitoring/`, ADR 0036) at `https://uptime-kuma.<service domain>`. **Its configuration is Ansible-managed**: every monitor and the notification channel are declared in [ansible/playbooks/uptime-kuma.yml](../ansible/playbooks/uptime-kuma.yml) and applied through the [`goodolclint.uptime_kuma`](https://github.com/GoodOlClint/ansible-collection-uptime_kuma) collection (`make uptime-kuma`; `CHECK=1` for check mode with diff). Targets derive from the inventory and `vlans.yaml`, so a guest re-home is a re-run, not a UI edit. The admin login is `goodolclint` with Infisical `/monitoring/uptime_kuma_admin_password`.
 
 A monitor added in the UI is not deleted by the playbook (monitors are matched by name; nothing prunes), but it will not survive a rebuild either — add it to the playbook instead.
 
@@ -14,25 +14,25 @@ One channel, shared with Alertmanager: **ntfy** (`ntfy (homelab alerts)`, type `
 
 ## Monitors
 
-23 monitors — the authoritative list is the playbook. Per-monitor defaults: 60 s interval, 2 retries (1 for AxoSyslog, so the syslog path trips fast), 60 s retry interval, 16 s timeout, accepted status `200-299` — widened to `300-399` for services that redirect to a login page.
+23 monitors — the authoritative list is the playbook. No monitor ignores TLS (ADR 0040 forbids it on Traefik-fronted apps; the ingress cert is Let's Encrypt since P5b). Per-monitor defaults: 60 s interval, 2 retries (1 for AxoSyslog, so the syslog path trips fast), 60 s retry interval, 16 s timeout, accepted status `200-299` — widened to `300-399` for services that redirect to a login page.
 
 | Monitor | Type | Target |
 |---------|------|--------|
 | AdGuard — DNS resolution | DNS | `google.com` A via the AdGuard VIP |
 | BIND9 — DNS resolution | DNS | `ns.<mgmt zone>` A via the BIND VIP |
 | AdGuard — web UI | HTTP | AdGuard VIP `:3000` |
-| Plex | HTTP | plex `:32400/identity`, TLS ignored |
+| Plex | HTTP | plex `:32400/identity` over plain HTTP (Plex allows it unless secure connections are *Required*) |
 | Tautulli / Jellyseerr / Sonarr / Radarr / Sabnzbd | HTTP | in-cluster `*.plex-services.svc.cluster.local` (ADR 0037) |
-| Grafana / OpenObserve / Prometheus / Alertmanager | HTTP | `https://<name>.<domain>` through Traefik, TLS ignored (homelab-ca) |
+| Grafana / OpenObserve / Prometheus / Alertmanager | HTTP | `https://<name>.<service domain>` through Traefik (Let's Encrypt, verified) |
 | AxoSyslog — syslog TCP 5514 | TCP port | syslog LB (`openobserve_listen_host`) |
 | Infisical | HTTP | infisical `:8080` |
-| Proxmox Backup Server | HTTP | pbs `:8007` (vlan30 since the re-home), TLS ignored |
+| Proxmox Backup Server | TCP port | pbs `:8007` (vlan30 since the re-home; self-signed cert, so no HTTP check until the per-host ACME lands) |
 | UniFi controller | TCP port | unifi `:11443` |
 | apt-cacher-ng — proxy TCP 3142 | TCP port | apt-cache `:3142` |
-| Homepage | HTTP | `https://homepage.<domain>` (on the cluster, ADR 0035) |
-| VPS — public IP | Ping | `vps.<public domain>` |
+| Homepage | HTTP | `https://homepage.<service domain>` (on the cluster, ADR 0035) |
+| VPS — public IP | Ping | `vps.<media domain>` |
 | VPS — WireGuard tunnel peer | Ping | VPS tunnel address (`vps_wg_tunnel.tunnel_address`) |
-| Cloudflare Tunnel — Tautulli | HTTP | `https://tautulli.<public domain>`, 120 s |
+| Cloudflare Tunnel — Tautulli | HTTP | `https://tautulli.<media domain>`, 120 s |
 | Valheim — PlayFab lobby | JSON query | `valheim-status.games.svc.cluster.local:8081/status.json`, `online == true` (ADR 0038) |
 
 ### Deliberate omissions

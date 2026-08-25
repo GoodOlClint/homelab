@@ -9,7 +9,7 @@
 Two changes sharing one signal source.
 
 1. **Gate `make update`** so container recreates and reboots defer when Valheim or Plex is in use. Operator-selected behaviour: **skip the host and continue the run**, report what was deferred, `FORCE=true` to override.
-2. **Put Valheim on `status.clintflix.tv`** (an UptimeRobot Public Status Page — the subdomain is a CNAME to `stats.uptimerobot.com`), and audit/document the intended monitor set for that page, which is hand-managed today with no inventory doc.
+2. **Put Valheim on `status.<media domain>`** (an UptimeRobot Public Status Page — the subdomain is a CNAME to `stats.uptimerobot.com`), and audit/document the intended monitor set for that page, which is hand-managed today with no inventory doc.
 
 Out of scope: automating UptimeRobot itself (no API key in the repo, no provider); Uptime Kuma status pages (ADR 0011 keeps Kuma internal); any change to the alerting channel.
 
