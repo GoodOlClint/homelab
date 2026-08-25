@@ -20,6 +20,12 @@ adguard_zone_forwards: >-
   {{ out }}
 adguard_upstreams: "{{ adguard_public_upstreams + adguard_reverse_forwards + adguard_zone_forwards }}"
 
+adguard_safebrowsing_enabled: true
+# Persistent clients (AdGuard `clients/add` bodies: name, ids, tags, use_global_settings,
+# filtering_enabled, safebrowsing_enabled, parental_enabled, safe_search, …). The list
+# carries addresses, so it lives in the gitignored group_vars/all.yml.
+adguard_clients: []
+
 # Query log retention. AdGuardHome's own default is 2160h (90 days), which on the
 # 19 GB root disk grew querylog.json{,.1} to 12 GB and drove the VM to 88% full.
 # 30 days is roughly 4 GB at this network's query rate — adjust if the disk changes.

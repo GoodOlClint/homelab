@@ -212,7 +212,7 @@ filtering:
   blocked_response_ttl: 10
   filtering_enabled: true
   parental_enabled: true
-  safebrowsing_enabled: false
+  safebrowsing_enabled: {{ adguard_safebrowsing_enabled | lower }}
   protection_enabled: true
 
 # Clients settings
@@ -223,7 +223,7 @@ clients:
     rdns: true
     dhcp: true
     hosts: true
-  persistent: []
+  persistent: {{ adguard_clients | to_json }}
 
 # Log settings
 log:

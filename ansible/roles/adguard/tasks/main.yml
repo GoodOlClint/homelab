@@ -296,6 +296,71 @@
   changed_when: true
   tags: [adguard, dns, config]
 
+- name: Read the live browsing-security state
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:3000/control/safebrowsing/status"
+    url_username: "{{ secrets.homepage.adguard_username }}"
+    url_password: "{{ secrets.homepage.adguard_password }}"
+    force_basic_auth: true
+  register: _adguard_safebrowsing
+  check_mode: false
+  tags: [adguard, dns, config]
+
+- name: Converge browsing security
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:3000/control/safebrowsing/{{ 'enable' if adguard_safebrowsing_enabled else 'disable' }}"
+    method: POST
+    url_username: "{{ secrets.homepage.adguard_username }}"
+    url_password: "{{ secrets.homepage.adguard_password }}"
+    force_basic_auth: true
+  when: _adguard_safebrowsing.json.enabled != (adguard_safebrowsing_enabled | bool)
+  changed_when: true
+  tags: [adguard, dns, config]
+
+- name: Read the live persistent clients
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:3000/control/clients"
+    url_username: "{{ secrets.homepage.adguard_username }}"
+    url_password: "{{ secrets.homepage.adguard_password }}"
+    force_basic_auth: true
+  register: _adguard_clients
+  check_mode: false
+  tags: [adguard, dns, config]
+
+- name: Add missing persistent clients
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:3000/control/clients/add"
+    method: POST
+    url_username: "{{ secrets.homepage.adguard_username }}"
+    url_password: "{{ secrets.homepage.adguard_password }}"
+    force_basic_auth: true
+    body_format: json
+    body: "{{ item }}"
+  loop: "{{ adguard_clients }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: item.name not in (_adguard_clients.json.clients | default([]) | map(attribute='name') | list)
+  changed_when: true
+  tags: [adguard, dns, config]
+
+- name: Update persistent clients that drifted
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:3000/control/clients/update"
+    method: POST
+    url_username: "{{ secrets.homepage.adguard_username }}"
+    url_password: "{{ secrets.homepage.adguard_password }}"
+    force_basic_auth: true
+    body_format: json
+    body: {name: "{{ item.name }}", data: "{{ _live | combine(item, recursive=true) }}"}
+  vars:
+    _live: "{{ (_adguard_clients.json.clients | default([]) | selectattr('name', '==', item.name) | first | default({})) }}"
+  loop: "{{ adguard_clients }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: _live and (_live | combine(item, recursive=true)) != _live
+  changed_when: true
+  tags: [adguard, dns, config]
+
 - name: Check AdGuard Home service status
   ansible.builtin.systemd:
     name: adguardhome
