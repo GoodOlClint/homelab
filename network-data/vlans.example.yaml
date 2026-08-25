@@ -17,6 +17,16 @@ ipv4_prefix: "REPLACE_WITH_IPV4_PREFIX"          # e.g., "172.16"
 ipv6_prefix: "REPLACE_WITH_IPV6_PREFIX"          # e.g., "fd00:abcd:1234"
 domain_suffix: "REPLACE_WITH_DOMAIN"             # e.g., "homelab.internal"
 
+# Flat public-domain zones served internally (ADR 0040): `name.<service_domain>` is the
+# address of every guest, node, VIP and cluster app; the media domain fronts the
+# family-facing services. Both are real domains you own (Cloudflare), never literals in
+# tracked files. internal_zones: each key is a zone BIND serves on the LAN, each value
+# the public-zone names mirrored inward (looked up on the public copy at run time).
+service_domain: "REPLACE_WITH_SERVICE_DOMAIN"    # e.g., "example.cloud"
+media_domain: "REPLACE_WITH_MEDIA_DOMAIN"        # e.g., "example.tv"
+internal_zones:
+  REPLACE_WITH_SERVICE_DOMAIN: ["vpn"]
+
 # Bootstrap DNS for cloud-init (public DNS first so VMs boot before internal DNS is up)
 dns_servers:
   - "1.1.1.1"                                     # Public bootstrap (OK to keep)
@@ -30,7 +40,7 @@ dns_server:
   dns_ipv4: "REPLACE_WITH_DNS_IPV4"               # AdGuard Home address
   dns_ipv6: "REPLACE_WITH_DNS_IPV6"               # AdGuard Home IPv6
   bind_ipv4: "REPLACE_WITH_BIND_IPV4"             # BIND9 authoritative address
-  zone_vlans: ["management", "core", "storage", "work", "iot", "sonos", "guest"]
+  zone_vlans: ["management", "infrastructure", "services", "core", "storage", "work", "iot", "sonos", "guest"]
 
 # --- Proxmox SDN Zones ---
 sdn_zones:

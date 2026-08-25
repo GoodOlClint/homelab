@@ -44,6 +44,9 @@
     ipv4_prefix_reversed: "{{ network_data.ipv4_prefix.split('.') | reverse | join('.') }}"
     internal_network_cidr: "{{ network_data.ipv4_prefix }}.0.0/12"
     management_subnet: "{{ network_data.ipv4_prefix }}.{{ network_data.vlans[network_data.management_vlan].id }}.0/24"
+    service_domain: "{{ network_data.service_domain }}"
+    media_domain: "{{ network_data.media_domain }}"
+    internal_zones: "{{ network_data.internal_zones }}"
   run_once: true
   when: not (skip_vlan_computation | default(false))
 

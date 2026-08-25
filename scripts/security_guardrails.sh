@@ -74,9 +74,11 @@ RFC1918_REGEX='(^|[^0-9.])(10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|172\.(1[6-9]|2
 ULA_REGEX='(^|[^0-9a-fA-F:])fd[0-9a-fA-F]{2}:[0-9a-fA-F:]+'
 MAC_REGEX='([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}'
 SUPERNET_ALLOW='10\.0\.0\.0/8|172\.16\.0\.0/12|192\.168\.0\.0/16'
-INTERNAL_DOMAIN=""
+# Site domains (the .internal suffix plus the public service/media domains, ADR 0040)
+# are bindings too — one grep pattern per line.
+INTERNAL_DOMAINS=""
 if [[ -f network-data/vlans.yaml ]]; then
-  INTERNAL_DOMAIN=$(sed -n 's/^domain_suffix: *"\([^"]*\)".*/\1/p' network-data/vlans.yaml | head -1)
+  INTERNAL_DOMAINS=$(sed -nE 's/^(domain_suffix|service_domain|media_domain): *"([^"]*)".*/\2/p' network-data/vlans.yaml | grep -v REPLACE_WITH || true)
 fi
 
 added_lines() {
@@ -97,8 +99,8 @@ while IFS= read -r f; do
   if [[ -n "$v6hits" ]]; then hits="${hits:+$hits$'\n'}$v6hits"; fi
   machits=$(added_lines "$f" | grep -E "$MAC_REGEX" || true)
   if [[ -n "$machits" ]]; then hits="${hits:+$hits$'\n'}$machits"; fi
-  if [[ -n "$INTERNAL_DOMAIN" ]]; then
-    dhits=$(added_lines "$f" | grep -F "$INTERNAL_DOMAIN" || true)
+  if [[ -n "$INTERNAL_DOMAINS" ]]; then
+    dhits=$(added_lines "$f" | grep -F -f <(printf '%s\n' "$INTERNAL_DOMAINS") || true)
     if [[ -n "$dhits" ]]; then hits="${hits:+$hits$'\n'}$dhits"; fi
   fi
   if [[ -n "$hits" ]]; then
