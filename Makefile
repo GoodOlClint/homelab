@@ -205,7 +205,8 @@ data-volumes:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/proxmox.yaml ansible/playbooks/data-volumes.yml
 
 # Rebuild = one atomic apply with -replace: no destroyed-but-not-rebuilt window,
-# and cloud-init/file resources refresh in the same graph. Still staged with
+# and cloud-init/file resources refresh in the same graph. PVE prunes the
+# destroyed VMID from every backup job, so the rebuild ends by re-adding it. Still staged with
 # -target pre-cutover (a full-graph apply proposes the known replace-all drift);
 # drop the `targets` part once the post-cutover plan is clean.
 rebuild:
@@ -221,6 +222,7 @@ endif
 	@$(MAKE) inventory
 	@echo "Configuring guest: $(VM)"
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/site.yml --limit $(VM)
+	@$(MAKE) backup-jobs
 
 # Rebuild the Infisical VM and restore the vault from its PBS dump (ADR 0039):
 # unprotect through the cluster API, replace the guest, bring the stack up with
