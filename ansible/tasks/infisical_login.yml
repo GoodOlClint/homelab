@@ -7,6 +7,10 @@
 #   /          → flat keys (secrets.key_name)
 #   /shared    → flat keys merged into root (secrets.key_name)
 #   /monitoring, /plex, etc. → nested dicts (secrets.monitoring.key_name)
+#
+# Reads authenticate with url + token_auth, never login_data: that dict is a no_log module
+# argument, so its url leaf is scrubbed to ******** inside any secret value that contains it
+# (acme_directory_url starts with the vault URL since ADR 0042).
 
 - name: Login to Infisical
   infisical.vault.login:
@@ -23,7 +27,9 @@
 # Read root-level secrets (/)
 - name: Read root secrets from Infisical
   infisical.vault.read_secrets:
-    login_data: "{{ infisical_login.login_data }}"
+    url: "{{ bootstrap_config.infisical_url }}"
+    auth_method: token_auth
+    token: "{{ infisical_login.login_data.access_token }}"
     project_id: "{{ bootstrap_config.infisical_project_id }}"
     env_slug: "prod"
     path: "/"
@@ -37,7 +43,9 @@
 # Read shared secrets (/shared) — merged flat into root
 - name: Read shared secrets from Infisical
   infisical.vault.read_secrets:
-    login_data: "{{ infisical_login.login_data }}"
+    url: "{{ bootstrap_config.infisical_url }}"
+    auth_method: token_auth
+    token: "{{ infisical_login.login_data.access_token }}"
     project_id: "{{ bootstrap_config.infisical_project_id }}"
     env_slug: "prod"
     path: "/shared"
@@ -52,7 +60,9 @@
 # Read nested path secrets — each becomes a nested dict in secrets fact
 - name: Read nested path secrets from Infisical
   infisical.vault.read_secrets:
-    login_data: "{{ infisical_login.login_data }}"
+    url: "{{ bootstrap_config.infisical_url }}"
+    auth_method: token_auth
+    token: "{{ infisical_login.login_data.access_token }}"
     project_id: "{{ bootstrap_config.infisical_project_id }}"
     env_slug: "prod"
     path: "/{{ item }}"

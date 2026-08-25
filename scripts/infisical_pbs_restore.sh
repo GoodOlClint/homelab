@@ -71,7 +71,8 @@ AUTH=$(grep -m1 '^AUTH_SECRET=' "$ENV_FILE" | cut -d= -f2-)
 [ "$KEY" = "$EXPECT_KEY" ] || { echo "ERROR: the dump's ENCRYPTION_KEY differs from bootstrap.sops.yml — fix the bootstrap file first"; exit 1; }
 [ "$AUTH" = "$EXPECT_AUTH" ] || { echo "ERROR: the dump's AUTH_SECRET differs from bootstrap.sops.yml — fix the bootstrap file first"; exit 1; }
 
-if [ -f "$COMPOSE" ] && [ -s "$TMP/dump/tls/cert.pem" ]; then
+[ -s "$TMP/dump/tls/cert.pem" ] && echo "dump carries tls/ (cert $(openssl x509 -in "$TMP/dump/tls/cert.pem" -noout -enddate | cut -d= -f2))"
+if [ -f "$COMPOSE" ] && [ -s "$TMP/dump/tls/cert.pem" ] && docker compose -f "$COMPOSE" config --services 2>/dev/null | grep -qx caddy; then
     mkdir -p "$DIR/tls"
     install -m 0600 "$TMP/dump/tls/key.pem" "$DIR/tls/key.pem"
     install -m 0644 "$TMP/dump/tls/cert.pem" "$DIR/tls/cert.pem"
