@@ -245,6 +245,33 @@
     - dns
     - validate
 
+# The config template is initial-only (AdGuardHome rewrites its own YAML), so the
+# running instance converges its upstream list through the API.
+- name: Read the live upstream list
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:3000/control/dns_info"
+    url_username: "{{ secrets.homepage.adguard_username }}"
+    url_password: "{{ secrets.homepage.adguard_password }}"
+    force_basic_auth: true
+  register: _adguard_dns_info
+  tags: [adguard, dns, config]
+
+- name: Add the flat-zone forwards to the live upstream list
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:3000/control/dns_config"
+    method: POST
+    url_username: "{{ secrets.homepage.adguard_username }}"
+    url_password: "{{ secrets.homepage.adguard_password }}"
+    force_basic_auth: true
+    body_format: json
+    body:
+      upstream_dns: "{{ _adguard_dns_info.json.upstream_dns + _missing }}"
+  vars:
+    _missing: "{{ adguard_zone_forwards | difference(_adguard_dns_info.json.upstream_dns) }}"
+  when: _missing | length > 0
+  changed_when: true
+  tags: [adguard, dns, config]
+
 - name: Check AdGuard Home service status
   ansible.builtin.systemd:
     name: adguardhome

@@ -2,38 +2,12 @@
 # Bootstrap mode flag (skips local zone DNS test during bootstrap)
 bootstrap_mode: false
 
-# DNS zone key for standard VM rewrites (references dns_zones dict)
-adguard_rewrite_zone: vlan100
-
-# VMs to create DNS rewrites for (<hostname>.<zone> -> management IP)
-# Each entry must match an inventory hostname. VMs not in inventory are silently skipped.
-adguard_rewrite_vms:
-  - proxmox-backup
-  - docker
-  - plex
-  - unifi
-  - control
-  - pdm
-
-# Service aliases: alternative domain names pointing to existing VMs
-adguard_service_aliases:
-  - domain: media
-    target: plex
-  - domain: portainer
-    target: control
-  - domain: meshcentral
-    target: control
-
-# Cross-VLAN DNS rewrites: hostname resolved on a different VLAN's zone
-adguard_cross_vlan_rewrites:
-  - hostname: plex
-    zone_key: vlan20
-    from_prefix: "{{ mgmt_vlan_prefix }}"
-    to_prefix: "{{ storage_vlan_prefix }}"
-  - hostname: docker
-    zone_key: vlan20
-    from_prefix: "{{ mgmt_vlan_prefix }}"
-    to_prefix: "{{ storage_vlan_prefix }}"
+# Conditional forwards for the flat public-domain zones (ADR 0040): AdGuard answers
+# nothing itself any more — every internal name is a BIND record.
+adguard_zone_forwards: >-
+  {%- set out = [] -%}
+  {%- for z in internal_zones -%}{{- out.append('[/' ~ z ~ '/]' ~ network_data.dns_server.bind_ipv4) -}}{%- endfor -%}
+  {{ out }}
 
 # Query log retention. AdGuardHome's own default is 2160h (90 days), which on the
 # 19 GB root disk grew querylog.json{,.1} to 12 GB and drove the VM to 88% full.
