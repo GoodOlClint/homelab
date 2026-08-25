@@ -135,10 +135,11 @@ Split DNS with filtering and dynamic registration:
 graph TD
     Client([Client query]) --> AG[AdGuard Home<br/>filtering / ad-blocking]
 
-    AG -->|Internal domain<br/>*.domain_suffix| BIND[BIND9<br/>authoritative for all internal zones]
+    AG -->|Internal zones<br/>*.service_domain, *.media_domain, in-addr.arpa| BIND[BIND9<br/>authoritative pair behind a VIP]
     AG -->|External domain| UP[Upstream resolvers<br/>1.1.1.1, etc.]
 
     PF[pfSense DHCP] -->|RFC 2136<br/>TSIG-authenticated| BIND
+    AN[Ansible dns-records<br/>+ external-dns] -->|RFC 2136| BIND
 
     style AG fill:#8e44ad,color:#fff
     style BIND fill:#2980b9,color:#fff
@@ -146,9 +147,7 @@ graph TD
     style PF fill:#c0392b,color:#fff
 ```
 
-BIND9 serves authoritative records for each VLAN's domain prefix (e.g., `mgmt.{domain_suffix}`, `services.{domain_suffix}`). pfSense pushes DHCP leases to BIND9 via RFC 2136 dynamic DNS updates using a TSIG key.
-
-See [docs/split-dns-adguard.md](docs/split-dns-adguard.md) for full setup details.
+BIND9 is authoritative for a flat zone on the operator-owned service domain (every guest, node, VIP and cluster app is `name.<service domain>`), the media domain's internal copy, and one reverse zone per VLAN. Every record is a dynamic update: `make dns-records` (fleet, nsupdate), external-dns (Ingress hosts), pfSense DHCP (leases) — all with one TSIG key. AdGuard forwards those zones to the BIND VIP and holds no rewrites. See [ADR 0040](docs/decisions/0040-p5-real-dns-on-a-flat-public-domain-zone-bind-fed-by-nsupdate-external-dns-adguard-forwards-rewrites-retired-let-s-encrypt-dns-01-wildcards-as-traefik-s-default-cert-two-authentik-realms-split-by-audience-jellyfin-over-the-vps-relay-with-ldap-auth.md) and [docs/p5-dns-sso-jellyfin-plan.md](docs/p5-dns-sso-jellyfin-plan.md).
 
 ## VPS WireGuard Relay
 
@@ -697,7 +696,6 @@ homelab/
 | [docs/pfsense-wireguard-vps-peer.md](docs/pfsense-wireguard-vps-peer.md) | VPS tunnel peer setup on pfSense |
 | [docs/pfsense-wireguard-mobile-peers.md](docs/pfsense-wireguard-mobile-peers.md) | Mobile WireGuard client configuration |
 | [docs/pfsense-firewall-rules.md](docs/pfsense-firewall-rules.md) | pfSense firewall rules reference |
-| [docs/split-dns-adguard.md](docs/split-dns-adguard.md) | AdGuard + BIND9 split DNS setup |
 | [docs/authentik-setup.md](docs/authentik-setup.md) | authentik: both realms, tunnel route, PVE/PBS/PDM realm hand steps, family enrollment |
 | [docs/cloudflare-tunnel-setup.md](docs/cloudflare-tunnel-setup.md) | Cloudflare Tunnel integration |
 | [docs/key-rotation-procedure.md](docs/key-rotation-procedure.md) | WireGuard key rotation procedure |

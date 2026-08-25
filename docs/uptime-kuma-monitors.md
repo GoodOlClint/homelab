@@ -19,7 +19,7 @@ One channel, shared with Alertmanager: **ntfy** (`ntfy (homelab alerts)`, type `
 | Monitor | Type | Target |
 |---------|------|--------|
 | AdGuard — DNS resolution | DNS | `google.com` A via the AdGuard VIP |
-| BIND9 — DNS resolution | DNS | `ns.<mgmt zone>` A via the BIND VIP |
+| BIND9 — DNS resolution | DNS | `ns.<service domain>` A via the BIND VIP |
 | AdGuard — web UI | HTTP | AdGuard VIP `:3000` |
 | Plex | HTTP | `https://plex.<media domain>:32400/identity` — the Let's Encrypt cert `plex_certificate` installs; Plex has secure connections *Required*, so plain HTTP from the network gets an empty reply |
 | Jellyfin | HTTP | `https://jellyfin.<media domain>/health` through Traefik (Let's Encrypt `*.<media domain>`, ADR 0040 P5d); no via-VPS row, same reason as Plex |

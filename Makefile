@@ -266,10 +266,10 @@ endif
 .PHONY: ansible ansible-all ansible-infra ansible-services ansible-pfsense docker-config update update-dns expand-disk
 
 ansible-all:
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/site.yml $(if $(TAGS),--tags $(TAGS))
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/site.yml --skip-tags unifi-user $(if $(TAGS),--tags $(TAGS))
 
 ansible-infra:
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/infrastructure.yml $(if $(TAGS),--tags $(TAGS))
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/infrastructure.yml --skip-tags unifi-user $(if $(TAGS),--tags $(TAGS))
 
 ansible-services:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/services.yml $(if $(TAGS),--tags $(TAGS))
