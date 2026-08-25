@@ -43,6 +43,7 @@
          dns_resolve_server: "{{ network_data.dns_server.bind_ipv4 }}"}
       - {name: "AdGuard — web UI", monitor_type: http, url: "http://{{ network_data.dns_server.dns_ipv4 }}:3000"}
       - {name: Plex, monitor_type: http, url: "https://plex.{{ media_domain }}:32400/identity"}
+      - {name: Jellyfin, monitor_type: http, url: "https://jellyfin.{{ media_domain }}/health"}
       - {name: Tautulli, monitor_type: http, url: "http://tautulli.plex-services.svc.cluster.local:8181/status", accepted_statuscodes: "{{ _redirects }}"}
       - {name: Jellyseerr, monitor_type: http, url: "http://seerr.plex-services.svc.cluster.local:5055", accepted_statuscodes: "{{ _redirects }}"}
       - {name: Grafana, monitor_type: http, url: "https://grafana.{{ service_domain }}", accepted_statuscodes: "{{ _redirects }}"}

@@ -4,6 +4,10 @@
         href: https://plex.${MEDIA_DOMAIN}:32400/web
         description: Media Server
         widget: {type: plex, url: "https://${PLEX}:32400", key: "{{HOMEPAGE_VAR_PLEX_TOKEN}}"}
+    - Jellyfin:
+        icon: jellyfin.svg
+        href: https://jellyfin.${MEDIA_DOMAIN}
+        description: Media Server (family)
     - Tautulli:
         icon: tautulli.svg
         href: https://tautulli.${MEDIA_DOMAIN}

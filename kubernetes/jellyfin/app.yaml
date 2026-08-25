@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jellyfin
+  namespace: jellyfin
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: jellyfin}}
+  template:
+    metadata: {labels: {app: jellyfin}}
+    spec:
+      enableServiceLinks: false
+      affinity: {nodeAffinity: {preferredDuringSchedulingIgnoredDuringExecution: [{weight: 100, preference: {matchExpressions: [{key: kubernetes.io/hostname, operator: NotIn, values: [talos-cp-w]}]}}]}}
+      securityContext: {runAsUser: 2009, runAsGroup: 2000, fsGroup: 2000}
+      containers:
+        - name: jellyfin
+          image: ${REGISTRY}/docker.io/jellyfin/jellyfin:latest
+          ports: [{containerPort: 8096}]
+          env:
+            - {name: TZ, value: "${TZ}"}
+            - {name: JELLYFIN_PublishedServerUrl, value: "https://jellyfin.${DOMAIN}"}
+          volumeMounts:
+            - {name: config, mountPath: /config, subPath: data}
+            - {name: cache, mountPath: /cache, subPath: data}
+            - {name: media, mountPath: /data, subPath: data, readOnly: true}
+          readinessProbe: {httpGet: {path: /health, port: 8096}, initialDelaySeconds: 15, periodSeconds: 10}
+      volumes:
+        - {name: config, persistentVolumeClaim: {claimName: config}}
+        - {name: cache, persistentVolumeClaim: {claimName: cache}}
+        - {name: media, persistentVolumeClaim: {claimName: media, readOnly: true}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: jellyfin, namespace: jellyfin}
+spec: {selector: {app: jellyfin}, ports: [{port: 8096}]}
+---
+# No forward-auth: the TV apps cannot follow a browser redirect; auth is the LDAP plugin (ADR 0040).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata: {name: jellyfin, namespace: jellyfin}
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: jellyfin.${DOMAIN}
+      http: {paths: [{path: /, pathType: Prefix, backend: {service: {name: jellyfin, port: {number: 8096}}}}]}

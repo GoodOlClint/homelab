@@ -73,6 +73,7 @@
     - talos
     - authentik
     - authentik-ext
+    - jellyfin
   register: _infisical_nested
   delegate_to: localhost
   become: false

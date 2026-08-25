@@ -1,0 +1,32 @@
+# The NAS media tree read-only for Jellyfin (ADR 0037 shape, own PV/PVC — a claim cannot cross namespaces);
+# server address via envsubst, never a tracked literal.
+apiVersion: v1
+kind: PersistentVolume
+metadata: {name: jellyfin-media}
+spec:
+  capacity: {storage: 1Ti}
+  accessModes: [ReadOnlyMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: [nfsvers=4.1, hard, noatime, rsize=1048576, wsize=1048576, nconnect=4, ro]
+  nfs: {server: "${SYNOLOGY_STORAGE}", path: /volume1/plex, readOnly: true}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: media, namespace: jellyfin}
+spec:
+  accessModes: [ReadOnlyMany]
+  storageClassName: ""
+  volumeName: jellyfin-media
+  resources: {requests: {storage: 1Ti}}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: config, namespace: jellyfin}
+spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 20Gi}}}
+---
+# Transcode scratch — bounded so a session can never pressure a Talos node.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: cache, namespace: jellyfin}
+spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 30Gi}}}

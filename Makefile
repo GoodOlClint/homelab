@@ -177,6 +177,10 @@ talos-games:
 games-migrate:
 	@kubernetes/games/deploy.sh migrate $(FROM)
 
+# P5d (ADR 0040): Jellyfin on jellyfin.<media domain> — LDAP auth against the authentik external realm, media read-only over NFS
+talos-jellyfin:
+	@kubernetes/jellyfin/deploy.sh
+
 # Fleet-root terraform passthrough with the TF_VAR_* exports (raw terraform hangs prompting for them);
 # the retirement step is `make tf ARGS='state rm <address>'` (ADR 0028: stopped, never destroyed)
 tf:
