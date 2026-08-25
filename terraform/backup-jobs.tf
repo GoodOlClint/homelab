@@ -21,11 +21,11 @@ resource "proxmox_backup_job" "jobs" {
   vmid = each.value.all ? null : each.value.vmids
   all  = each.value.all ? true : null
 
-  mode             = each.value.mode
-  enabled          = true
-  protected        = each.value.protected
-  prune_backups    = each.value.prune_backups
-  repeat_missed    = true
+  mode          = each.value.mode
+  enabled       = true
+  protected     = each.value.protected
+  prune_backups = each.value.prune_backups
+  repeat_missed = true
   # ASCII only: bpg round-trips non-ASCII in notes-template as mojibake and
   # fails the apply with "inconsistent result" (hit live with an em-dash).
   notes_template   = "{{guestname}} - IaC backup job '${each.key}'"

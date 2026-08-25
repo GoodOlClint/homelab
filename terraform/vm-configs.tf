@@ -79,9 +79,9 @@ locals {
     },
     # docker-on-LXC. OpenObserve parquet + metadata.sqlite, the Prometheus TSDB,
     {
-      name         = "proxmox-backup"
-      vm_id        = 201 # old 101 + 100 (ADR 0028)
-      node_name    = "ms-01b"
+      name      = "proxmox-backup"
+      vm_id     = 201 # old 101 + 100 (ADR 0028)
+      node_name = "ms-01b"
       # Hypervisor plane (ADR 0030) + the vlan20 leg for the Synology iSCSI LUN (ADR 0017 exception).
       # ip_offset 101 keeps the LUN-side address; on vlan30 it sits inside the DHCP pool (pfSense probes before leasing).
       vlans        = ["vlan30", "vlan20"]
