@@ -325,7 +325,7 @@ Self-hosted secret management platform deployed via Docker Compose:
 
 ### Talos Kubernetes services plane (`kubernetes/`)
 
-Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-manager (`homelab-ca`, an intermediate signed by the Infisical root — ADR 0039), Zot pull-through registry, ARC CI runners (ADR 0034), Traefik ingress + the Infisical Kubernetes operator + **homepage** (ADR 0035 — `make talos-ingress`, `make talos-infisical`, `make talos-homepage`), and the **monitoring stack** (ADR 0036 — `make talos-monitoring`, `make monitoring-migrate`, `make monitoring-users`) the **plex-services stack** (ADR 0037 — `make talos-plex-services`, `make plex-services-migrate`, `make plex-pbs-image`), and the **games stack** (ADR 0038 — `make talos-games`, `make games-migrate`, `make games-kuma`). Each `kubernetes/<component>/deploy.sh` renders with `helm template | kubectl apply`; runtime secrets are `InfisicalSecret` CRDs; images pull through `registry.<domain>`.
+Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-manager (`homelab-ca`, an intermediate signed by the Infisical root — ADR 0039), Zot pull-through registry, ARC CI runners (ADR 0034), Traefik ingress + the Infisical Kubernetes operator + **homepage** (ADR 0035 — `make talos-ingress`, `make talos-infisical`, `make talos-homepage`), and the **monitoring stack** (ADR 0036 — `make talos-monitoring`, `make monitoring-migrate`, `make monitoring-users`) the **plex-services stack** (ADR 0037 — `make talos-plex-services`, `make plex-services-migrate`, `make plex-pbs-image`), the **games stack** (ADR 0038 — `make talos-games`, `make games-migrate`, `make games-kuma`), and **external-dns** (ADR 0040 — `make talos-dns`: Ingress hosts on `<service domain>` become BIND records; AdGuard rewrites are gone). Each `kubernetes/<component>/deploy.sh` renders with `helm template | kubectl apply`; runtime secrets are `InfisicalSecret` CRDs; images pull through `registry.<domain>`.
 
 ## Ansible Roles
 
@@ -402,7 +402,7 @@ Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-m
 | update-all.yml | All + VPS | OS patching (apt/apk) |
 | update-dns.yml | DNS VMs | DNS configuration updates |
 | adguard-pause.yml | adguard group | Disable filtering on both AdGuard instances for n minutes (`make adguard-pause`) |
-| adguard-rewrite.yml | adguard group | Add a DNS rewrite on both AdGuard instances via the API (`make adguard-rewrite`) |
+| dns-records.yml | localhost (both inventories) | Push every inventory-derived name into the flat service zone over RFC 2136 (`make dns-records`, ADR 0040) |
 | data-volumes.yml | proxmox group | Format + chown new holder volumes, blkid-guarded (`make data-volumes`) |
 | backup-clients.yml | Multiple | PBS client configuration |
 | vps-rotate-keys.yml | VPS | WireGuard key rotation |
@@ -555,7 +555,8 @@ The Makefile is the primary operational interface.
 | `sdn-apply` | Apply only the SDN zones/VNETs derived from `vlans.yaml` (new guest VLAN) |
 | `inventory` | Generate Ansible inventory from Terraform outputs |
 | `adguard-pause MINUTES=n` | Pause AdGuard filtering on every resolver instance for n minutes (default 10) |
-| `adguard-rewrite DOMAIN=<fqdn> ANSWER=<ip>` | Add a DNS rewrite on every resolver instance via the API — the config template is initial-only; no-op when present |
+| `dns-records` | Push guests, nodes, VIPs, MetalLB names and the mirrored public records into `<service domain>` on BIND (nsupdate, TSIG); second run = 0 changed |
+| `talos-dns` | external-dns on the cluster: every Ingress host becomes an A record in the service zone over RFC 2136 (ADR 0040) |
 
 ### Targeted Operations
 

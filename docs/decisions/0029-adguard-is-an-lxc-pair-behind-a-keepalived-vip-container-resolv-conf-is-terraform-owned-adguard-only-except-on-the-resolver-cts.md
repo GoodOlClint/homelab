@@ -1,6 +1,7 @@
 # ADR 0029 — AdGuard is an LXC pair behind a keepalived VIP; container resolv.conf is Terraform-owned, AdGuard-only except on the resolver CTs
 
 - **Status:** Accepted
+- **Amended:** ADR 0040 (P5a, 2026-08-25) removed the rewrite variables and `make adguard-rewrite`; AdGuard now forwards the flat service zone to BIND and answers no internal name itself.
 - **Date:** 2026-08-21
 - **Deciders:** operator + agent
 - **Context source:** Day 3+ greenfield-replace session (ADR 0028 runbook, third guest) · plan doc WP4 "OPEN (ADR 0012 gap on containers)" · W6 findings 11/13
