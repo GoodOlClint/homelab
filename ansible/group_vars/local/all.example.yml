@@ -1,10 +1,5 @@
 # Local-only inventory variables (not tracked)
 # Copy to ansible/group_vars/local/all.yml and set real values.
 
-local_network:
-  domain_suffix: "REPLACE_WITH_DOMAIN"
-
-local_services: {}
-
 # Override default timezone for Docker containers (default: America/Chicago)
 # timezone: "America/New_York"
