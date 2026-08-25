@@ -227,14 +227,16 @@ endif
 # the bootstrap keys, restore the newest databases/infisical snapshot, then bake
 # the real PBS creds + confirm every machine identity. Never re-bootstraps —
 # that path discards the PKI root and every identity (make bootstrap is for an
-# empty fleet only).
+# empty fleet only). The first site.yml pass is allowed to fail: once the Phase 1
+# play has the empty stack answering, a later play's secrets login gets 401 —
+# the restore fixes that and the second pass must be clean.
 rebuild-infisical:
 	@echo "Removing Infisical VM protection via the cluster API..."
-	@PVE=$$($(VENV_PYTHON) -c "import yaml; print(yaml.safe_load(open('ansible/group_vars/all.yml'))['proxmox_host'])"); \
-		ssh "root@$$PVE" 'pvesh get /cluster/resources --type vm --output-format json' \
+	@PVE=$$($(VENV_PYTHON) -c "import yaml; print(next(iter(yaml.safe_load(open('ansible/inventory/proxmox.yaml'))['proxmox']['hosts'].values()))['ansible_host'])"); \
+		ssh -o BatchMode=yes "root@$$PVE" 'pvesh get /cluster/resources --type vm --output-format json' \
 		| $(VENV_PYTHON) -c "import json,sys; r=[x for x in json.load(sys.stdin) if x['name']=='infisical' and x['status']=='running']; print(r[0]['node'], r[0]['vmid'])" \
 		| { read -r node vmid; ssh "root@$$PVE" "pvesh set /nodes/$$node/qemu/$$vmid/config --protection 0"; }
-	@$(MAKE) rebuild VM=infisical
+	-@$(MAKE) rebuild VM=infisical
 	@$(MAKE) infisical-restore
 	@$(MAKE) ansible VM=infisical
 	@$(MAKE) refresh-identity
