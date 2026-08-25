@@ -3,15 +3,23 @@
 # cluster, signed by the Infisical internal root `Homelab Root CA` (Certificate Manager
 # project `homelab-pki`, both created here if absent). Exports the ROOT to
 # kubernetes/.secrets/homelab-ca.crt — that is what nodes and clients trust.
+# Plus the Let's Encrypt issuers (ADR 0040 P5b): DNS-01 via Cloudflare, token from Infisical
+# /infrastructure through an InfisicalSecret — needs `make talos-infisical` first; without the
+# operator the issuers are applied but stay NotReady until it lands.
 source "$(dirname "$0")/../lib.sh"
 NS=cert-manager
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT_CRT="$SECRETS/homelab-ca.crt"
+eval "$(inv_env)"   # ACME_EMAIL
+export ACME_EMAIL HOST_API="$(inf_host_api)" PROJECT_ID="$(inf_project_id)"
 
 helm repo add jetstack https://charts.jetstack.io >/dev/null 2>&1 || true
 helm repo update jetstack >/dev/null
 ns "$NS"
-helm_apply cert-manager jetstack/cert-manager "$NS" --set crds.enabled=true --set global.leaderElection.namespace="$NS"   # helm_apply -n rejects the chart's kube-system leader-election objects
+# DNS-01 self-check must ask public resolvers: AdGuard forwards the service zone to BIND, which never
+# sees the _acme-challenge TXT (a deliberate, cert-manager-only exception to ADR 0012).
+helm_apply cert-manager jetstack/cert-manager "$NS" --set crds.enabled=true --set global.leaderElection.namespace="$NS" \
+  --set 'dns01RecursiveNameservers=1.1.1.1:53\,1.0.0.1:53' --set dns01RecursiveNameserversOnly=true   # helm_apply -n rejects the chart's kube-system leader-election objects
 for d in cert-manager cert-manager-webhook cert-manager-cainjector; do kubectl -n "$NS" rollout status deploy/$d --timeout=300s; done
 
 API="$(inf_host_api)" TOK="$(inf_token)"
@@ -36,5 +44,12 @@ if ! kubectl -n "$NS" get secret homelab-ca -o jsonpath='{.data.tls\.crt}' 2>/de
     --dry-run=client -o yaml | kubectl apply -f -
   echo "intermediate homelab-ca signed by the root"
 fi
-until kubectl apply -f "$HERE/issuer.yaml" 2>/dev/null; do sleep 5; done   # webhook readiness lags the rollout
+until envsubst < "$HERE/issuer.yaml" | kubectl apply -f - 2>/dev/null; do sleep 5; done   # webhook readiness lags the rollout
 kubectl wait --for=condition=Ready clusterissuer/homelab-ca --timeout=120s
+if kubectl get crd infisicalsecrets.secrets.infisical.com >/dev/null 2>&1; then
+  envsubst < "$HERE/secrets.yaml" | kubectl apply -f -
+  for i in $(seq 30); do kubectl -n "$NS" get secret cloudflare-api-token >/dev/null 2>&1 && break; sleep 2; done
+  kubectl wait --for=condition=Ready clusterissuer/letsencrypt clusterissuer/letsencrypt-staging --timeout=120s
+else
+  echo "Infisical operator absent: letsencrypt issuers stay NotReady until make talos-infisical, then re-run"
+fi

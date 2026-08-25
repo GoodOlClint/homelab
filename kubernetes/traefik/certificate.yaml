@@ -1,7 +1,17 @@
+# Default cert: Let's Encrypt wildcards over both public domains (ADR 0040 P5b).
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata: {name: wildcard-tls, namespace: traefik}
 spec:
-  dnsNames: ["*.${DOMAIN}", "${DOMAIN}", "*.${LEGACY_DOMAIN}", "*.${SERVICES_ZONE}", "${LEGACY_DOMAIN}"]
+  dnsNames: ["*.${DOMAIN}", "*.${MEDIA_DOMAIN}"]
   secretName: wildcard-tls
+  issuerRef: {name: ${ISSUER}, kind: ClusterIssuer}
+---
+# SNI fallback for the legacy names (302 path) until P5e — no public CA can sign .internal.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: {name: legacy-tls, namespace: traefik}
+spec:
+  dnsNames: ["*.${LEGACY_DOMAIN}", "*.${SERVICES_ZONE}", "${LEGACY_DOMAIN}"]
+  secretName: legacy-tls
   issuerRef: {name: homelab-ca, kind: ClusterIssuer}

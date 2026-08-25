@@ -10,6 +10,7 @@ ports:
 tlsStore:
   default:
     defaultCertificate: {secretName: wildcard-tls}
+    certificates: [{secretName: legacy-tls}]
 service:
   annotations: {metallb.io/loadBalancerIPs: "${LB_IP}"}
 providers:
