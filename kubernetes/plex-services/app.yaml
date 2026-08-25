@@ -462,7 +462,6 @@ spec:
               env:
                 - {name: PBS_REPOSITORY, value: "${PBS_REPOSITORY}"}
                 - {name: PBS_PASSWORD, valueFrom: {secretKeyRef: {name: pbs-secrets, key: PBS_PASSWORD}}}
-                - {name: PBS_FINGERPRINT, valueFrom: {secretKeyRef: {name: pbs-secrets, key: PBS_FINGERPRINT}}}
               volumeMounts:
                 - {name: backups, mountPath: /backups, subPath: data}
           volumes:

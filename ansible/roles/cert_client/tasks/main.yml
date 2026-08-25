@@ -1,0 +1,67 @@
+---
+- name: Install certbot with the RFC 2136 plugin
+  ansible.builtin.apt:
+    name:
+      - certbot
+      - python3-certbot-dns-rfc2136
+    state: present
+  tags: [cert_client]
+
+- name: RFC 2136 credentials
+  ansible.builtin.template:
+    src: rfc2136.ini.j2
+    dest: /etc/letsencrypt/rfc2136.ini
+    mode: "0600"
+  no_log: true
+  tags: [cert_client]
+
+- name: Deploy hook directory
+  ansible.builtin.file:
+    path: /etc/letsencrypt/renewal-hooks/deploy
+    state: directory
+    mode: "0755"
+  tags: [cert_client]
+
+- name: Deploy hook
+  ansible.builtin.copy:
+    content: "#!/bin/sh\nset -e\n{{ cert_client_deploy_hook }}\n"
+    dest: /etc/letsencrypt/renewal-hooks/deploy/{{ inventory_hostname }}.sh
+    mode: "0755"
+  when: cert_client_deploy_hook | length > 0
+  tags: [cert_client]
+
+- name: Check the current certificate
+  ansible.builtin.stat:
+    path: "{{ cert_client_dir }}/fullchain.pem"
+  register: _cert_client_cert
+  tags: [cert_client]
+
+- name: Request the certificate (DNS-01 via BIND)
+  ansible.builtin.command:
+    cmd: >-
+      certbot certonly --non-interactive --agree-tos --email {{ acme_email }}
+      --server {{ secrets.infrastructure.acme_directory_url }}
+      --dns-rfc2136 --dns-rfc2136-credentials /etc/letsencrypt/rfc2136.ini
+      --dns-rfc2136-propagation-seconds 30
+      --cert-name {{ cert_client_fqdn }} --domain {{ ([cert_client_fqdn] + cert_client_extra_domains) | join(',') }}
+      --key-type rsa
+  when: not _cert_client_cert.stat.exists
+  register: _cert_client_issue
+  tags: [cert_client]
+
+- name: Run the deploy hook once for a fresh certificate
+  ansible.builtin.command:
+    cmd: /etc/letsencrypt/renewal-hooks/deploy/{{ inventory_hostname }}.sh
+  environment:
+    RENEWED_LINEAGE: "{{ cert_client_dir }}"
+  when:
+    - _cert_client_issue is changed
+    - cert_client_deploy_hook | length > 0
+  tags: [cert_client]
+
+- name: Renewal timer
+  ansible.builtin.systemd:
+    name: certbot.timer
+    enabled: true
+    state: started
+  tags: [cert_client]

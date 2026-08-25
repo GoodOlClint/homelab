@@ -9,7 +9,7 @@ provider "proxmox" {
   endpoint = var.virtual_environment_endpoint
   username = var.virtual_environment_username
   password = var.virtual_environment_password
-  insecure = true # self-signed node certs until WP8 (ACME) lands
+  insecure = var.insecure # false: node certs chain to the Homelab Root CA (ADR 0041); TF_VAR_insecure=true only for the first ACME order
 
   ssh {
     agent = true

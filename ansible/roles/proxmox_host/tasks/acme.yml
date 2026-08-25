@@ -1,0 +1,14 @@
+---
+# ADR 0041: node certs come from certbot (cert_client) — PVE's own ACME client rejects the
+# CRLF-terminated PEM Infisical serves — and land through `pvenode cert set`, which reloads
+# pveproxy. The cert carries the node name and the cluster VIP name. Needs runtime secrets
+# (the acme-key TSIG secret + directory URL) — skipped on a Day-1 node.
+- name: Node certificate (certbot, DNS-01 via BIND)
+  ansible.builtin.include_role:
+    name: cert_client
+  vars:
+    cert_client_fqdn: "{{ inventory_hostname }}.{{ network_data.service_domain }}"
+    cert_client_extra_domains: ["{{ proxmox_host_vip_name }}.{{ network_data.service_domain }}"]
+    cert_client_deploy_hook: 'pvenode cert set "$RENEWED_LINEAGE/fullchain.pem" "$RENEWED_LINEAGE/privkey.pem" --force --restart 1'
+  when: secrets.infrastructure.acme_directory_url is defined
+  tags: [acme]

@@ -194,3 +194,6 @@ kubernetes/.secrets/
 
 # InfisicalSecret CRDs (key references only, no values) — ADR 0035
 !kubernetes/*/secrets.yaml
+
+# copied into the image build context by make plex-pbs-image (ADR 0041)
+kubernetes/plex-services/pbs-client/homelab-ca.crt

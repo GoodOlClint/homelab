@@ -1,0 +1,89 @@
+---
+# ADR 0041: a host cert issued through the Infisical API from the fleet-hosts profile (the
+# API enrollment) — for hosts that cannot use ACME: the vault itself (directory chicken-and-egg)
+# and MeshCentral (needs a subject CN, which Infisical's ACME leaves omit). Key + CSR stay on
+# the host; the workstation posts the CSR with the play's login token. A self-signed
+# placeholder covers the bootstrap run before the vault answers. Re-issued when < 30 days
+# remain or the root/SAN drifts. Caller vars: api_cert_dir, api_cert_fqdn, api_cert_handler,
+# optional api_cert_ip.
+- name: TLS directory
+  ansible.builtin.file:
+    path: "{{ api_cert_dir }}"
+    state: directory
+    mode: "0755"
+
+# RSA: the fleet-hosts profile issues from the RSA intermediate and Infisical only signs a CSR
+# whose key family matches the CA's.
+- name: Check the current key and certificate
+  ansible.builtin.shell: |
+    set -o pipefail
+    k={{ api_cert_dir }}/key.pem; c={{ api_cert_dir }}/cert.pem
+    [ -s "$k" ] && openssl pkey -in "$k" -noout -text 2>/dev/null | head -1 | grep -q RSA || { echo key; exit 0; }
+    [ -s "$c" ] || { echo missing; exit 0; }
+    openssl x509 -in "$c" -noout -checkend 2592000 >/dev/null || { echo expiring; exit 0; }
+    openssl verify -CAfile /usr/local/share/ca-certificates/homelab-root-ca.crt -untrusted "$c" "$c" >/dev/null 2>&1 || { echo untrusted; exit 0; }
+    openssl x509 -in "$c" -noout -ext subjectAltName | grep -q "DNS:{{ api_cert_fqdn }}" || { echo san; exit 0; }
+    echo ok
+  args:
+    executable: /bin/bash
+  register: _api_cert_state
+  changed_when: false
+
+- name: Generate the RSA private key
+  ansible.builtin.shell: |
+    set -o pipefail
+    rm -f {{ api_cert_dir }}/cert.pem
+    openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out {{ api_cert_dir }}/key.pem
+    chmod 0600 {{ api_cert_dir }}/key.pem
+  args:
+    executable: /bin/bash
+  when: _api_cert_state.stdout == 'key'
+
+- name: Self-signed placeholder until the vault answers
+  ansible.builtin.command:
+    cmd: >-
+      openssl req -x509 -key {{ api_cert_dir }}/key.pem -subj /CN={{ api_cert_fqdn }}
+      -addext subjectAltName=DNS:{{ api_cert_fqdn }} -days 30 -out {{ api_cert_dir }}/cert.pem
+  when: _api_cert_state.stdout in ['missing', 'key']
+  notify: "{{ api_cert_handler }}"
+
+- name: Issue the certificate from the fleet-hosts profile
+  when:
+    - _api_cert_state.stdout != 'ok'
+    - secrets.infrastructure.acme_profile_id is defined
+  block:
+    - name: Build the CSR
+      ansible.builtin.command:
+        cmd: >-
+          openssl req -new -key {{ api_cert_dir }}/key.pem -subj /CN={{ api_cert_fqdn }}
+          -addext subjectAltName=DNS:{{ api_cert_fqdn }}{{ (',IP:' ~ api_cert_ip) if api_cert_ip | default('') else '' }}
+      register: _api_cert_csr
+      changed_when: false
+
+    - name: Request the certificate through the Infisical API
+      ansible.builtin.uri:
+        url: "{{ bootstrap_config.infisical_url }}/api/v1/cert-manager/certificates"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ infisical_login.login_data.access_token }}"
+        body_format: json
+        body:
+          profileId: "{{ secrets.infrastructure.acme_profile_id }}"
+          applicationId: "{{ secrets.infrastructure.acme_application_id }}"
+          csr: "{{ _api_cert_csr.stdout }}"
+          attributes:
+            commonName: "{{ api_cert_fqdn }}"
+            altNames: "{{ [{'type': 'dns_name', 'value': api_cert_fqdn}] + ([{'type': 'ip_address', 'value': api_cert_ip}] if api_cert_ip | default('') else []) }}"
+            ttl: 365d
+        status_code: 200
+      register: _api_cert_issue
+      delegate_to: localhost
+      become: false
+      no_log: true
+
+    - name: Install the certificate chain
+      ansible.builtin.copy:
+        content: "{{ _api_cert_issue.json.certificate.certificate }}\n{{ _api_cert_issue.json.certificate.certificateChain }}\n"
+        dest: "{{ api_cert_dir }}/cert.pem"
+        mode: "0644"
+      notify: "{{ api_cert_handler }}"

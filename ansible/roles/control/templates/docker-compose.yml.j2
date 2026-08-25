@@ -4,7 +4,6 @@ services:
     container_name: meshcentral
     restart: unless-stopped
     ports:
-      - "80:80"
       - "443:443"
     environment:
       - TZ={{ timezone }}
@@ -18,12 +17,13 @@ services:
     image: {{ portainer_image }}
     container_name: portainer
     restart: unless-stopped
-    command: --no-setup-token
+    command: --no-setup-token --sslcert /certs/cert.pem --sslkey /certs/key.pem
     ports:
       - "{{ portainer_port }}:9443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - {{ control_base_dir }}/portainer:/data
+      - {{ control_base_dir }}/tls:/certs:ro
     healthcheck:
       test: ["CMD", "wget", "--no-check-certificate", "-q", "--spider", "https://localhost:9443/api/system/status"]
       interval: 30s

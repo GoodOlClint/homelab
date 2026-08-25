@@ -1,0 +1,10 @@
+---
+# ADR 0041: a per-host cert from the Infisical fleet-hosts ACME directory for guests with no
+# native ACME client — certbot with DNS-01 through BIND's dynamic-update path on the TXT-only
+# acme-key. certbot.timer renews; the deploy hook is the consumer's install step.
+cert_client_fqdn: "{{ inventory_hostname }}.{{ service_domain }}"
+cert_client_dir: "/etc/letsencrypt/live/{{ cert_client_fqdn }}"
+# Extra SANs on the same cert (a PVE node adds the cluster VIP name).
+cert_client_extra_domains: []
+# Shell run by certbot after every issue/renew (RENEWED_LINEAGE is set); the consumer role sets it.
+cert_client_deploy_hook: ""

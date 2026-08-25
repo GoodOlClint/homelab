@@ -38,5 +38,27 @@
         file: "{{ playbook_dir }}/../group_vars/all.yml"
       failed_when: false
       tags: [always]
+
+    # Runtime secrets only once the vault answers (ADR 0041's ACME key); a Day-1
+    # node has no guest to ask, so an unreachable Infisical skips instead of failing.
+    - name: Probe Infisical
+      ansible.builtin.uri:
+        url: "{{ bootstrap_config.infisical_url }}/api/status"
+        timeout: 5
+      register: _pve_infisical
+      delegate_to: localhost
+      become: false
+      run_once: true
+      failed_when: false
+      tags: [always]
+
+    - name: Load runtime secrets
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/../tasks/infisical_login.yml"
+        apply:
+          tags: [always]
+      run_once: true
+      when: _pve_infisical.status | default(0) == 200
+      tags: [always]
   roles:
     - proxmox_host

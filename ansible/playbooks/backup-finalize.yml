@@ -26,19 +26,17 @@
     # namespace must already exist on PBS. W2 campaign registers worklab with
     # storage id pbs-campaign + namespace w2-campaign via -e overrides.
     pbs_pve_namespace: ""
-    # Nodes reach PBS over the storage VLAN (PBS keeps its vlan20 leg — ADR 0017);
-    # same-offset prefix translation is the repo convention.
-    pbs_pve_server: "{{ hostvars['proxmox-backup'].ansible_host | replace(mgmt_vlan_prefix, storage_vlan_prefix) | replace(services_vlan_prefix, storage_vlan_prefix) }}"
+    # The name on PBS's ACME cert (ADR 0041): nodes verify it through the root CA, no fingerprint.
+    pbs_pve_server: "proxmox-backup.{{ service_domain }}"
 
   tasks:
     - name: Require PBS credentials from Infisical /shared
       ansible.builtin.assert:
         that:
           - secrets.pbs_backup_token | default('') | length > 0
-          - secrets.pbs_fingerprint | default('') | length > 0
         fail_msg: >-
-          /shared/pbs_backup_token and /shared/pbs_fingerprint must exist in
-          Infisical — run the proxmox-backup provisioning play first.
+          /shared/pbs_backup_token must exist in Infisical — run the
+          proxmox-backup provisioning play first.
         quiet: true
       run_once: true
 
@@ -100,7 +98,6 @@
           --datastore {{ pbs_pve_datastore }}
           --username backup@pbs!backup-token
           --password {{ secrets.pbs_backup_token }}
-          --fingerprint {{ secrets.pbs_fingerprint }}
           --content backup{{ (pbs_pve_namespace | length > 0) | ternary(' --namespace ' ~ pbs_pve_namespace, '') }}
       run_once: true
       changed_when: true
@@ -110,7 +107,7 @@
     - name: Recreate PBS storage (datastore/server moved)
       ansible.builtin.shell: |
         pvesm remove {{ pbs_pve_storage_id }}
-        pvesm add pbs {{ pbs_pve_storage_id }}           --server {{ pbs_pve_server }}           --datastore {{ pbs_pve_datastore }}           --username backup@pbs!backup-token           --password {{ secrets.pbs_backup_token }}           --fingerprint {{ secrets.pbs_fingerprint }}           --content backup{{ (pbs_pve_namespace | length > 0) | ternary(' --namespace ' ~ pbs_pve_namespace, '') }}
+        pvesm add pbs {{ pbs_pve_storage_id }}           --server {{ pbs_pve_server }}           --datastore {{ pbs_pve_datastore }}           --username backup@pbs!backup-token           --password {{ secrets.pbs_backup_token }}           --content backup{{ (pbs_pve_namespace | length > 0) | ternary(' --namespace ' ~ pbs_pve_namespace, '') }}
       run_once: true
       changed_when: true
       no_log: true
@@ -118,15 +115,15 @@
         - _pbs_entry is not none
         - _pbs_drifted | bool
 
-    # Same endpoint, but PBS was rebuilt: token + fingerprint rotated, entry
-    # inactive. Push current credentials.
+    # Same endpoint, but PBS was rebuilt: token rotated, entry inactive. Push
+    # current credentials.
     - name: Reconcile PBS storage credentials
       ansible.builtin.command:
         cmd: >-
           pvesm set {{ pbs_pve_storage_id }}
           --username backup@pbs!backup-token
           --password {{ secrets.pbs_backup_token }}
-          --fingerprint {{ secrets.pbs_fingerprint }}
+          --delete fingerprint
       run_once: true
       changed_when: true
       no_log: true

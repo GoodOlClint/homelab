@@ -1,0 +1,90 @@
+---
+# ADR 0041: PBS's cert from the Infisical fleet-hosts ACME directory over DNS-01 (nsupdate
+# plugin on the TXT-only acme-key); proxmox-backup-daily-update renews.
+- name: Install nsupdate for the ACME DNS plugin
+  ansible.builtin.apt:
+    name: [bind9-dnsutils, jq]
+    state: present
+  tags: [proxmox_backup, pbs, acme]
+
+- name: ACME plugin key directory
+  ansible.builtin.file:
+    path: /etc/proxmox-acme
+    state: directory
+    mode: "0755"
+  tags: [proxmox_backup, pbs, acme]
+
+# The DNS plugin runs as nobody (setpriv), so the key is group-readable by nogroup.
+- name: ACME challenge key
+  ansible.builtin.copy:
+    content: |
+      key "acme-key" {
+          algorithm hmac-sha256;
+          secret "{{ secrets.infrastructure.acme_tsig_key_secret }}";
+      };
+    dest: /etc/proxmox-acme/tsig.key
+    owner: root
+    group: nogroup
+    mode: "0640"
+  no_log: true
+  tags: [proxmox_backup, pbs, acme]
+
+- name: Read the ACME state
+  ansible.builtin.shell: |
+    set -o pipefail
+    printf 'account=%s\n' "$(proxmox-backup-manager acme account info default --output-format json 2>/dev/null | jq -r '.directory // ""')"
+    printf 'plugin=%s\n' "$(proxmox-backup-manager acme plugin list --output-format json | jq -r '.[].plugin' | paste -sd,)"
+    printf 'domain=%s\n' "$(proxmox-backup-manager node show --output-format json | jq -r '.acmedomain0 // ""')"
+    printf 'issuer=%s\n' "$(openssl x509 -in /etc/proxmox-backup/proxy.pem -noout -issuer 2>/dev/null)"
+    printf 'san=%s\n' "$(openssl x509 -in /etc/proxmox-backup/proxy.pem -noout -ext subjectAltName 2>/dev/null | tr -d ' \n')"
+  args:
+    executable: /bin/bash
+  register: _pbs_acme
+  changed_when: false
+  tags: [proxmox_backup, pbs, acme]
+
+- name: Drop an account registered against another directory
+  ansible.builtin.command:
+    cmd: proxmox-backup-manager acme account deactivate default
+  when:
+    - _pbs_acme.stdout_lines[0] != 'account='
+    - _pbs_acme.stdout_lines[0] != 'account=' ~ secrets.infrastructure.acme_directory_url
+  tags: [proxmox_backup, pbs, acme]
+
+- name: Register the ACME account
+  ansible.builtin.shell:
+    cmd: printf 'n\n' | proxmox-backup-manager acme account register default {{ acme_email }} --directory {{ secrets.infrastructure.acme_directory_url }}
+  when: _pbs_acme.stdout_lines[0] != 'account=' ~ secrets.infrastructure.acme_directory_url
+  tags: [proxmox_backup, pbs, acme]
+
+- name: Configure the nsupdate DNS plugin
+  when: "'bind' not in _pbs_acme.stdout_lines[1]"
+  block:
+    - name: Plugin data file
+      ansible.builtin.copy:
+        content: |
+          NSUPDATE_SERVER={{ network_data.dns_server.bind_ipv4 }}
+          NSUPDATE_KEY=/etc/proxmox-acme/tsig.key
+          NSUPDATE_ZONE={{ service_domain }}
+        dest: /etc/proxmox-acme/bind.data
+        mode: "0600"
+    - name: Add the plugin
+      ansible.builtin.command:
+        cmd: proxmox-backup-manager acme plugin add dns bind --api nsupdate --data /etc/proxmox-acme/bind.data --validation-delay 30
+  tags: [proxmox_backup, pbs, acme]
+
+- name: Point the node config at the account and domain
+  ansible.builtin.command:
+    cmd: proxmox-backup-manager node update --acme account=default --acmedomain0 domain={{ pbs_fqdn }},plugin=bind
+  when: _pbs_acme.stdout_lines[2] != 'domain=domain=' ~ pbs_fqdn ~ ',plugin=bind'
+  tags: [proxmox_backup, pbs, acme]
+
+- name: Order the certificate
+  ansible.builtin.command:
+    cmd: proxmox-backup-manager acme cert order --force
+  register: _acme_order
+  failed_when: "'TASK ERROR' in (_acme_order.stdout ~ _acme_order.stderr) or _acme_order.rc != 0"
+  when: >-
+    'Homelab Root CA' not in _pbs_acme.stdout_lines[3]
+    or ('DNS:' ~ pbs_fqdn) not in _pbs_acme.stdout_lines[4]
+  tags: [proxmox_backup, pbs, acme]

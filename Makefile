@@ -39,7 +39,7 @@ ifneq (,$(filter build rebuild plan ansible docker-config update,$(firstword $(M
 endif
 
 # === Core Operations ===
-.PHONY: talos-authentik talos-plan talos-build talos-secrets talos-apply talos-bootstrap talos-csi talos-smoke talos-lb talos-certs talos-registry talos-trust registry-smoke talos-arc talos-ingress talos-infisical infisical-smoke talos-homepage all apply plan init terraform-apply terraform-bootstrap inventory bootstrap ansible-bootstrap build rebuild rebuild-infisical data-volumes backup-jobs sdn-apply
+.PHONY: refresh talos-authentik talos-plan talos-build talos-secrets talos-apply talos-bootstrap talos-csi talos-smoke talos-lb talos-certs talos-registry talos-trust registry-smoke talos-arc talos-ingress talos-infisical infisical-smoke talos-homepage all apply plan init terraform-apply terraform-bootstrap inventory bootstrap ansible-bootstrap build rebuild rebuild-infisical data-volumes backup-jobs sdn-apply
 
 all: apply
 
@@ -50,6 +50,10 @@ bootstrap: terraform-bootstrap inventory ansible-bootstrap
 
 ansible-bootstrap:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/bootstrap.yml
+
+# Refresh state + outputs (terraform refresh updates state but NOT outputs) — settles agent-reported drift after a guest change.
+refresh:
+	@cd terraform && terraform apply -refresh-only -auto-approve -no-color -input=false > /dev/null && echo "state refreshed"
 
 plan:
 ifdef VM
@@ -167,6 +171,7 @@ plex-services-migrate:
 # Build + push the pg-backup CronJob's proxmox-backup-client image (the registry's one local push);
 # re-run when the PBS server major rolls (client suite tracks the Debian base)
 plex-pbs-image:
+	@cp kubernetes/.secrets/homelab-ca.crt kubernetes/plex-services/pbs-client/homelab-ca.crt
 	@DOMAIN=$$(jq -r .domain kubernetes/talos/.secrets/nodes.json); \
 	docker build --platform linux/amd64 -t registry.$$DOMAIN/homelab/proxmox-backup-client:trixie kubernetes/plex-services/pbs-client && \
 	docker push registry.$$DOMAIN/homelab/proxmox-backup-client:trixie
@@ -519,14 +524,14 @@ node-bootstrap:
 # node is clustered (a standalone node's API cannot reach the others); omit it
 # once the cluster exists to converge every node through the VIP.
 HOSTS_TARGETS = $(if $(NODE),-target='proxmox_network_linux_bond.bond0["$(NODE)"]' -target='proxmox_network_linux_bridge.vmbr0["$(NODE)"]' -target='proxmox_network_linux_vlan.storage["$(NODE)"]',)
+# ENDPOINT defaults to the VIP name (its SAN is on every node cert, ADR 0041); pass a node URL during bring-up.
+ENDPOINT ?= https://pve.$(shell .venv/bin/python3 -c "import yaml;print(yaml.safe_load(open('network-data/vlans.yaml'))['service_domain'])"):8006/
 hosts-plan:
-	@test -n "$(ENDPOINT)" || { echo "ERROR: set ENDPOINT=https://<node-vlan30-ip>:8006/"; exit 1; }
 	@cd terraform/hosts && terraform init -input=false >/dev/null && \
 		TF_VAR_virtual_environment_endpoint="$(ENDPOINT)" terraform plan -no-color -input=false $(HOSTS_TARGETS)
 
 # Apply the host plane (interactive confirm; AUTO=1 skips it). make hosts-apply ENDPOINT=https://<node-vlan30-ip>:8006/
 hosts-apply:
-	@test -n "$(ENDPOINT)" || { echo "ERROR: set ENDPOINT=https://<node-vlan30-ip>:8006/"; exit 1; }
 	@cd terraform/hosts && terraform init -input=false >/dev/null && \
 		TF_VAR_virtual_environment_endpoint="$(ENDPOINT)" terraform apply -input=false $(if $(AUTO),-auto-approve,) $(HOSTS_TARGETS)
 

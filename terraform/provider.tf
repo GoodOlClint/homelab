@@ -25,7 +25,7 @@ provider "proxmox" {
   endpoint = var.virtual_environment_endpoint
   username = var.virtual_environment_username
   password = var.virtual_environment_password
-  insecure = true # Allow self-signed certificates for local lab
+  insecure = false # node certs chain to the Homelab Root CA (ADR 0041); the VIP name is a SAN on every node cert
   ssh {
     agent = true
     # bpg otherwise resolves a node's SSH address from its first interface, which

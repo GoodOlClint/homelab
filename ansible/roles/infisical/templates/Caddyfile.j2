@@ -1,0 +1,7 @@
+{
+    auto_https off
+}
+:443 {
+    tls /tls/cert.pem /tls/key.pem
+    reverse_proxy infisical:8080
+}

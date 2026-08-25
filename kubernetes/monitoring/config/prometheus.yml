@@ -80,6 +80,26 @@ scrape_configs:
       - target_label: __address__
         replacement: blackbox:9115
 
+  # Fleet-host certs (ADR 0041): TLSCertExpiringSoon watches probe_ssl_earliest_cert_expiry.
+  - job_name: 'blackbox-tls'
+    metrics_path: /probe
+    params:
+      module: [http_2xx_insecure]
+    static_configs:
+      - targets:
+          - https://${PVE_API_HOST}:8006/
+          - https://${PBS}:8007/
+          - https://pdm.${DOMAIN}:8443/
+          - https://infisical.${DOMAIN}/api/status
+          - https://control.${DOMAIN}:9443/
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox:9115
+
   - job_name: 'blackbox-plex'
     metrics_path: /probe
     params:

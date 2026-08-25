@@ -1,0 +1,5 @@
+dns_rfc2136_server = {{ network_data.dns_server.bind_ipv4 }}
+dns_rfc2136_port = 53
+dns_rfc2136_name = acme-key
+dns_rfc2136_secret = {{ secrets.infrastructure.acme_tsig_key_secret }}
+dns_rfc2136_algorithm = HMAC-SHA256

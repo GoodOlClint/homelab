@@ -7,7 +7,7 @@ source "$(dirname "$0")/../lib.sh"
 NS=monitoring
 HERE="$(cd "$(dirname "$0")" && pwd)"
 eval "$(inv_env)"   # ADGUARD BIND PLEX PBS UNIFI SYNOLOGY TZ SERVICE_DOMAIN ...
-DOMAIN="$SERVICE_DOMAIN"
+export DOMAIN="$SERVICE_DOMAIN"
 export REGISTRY="registry.$(j .domain)" HOST_API="$(inf_host_api)" PROJECT_ID="$(inf_project_id)" SYSLOG_IP="$(subnet_ip 66)"
 export AUTH_HOST="auth.$DOMAIN" GRAFANA_HOST="grafana.$DOMAIN" OO_HOST="openobserve.$DOMAIN" PROM_HOST="prometheus.$DOMAIN" AM_HOST="alertmanager.$DOMAIN" KUMA_HOST="uptime-kuma.$DOMAIN"
 export PVE_API_HOST="$(sed -n 's/^virtual_environment_endpoint *= *"https\{0,1\}:\/\/\([^:"/]*\).*/\1/p' "$ROOT/terraform/vars.auto.tfvars")"
@@ -15,7 +15,7 @@ GEN="$(mktemp -d)"; trap 'rm -rf "$GEN"' EXIT
 eval "$("$ROOT/.venv/bin/python3" "$HERE/render.py" "$ROOT" "$GEN")"   # OO_EMAIL UNIFI_PORT SYNOLOGY_SNMP_COMMUNITY SMOKEPING_ARGS + $GEN/*.json
 export CONFIG_HASH="$(cat "$HERE"/config/* "$GEN"/*.json | shasum -a 256 | cut -c1-16)"
 # Only these are substituted — the configs carry $-syntax of their own (Grafana, Prometheus templates, syslog-ng macros).
-SUBST='${REGISTRY} ${HOST_API} ${PROJECT_ID} ${SYSLOG_IP} ${AUTH_HOST} ${GRAFANA_HOST} ${OO_HOST} ${PROM_HOST} ${AM_HOST} ${KUMA_HOST} ${PVE_API_HOST} ${ADGUARD} ${BIND} ${PLEX} ${PBS} ${UNIFI} ${UNIFI_PORT} ${SYNOLOGY} ${SYNOLOGY_SNMP_COMMUNITY} ${SMOKEPING_ARGS} ${OO_EMAIL} ${TZ} ${MEDIA_DOMAIN} ${CONFIG_HASH}'
+SUBST='${REGISTRY} ${HOST_API} ${PROJECT_ID} ${SYSLOG_IP} ${AUTH_HOST} ${GRAFANA_HOST} ${OO_HOST} ${PROM_HOST} ${AM_HOST} ${KUMA_HOST} ${PVE_API_HOST} ${DOMAIN} ${ADGUARD} ${BIND} ${PLEX} ${PBS} ${UNIFI} ${UNIFI_PORT} ${SYNOLOGY} ${SYNOLOGY_SNMP_COMMUNITY} ${SMOKEPING_ARGS} ${OO_EMAIL} ${TZ} ${MEDIA_DOMAIN} ${CONFIG_HASH}'
 sub() { envsubst "$SUBST"; }
 
 migrate() {

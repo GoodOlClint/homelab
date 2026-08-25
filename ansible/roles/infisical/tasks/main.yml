@@ -33,6 +33,21 @@
     owner: '999'
     group: '999'
 
+- name: Deploy Caddyfile
+  ansible.builtin.template:
+    src: Caddyfile.j2
+    dest: "{{ infisical_data_dir }}/Caddyfile"
+    mode: '0644'
+  notify: Restart Caddy
+
+- name: Vault certificate (API-issued, ADR 0041)
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/api_certificate.yml"
+  vars:
+    api_cert_dir: "{{ infisical_tls_dir }}"
+    api_cert_fqdn: "{{ infisical_fqdn }}"
+    api_cert_ip: "{{ ansible_host | replace(mgmt_vlan_prefix, services_vlan_prefix) }}"
+    api_cert_handler: Restart Caddy
+
 - name: Deploy Infisical docker-compose configuration
   ansible.builtin.template:
     src: docker-compose.yml.j2

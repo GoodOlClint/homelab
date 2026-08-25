@@ -73,3 +73,5 @@
     - proxmox-datacenter-api
     - proxmox-datacenter-privileged-api
   tags: [pdm, services]
+
+- ansible.builtin.import_tasks: acme.yml

@@ -113,11 +113,11 @@
 - name: Verify PBS connection
   ansible.builtin.shell: |
     . /etc/proxmox-backup/pbs-client.env
-    if [ -z "$PBS_PASSWORD" ] || [ -z "$PBS_FINGERPRINT" ]; then
+    if [ -z "$PBS_PASSWORD" ]; then
       echo "SKIP: PBS credentials not yet available"
       exit 2
     fi
-    timeout 10 proxmox-backup-client snapshot list | head -n 1
+    timeout -s KILL 10 proxmox-backup-client snapshot list </dev/null | head -n 1
   register: pbs_connection_test
   failed_when: false
   changed_when: false

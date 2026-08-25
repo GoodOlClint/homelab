@@ -88,3 +88,6 @@ proxmox_host_dns_search: "{{ network_data.service_domain }}"
 # killed job never leaks a guest. 0 disables.
 proxmox_host_ci_pool: ci
 proxmox_host_ci_max_age_hours: 8
+
+# ADR 0041: the cluster VIP name, a SAN on every node cert
+proxmox_host_vip_name: pve

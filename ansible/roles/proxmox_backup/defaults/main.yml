@@ -80,3 +80,6 @@ pbs_namespaces:
   - datastore: synology
     namespace: databases
     comment: "Database backups"
+
+# ADR 0041: the name on the ACME cert; every PBS consumer verifies it through the root CA (no fingerprint pin)
+pbs_fqdn: "proxmox-backup.{{ service_domain }}"

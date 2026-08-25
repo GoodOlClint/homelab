@@ -57,7 +57,7 @@ net = yaml.safe_load(open(f"{r}/network-data/vlans.yaml"))
 g = yaml.safe_load(open(f"{r}/ansible/group_vars/all.yml"))
 for h, v in hosts.items():
     print(f"export {h.upper().replace('-', '_')}={v['service_ip']}")
-print(f"export PBS={hosts['proxmox-backup']['service_ip']}")
+print(f"export PBS=proxmox-backup.{net['service_domain']}")   # PBS's ACME cert name (ADR 0041), verified through the root
 print(f"export ADGUARD={net['dns_server']['dns_ipv4']}")
 print(f"export BIND={net['dns_server']['bind_ipv4']}")
 print(f"export SYNOLOGY={g['synology_host']}")

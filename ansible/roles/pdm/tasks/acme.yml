@@ -1,0 +1,95 @@
+---
+# ADR 0041: PDM's cert from the Infisical fleet-hosts ACME directory over DNS-01 (nsupdate
+# plugin on the TXT-only acme-key); proxmox-datacenter-manager-daily-update renews. The CLI has
+# no setter for the domain list, so it lands in acme/certificate.cfg directly (node.cfg is ignored).
+- name: Install nsupdate for the ACME DNS plugin
+  ansible.builtin.apt:
+    name: [bind9-dnsutils, jq]
+    state: present
+  tags: [pdm, acme]
+
+- name: ACME plugin key directory
+  ansible.builtin.file:
+    path: /etc/proxmox-acme
+    state: directory
+    mode: "0755"
+  tags: [pdm, acme]
+
+# The DNS plugin runs as nobody (setpriv), so the key is group-readable by nogroup.
+- name: ACME challenge key
+  ansible.builtin.copy:
+    content: |
+      key "acme-key" {
+          algorithm hmac-sha256;
+          secret "{{ secrets.infrastructure.acme_tsig_key_secret }}";
+      };
+    dest: /etc/proxmox-acme/tsig.key
+    owner: root
+    group: nogroup
+    mode: "0640"
+  no_log: true
+  tags: [pdm, acme]
+
+- name: Read the ACME state
+  ansible.builtin.shell: |
+    set -o pipefail
+    printf 'account=%s\n' "$(proxmox-datacenter-manager-admin acme account info default --output-format json 2>/dev/null | jq -r '.directory // ""')"
+    printf 'plugin=%s\n' "$(proxmox-datacenter-manager-admin acme plugin list --output-format json | jq -r '.[].plugin' | paste -sd,)"
+    printf 'issuer=%s\n' "$(openssl x509 -in /etc/proxmox-datacenter-manager/auth/api.pem -noout -issuer 2>/dev/null)"
+    printf 'san=%s\n' "$(openssl x509 -in /etc/proxmox-datacenter-manager/auth/api.pem -noout -ext subjectAltName 2>/dev/null | tr -d ' \n')"
+  args:
+    executable: /bin/bash
+  register: _pdm_acme
+  changed_when: false
+  tags: [pdm, acme]
+
+- name: Drop an account registered against another directory
+  ansible.builtin.command:
+    cmd: proxmox-datacenter-manager-admin acme account deactivate default
+  when:
+    - _pdm_acme.stdout_lines[0] != 'account='
+    - _pdm_acme.stdout_lines[0] != 'account=' ~ secrets.infrastructure.acme_directory_url
+  tags: [pdm, acme]
+
+- name: Register the ACME account
+  ansible.builtin.shell:
+    cmd: printf 'n\n' | proxmox-datacenter-manager-admin acme account register default {{ acme_email }} --directory {{ secrets.infrastructure.acme_directory_url }}
+  when: _pdm_acme.stdout_lines[0] != 'account=' ~ secrets.infrastructure.acme_directory_url
+  tags: [pdm, acme]
+
+- name: Configure the nsupdate DNS plugin
+  when: "'bind' not in _pdm_acme.stdout_lines[1]"
+  block:
+    - name: Plugin data file
+      ansible.builtin.copy:
+        content: |
+          NSUPDATE_SERVER={{ network_data.dns_server.bind_ipv4 }}
+          NSUPDATE_KEY=/etc/proxmox-acme/tsig.key
+          NSUPDATE_ZONE={{ service_domain }}
+        dest: /etc/proxmox-acme/bind.data
+        mode: "0600"
+    - name: Add the plugin
+      ansible.builtin.command:
+        cmd: proxmox-datacenter-manager-admin acme plugin add dns bind --api nsupdate --data /etc/proxmox-acme/bind.data --validation-delay 30
+  tags: [pdm, acme]
+
+- name: Point the ACME certificate config at the account and domain
+  ansible.builtin.copy:
+    content: |
+      acme: account=default
+      acmedomain0: domain={{ pdm_fqdn }},plugin=bind
+    dest: /etc/proxmox-datacenter-manager/acme/certificate.cfg
+    owner: root
+    group: www-data
+    mode: "0640"
+  tags: [pdm, acme]
+
+- name: Order the certificate
+  ansible.builtin.command:
+    cmd: proxmox-datacenter-manager-admin acme certificate order --force
+  register: _acme_order
+  failed_when: "'TASK ERROR' in (_acme_order.stdout ~ _acme_order.stderr) or _acme_order.rc != 0"
+  when: >-
+    'Homelab Root CA' not in _pdm_acme.stdout_lines[2]
+    or ('DNS:' ~ pdm_fqdn) not in _pdm_acme.stdout_lines[3]
+  tags: [pdm, acme]

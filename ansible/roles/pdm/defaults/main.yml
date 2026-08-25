@@ -8,3 +8,6 @@ pdm_packages:
   - proxmox-datacenter-manager-ui
 # PDM remotes: id -> { type, nodes: [inventory hostnames in the proxmox group] }
 pdm_remotes: {}
+
+# ADR 0041: the name on the ACME cert
+pdm_fqdn: "pdm.{{ service_domain }}"

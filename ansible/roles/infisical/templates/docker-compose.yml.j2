@@ -10,7 +10,8 @@ services:
       - AUTH_SECRET={{ infisical_auth_secret }}
       - DB_CONNECTION_URI=postgres://infisical:{{ infisical_postgres_password | urlencode }}@postgres:5432/infisical
       - REDIS_URL=redis://redis:6379
-      - SITE_URL=http://{{ ansible_host | replace(mgmt_vlan_prefix, services_vlan_prefix) }}:{{ infisical_port }}
+      - SITE_URL=https://{{ infisical_fqdn }}
+      - ACME_DNS_RESOLVER_SERVERS={{ network_data.dns_server.bind_ipv4 }}
     depends_on:
       postgres:
         condition: service_healthy
@@ -22,6 +23,18 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+
+  caddy:
+    image: caddy:latest
+    container_name: infisical-caddy
+    restart: unless-stopped
+    ports:
+      - "443:443"
+    volumes:
+      - {{ infisical_data_dir }}/Caddyfile:/etc/caddy/Caddyfile:ro
+      - {{ infisical_tls_dir }}:/tls:ro
+    depends_on:
+      - infisical
 
   postgres:
     image: postgres:16-alpine

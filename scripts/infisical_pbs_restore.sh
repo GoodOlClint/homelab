@@ -30,15 +30,14 @@ for cmd in sops infisical ssh; do command -v "$cmd" >/dev/null || { echo "ERROR:
 
 inv() { "$VENV_PYTHON" -c "import yaml,sys; print(yaml.safe_load(open('$INVENTORY'))['all']['hosts'][sys.argv[1]]['ansible_host'])" "$1"; }
 HOST="${HOST:-$(inv infisical)}"
-PBS_HOST="$(inv proxmox-backup)"
+PBS_HOST="proxmox-backup.$("$VENV_PYTHON" -c "import yaml; print(yaml.safe_load(open('$REPO_ROOT/network-data/vlans.yaml'))['service_domain'])")"
 PBS_PASSWORD=$(sops -d --extract '["secrets"]["shared"]["pbs_backup_token"]' "$SOPS_FILE")
-PBS_FINGERPRINT=$(sops -d --extract '["secrets"]["shared"]["pbs_fingerprint"]' "$SOPS_FILE")
 ENCRYPTION_KEY=$(sops -d --extract '["bootstrap"]["infisical_encryption_key"]' "$BOOTSTRAP_FILE")
 AUTH_SECRET=$(sops -d --extract '["bootstrap"]["infisical_auth_secret"]' "$BOOTSTRAP_FILE")
 CLIENT_ID=$(sops -d --extract '["bootstrap"]["infisical_client_id"]' "$BOOTSTRAP_FILE")
 CLIENT_SECRET=$(sops -d --extract '["bootstrap"]["infisical_client_secret"]' "$BOOTSTRAP_FILE")
 PROJECT_ID=$(sops -d --extract '["bootstrap_config"]["infisical_project_id"]' "$BOOTSTRAP_FILE")
-for v in PBS_PASSWORD PBS_FINGERPRINT ENCRYPTION_KEY AUTH_SECRET CLIENT_ID CLIENT_SECRET PROJECT_ID; do
+for v in PBS_PASSWORD ENCRYPTION_KEY AUTH_SECRET CLIENT_ID CLIENT_SECRET PROJECT_ID; do
     [ -n "${!v}" ] && [ "${!v}" != "REPLACE_ME" ] || { echo "ERROR: $v is empty"; exit 1; }
 done
 
@@ -46,8 +45,8 @@ echo "Restoring ${SNAPSHOT:-newest databases/infisical snapshot} into $SSH_USER@
 
 # Secrets travel on the remote shell's stdin — never argv, never a file on the target.
 {
-    printf 'export PBS_REPOSITORY=%q PBS_PASSWORD=%q PBS_FINGERPRINT=%q\n' \
-        "backup@pbs!backup-token@${PBS_HOST}:synology" "$PBS_PASSWORD" "$PBS_FINGERPRINT"
+    printf 'export PBS_REPOSITORY=%q PBS_PASSWORD=%q\n' \
+        "backup@pbs!backup-token@${PBS_HOST}:synology" "$PBS_PASSWORD"
     printf 'EXPECT_KEY=%q EXPECT_AUTH=%q DIR=%q SNAPSHOT=%q\n' "$ENCRYPTION_KEY" "$AUTH_SECRET" "$DIR" "$SNAPSHOT"
     cat <<'REMOTE'
 set -euo pipefail

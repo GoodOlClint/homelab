@@ -8,14 +8,10 @@ export PBS_REPOSITORY="{{ pbs_username }}!{{ pbs_token_name }}@{{ pbs_server_hos
 # '$' in any secret breaks the sourcing shell.
 if [ -f /etc/infisical/secrets/pbs.env ]; then
     PBS_PASSWORD="$(grep -m1 '^PBS_PASSWORD=' /etc/infisical/secrets/pbs.env 2>/dev/null | cut -d= -f2- || true)"
-    PBS_FINGERPRINT="$(grep -m1 '^PBS_FINGERPRINT=' /etc/infisical/secrets/pbs.env 2>/dev/null | cut -d= -f2- || true)"
 fi
 
 # Baked fallback (values from last Ansible deploy)
 if [ -z "${PBS_PASSWORD:-}" ]; then
     PBS_PASSWORD="{{ secrets.pbs_backup_token | default('') }}"
 fi
-if [ -z "${PBS_FINGERPRINT:-}" ]; then
-    PBS_FINGERPRINT="{{ secrets.pbs_fingerprint | default('') }}"
-fi
-export PBS_PASSWORD PBS_FINGERPRINT
+export PBS_PASSWORD

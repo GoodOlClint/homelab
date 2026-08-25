@@ -3,3 +3,9 @@
   community.docker.docker_compose_v2:
     project_src: "{{ infisical_data_dir }}"
     state: restarted
+
+- name: Restart Caddy
+  community.docker.docker_compose_v2:
+    project_src: "{{ infisical_data_dir }}"
+    services: [caddy]
+    state: restarted

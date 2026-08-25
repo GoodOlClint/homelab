@@ -41,6 +41,26 @@
     control_fqdn: "{{ inventory_hostname }}.{{ service_domain }}"
   tags: [control, config]
 
+- name: Host certificate (API-issued, ADR 0041 — MeshCentral needs a subject CN)
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/api_certificate.yml"
+  vars:
+    api_cert_dir: "{{ control_base_dir }}/tls"
+    api_cert_fqdn: "{{ control_fqdn }}"
+    api_cert_handler: restart control compose
+  tags: [control, config]
+
+- name: MeshCentral certificate files
+  ansible.builtin.copy:
+    src: "{{ control_base_dir }}/tls/{{ item.src }}"
+    dest: "{{ control_base_dir }}/meshcentral/data/{{ item.dest }}"
+    remote_src: true
+    mode: "0644"
+  loop:
+    - { src: cert.pem, dest: webserver-cert-public.crt }
+    - { src: key.pem, dest: webserver-cert-private.key }
+  notify: restart control compose
+  tags: [control, config]
+
 - name: Template MeshCentral config
   ansible.builtin.template:
     src: meshcentral-config.json.j2
