@@ -25,7 +25,8 @@ OUTPUT_FILE="$REPO_ROOT/ansible/group_vars/secrets.sops.yml"
 # "Infisical Folder Ownership" table. Root / is exported too (must be empty;
 # any stray keys get captured rather than silently dropped).
 FOLDERS=(shared monitoring plex plex-services homepage docker minio vps
-         pfsense pbs infrastructure github-runner squid control talos)
+         pfsense pbs infrastructure github-runner squid control talos
+         authentik authentik-ext jellyfin)
 
 if [ ! -x "$VENV_PYTHON" ]; then
     echo "ERROR: .venv not found. Run: make init"

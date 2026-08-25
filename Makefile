@@ -222,28 +222,22 @@ endif
 	@echo "Configuring guest: $(VM)"
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/site.yml --limit $(VM)
 
-# Rebuild Infisical VM — destroys, recreates, and re-bootstraps.
-# Stale credential detection in bootstrap_infisical_setup.yml handles
-# re-creating the admin account, project, identity, and folder structure.
+# Rebuild the Infisical VM and restore the vault from its PBS dump (ADR 0039):
+# unprotect through the cluster API, replace the guest, bring the stack up with
+# the bootstrap keys, restore the newest databases/infisical snapshot, then bake
+# the real PBS creds + confirm every machine identity. Never re-bootstraps —
+# that path discards the PKI root and every identity (make bootstrap is for an
+# empty fleet only).
 rebuild-infisical:
-	@echo "Removing Infisical VM protection via Proxmox..."
-	@PROXMOX_HOST=$$($(VENV_PYTHON) -c "import yaml; print(yaml.safe_load(open('ansible/group_vars/all.yml'))['proxmox_host'])"); \
-		ssh "root@$$PROXMOX_HOST" "qm set \$$(qm list | awk '/infisical/{print \$$1}') --protection 0" 2>/dev/null || true
-	@echo "Destroying Infisical VM..."
-	@cd terraform && terraform init && terraform destroy -no-color -auto-approve \
-		-target='module.vms.proxmox_virtual_environment_vm.vms["infisical"]' \
-		-var 'unprotect=true'
-	@VM_IP=$$($(VENV_PYTHON) -c "import yaml; print(yaml.safe_load(open('ansible/inventory/vms.yaml'))['all']['hosts']['infisical']['ansible_host'])"); \
-		ssh-keygen -R "$$VM_IP" 2>/dev/null || true
-	@echo "Rebuilding Infisical VM..."
-	@cd terraform && terraform apply -no-color -auto-approve \
-		-target=module.network \
-		-target='module.vms.proxmox_virtual_environment_vm.vms["infisical"]' \
-		-target='module.vms.proxmox_virtual_environment_file.user_data["infisical"]' \
-		-target='module.vms.proxmox_virtual_environment_file.network_data["infisical"]'
-	@$(MAKE) inventory
-	@echo "Re-bootstrapping Infisical (skipping AdGuard)..."
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/bootstrap.yml --skip-tags adguard
+	@echo "Removing Infisical VM protection via the cluster API..."
+	@PVE=$$($(VENV_PYTHON) -c "import yaml; print(yaml.safe_load(open('ansible/group_vars/all.yml'))['proxmox_host'])"); \
+		ssh "root@$$PVE" 'pvesh get /cluster/resources --type vm --output-format json' \
+		| $(VENV_PYTHON) -c "import json,sys; r=[x for x in json.load(sys.stdin) if x['name']=='infisical' and x['status']=='running']; print(r[0]['node'], r[0]['vmid'])" \
+		| { read -r node vmid; ssh "root@$$PVE" "pvesh set /nodes/$$node/qemu/$$vmid/config --protection 0"; }
+	@$(MAKE) rebuild VM=infisical
+	@$(MAKE) infisical-restore
+	@$(MAKE) ansible VM=infisical
+	@$(MAKE) refresh-identity
 
 # === Targeted Ansible Deploy ===
 # make ansible <vm>  — run site.yml limited to a single host
@@ -373,7 +367,7 @@ vps-rotate-keys:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vps.yaml ansible/playbooks/vps-rotate-keys.yml -e "ansible_host=$(VPS_IP)"
 
 # === Secrets Management ===
-.PHONY: infisical-seed infisical-backup infisical-organize refresh-identity plex-token
+.PHONY: infisical-seed infisical-backup infisical-restore infisical-organize refresh-identity plex-token
 
 # Restore Infisical from backup (disaster recovery)
 infisical-seed:
@@ -385,6 +379,12 @@ infisical-seed:
 # previous export preserved at .bak). Restores via make infisical-seed.
 infisical-backup:
 	@bash scripts/infisical_backup.sh
+
+# Restore the newest PBS databases/infisical dump into a stack (ADR 0039 DR path).
+# HOST= (default: the inventory's infisical) DIR= (default /opt/infisical; an
+# empty dir gets a throwaway stack — the rehearsal) SNAPSHOT= (default newest)
+infisical-restore:
+	@HOST=$(HOST) DIR=$(DIR) SNAPSHOT=$(SNAPSHOT) SSH_USER=$(SSH_USER) bash scripts/infisical_pbs_restore.sh
 
 # One-time: organize flat Infisical secrets into per-VM folders
 infisical-organize:

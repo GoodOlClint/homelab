@@ -593,6 +593,7 @@ All `ansible-*` targets support `TAGS=<tag>` to filter by play-level tags (e.g.,
 |--------|-------------|
 | `infisical-seed` | Migrate secrets from SOPS to Infisical |
 | `infisical-backup` | Export Infisical secrets to SOPS format |
+| `infisical-restore` | Restore the vault from its newest PBS `databases/infisical` dump (ADR 0039); `HOST=`/`DIR=` point it at a throwaway stack for a rehearsal |
 | `infisical-organize` | Organize flat secrets into per-VM folders |
 | `refresh-identity` | Refresh Infisical machine identity credentials |
 | `plex-token` | Retrieve Plex authentication token |
