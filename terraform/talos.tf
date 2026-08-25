@@ -8,7 +8,7 @@ provider "proxmox" {
   endpoint = var.worklab_endpoint
   username = var.virtual_environment_username
   password = var.worklab_password
-  insecure = true
+  insecure = false # the endpoint serves a root-chained node cert (ADR 0041; proxmox-hosts.yml)
   ssh {
     agent    = true
     username = "root"

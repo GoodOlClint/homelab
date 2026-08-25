@@ -9,7 +9,7 @@
 - name: Proxmox cluster hosts
   hosts: proxmox
   become: true
-  pre_tasks:
+  pre_tasks: &hosts_pre_tasks
     # Tier-1 bootstrap creds (SOPS, not Infisical — no guest dependency):
     # the cluster create/join API modules authenticate as root@pam with
     # bootstrap.proxmox_password (ADR 0023).
@@ -62,3 +62,21 @@
       tags: [always]
   roles:
     - proxmox_host
+
+# worklab is not a cluster member (ADR 0031) but is a PVE endpoint Terraform talks to
+# (talos.tf `proxmox.worklab`), so it trusts the root and serves a root-chained node cert
+# under its own name only — no `pve` SAN (ADR 0041).
+- name: worklab (standalone PVE)
+  hosts: worklab
+  become: true
+  pre_tasks: *hosts_pre_tasks
+  roles:
+    - ca_trust
+  tasks:
+    - name: Node certificate
+      ansible.builtin.include_role:
+        name: proxmox_host
+        tasks_from: acme
+      vars:
+        proxmox_host_cert_extra_domains: []
+      tags: [acme]

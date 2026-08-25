@@ -91,3 +91,4 @@ proxmox_host_ci_max_age_hours: 8
 
 # ADR 0041: the cluster VIP name, a SAN on every node cert
 proxmox_host_vip_name: pve
+proxmox_host_cert_extra_domains: ["{{ proxmox_host_vip_name }}.{{ network_data.service_domain }}"]
