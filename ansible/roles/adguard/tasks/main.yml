@@ -246,7 +246,7 @@
     - validate
 
 # The config template is initial-only (AdGuardHome rewrites its own YAML), so the
-# running instance converges its upstream list through the API.
+# running instance converges its upstream list and rewrites through the API.
 - name: Read the live upstream list
   ansible.builtin.uri:
     url: "http://127.0.0.1:3000/control/dns_info"
@@ -254,9 +254,10 @@
     url_password: "{{ secrets.homepage.adguard_password }}"
     force_basic_auth: true
   register: _adguard_dns_info
+  check_mode: false
   tags: [adguard, dns, config]
 
-- name: Add the flat-zone forwards to the live upstream list
+- name: Converge the live upstream list
   ansible.builtin.uri:
     url: "http://127.0.0.1:3000/control/dns_config"
     method: POST
@@ -265,10 +266,33 @@
     force_basic_auth: true
     body_format: json
     body:
-      upstream_dns: "{{ _adguard_dns_info.json.upstream_dns + _missing }}"
-  vars:
-    _missing: "{{ adguard_zone_forwards | difference(_adguard_dns_info.json.upstream_dns) }}"
-  when: _missing | length > 0
+      upstream_dns: "{{ adguard_upstreams }}"
+  when: _adguard_dns_info.json.upstream_dns != adguard_upstreams
+  changed_when: true
+  tags: [adguard, dns, config]
+
+- name: Read the live rewrites
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:3000/control/rewrite/list"
+    url_username: "{{ secrets.homepage.adguard_username }}"
+    url_password: "{{ secrets.homepage.adguard_password }}"
+    force_basic_auth: true
+  register: _adguard_rewrites
+  check_mode: false
+  tags: [adguard, dns, config]
+
+- name: Retire every rewrite (ADR 0040 — BIND owns every internal name)
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:3000/control/rewrite/delete"
+    method: POST
+    url_username: "{{ secrets.homepage.adguard_username }}"
+    url_password: "{{ secrets.homepage.adguard_password }}"
+    force_basic_auth: true
+    body_format: json
+    body: {domain: "{{ item.domain }}", answer: "{{ item.answer }}"}
+  loop: "{{ _adguard_rewrites.json }}"
+  loop_control:
+    label: "{{ item.domain }}"
   changed_when: true
   tags: [adguard, dns, config]
 
@@ -303,7 +327,7 @@
     - test
 
 - name: Test local zone resolution through AdGuard Home
-  ansible.builtin.command: dig @127.0.0.1 ns.{{ (dns_zones.values() | first).zone }} +short
+  ansible.builtin.command: dig @127.0.0.1 ns.{{ service_domain }} +short
   register: local_dns_test
   failed_when: local_dns_test.rc != 0 or local_dns_test.stdout == ""
   changed_when: false
@@ -393,7 +417,9 @@
     vip_interface: "{{ adguard_vip_interface }}"
     vip_router_id: "{{ adguard_vrrp_router_id }}"
     vip_base_priority: "{{ adguard_vrrp_base_priority }}"
-    vip_track_name: "dns.{{ (dns_zones.values() | first).zone }}"
+    # The instance's own hostname comes from /etc/hosts (hostsfile_enabled), so the
+    # resolver VIP never depends on BIND or an upstream.
+    vip_track_name: "{{ inventory_hostname }}"
     vip_state: "{{ adguard_vip_state }}"
   when: groups['adguard'] | default([]) | length > 1
   tags: [adguard, dns, keepalived]

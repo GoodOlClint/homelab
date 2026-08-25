@@ -251,7 +251,7 @@ variable "create_cloud_image" {
 
 variable "domain_suffix" {
   type        = string
-  description = "Domain suffix for VM FQDNs (sourced from vlans.yaml)"
+  description = "cloud-init FQDN domain for the VM fleet — pinned like an OS image (ADR 0016): a change replaces every VM, so it moves to the service domain only with a deliberate roll"
 }
 
 # Packer template configuration

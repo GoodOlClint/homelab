@@ -27,7 +27,7 @@ zone "{{ name }}" {
 {% endif %}
 };
 {% endmacro %}
-// Forward zones — one per VLAN plus the flat public-domain zones (ADR 0040)
+// Forward zones — the flat public-domain zones (ADR 0040)
 {% for z in bind9_forward_zones %}
 {{ zone(z) }}
 {% endfor %}

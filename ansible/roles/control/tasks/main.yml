@@ -38,7 +38,7 @@
 
 - name: Set control FQDN
   ansible.builtin.set_fact:
-    control_fqdn: "{{ inventory_hostname }}.{{ dns_zones.vlan100.zone }}"
+    control_fqdn: "{{ inventory_hostname }}.{{ service_domain }}"
   tags: [control, config]
 
 - name: Template MeshCentral config

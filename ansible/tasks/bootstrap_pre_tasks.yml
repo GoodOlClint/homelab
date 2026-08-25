@@ -193,7 +193,6 @@
     dns_zones: >-
       {{ dns_zones | default({}) | combine({
         'vlan' ~ network_data.vlans[item].id: {
-          'zone': network_data.vlans[item].domain_prefix ~ '.' ~ network_data.domain_suffix,
           'vlan_id': network_data.vlans[item].id,
           'dns_ip': network_data.dns_server.dns_ipv4,
           'dns_ipv6': network_data.dns_server.dns_ipv6,

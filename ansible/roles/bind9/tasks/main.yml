@@ -124,7 +124,7 @@
     dest: "/var/lib/bind/db.{{ item.item.value.vlan_id }}.{{ ipv4_prefix_reversed }}.in-addr.arpa"
     mode: '0644'
   vars:
-    forward_zone: "{{ item.item.value.zone }}"
+    forward_zone: "{{ service_domain }}"
     zone_dns_ip: "{{ item.item.value.dns_ip }}"
   loop: "{{ reverse_zone_files_stat.results | default([]) }}"
   when: bind9_primary and not item.stat.exists
@@ -257,7 +257,7 @@
     - service
 
 - name: Verify BIND answers the local zone SOA (secondaries wait for the first AXFR)
-  ansible.builtin.command: dig +short +time=2 +tries=3 @127.0.0.1 {{ (dns_zones.values() | first).zone }} SOA
+  ansible.builtin.command: dig +short +time=2 +tries=3 @127.0.0.1 {{ service_domain }} SOA
   register: dns_test
   retries: 15
   delay: 2
@@ -277,7 +277,7 @@
     vip_group: dns
     vip_ipv4: "{{ bind9_vip_ipv4 }}"
     vip_router_id: "{{ bind9_vrrp_router_id }}"
-    vip_track_name: "ns.{{ (dns_zones.values() | first).zone }}"
+    vip_track_name: "ns.{{ service_domain }}"
     vip_state: "{{ bind9_vip_state }}"
   when: bind9_instances | length > 1
   tags: [bind9, dns, keepalived]

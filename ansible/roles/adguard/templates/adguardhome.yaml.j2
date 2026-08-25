@@ -37,28 +37,8 @@ dns:
 
   # Upstream DNS servers
   upstream_dns:
-    # Internet upstreams (default for non-local queries)
-    - 1.1.1.1
-    - 1.0.0.1
-    - 8.8.8.8
-    - 8.8.4.4
-{% if dns_listen_ipv6s | length > 0 %}
-    - 2606:4700:4700::1111
-    - 2606:4700:4700::1001
-    - 2001:4860:4860::8888
-    - 2001:4860:4860::8844
-{% endif %}
-    # Local zone routing — forward to BIND for authoritative local resolution
-{% for vlan, zone_data in dns_zones.items() %}
-    - "[/{{ zone_data.zone }}/]{{ zone_data.bind_ip }}"
-{% endfor %}
-    # Reverse DNS for internal subnets
-{% for vlan, zone_data in dns_zones.items() %}
-    - "[/{{ zone_data.vlan_id }}.{{ ipv4_prefix_reversed }}.in-addr.arpa/]{{ zone_data.bind_ip }}"
-{% endfor %}
-    # Flat public-domain zones served internally (ADR 0040)
-{% for fwd in adguard_zone_forwards %}
-    - "{{ fwd }}"
+{% for u in adguard_upstreams %}
+    - "{{ u }}"
 {% endfor %}
 
   upstream_dns_file: ""
@@ -112,9 +92,7 @@ dns:
   private_networks: []
   use_private_ptr_resolvers: true
   local_ptr_upstreams:
-{% for vlan, zone_data in dns_zones.items() %}
-    - {{ zone_data.bind_ip }}
-{% endfor %}
+    - {{ network_data.dns_server.bind_ipv4 }}
   use_dns64: false
   dns64_prefixes: []
   serve_http3: false
@@ -223,13 +201,7 @@ filtering:
   parental_block_host: family-block.dns.adguard.com
   safebrowsing_block_host: standard-block.dns.adguard.com
 
-  # The only rewrites left: dns.<zone> is what keepalived's check_dns.sh resolves
-  # through the local instance to decide whether it may hold the VIP.
-  rewrites:
-{% for vlan, zone_data in dns_zones.items() %}
-    - domain: dns.{{ zone_data.zone }}
-      answer: {{ zone_data.dns_ip }}
-{% endfor %}
+  rewrites: []
 
   safe_fs_patterns: []
   safebrowsing_cache_size: 1048576

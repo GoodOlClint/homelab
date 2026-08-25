@@ -35,7 +35,7 @@ output "ipv6_prefix" {
 }
 
 output "domain_suffix" {
-  description = "Site domain suffix"
+  description = "cloud-init FQDN domain for the VM fleet (pinned, ADR 0016) — every DNS name is on service_domain (ADR 0040)"
   value       = local.network_data.domain_suffix
 }
 

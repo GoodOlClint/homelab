@@ -40,21 +40,6 @@
 
 [[inputs.kernel]]
 
-# DNS Monitoring (for DNS hosts)
-{% if inventory_hostname == 'dns' %}
-[[inputs.dns_query]]
-  servers = ["127.0.0.1"]
-  domains = [
-{% for vlan, zone in dns_zones.items() %}
-    "{{ zone.zone }}",
-{% endfor %}
-    "google.com",
-    "cloudflare.com"
-  ]
-  record_type = "A"
-  timeout = 2
-{% endif %}
-
 # NFS Monitoring (for hosts with NFS mounts)
 {% if inventory_hostname == 'plex' %}
 [[inputs.nfsclient]]

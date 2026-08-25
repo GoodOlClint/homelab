@@ -27,7 +27,7 @@
         msg:
           - "UniFi OS Server deployment complete!"
           - ""
-          - "Access URL: https://{{ ansible_facts['hostname'] }}.{{ domain_suffix | default('lab.internal') }}:11443"
+          - "Access URL: https://{{ ansible_facts['hostname'] }}.{{ service_domain }}:11443"
           - "Alternative: https://{{ ansible_facts['default_ipv4']['address'] }}:11443"
           - ""
           - "Service management:"

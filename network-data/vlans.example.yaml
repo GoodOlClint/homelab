@@ -15,6 +15,9 @@
 
 ipv4_prefix: "REPLACE_WITH_IPV4_PREFIX"          # e.g., "172.16"
 ipv6_prefix: "REPLACE_WITH_IPV6_PREFIX"          # e.g., "fd00:abcd:1234"
+# cloud-init FQDN domain of the VM fleet only — pinned like an OS image (ADR 0016): changing
+# it replaces every VM, so it moves to service_domain with a deliberate roll. No DNS zone
+# is served for it since ADR 0040 P5e; the security guardrail still blocks it as a binding.
 domain_suffix: "REPLACE_WITH_DOMAIN"             # e.g., "homelab.internal"
 
 # Flat public-domain zones served internally (ADR 0040): `name.<service_domain>` is the

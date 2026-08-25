@@ -20,7 +20,7 @@
 squid_listen_port: 3128
 
 # Visible hostname advertised in error pages / upstream requests
-squid_visible_hostname: "squid.services.{{ network_data.domain_suffix }}"
+squid_visible_hostname: "squid.{{ network_data.service_domain }}"
 
 # CA certificate storage
 squid_ca_dir: /etc/squid/ssl_cert

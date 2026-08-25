@@ -13,7 +13,6 @@
       ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/full_pre_tasks.yml"
       tags: [always]
   vars:
-    _domain: "{{ network_data.domain_suffix }}"
     _redirects: ["200-299", "300-399"]
     uptime_kuma_api_url: "https://uptime-kuma.{{ service_domain }}"
     uptime_kuma_api_username: "{{ uptime_kuma_admin_user | default('goodolclint') }}"
@@ -39,7 +38,7 @@
       - {name: "AdGuard — DNS resolution", monitor_type: dns, hostname: google.com, port: 53, dns_resolve_type: A,
          dns_resolve_server: "{{ network_data.dns_server.dns_ipv4 }}"}
       - {name: "BIND9 — DNS resolution", monitor_type: dns, port: 53, dns_resolve_type: A,
-         hostname: "ns.{{ network_data.vlans[network_data.management_vlan].domain_prefix }}.{{ _domain }}",
+         hostname: "ns.{{ service_domain }}",
          dns_resolve_server: "{{ network_data.dns_server.bind_ipv4 }}"}
       - {name: "AdGuard — web UI", monitor_type: http, url: "http://{{ network_data.dns_server.dns_ipv4 }}:3000"}
       - {name: Plex, monitor_type: http, url: "https://plex.{{ media_domain }}:32400/identity"}

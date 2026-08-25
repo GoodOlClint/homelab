@@ -7,5 +7,4 @@
 #   openobserve_root_user_email — OpenObserve admin email
 #
 # Required from pre_tasks:
-#   dns_zones
 #   secrets.monitoring.openobserve_root_user_pass

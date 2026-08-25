@@ -2,12 +2,23 @@
 # Bootstrap mode flag (skips local zone DNS test during bootstrap)
 bootstrap_mode: false
 
-# Conditional forwards for the flat public-domain zones (ADR 0040): AdGuard answers
-# nothing itself any more — every internal name is a BIND record.
+# The upstream list, converged on the live instance every run (the config template is
+# initial-only): public resolvers, then the per-VLAN reverse zones and the flat
+# public-domain zones to BIND (ADR 0040) — AdGuard answers nothing itself, every
+# internal name is a BIND record.
+adguard_public_upstreams: >-
+  {{ ['1.1.1.1', '1.0.0.1', '8.8.8.8', '8.8.4.4']
+     + (['2606:4700:4700::1111', '2606:4700:4700::1001', '2001:4860:4860::8888', '2001:4860:4860::8844']
+        if dns_listen_ipv6s | length > 0 else []) }}
+adguard_reverse_forwards: >-
+  {%- set out = [] -%}
+  {%- for z in dns_zones.values() -%}{{- out.append('[/' ~ z.vlan_id ~ '.' ~ ipv4_prefix_reversed ~ '.in-addr.arpa/]' ~ z.bind_ip) -}}{%- endfor -%}
+  {{ out }}
 adguard_zone_forwards: >-
   {%- set out = [] -%}
   {%- for z in internal_zones -%}{{- out.append('[/' ~ z ~ '/]' ~ network_data.dns_server.bind_ipv4) -}}{%- endfor -%}
   {{ out }}
+adguard_upstreams: "{{ adguard_public_upstreams + adguard_reverse_forwards + adguard_zone_forwards }}"
 
 # Query log retention. AdGuardHome's own default is 2160h (90 days), which on the
 # 19 GB root disk grew querylog.json{,.1} to 12 GB and drove the VM to 88% full.

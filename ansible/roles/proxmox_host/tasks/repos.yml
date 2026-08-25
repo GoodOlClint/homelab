@@ -18,7 +18,9 @@
       --dns1 {{ network_data.dns_servers[0] }}
       {% if network_data.dns_servers | length > 1 %}--dns2 {{ network_data.dns_servers[1] }}{% endif %}
       --search {{ proxmox_host_dns_search }}
-  when: not _resolv_current.stdout is search(network_data.dns_servers[0])
+  when: >-
+    not (_resolv_current.stdout is search(network_data.dns_servers[0])
+         and _resolv_current.stdout is search('search ' ~ proxmox_host_dns_search))
 
 - name: Drop enterprise sources (no subscription)
   ansible.builtin.file:

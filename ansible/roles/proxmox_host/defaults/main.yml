@@ -82,7 +82,7 @@ proxmox_host_media_idmap_start: 2000
 proxmox_host_media_idmap_size: 11
 
 # Resolver search domain set via pvesh (repos.yml); fleet internal zone.
-proxmox_host_dns_search: "{{ network_data.domain_suffix }}"
+proxmox_host_dns_search: "{{ network_data.service_domain }}"
 
 # CI sandbox reaper (ADR 0032): destroy pool members older than this, so a
 # killed job never leaks a guest. 0 disables.

@@ -36,7 +36,6 @@ locals {
       subnet_v6    = try(v.ipv6_subnet, "${local.network_data.ipv6_prefix}:${format("%x", v.id)}::/64")
       mtu          = try(v.mtu, 1500)
       description  = try(v.description, v.name)
-      domain       = try("${v.domain_prefix}.${local.network_data.domain_suffix}", null)
       is_wireguard = try(v.is_wireguard, false)
     }
   }
