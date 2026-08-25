@@ -195,7 +195,13 @@ scrape_configs:
           - pdm.${DOMAIN}:8443
           - infisical.${DOMAIN}:443
           - control.${DOMAIN}:9443
+          - worklab.${DOMAIN}:8006
+          - unifi.${DOMAIN}:11443
     relabel_configs:
+      - source_labels: [__address__]
+        regex: 'plex\..*'
+        target_label: __param_module
+        replacement: tls_connect_plex
       - source_labels: [__address__]
         target_label: __param_target
       - source_labels: [__param_target]

@@ -45,12 +45,23 @@ modules:
       transport_protocol: "tcp"
       preferred_ip_protocol: "ip4"
 
-  # Expiry only (TLSCertExpiringSoon): the prober trusts neither the fleet root nor, apparently, Plex's chain.
+  # Fleet-host certs chain to the mounted root (ADR 0041); server_name comes from the target.
   tls_connect:
     prober: tcp
     timeout: 5s
     tcp:
       tls: true
+      preferred_ip_protocol: "ip4"
+      tls_config:
+        ca_file: /etc/ssl/certs/homelab-root-ca.crt
+
+  # Plex's chain does not verify; expiry only (TLSCertExpiringSoon). ip4: the pod has no v6 route.
+  tls_connect_plex:
+    prober: tcp
+    timeout: 5s
+    tcp:
+      tls: true
+      preferred_ip_protocol: "ip4"
       tls_config:
         insecure_skip_verify: true
 
