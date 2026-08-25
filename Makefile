@@ -78,7 +78,7 @@ export PATH := $(CURDIR)/.venv/bin:$(PATH)
 
 init:
 	@python3 -m venv .venv
-	@. .venv/bin/activate && pip install pyyaml infisicalsdk ansible 'proxmoxer>=2.3' requests bcrypt 'python-socketio[client]>=5.0'
+	@. .venv/bin/activate && pip install pyyaml infisicalsdk ansible 'proxmoxer>=2.3' requests bcrypt passlib 'python-socketio[client]>=5.0'
 	@cd terraform && terraform init
 	@cd ansible && ansible-galaxy install -r requirements.yml --force
 

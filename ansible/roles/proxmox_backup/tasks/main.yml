@@ -34,6 +34,16 @@
     pbs_backup_user_password: "{{ secrets.pbs.pbs_backup_user_password }}"
   tags: [proxmox_backup, pbs, secrets]
 
+# Cloud images ship root with a locked password; root@pam (PDM wizard, UI
+# login) authenticates against the Unix password, so apply the secret here.
+# The salt is derived from inventory_hostname so re-runs hash identically.
+- name: Set root Unix password from pbs_admin_password
+  ansible.builtin.user:
+    name: root
+    password: "{{ pbs_admin_password | password_hash('sha512', 65534 | random(seed=inventory_hostname) | string) }}"
+  no_log: true
+  tags: [proxmox_backup, pbs, secrets]
+
 - name: Ensure apt keyrings directory exists
   ansible.builtin.file:
     path: /etc/apt/keyrings
