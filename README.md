@@ -583,6 +583,9 @@ All `ansible-*` targets support `TAGS=<tag>` to filter by play-level tags (e.g.,
 | `expand-disk` | Expand root filesystem on service VMs |
 | `uptime-kuma` | Converge Uptime Kuma monitors + the ntfy channel from `ansible/playbooks/uptime-kuma.yml` (`goodolclint.uptime_kuma` collection; `CHECK=1` for check mode) |
 | `apt-proxy` | Point apt on every node and guest at the apt-cacher-ng cache via `Proxy-Auto-Detect` (falls back to `DIRECT` when the cache is down; `LIMIT=<host>`) |
+| `pki-hosts` | ADR 0041: Infisical `fleet-hosts` policy/profile/application + ACME (DNS-01) and API enrollment under the RSA intermediate `Homelab Hosts CA`; publishes the directory URL to `/infrastructure` |
+| `ca-trust` | ADR 0041: install the Homelab Root CA into every node's, worklab's and guest's trust store (`LIMIT=<host>`) |
+| `refresh` | Refresh Terraform state + outputs so `make plan` reads clean after a guest's interfaces change |
 | `nut-clients` | Deploy NUT `upsmon` secondaries to the physical hosts (`nut_clients` inventory group; server is the pfSense NUT package — see `docs/pfsense-nut.md`) |
 
 ### Secrets

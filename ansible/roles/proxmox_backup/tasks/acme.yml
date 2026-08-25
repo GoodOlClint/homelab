@@ -85,6 +85,6 @@
   register: _acme_order
   failed_when: "'TASK ERROR' in (_acme_order.stdout ~ _acme_order.stderr) or _acme_order.rc != 0"
   when: >-
-    'Homelab Root CA' not in _pbs_acme.stdout_lines[3]
+    'O=homelab' not in _pbs_acme.stdout_lines[3]
     or ('DNS:' ~ pbs_fqdn) not in _pbs_acme.stdout_lines[4]
   tags: [proxmox_backup, pbs, acme]

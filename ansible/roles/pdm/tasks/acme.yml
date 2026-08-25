@@ -90,6 +90,6 @@
   register: _acme_order
   failed_when: "'TASK ERROR' in (_acme_order.stdout ~ _acme_order.stderr) or _acme_order.rc != 0"
   when: >-
-    'Homelab Root CA' not in _pdm_acme.stdout_lines[2]
+    'O=homelab' not in _pdm_acme.stdout_lines[2]
     or ('DNS:' ~ pdm_fqdn) not in _pdm_acme.stdout_lines[3]
   tags: [pdm, acme]
