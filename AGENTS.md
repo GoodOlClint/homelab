@@ -2,7 +2,7 @@
 
 ## Repo Overview
 
-This repo automates a Proxmox-based homelab with Terraform (VM provisioning, SDN, Vultr VPS, Cloudflare DNS) and Ansible (software configuration, Docker stacks, monitoring, secrets management). Key VMs: AdGuard (DNS filtering), BIND9 (authoritative DNS), Infisical (secrets vault), OpenObserve (monitoring stack), Proxmox Backup Server, UniFi, Plex, plex-services (arr stack), Docker (legacy services), Homepage, Lancache, NVIDIA licensing. A Vultr VPS acts as a WireGuard relay for external access.
+This repo automates a Proxmox-based homelab with Terraform (VM provisioning, SDN, Vultr VPS, Cloudflare DNS) and Ansible (software configuration, Docker stacks, monitoring, secrets management). Key VMs: AdGuard (DNS filtering), BIND9 (authoritative DNS), Infisical (secrets vault), OpenObserve (monitoring stack), Proxmox Backup Server, UniFi, Plex, plex-services (arr stack), Docker (legacy services), Homepage, NVIDIA licensing. A Vultr VPS acts as a WireGuard relay for external access.
 
 **Architectural decisions** live in `docs/decisions/` (ADRs) — read them before proposing architecture changes. In flight: the MS-01 3-node cluster migration ([plan](docs/ms01-cluster-iac-plan.md), ADRs 0001–0009 + 0014) — 3-node PVE 9 + Ceph, Terraform-managed hosts, static-IP LXCs, greenfield rebuild. Ceph cluster network is switched 25G on the Pro-Aggregation's SFP28 ports, VLAN 21 (ADR 0014, renumbered from 33 — the FRR mesh is superseded). Corosync VLANs 31/32 live on the shared 48-port access switch, not a dedicated one ([ADR 0019](docs/decisions/0019-corosync-moves-onto-the-shared-48-port-access-switch-trading-physical-isolation-for-consolidation.md), superseding [ADR 0008](docs/decisions/0008-corosync-on-a-dedicated-switch-local-vlan-vlan-30-stays-infrastructure.md)'s dedicated-switch model — VLAN isolation itself is unchanged, only the physical switch). End-state rebuild model ([design](docs/rebuild-as-routine-design.md)): durable state on detached Ceph data volumes, guest rootfs disposable ([ADR 0015](docs/decisions/0015-durable-state-rides-detached-ceph-data-volumes-the-guest-rootfs-is-disposable.md)); guest OS images pinned + deliberately rolled ([ADR 0016](docs/decisions/0016-guest-os-images-are-pinned-and-deliberately-rolled-container-tags-stay-latest.md)); guests single-homed on the services VLAN with storage via host bind mounts, squid retired ([ADR 0017](docs/decisions/0017-guests-are-single-homed-on-the-services-vlan-storage-reaches-containers-via-host-bind-mounts.md)). The dual-homed vlan10/vlan40 conventions below (SSH via vlan10, prefix translation) describe the live fleet and are amended at cutover (WP7).
 
@@ -156,7 +156,7 @@ Both `infrastructure.yml` and `services.yml` have play-level tags for targeted d
 
 **infrastructure.yml tags:** `phase1`, `phase2`, `phase3`, `dns`, `adguard`, `infisical`, `openobserve`, `proxmox-backup`, `unifi`, `monitoring`, `monitoring-users`, `users`
 
-**services.yml tags:** `nvidia-licensing`, `docker`, `plex`, `plex-services`, `minio`, `homepage`, `github-runner`, `squid`, `mcp`, `lancache`
+**services.yml tags:** `nvidia-licensing`, `docker`, `plex`, `plex-services`, `minio`, `homepage`, `github-runner`, `squid`, `mcp`
 
 **How tags work with pre_tasks:**
 - All `pre_tasks` blocks have `tags: [always]`, so secrets/VLANs/facts always load regardless of `--tags` filter.

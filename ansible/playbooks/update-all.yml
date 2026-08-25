@@ -21,12 +21,11 @@
       when: ansible_os_family | default('') == 'Alpine'
 
 - name: Update all Docker containers (pull latest and recreate)
-  hosts: infisical,lancache,minio
+  hosts: infisical,minio
   become: true
   vars:
     _compose_dirs:
       infisical: /opt/infisical
-      lancache: /opt/lancache
       minio: /opt/minio
   tasks:
     - name: Pull latest images

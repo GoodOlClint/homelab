@@ -1,6 +1,0 @@
----
-lancache_base_dir: /opt/lancache
-
-lancache_cache_disk_size: "500g"
-lancache_upstream_dns: "{{ network_data.dns_server.dns_ipv4 }}"
-lancache_nfs_mount: "/mnt/lancache"

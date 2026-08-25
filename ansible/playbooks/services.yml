@@ -86,17 +86,3 @@
     - telegraf
   tags:
     - squid
-
-- name: Configure lancache VM
-  hosts: lancache
-  become: true
-
-  vars_files:
-    - ../group_vars/all.yml
-  pre_tasks: *load_all_config
-  roles:
-    - dns_config
-    - lancache
-    - rsyslog_client
-  tags:
-    - lancache

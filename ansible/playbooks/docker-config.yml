@@ -11,39 +11,13 @@
   vars_files:
     - ../group_vars/all.yml
     - ../roles/infisical/defaults/main.yml
-    - ../roles/lancache/defaults/main.yml
     - ../roles/minio/defaults/main.yml
 
   pre_tasks:
     - name: Load all configuration and secrets
       ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/full_pre_tasks.yml"
 
-    - name: Compute lancache service IP on services VLAN
-      ansible.builtin.set_fact:
-        lancache_service_ip: "{{ ansible_host | replace(mgmt_vlan_prefix, services_vlan_prefix) }}"
-      when: inventory_hostname == 'lancache'
-
   tasks:
-    # --- lancache ---
-    - name: Deploy lancache docker-compose
-      ansible.builtin.template:
-        src: "{{ playbook_dir }}/../roles/lancache/templates/docker-compose.yml.j2"
-        dest: /opt/lancache/docker-compose.yml
-        owner: root
-        group: root
-        mode: '0600'
-      register: lancache_compose
-      when: inventory_hostname == 'lancache'
-
-    - name: Restart lancache containers
-      community.docker.docker_compose_v2:
-        project_src: /opt/lancache
-        state: present
-        recreate: always
-      when:
-        - inventory_hostname == 'lancache'
-        - lancache_compose is changed
-
     # --- infisical ---
     - name: Deploy infisical docker-compose
       ansible.builtin.template:

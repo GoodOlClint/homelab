@@ -223,7 +223,6 @@ All VMs are defined in `terraform/vm-configs.tf` and provisioned with cloud-init
 | nvidia-licensing | 107 | mgmt, services | 2 | 2 GB | 20 GB | -- | NVIDIA GRID license server (FastAPI DLS) |
 | plex | 108 | mgmt, services, storage | 8 | 32 GB | 100 GB | NVIDIA | Plex Media Server (hardware transcoding) |
 | dns1 / dns2 | 218 / 219 | services | 2 | 1 GB | 10 GB | -- | BIND9 authoritative LXC pair (primary + AXFR secondary), one per MS-01, keepalived VIP (ADR 0003/0029) |
-| lancache | 110 | mgmt, services, storage | 4 | 4 GB | 20 GB | -- | LAN game cache server |
 | minio | 112 | mgmt, services, storage | 4 | 4 GB | 20 GB | -- | MinIO object storage |
 | github-runner | 113 | mgmt, services | 4 | 8 GB | 50 GB | -- | GitHub Actions self-hosted runner |
 | squid | 114 | mgmt, services, openclaw | 2 | 2 GB | 20 GB | -- | Squid forward proxy (SSL bump) |
@@ -355,7 +354,6 @@ Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-m
 | nvidia_licensing | FastAPI DLS license server |
 | github_runner | GitHub Actions self-hosted runner for CI integration tests |
 | squid | Squid forward proxy with SSL bump for OpenClaw VLAN |
-| lancache | LAN game cache server |
 
 ### VPS
 
