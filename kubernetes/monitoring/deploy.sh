@@ -6,11 +6,11 @@
 source "$(dirname "$0")/../lib.sh"
 NS=monitoring
 HERE="$(cd "$(dirname "$0")" && pwd)"
-DOMAIN="$(j .domain)"
-export REGISTRY="registry.$DOMAIN" HOST_API="$(inf_host_api)" PROJECT_ID="$(inf_project_id)" SYSLOG_IP="$(subnet_ip 66)"
+eval "$(inv_env)"   # ADGUARD BIND PLEX PBS UNIFI SYNOLOGY TZ SERVICE_DOMAIN ...
+DOMAIN="$SERVICE_DOMAIN"
+export REGISTRY="registry.$(j .domain)" HOST_API="$(inf_host_api)" PROJECT_ID="$(inf_project_id)" SYSLOG_IP="$(subnet_ip 66)"
 export GRAFANA_HOST="grafana.$DOMAIN" OO_HOST="openobserve.$DOMAIN" PROM_HOST="prometheus.$DOMAIN" AM_HOST="alertmanager.$DOMAIN" KUMA_HOST="uptime-kuma.$DOMAIN"
 export PVE_API_HOST="$(sed -n 's/^virtual_environment_endpoint *= *"https\{0,1\}:\/\/\([^:"/]*\).*/\1/p' "$ROOT/terraform/vars.auto.tfvars")"
-eval "$(inv_env)"   # ADGUARD BIND PLEX PBS UNIFI SYNOLOGY TZ ...
 GEN="$(mktemp -d)"; trap 'rm -rf "$GEN"' EXIT
 eval "$("$ROOT/.venv/bin/python3" "$HERE/render.py" "$ROOT" "$GEN")"   # OO_EMAIL UNIFI_PORT SYNOLOGY_SNMP_COMMUNITY SMOKEPING_ARGS + $GEN/*.json
 export CONFIG_HASH="$(cat "$HERE"/config/* "$GEN"/*.json | shasum -a 256 | cut -c1-16)"
@@ -57,6 +57,4 @@ sub < "$HERE/secrets.yaml" | kubectl apply -f -
 sub < "$HERE/app.yaml" | kubectl apply -f -
 for i in $(seq 30); do kubectl -n "$NS" get secret monitoring-secrets >/dev/null 2>&1 && break; sleep 2; done
 kubectl -n "$NS" rollout status deploy --timeout=600s
-LB=$(kubectl -n traefik get svc traefik -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-for h in "$GRAFANA_HOST" "$OO_HOST" "$PROM_HOST" "$AM_HOST" "$KUMA_HOST"; do (cd "$ROOT" && make -s adguard-rewrite DOMAIN="$h" ANSWER="$LB"); done
-echo "monitoring UIs at https://{$GRAFANA_HOST,$OO_HOST,$PROM_HOST,$AM_HOST,$KUMA_HOST} ($LB); syslog/netconsole at $(kubectl -n "$NS" get svc syslog -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
+echo "monitoring UIs at https://{$GRAFANA_HOST,$OO_HOST,$PROM_HOST,$AM_HOST,$KUMA_HOST}; syslog/netconsole at $(kubectl -n "$NS" get svc syslog -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"

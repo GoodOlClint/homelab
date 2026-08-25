@@ -2,6 +2,6 @@ apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata: {name: wildcard-tls, namespace: traefik}
 spec:
-  dnsNames: ["*.${DOMAIN}", "*.${ZONE}", "${DOMAIN}"]
+  dnsNames: ["*.${DOMAIN}", "${DOMAIN}", "*.${LEGACY_DOMAIN}", "*.${SERVICES_ZONE}", "${LEGACY_DOMAIN}"]
   secretName: wildcard-tls
   issuerRef: {name: homelab-ca, kind: ClusterIssuer}

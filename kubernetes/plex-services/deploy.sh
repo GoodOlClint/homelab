@@ -8,10 +8,9 @@
 source "$(dirname "$0")/../lib.sh"
 NS=plex-services
 HERE="$(cd "$(dirname "$0")" && pwd)"
-DOMAIN="$(j .domain)"
-export DOMAIN REGISTRY="registry.$DOMAIN" HOST_API="$(inf_host_api)" PROJECT_ID="$(inf_project_id)"
+eval "$(inv_env)"   # PBS TZ SERVICE_DOMAIN ...
+export DOMAIN="$SERVICE_DOMAIN" REGISTRY="registry.$(j .domain)" HOST_API="$(inf_host_api)" PROJECT_ID="$(inf_project_id)"
 export SYNOLOGY_STORAGE="$("$ROOT/.venv/bin/python3" -c "import yaml;print(yaml.safe_load(open('$ROOT/ansible/group_vars/all.yml'))['synology_storage_host'])")"
-eval "$(inv_env)"   # PBS TZ ...
 export PBS_REPOSITORY="backup@pbs!backup-token@${PBS}:synology"
 export CONFIG_HASH="$(shasum -a 256 "$HERE/config/recyclarr.yml" | cut -c1-16)"
 SUBST='${REGISTRY} ${HOST_API} ${PROJECT_ID} ${DOMAIN} ${TZ} ${SYNOLOGY_STORAGE} ${PBS_REPOSITORY} ${CONFIG_HASH}'
@@ -80,6 +79,4 @@ sub < "$HERE/app.yaml" | kubectl apply -f -
 for i in $(seq 30); do kubectl -n "$NS" get secret plex-services-secrets >/dev/null 2>&1 && break; sleep 2; done
 # Pre-migration the db-backed pods crashloop until their data lands — the rollout wait is advisory.
 kubectl -n "$NS" rollout status deploy --timeout=300s || true
-LB=$(kubectl -n traefik get svc traefik -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-for h in "${HOSTS[@]}"; do (cd "$ROOT" && make -s adguard-rewrite DOMAIN="$h.$DOMAIN" ANSWER="$LB"); done
-echo "plex-services UIs at https://{sonarr,radarr,lidarr,prowlarr,bazarr,sabnzbd,tautulli,seerr}.$DOMAIN ($LB)"
+echo "plex-services UIs at https://{sonarr,radarr,lidarr,prowlarr,bazarr,sabnzbd,tautulli,seerr}.$DOMAIN"

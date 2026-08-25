@@ -27,7 +27,8 @@ configFiles:
             {"urls": ["https://docker.io"], "onDemand": true, "tlsVerify": true, "content": [{"prefix": "**", "destination": "/docker.io"}]},
             {"urls": ["https://ghcr.io"],   "onDemand": true, "tlsVerify": true, "content": [{"prefix": "**", "destination": "/ghcr.io"}]},
             {"urls": ["https://quay.io"],   "onDemand": true, "tlsVerify": true, "content": [{"prefix": "**", "destination": "/quay.io"}]},
-            {"urls": ["https://public.ecr.aws"], "onDemand": true, "tlsVerify": true, "content": [{"prefix": "**", "destination": "/public.ecr.aws"}]}
+            {"urls": ["https://public.ecr.aws"], "onDemand": true, "tlsVerify": true, "content": [{"prefix": "**", "destination": "/public.ecr.aws"}]},
+            {"urls": ["https://registry.k8s.io"], "onDemand": true, "tlsVerify": true, "content": [{"prefix": "**", "destination": "/registry.k8s.io"}]}
           ]
         }
       }

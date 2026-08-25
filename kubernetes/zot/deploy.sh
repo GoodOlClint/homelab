@@ -26,5 +26,4 @@ kubectl -n "$NS" wait --for=condition=Ready certificate/zot-tls --timeout=120s
 helm_apply zot project-zot/zot "$NS" -f "$HERE/values.yaml"
 kubectl -n "$NS" rollout status statefulset/zot --timeout=300s
 LB=$(kubectl -n "$NS" get svc zot -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-echo "registry at https://$HOST ($LB) — AdGuard rewrite:"
-(cd "$ROOT" && make -s adguard-rewrite DOMAIN="$HOST" ANSWER="$LB")
+echo "registry at https://$HOST ($LB)"

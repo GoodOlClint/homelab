@@ -15,7 +15,7 @@
   vars:
     _domain: "{{ network_data.domain_suffix }}"
     _redirects: ["200-299", "300-399"]
-    uptime_kuma_api_url: "https://uptime-kuma.{{ _domain }}"
+    uptime_kuma_api_url: "https://uptime-kuma.{{ service_domain }}"
     uptime_kuma_validate_certs: false
     uptime_kuma_api_username: "{{ uptime_kuma_admin_user | default('goodolclint') }}"
     uptime_kuma_api_password: "{{ secrets.monitoring.uptime_kuma_admin_password }}"

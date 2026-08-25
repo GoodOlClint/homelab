@@ -5,10 +5,9 @@
 source "$(dirname "$0")/../lib.sh"
 NS=homepage
 HERE="$(cd "$(dirname "$0")" && pwd)"
-DOMAIN="$(j .domain)"
-export DOMAIN HOST="homepage.$DOMAIN" REGISTRY="registry.$DOMAIN" HOST_API="$(inf_host_api)" PROJECT_ID="$(inf_project_id)" GATEWAY="$(j .gateway)"
+eval "$(inv_env)"   # PLEX CONTROL PBS UNIFI INFISICAL ADGUARD SYNOLOGY TZ SERVICE_DOMAIN HOST_ALIAS
+export DOMAIN="$SERVICE_DOMAIN" HOST="homepage.$SERVICE_DOMAIN" REGISTRY="registry.$(j .domain)" HOST_API="$(inf_host_api)" PROJECT_ID="$(inf_project_id)" GATEWAY="$(j .gateway)"
 export PVE_API="$(sed -n "s/^virtual_environment_endpoint *= *\"\([^\"]*\)\".*/\1/p" "$ROOT/terraform/vars.auto.tfvars")"
-eval "$(inv_env)"   # PLEX CONTROL PBS UNIFI INFISICAL ADGUARD SYNOLOGY TZ HOST_ALIAS
 export HOSTS="$HOST,$HOST_ALIAS"
 
 ns "$NS"
@@ -21,6 +20,4 @@ for s in homepage plex-services plex monitoring; do
   for i in $(seq 30); do kubectl -n "$NS" get secret "homepage-$s" >/dev/null 2>&1 && break; sleep 2; done
 done
 kubectl -n "$NS" rollout status deploy/homepage --timeout=300s
-LB=$(kubectl -n traefik get svc traefik -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-for h in "$HOST" "$HOST_ALIAS"; do (cd "$ROOT" && make -s adguard-rewrite DOMAIN="$h" ANSWER="$LB"); done
-echo "homepage at https://$HOST ($LB)"
+echo "homepage at https://$HOST (and https://$HOST_ALIAS)"

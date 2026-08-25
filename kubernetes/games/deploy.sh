@@ -6,10 +6,9 @@
 source "$(dirname "$0")/../lib.sh"
 NS=games
 HERE="$(cd "$(dirname "$0")" && pwd)"
-DOMAIN="$(j .domain)"
-export DOMAIN REGISTRY="registry.$DOMAIN" HOST_API="$(inf_host_api)" PROJECT_ID="$(inf_project_id)" VALHEIM_IP="$(subnet_ip 67)"
+eval "$(inv_env)"   # TZ SERVICE_DOMAIN
+export DOMAIN="$SERVICE_DOMAIN" REGISTRY="registry.$(j .domain)" HOST_API="$(inf_host_api)" PROJECT_ID="$(inf_project_id)" VALHEIM_IP="$(subnet_ip 67)"
 export SYNOLOGY_STORAGE="$("$ROOT/.venv/bin/python3" -c "import yaml;print(yaml.safe_load(open('$ROOT/ansible/group_vars/all.yml'))['synology_storage_host'])")"
-eval "$(inv_env)"   # TZ
 export CONFIG_HASH="$(shasum -a 256 "$HERE/valheim-playfab-status.mjs" | cut -c1-16)"
 SUBST='${REGISTRY} ${HOST_API} ${PROJECT_ID} ${DOMAIN} ${TZ} ${SYNOLOGY_STORAGE} ${VALHEIM_IP} ${CONFIG_HASH}'
 sub() { envsubst "$SUBST"; }
@@ -60,6 +59,4 @@ sub < "$HERE/secrets.yaml" | kubectl apply -f -
 sub < "$HERE/app.yaml" | kubectl apply -f -
 for i in $(seq 30); do kubectl -n "$NS" get secret valheim-secrets >/dev/null 2>&1 && break; sleep 2; done
 kubectl -n "$NS" rollout status deploy kiwix --timeout=300s
-LB=$(kubectl -n traefik get svc traefik -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-(cd "$ROOT" && make -s adguard-rewrite DOMAIN="kiwix.$DOMAIN" ANSWER="$LB")
-echo "kiwix at https://kiwix.$DOMAIN ($LB); valheim UDP 2456-2458 on $VALHEIM_IP"
+echo "kiwix at https://kiwix.$DOMAIN; valheim UDP 2456-2458 on $VALHEIM_IP"
