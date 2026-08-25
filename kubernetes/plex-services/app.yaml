@@ -63,6 +63,7 @@ spec:
             - {name: config, mountPath: /config, subPath: data}
             - {name: media, mountPath: /data, subPath: data}
           readinessProbe: {httpGet: {path: /ping, port: 8989}, initialDelaySeconds: 15, periodSeconds: 10}
+          livenessProbe: {httpGet: {path: /ping, port: 8989}, initialDelaySeconds: 60, periodSeconds: 30, failureThreshold: 10}
       volumes:
         - {name: config, persistentVolumeClaim: {claimName: sonarr}}
         - {name: media, persistentVolumeClaim: {claimName: media}}
@@ -99,6 +100,7 @@ spec:
             - {name: config, mountPath: /config, subPath: data}
             - {name: media, mountPath: /data, subPath: data}
           readinessProbe: {httpGet: {path: /ping, port: 7878}, initialDelaySeconds: 15, periodSeconds: 10}
+          livenessProbe: {httpGet: {path: /ping, port: 7878}, initialDelaySeconds: 60, periodSeconds: 30, failureThreshold: 10}
       volumes:
         - {name: config, persistentVolumeClaim: {claimName: radarr}}
         - {name: media, persistentVolumeClaim: {claimName: media}}
@@ -135,6 +137,7 @@ spec:
             - {name: config, mountPath: /config, subPath: data}
             - {name: media, mountPath: /data, subPath: data}
           readinessProbe: {httpGet: {path: /ping, port: 8686}, initialDelaySeconds: 15, periodSeconds: 10}
+          livenessProbe: {httpGet: {path: /ping, port: 8686}, initialDelaySeconds: 60, periodSeconds: 30, failureThreshold: 10}
       volumes:
         - {name: config, persistentVolumeClaim: {claimName: lidarr}}
         - {name: media, persistentVolumeClaim: {claimName: media}}
@@ -170,6 +173,7 @@ spec:
           volumeMounts:
             - {name: config, mountPath: /config, subPath: data}
           readinessProbe: {httpGet: {path: /ping, port: 9696}, initialDelaySeconds: 15, periodSeconds: 10}
+          livenessProbe: {httpGet: {path: /ping, port: 9696}, initialDelaySeconds: 60, periodSeconds: 30, failureThreshold: 10}
       volumes:
         - {name: config, persistentVolumeClaim: {claimName: prowlarr}}
 ---
