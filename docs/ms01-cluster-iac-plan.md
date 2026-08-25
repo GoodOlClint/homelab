@@ -222,6 +222,7 @@ Decisions below are the **cutover** carries; the **end-state** home of each serv
 ## Open items (not blocking approval)
 
 - **BOINC:** keep CPU-only or drop — decide before WP4 lands the docker-legacy stack.
+- **AdGuard: filtered work laptop (operator, 2026-08-25).** The `Work Laptop` persistent client (`adguard_clients` in the gitignored `all.yml`, identified by its address — needs a pfSense static DHCP mapping to stay identified) runs with filtering OFF because Azure/M365 endpoints broke behind the blocklists. Goal: filtering back ON with client-scoped allow rules (`@@||domain^$client='Work Laptop'`) mined from that client's blocked-query log — a candidate job for a local LLM (LLM VM after the msi RMA) reading the AdGuard query log and proposing the allowlist. DoH: upstream DoH is a cheap `adguard_public_upstreams` change (not done yet); client-facing DoH/DoT on AdGuard would give ClientID identification (`<id>.adguard.<service domain>`) instead of the static lease, but needs its own LE cert and a laptop that MDM lets point at a custom resolver — parked until that is known.
 - **Corosync ring1:** ring1 on **VLAN 32** (i226-LM, tagged alongside AMT), configured in WP2 (cheap); drop if flaky. ring0 is VLAN 31 on i226-V (ADR-0008).
 - **MS-01 PCIe lane-sharing:** verify the x4 slot doesn't starve an M.2/OSD when the 25G NIC is installed (check during Day-1 bring-up, before Ceph).
 - **Packer golden images:** unaffected; revisit after migration.
