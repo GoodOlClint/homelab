@@ -233,7 +233,7 @@ All VMs are defined in `terraform/vm-configs.tf` and provisioned with cloud-init
 - `vm_id` determines the static management IP: VMID 109 maps to `{prefix}.{mgmt_vlan_id}.109`
 - `ip_offset` determines the static IP on service/storage VLANs
 - Management VLAN is always the first NIC
-- GPU passthrough is configured for `plex` and `docker` VMs (NVIDIA GRID drivers)
+- PCI passthrough: a VM entry's `pci_devices = [{ id = "0000:01:00" }]` hands the host device (every function) to the guest with the driver in the guest; the `llm` VM takes the Quadro RTX 5000 on `msi` this way. Plex uses the node iGPU through an LXC `/dev/dri` device instead
 
 ## Services
 
@@ -667,7 +667,6 @@ homelab/
 │   ├── vm-configs.tf               # All VM definitions
 │   ├── vultr-vps.tf                # VPS instance, firewall, bootstrap
 │   ├── cloudflare-dns.tf           # DNS A/AAAA records
-│   ├── pci.tf                      # GPU passthrough configuration
 │   └── modules/
 │       ├── network/                # Reads vlans.yaml, manages SDN zones/VNETs
 │       └── proxmox-vm/            # VM provisioning with cloud-init
