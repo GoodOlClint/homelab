@@ -15,10 +15,11 @@ locals {
   # assign the next free number (1..31) and NEVER renumber an existing volume.
   data_volumes = {
     plex          = { index = 1, size_gb = 150 } # Library dir, 62 GB measured 2026-08-21
-    plex_services = { index = 2, size_gb = 40 }  # retired with LXC 206 (ADR 0037, state moved to cluster PVCs); slot stays until the decommission sweep
-    openobserve   = { index = 3, size_gb = 100 } # retired with LXC 203 (ADR 0036, history moved to cluster PVCs); slot stays until the decommission sweep
-    docker        = { index = 4, size_gb = 20 }  # retired with LXC 204 (ADR 0038, Valheim state moved to a cluster PVC); slot stays until the decommission sweep
+    plex_services = { index = 2, size_gb = 40 }  # no consumer (ADR 0037); disk still holds state — never drop or renumber
+    openobserve   = { index = 3, size_gb = 100 } # no consumer (ADR 0036); disk still holds state — never drop or renumber
+    docker        = { index = 4, size_gb = 20 }  # no consumer (ADR 0038); disk still holds state — never drop or renumber
     control       = { index = 5, size_gb = 10 }  # MeshCentral data/files + Portainer state (ADR 0030)
+    llm           = { index = 6, size_gb = 100 } # Ollama model cache (rebuild matrix: re-download is the fallback, not the routine)
   }
 
   # --- Infrastructure VMs ---
@@ -183,6 +184,21 @@ locals {
       bind_mounts = [
         { source = "/mnt/nas/plex/data/media", path = "/mnt/media", read_only = true },
       ]
+    },
+    # Second inference node beside the Mac Studio (ADR 0001/0003/0031): the
+    # Quadro RTX 5000 passed through whole (IOMMU group 19 on msi, all four
+    # functions), driver in the guest, pinned to msi, never HA. VMID = 200 + ip_offset.
+    {
+      name         = "llm"
+      node_name    = "msi"
+      vm_id        = 240
+      vlans        = ["vlan40"]
+      ip_offset    = 40
+      cpu_cores    = 8
+      memory_mb    = 16384
+      disk_size_gb = 32
+      pci_devices  = [{ id = "0000:01:00" }]
+      data_volume  = { name = "llm" }
     },
   ]
 }

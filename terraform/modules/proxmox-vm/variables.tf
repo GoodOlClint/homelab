@@ -105,6 +105,14 @@ variable "vm_configurations" {
       size_gb = number                 # Disk size in GB
       storage = optional(string, null) # Storage pool (uses primary_disk_storage if null)
     })), [])
+    # PCI passthrough (VM only, q35). `id` is the host BDF; a bare "0000:01:00"
+    # passes every function of the device. Raw ids need the provider's root@pam
+    # login — switch to a cluster resource mapping if that ever changes.
+    pci_devices = optional(list(object({
+      id     = string
+      pcie   = optional(bool, true)
+      rombar = optional(bool, true)
+    })), [])
     # Additional cloud-init or VM configuration options
     extra_config = optional(map(string), {})
   }))

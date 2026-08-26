@@ -269,6 +269,16 @@ resource "proxmox_virtual_environment_vm" "vms" {
     }
   }
 
+  dynamic "hostpci" {
+    for_each = each.value.pci_devices
+    content {
+      device = "hostpci${hostpci.key}"
+      id     = hostpci.value.id
+      pcie   = hostpci.value.pcie
+      rombar = hostpci.value.rombar
+    }
+  }
+
   # Conditional cloud-init initialization (only when not using Packer)
   dynamic "initialization" {
     for_each = var.use_packer_template ? [] : [1]
