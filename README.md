@@ -700,6 +700,7 @@ homelab/
 | [docs/pfsense-wireguard-mobile-peers.md](docs/pfsense-wireguard-mobile-peers.md) | Mobile WireGuard client configuration |
 | [docs/pfsense-firewall-rules.md](docs/pfsense-firewall-rules.md) | pfSense firewall rules reference |
 | [docs/authentik-setup.md](docs/authentik-setup.md) | authentik: both realms, tunnel route, PVE/PBS/PDM realm hand steps, family enrollment |
+| [docs/operator-hand-steps.md](docs/operator-hand-steps.md) | Every remaining hand step (pending + standing), each with its probe and an automation verdict; the ranked levers for the next drain tranche |
 | [docs/cloudflare-tunnel-setup.md](docs/cloudflare-tunnel-setup.md) | Cloudflare Tunnel integration |
 | [docs/key-rotation-procedure.md](docs/key-rotation-procedure.md) | WireGuard key rotation procedure |
 | [docs/uptime-kuma-monitors.md](docs/uptime-kuma-monitors.md) | Uptime Kuma monitors (Ansible-managed, `make uptime-kuma`) |
