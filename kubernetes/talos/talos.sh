@@ -63,6 +63,11 @@ render() {
   cat > "$SEC/$n.patch.yaml" <<YAML
 machine:
   kubelet:
+    # Kubelet serves a CA-signed cert instead of a self-signed one, so metrics-server
+    # verifies it rather than running --kubelet-insecure-tls. Needs the CSR approver:
+    # nothing built into Kubernetes approves kubelet-serving CSRs.
+    extraArgs:
+      rotate-server-certificates: "true"
     nodeIP:
       validSubnets: [$SUBNET]
   network:

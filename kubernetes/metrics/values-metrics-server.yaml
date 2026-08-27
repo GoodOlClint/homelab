@@ -1,0 +1,2 @@
+image:
+  repository: ${REGISTRY}/registry.k8s.io/metrics-server/metrics-server

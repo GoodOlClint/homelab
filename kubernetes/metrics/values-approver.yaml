@@ -1,0 +1,9 @@
+# The Talos nodes have no DNS records (they live in talos.tf, outside the Ansible
+# inventory that make dns-records reads), so the approver's hostname->SAN check
+# can never pass; IP SANs and the node-name regex remain enforced.
+bypassDnsResolution: true
+providerRegex: ^talos-cp-[a-z]+$
+maxExpirationSeconds: 86400
+image:
+  repository: ${REGISTRY}/ghcr.io/postfinance/kubelet-csr-approver
+resources: {requests: {cpu: 25m, memory: 64Mi}}

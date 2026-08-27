@@ -198,6 +198,10 @@ talos-jellyfin:
 talos-headlamp:
 	@kubernetes/headlamp/deploy.sh
 
+# Cluster metrics API: kubelet-csr-approver (kubelet serving certs, see talos.sh) + metrics-server
+talos-metrics:
+	@kubernetes/metrics/deploy.sh
+
 # Fleet-root terraform passthrough with the TF_VAR_* exports (raw terraform hangs prompting for them);
 # the retirement step is `make tf ARGS='state rm <address>'` (ADR 0028: stopped, never destroyed)
 tf:
