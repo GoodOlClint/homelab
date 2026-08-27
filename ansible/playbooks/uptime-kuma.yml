@@ -47,8 +47,8 @@
       - {name: Jellyseerr, monitor_type: http, url: "http://seerr.plex-services.svc.cluster.local:5055", accepted_statuscodes: "{{ _redirects }}"}
       - {name: Grafana, monitor_type: http, url: "https://grafana.{{ service_domain }}", accepted_statuscodes: "{{ _redirects }}", expiry_notification: true}
       - {name: OpenObserve, monitor_type: http, url: "https://openobserve.{{ service_domain }}/healthz", expiry_notification: true}
-      - {name: Prometheus, monitor_type: http, url: "https://prometheus.{{ service_domain }}/-/healthy", expiry_notification: true}
-      - {name: Alertmanager, monitor_type: http, url: "https://alertmanager.{{ service_domain }}/-/healthy", expiry_notification: true}
+      - {name: Prometheus, monitor_type: http, url: "http://prometheus.monitoring.svc.cluster.local:9090/-/healthy"}
+      - {name: Alertmanager, monitor_type: http, url: "http://alertmanager.monitoring.svc.cluster.local:9093/-/healthy"}
       - {name: "AxoSyslog — syslog TCP 5514", monitor_type: port, hostname: "{{ openobserve_listen_host }}", port: 5514, max_retries: 1}
       - {name: Infisical, monitor_type: http, url: "https://infisical.{{ service_domain }}", accepted_statuscodes: "{{ _redirects }}", expiry_notification: true}
       - {name: "Proxmox Backup Server", monitor_type: port, hostname: "{{ hostvars['proxmox-backup'].service_ip }}", port: 8007}
