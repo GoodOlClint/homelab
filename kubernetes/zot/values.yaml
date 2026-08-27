@@ -1,4 +1,5 @@
 # Image ref stays upstream — the registry must always rebuild itself from the WAN (ADR 0022).
+resources: {requests: {cpu: 100m, memory: 256Mi}}
 service:
   type: LoadBalancer
   port: 443

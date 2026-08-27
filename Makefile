@@ -194,6 +194,10 @@ games-migrate:
 talos-jellyfin:
 	@kubernetes/jellyfin/deploy.sh
 
+# Read-only Kubernetes dashboard (Headlamp) on headlamp.<service domain>, behind authentik forward-auth
+talos-headlamp:
+	@kubernetes/headlamp/deploy.sh
+
 # Fleet-root terraform passthrough with the TF_VAR_* exports (raw terraform hangs prompting for them);
 # the retirement step is `make tf ARGS='state rm <address>'` (ADR 0028: stopped, never destroyed)
 tf:

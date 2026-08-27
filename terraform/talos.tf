@@ -79,10 +79,10 @@ resource "proxmox_virtual_environment_vm" "talos_cp" {
 
   agent { enabled = true }
   cpu {
-    cores = 4
+    cores = 6
     type  = "host"
   }
-  memory { dedicated = 8192 }
+  memory { dedicated = 16384 }
   operating_system { type = "l26" }
 
   disk {
@@ -123,10 +123,10 @@ resource "proxmox_virtual_environment_vm" "talos_cp_worklab" {
 
   agent { enabled = true }
   cpu {
-    cores = 4
+    cores = 6
     type  = "host"
   }
-  memory { dedicated = 8192 }
+  memory { dedicated = 16384 }
   operating_system { type = "l26" }
 
   disk {
