@@ -181,6 +181,8 @@ plex-services-migrate:
 plex-pbs-image:
 	@cp kubernetes/.secrets/homelab-ca.crt kubernetes/plex-services/pbs-client/homelab-ca.crt
 	@DOMAIN=$$(jq -r .domain kubernetes/talos/.secrets/nodes.json); \
+	PW=$$(bash -c 'source kubernetes/lib.sh; inf_get /infrastructure zot_push_password'); \
+	echo "$$PW" | docker login "registry.$$DOMAIN" -u push --password-stdin && \
 	docker build --platform linux/amd64 -t registry.$$DOMAIN/homelab/proxmox-backup-client:trixie kubernetes/plex-services/pbs-client && \
 	docker push registry.$$DOMAIN/homelab/proxmox-backup-client:trixie
 

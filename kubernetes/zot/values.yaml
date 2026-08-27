@@ -9,6 +9,8 @@ persistence: true
 pvc:
   storage: 50Gi
 mountConfig: true
+mountSecret: true
+secretFiles: null
 configFiles:
   config.json: |-
     {
@@ -16,7 +18,21 @@ configFiles:
       "storage": {"rootDirectory": "/var/lib/registry", "gc": true, "dedupe": true},
       "http": {
         "address": "0.0.0.0", "port": "5000",
-        "tls": {"cert": "/etc/zot-tls/tls.crt", "key": "/etc/zot-tls/tls.key"}
+        "externalUrl": "https://${HOST}",
+        "tls": {"cert": "/etc/zot-tls/tls.crt", "key": "/etc/zot-tls/tls.key"},
+        "auth": {
+          "htpasswd": {"path": "/secret/htpasswd"},
+          "openid": {"providers": {"oidc": {
+            "credentialsFile": "/secret/oidc-credentials.json",
+            "issuer": "https://auth.${DOMAIN}/application/o/zot/",
+            "keypath": "",
+            "scopes": ["openid", "profile", "email"]
+          }}}
+        },
+        "accessControl": {
+          "repositories": {"**": {"anonymousPolicy": ["read"], "defaultPolicy": ["read"]}},
+          "adminPolicy": {"users": ["${ZOT_PUSH_USER}"], "actions": ["read", "create", "update", "delete"]}
+        }
       },
       "log": {"level": "info"},
       "extensions": {

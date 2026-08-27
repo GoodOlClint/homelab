@@ -46,3 +46,18 @@ Forward-auth: any Ingress opts in with `traefik.ingress.kubernetes.io/router.mid
 ## Rebuild
 
 A realm rebuild is `kubectl delete ns` + `make talos-authentik REALM=…`; the Infisical folder survives, so every secret and client secret stays stable and the consumers need nothing. Data comes back from the PBS dump: restore `pg_dumpall-<date>.sql.gz` from ns `databases` and `psql -U authentik -f` into the fresh Postgres before the server starts (or after, then restart both Deployments). Verify the lane by snapshot recency on PBS, never by the CronJob's exit code.
+
+## Internal realm — Zot registry (2026-08-27)
+
+The `zot` provider backs the registry **web UI only**. Zot's own docs are explicit that OIDC cannot authenticate `docker`/`containerd`: CLI pushes use the `push` htpasswd identity instead (`/infrastructure/zot_push_password`, consumed by `make plex-pbs-image`), and pulls stay anonymous so every node's containerd is unaffected.
+
+Access control (`kubernetes/zot/values.yaml`): `anonymousPolicy: [read]` on `**`, `defaultPolicy: [read]` for any authenticated user, and `adminPolicy` limited to `push`. Before this, the registry had no `auth` block at all and accepted **anonymous pushes** — anyone on the LAN could overwrite a tag the cluster pulls. Verify after any change to that file:
+
+    curl -s -o /dev/null -w '%{http_code}\n' -X POST https://registry.<service domain>/v2/scratch-authcheck/blobs/uploads/   # must be 401
+    curl -s -o /dev/null -w '%{http_code}\n' https://registry.<service domain>/v2/docker.io/library/busybox/tags/list       # must be 200
+
+## Internal realm — Synology DSM (provider ready, DSM side is a hand step)
+
+The `synology` OIDC provider exists in the blueprint. On the NAS: **Control Panel → Domain/LDAP → SSO Client**, tick *Enable OIDC SSO service*, then Profile `OIDC`, Account type `Domain/LDAP/local`, Name `authentik`, Well Known URL `https://auth.<service domain>/application/o/synology/.well-known/openid-configuration`, Application ID `synology`, Application Key from Infisical `/authentik/synology_oidc_client_secret`, Redirect URL `https://synology.<service domain>`, scope `openid profile email`, username claim `preferred_username`.
+
+Two prerequisites: the redirect is matched by regex `^https://synology\.[^/]+(:5001)?/?$`, so DSM must be reached **by name** — an A record for the NAS is not in `make dns-records` today and has to be added by hand. And DSM authenticates existing accounts only: each user must already exist locally on the NAS before SSO will admit them.
