@@ -1,0 +1,4 @@
+image:
+  registry: ${REGISTRY}/registry.k8s.io
+  repository: kube-state-metrics/kube-state-metrics
+resources: {requests: {cpu: 25m, memory: 128Mi}}

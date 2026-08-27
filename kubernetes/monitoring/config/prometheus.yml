@@ -28,6 +28,11 @@ scrape_configs:
     static_configs:
       - targets: ['openobserve:5080']
 
+  # Cross-namespace: kube-state-metrics lives in kube-system, so the bare service name does not resolve.
+  - job_name: 'kube-state-metrics'
+    static_configs:
+      - targets: ['kube-state-metrics.kube-system.svc.cluster.local:8080']
+
   - job_name: 'blackbox-exporter'
     static_configs:
       - targets: ['blackbox:9115']
