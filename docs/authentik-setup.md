@@ -61,3 +61,28 @@ Access control (`kubernetes/zot/values.yaml`): `anonymousPolicy: [read]` on `**`
 The `synology` OIDC provider exists in the blueprint. On the NAS: **Control Panel → Domain/LDAP → SSO Client**, tick *Enable OIDC SSO service*, then Profile `OIDC`, Account type `Domain/LDAP/local`, Name `authentik`, Well Known URL `https://auth.<service domain>/application/o/synology/.well-known/openid-configuration`, Application ID `synology`, Application Key from Infisical `/authentik/synology_oidc_client_secret`, Redirect URL `https://synology.<service domain>`, scope `openid profile email`, username claim `preferred_username`.
 
 Two prerequisites: the redirect is matched by regex `^https://synology\.[^/]+(:5001)?/?$`, so DSM must be reached **by name** — an A record for the NAS is not in `make dns-records` today and has to be added by hand. And DSM authenticates existing accounts only: each user must already exist locally on the NAS before SSO will admit them.
+
+## Internal realm — Home Assistant (provider ready, HA side is a hand step)
+
+Home Assistant is **not fleet-managed** — nothing in this repo deploys or configures it. The `homeassistant` provider exists so the HA side can be wired by hand.
+
+HA ships no SSO of its own, so it needs one of the two community integrations (HACS). Pick one; the provider's redirect regex accepts either callback path:
+
+| Integration | Callback path |
+|---|---|
+| `christiaangoossens/hass-oidc-auth` | `/auth/oidc/callback` |
+| `cavefire/hass-openid` | `/auth/openid/callback` |
+
+Values for the HA side:
+
+- Discovery URL: `https://auth.<service domain>/application/o/homeassistant/.well-known/openid-configuration`
+- Client ID: `homeassistant`
+- Client secret: Infisical `/authentik/homeassistant_oidc_client_secret`
+
+The redirect is a **regex** — `^https?://(homeassistant|hass|ha)\.[^/]+(:8123)?/auth/(oidc|openid)/callback$` — because HA's hostname and scheme are not known to this repo. Consequences:
+
+- HA must be reached **by name** (`homeassistant`/`hass`/`ha` + any domain, optional `:8123`). An IP-addressed HA will not match, and an RFC 1918 address cannot go in a tracked file — narrow the provider by hand in the authentik UI for that case.
+- `http` is permitted because HA commonly serves plain HTTP on the LAN, but the authorization code then crosses the network in clear. Prefer https, and once the real URL is settled, replace the regex with a strict URI in `blueprint-internal.yaml`.
+- Group claims arrive via the `profile` scope, so admin mapping in the HA integration can key on `groups` without an extra property mapping.
+
+**Do not enable "Block other login methods" (hass-openid) until an OIDC login has succeeded** — it removes HA's local login and will lock you out otherwise.

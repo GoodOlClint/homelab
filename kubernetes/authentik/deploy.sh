@@ -33,7 +33,7 @@ realm() {
   ensure_secret bootstrap_password 16 "authentik $realm: akadmin initial password"
   ensure_secret bootstrap_token 32 "authentik $realm: akadmin API token"
   if [ "$realm" = internal ]; then
-    for app in grafana portainer meshcentral pdm pve pbs zot synology; do ensure_secret "${app}_oidc_client_secret" 32 "authentik internal: OIDC client secret for $app"; done
+    for app in grafana portainer meshcentral pdm pve pbs zot synology homeassistant; do ensure_secret "${app}_oidc_client_secret" 32 "authentik internal: OIDC client secret for $app"; done
   else
     ensure_secret ldap_bind_password 24 "authentik external: LDAP outpost bind password (Jellyfin)"
   fi
