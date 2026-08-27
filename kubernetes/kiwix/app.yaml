@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kiwix
+  namespace: kiwix
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: kiwix}}
+  template:
+    metadata: {labels: {app: kiwix}}
+    spec:
+      enableServiceLinks: false
+      affinity: {nodeAffinity: {preferredDuringSchedulingIgnoredDuringExecution: [{weight: 100, preference: {matchExpressions: [{key: kubernetes.io/hostname, operator: NotIn, values: [talos-cp-w]}]}}]}}
+      containers:
+        - name: kiwix
+          image: ${REGISTRY}/ghcr.io/kiwix/kiwix-serve:latest
+          resources: {requests: {cpu: 25m, memory: 64Mi}}
+          args: ["*.zim"]
+          ports: [{containerPort: 8080}]
+          env:
+            - {name: TZ, value: "${TZ}"}
+          volumeMounts:
+            - {name: zims, mountPath: /data, subPath: kiwix, readOnly: true}
+          readinessProbe: {httpGet: {path: /, port: 8080}, initialDelaySeconds: 10, periodSeconds: 15}
+      volumes:
+        - {name: zims, persistentVolumeClaim: {claimName: kiwix, readOnly: true}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: kiwix, namespace: kiwix}
+spec: {selector: {app: kiwix}, ports: [{port: 8080}]}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kiwix
+  namespace: kiwix
+  annotations: {traefik.ingress.kubernetes.io/router.middlewares: authentik-forward-auth@kubernetescrd}
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: kiwix.${DOMAIN}
+      http: {paths: [{path: /, pathType: Prefix, backend: {service: {name: kiwix, port: {number: 8080}}}}]}

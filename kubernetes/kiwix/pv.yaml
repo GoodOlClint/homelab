@@ -12,7 +12,7 @@ spec:
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
-metadata: {name: kiwix, namespace: games}
+metadata: {name: kiwix, namespace: kiwix}
 spec:
   accessModes: [ReadOnlyMany]
   storageClassName: ""

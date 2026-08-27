@@ -202,6 +202,14 @@ talos-headlamp:
 talos-metrics:
 	@kubernetes/metrics/deploy.sh
 
+# Kiwix ZIM library on kiwix.<service domain> (split out of the games namespace)
+talos-kiwix:
+	@kubernetes/kiwix/deploy.sh
+
+# Cluster half of `make update`: restart every :latest workload so it re-pulls through Zot (NS= to scope)
+talos-update:
+	@kubernetes/update.sh
+
 # Fleet-root terraform passthrough with the TF_VAR_* exports (raw terraform hangs prompting for them);
 # the retirement step is `make tf ARGS='state rm <address>'` (ADR 0028: stopped, never destroyed)
 tf:
