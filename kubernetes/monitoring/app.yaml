@@ -15,6 +15,7 @@ spec:
         - name: openobserve
           # Pinned: the metadata DB is on schema 46, which only v0.92.x reads (renovate watches this line).
           image: ${REGISTRY}/public.ecr.aws/zinclabs/openobserve:v0.92.0-rc2-amd64
+          resources: {requests: {cpu: 100m, memory: 512Mi}}
           ports: [{containerPort: 5080}]
           env:
             - {name: TZ, value: "${TZ}"}
@@ -59,6 +60,7 @@ spec:
       containers:
         - name: grafana
           image: ${REGISTRY}/docker.io/grafana/grafana:latest
+          resources: {requests: {cpu: 100m, memory: 256Mi}}
           ports: [{containerPort: 3000}]
           env:
             - {name: TZ, value: "${TZ}"}
@@ -118,6 +120,7 @@ spec:
       containers:
         - name: prometheus
           image: ${REGISTRY}/docker.io/prom/prometheus:latest
+          resources: {requests: {cpu: 200m, memory: 1Gi}}
           args:
             - --config.file=/etc/prometheus/config/prometheus.yml
             - --storage.tsdb.path=/prometheus
@@ -160,6 +163,7 @@ spec:
       containers:
         - name: alertmanager
           image: ${REGISTRY}/docker.io/prom/alertmanager:latest
+          resources: {requests: {cpu: 25m, memory: 64Mi}}
           args:
             - --config.file=/etc/alertmanager/alertmanager.yml
             - --storage.path=/alertmanager
@@ -196,6 +200,7 @@ spec:
       containers:
         - name: blackbox
           image: ${REGISTRY}/docker.io/prom/blackbox-exporter:latest
+          resources: {requests: {cpu: 25m, memory: 64Mi}}
           args: [--config.file=/config/blackbox.yml]
           ports: [{containerPort: 9115}]
           env: [{name: TZ, value: "${TZ}"}]
@@ -224,6 +229,7 @@ spec:
       containers:
         - name: speedtest
           image: ${REGISTRY}/docker.io/miguelndecarvalho/speedtest-exporter:latest
+          resources: {requests: {cpu: 25m, memory: 64Mi}}
           ports: [{containerPort: 9798}]
           env: [{name: TZ, value: "${TZ}"}]
 ---
@@ -245,6 +251,7 @@ spec:
       containers:
         - name: smokeping-prober
           image: ${REGISTRY}/quay.io/superq/smokeping-prober:latest
+          resources: {requests: {cpu: 25m, memory: 64Mi}}
           args: ${SMOKEPING_ARGS}
           ports: [{containerPort: 9374}]
           env: [{name: TZ, value: "${TZ}"}]
@@ -269,6 +276,7 @@ spec:
       containers:
         - name: proxmox-exporter
           image: ${REGISTRY}/docker.io/prompve/prometheus-pve-exporter:latest
+          resources: {requests: {cpu: 25m, memory: 64Mi}}
           ports: [{containerPort: 9221}]
           env:
             - {name: TZ, value: "${TZ}"}
@@ -296,6 +304,7 @@ spec:
       containers:
         - name: snmp-exporter
           image: ${REGISTRY}/docker.io/prom/snmp-exporter:latest
+          resources: {requests: {cpu: 25m, memory: 64Mi}}
           args: [--config.file=/etc/snmp_exporter/snmp.yml]
           ports: [{containerPort: 9116}]
           env: [{name: TZ, value: "${TZ}"}]
@@ -323,6 +332,7 @@ spec:
       containers:
         - name: unifi-poller
           image: ${REGISTRY}/docker.io/golift/unifi-poller:latest
+          resources: {requests: {cpu: 25m, memory: 64Mi}}
           ports: [{containerPort: 9130}]
           env:
             - {name: TZ, value: "${TZ}"}
@@ -356,6 +366,7 @@ spec:
       containers:
         - name: pbs-exporter
           image: ${REGISTRY}/ghcr.io/natrontech/pbs-exporter:latest
+          resources: {requests: {cpu: 25m, memory: 64Mi}}
           ports: [{containerPort: 10019}]
           env:
             - {name: TZ, value: "${TZ}"}
@@ -388,6 +399,7 @@ spec:
       containers:
         - name: uptime-kuma
           image: ${REGISTRY}/docker.io/louislam/uptime-kuma:2
+          resources: {requests: {cpu: 50m, memory: 128Mi}}
           ports: [{containerPort: 3001}]
           env: [{name: TZ, value: "${TZ}"}]
           volumeMounts:
@@ -419,6 +431,7 @@ spec:
       containers:
         - name: axosyslog
           image: ${REGISTRY}/ghcr.io/axoflow/axosyslog:latest
+          resources: {requests: {cpu: 50m, memory: 128Mi}}
           args: [-e]
           ports:
             - {containerPort: 5514, protocol: UDP}

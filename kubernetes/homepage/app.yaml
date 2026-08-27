@@ -13,6 +13,7 @@ spec:
       containers:
         - name: homepage
           image: ${REGISTRY}/ghcr.io/gethomepage/homepage:latest
+          resources: {requests: {cpu: 50m, memory: 128Mi}}
           ports: [{containerPort: 3000}]
           env:
             - {name: TZ, value: "${TZ}"}

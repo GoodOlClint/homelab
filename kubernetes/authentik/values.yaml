@@ -20,5 +20,7 @@ blueprints:
   configMaps: [authentik-blueprint]
 server:
   deploymentStrategy: {type: Recreate}
+  resources: {requests: {cpu: 100m, memory: 512Mi}}
 worker:
   deploymentStrategy: {type: Recreate}
+  resources: {requests: {cpu: 100m, memory: 512Mi}}

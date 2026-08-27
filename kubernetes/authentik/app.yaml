@@ -17,6 +17,7 @@ spec:
         - name: postgres
           # Major pinned: the data dir is a 17-format cluster.
           image: ${REGISTRY}/docker.io/library/postgres:17
+          resources: {requests: {cpu: 100m, memory: 256Mi}}
           ports: [{containerPort: 5432}]
           env:
             - {name: TZ, value: "${TZ}"}

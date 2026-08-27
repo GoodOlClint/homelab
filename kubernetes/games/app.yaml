@@ -20,6 +20,7 @@ spec:
       containers:
         - name: valheim
           image: ${REGISTRY}/ghcr.io/community-valheim-tools/valheim-server:latest
+          resources: {requests: {cpu: 500m, memory: 2Gi}}
           securityContext: {capabilities: {add: [SYS_NICE]}}
           ports:
             - {containerPort: 2456, protocol: UDP}
@@ -63,6 +64,7 @@ spec:
             failureThreshold: 10
         - name: valheim-status
           image: ${REGISTRY}/public.ecr.aws/docker/library/node:22-alpine
+          resources: {requests: {cpu: 25m, memory: 64Mi}}
           env:
             - {name: NAME, value: "Homelab Valheim"}
             - {name: INTERVAL, value: "60"}
@@ -73,6 +75,7 @@ spec:
             - {name: status, mountPath: /srv}
         - name: valheim-status-web
           image: ${REGISTRY}/public.ecr.aws/docker/library/busybox:stable
+          resources: {requests: {cpu: 10m, memory: 32Mi}}
           command: [httpd, -f, -p, "8081", -h, /srv]
           ports: [{containerPort: 8081}]
           volumeMounts:
@@ -115,6 +118,7 @@ metadata:
   namespace: games
 spec:
   replicas: 1
+  strategy: {type: Recreate}
   selector: {matchLabels: {app: kiwix}}
   template:
     metadata: {labels: {app: kiwix}}
@@ -124,6 +128,7 @@ spec:
       containers:
         - name: kiwix
           image: ${REGISTRY}/ghcr.io/kiwix/kiwix-serve:latest
+          resources: {requests: {cpu: 25m, memory: 64Mi}}
           args: ["*.zim"]
           ports: [{containerPort: 8080}]
           env:

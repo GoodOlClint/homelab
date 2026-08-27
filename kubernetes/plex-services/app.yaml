@@ -17,6 +17,7 @@ spec:
         - name: postgres
           # Major pinned: the data dir is a 17-format cluster.
           image: ${REGISTRY}/docker.io/library/postgres:17
+          resources: {requests: {cpu: 100m, memory: 256Mi}}
           ports: [{containerPort: 5432}]
           env:
             - {name: TZ, value: "${TZ}"}
@@ -53,6 +54,7 @@ spec:
       containers:
         - name: sonarr
           image: ${REGISTRY}/ghcr.io/hotio/sonarr:latest
+          resources: {requests: {cpu: 50m, memory: 192Mi}}
           ports: [{containerPort: 8989}]
           env:
             - {name: TZ, value: "${TZ}"}
@@ -90,6 +92,7 @@ spec:
       containers:
         - name: radarr
           image: ${REGISTRY}/ghcr.io/hotio/radarr:latest
+          resources: {requests: {cpu: 50m, memory: 192Mi}}
           ports: [{containerPort: 7878}]
           env:
             - {name: TZ, value: "${TZ}"}
@@ -127,6 +130,7 @@ spec:
       containers:
         - name: lidarr
           image: ${REGISTRY}/ghcr.io/hotio/lidarr:latest
+          resources: {requests: {cpu: 50m, memory: 192Mi}}
           ports: [{containerPort: 8686}]
           env:
             - {name: TZ, value: "${TZ}"}
@@ -164,6 +168,7 @@ spec:
       containers:
         - name: prowlarr
           image: ${REGISTRY}/ghcr.io/hotio/prowlarr:latest
+          resources: {requests: {cpu: 50m, memory: 192Mi}}
           ports: [{containerPort: 9696}]
           env:
             - {name: TZ, value: "${TZ}"}
@@ -200,6 +205,7 @@ spec:
       containers:
         - name: bazarr
           image: ${REGISTRY}/ghcr.io/hotio/bazarr:latest
+          resources: {requests: {cpu: 50m, memory: 192Mi}}
           ports: [{containerPort: 6767}]
           env:
             - {name: TZ, value: "${TZ}"}
@@ -244,6 +250,7 @@ spec:
       containers:
         - name: sabnzbd
           image: ${REGISTRY}/ghcr.io/hotio/sabnzbd:testing
+          resources: {requests: {cpu: 100m, memory: 256Mi}}
           ports: [{containerPort: 8080}]
           env:
             - {name: TZ, value: "${TZ}"}
@@ -282,6 +289,7 @@ spec:
       containers:
         - name: tautulli
           image: ${REGISTRY}/ghcr.io/hotio/tautulli:latest
+          resources: {requests: {cpu: 50m, memory: 128Mi}}
           ports: [{containerPort: 8181}]
           env:
             - {name: TZ, value: "${TZ}"}
@@ -320,6 +328,7 @@ spec:
       containers:
         - name: seerr
           image: ${REGISTRY}/ghcr.io/seerr-team/seerr:latest
+          resources: {requests: {cpu: 50m, memory: 192Mi}}
           ports: [{containerPort: 5055}]
           env:
             - {name: TZ, value: "${TZ}"}
@@ -361,6 +370,7 @@ spec:
       containers:
         - name: recyclarr
           image: ${REGISTRY}/ghcr.io/recyclarr/recyclarr:8
+          resources: {requests: {cpu: 25m, memory: 64Mi}}
           env:
             - {name: TZ, value: "${TZ}"}
             - {name: CRON_SCHEDULE, value: "@daily"}
@@ -391,6 +401,7 @@ spec:
       containers:
         - name: cloudflared
           image: ${REGISTRY}/docker.io/cloudflare/cloudflared:latest
+          resources: {requests: {cpu: 25m, memory: 64Mi}}
           args: [tunnel, run]
           env:
             - {name: TZ, value: "${TZ}"}
@@ -416,6 +427,7 @@ spec:
         - name: libation
           # Pinned (ADR 0018): CLI-only installs skip GUI-run migrations.
           image: ${REGISTRY}/docker.io/rmcrackan/libation:13.7.10
+          resources: {requests: {cpu: 25m, memory: 128Mi}}
           env:
             - {name: TZ, value: "${TZ}"}
             - {name: SLEEP_TIME, value: "6h"}
