@@ -209,3 +209,37 @@ entries:
   - model: authentik_core.application
     identifiers: {slug: homeassistant}
     attrs: {name: Home Assistant, provider: !KeyOf homeassistant}
+
+  # pfSense webConfigurator SSO (ADR 0043). SAML2 because pfSense has no OIDC; the package is
+  # pfrest/pfSense-pkg-saml2-auth (generic OneLogin php-saml). NameID carries the username and the
+  # managed Groups mapping emits http://schemas.xmlsoap.org/claims/Group — the exact attribute name
+  # pfSense reads for privilege assignment. The application is bound to `pfsense-admins`: an
+  # assertion with no groups makes pfSense silently inherit a same-named LOCAL account's privileges,
+  # so nobody outside the group may reach the provider at all.
+  - model: authentik_core.group
+    id: pfsense-admins
+    identifiers: {name: pfsense-admins}
+  - model: authentik_providers_saml.samlprovider
+    id: pfsense
+    identifiers: {name: pfsense}
+    attrs:
+      acs_url: "https://pfsense.${DOMAIN}/saml2_auth/sso/acs/"
+      audience: "https://pfsense.${DOMAIN}/saml2_auth/sso/metadata/"
+      sp_binding: post
+      sign_assertion: true
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      signing_kp: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+      name_id_mapping: !Find [authentik_providers_saml.samlpropertymapping, [managed, goauthentik.io/providers/saml/username]]
+      property_mappings:
+        - !Find [authentik_providers_saml.samlpropertymapping, [managed, goauthentik.io/providers/saml/username]]
+        - !Find [authentik_providers_saml.samlpropertymapping, [managed, goauthentik.io/providers/saml/email]]
+        - !Find [authentik_providers_saml.samlpropertymapping, [managed, goauthentik.io/providers/saml/name]]
+        - !Find [authentik_providers_saml.samlpropertymapping, [managed, goauthentik.io/providers/saml/groups]]
+  - model: authentik_core.application
+    id: pfsense-app
+    identifiers: {slug: pfsense}
+    attrs: {name: pfSense, provider: !KeyOf pfsense, meta_launch_url: "https://pfsense.${DOMAIN}"}
+  - model: authentik_policies.policybinding
+    identifiers: {target: !KeyOf pfsense-app, group: !KeyOf pfsense-admins, order: 0}
+    attrs: {enabled: true}

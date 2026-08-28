@@ -83,10 +83,52 @@ Values for the HA side:
 - Client ID: `homeassistant`
 - Client secret: Infisical `/authentik/homeassistant_oidc_client_secret`
 
-The redirect is a **regex** — `^https?://(homeassistant|hass|ha)\.[^/]+(:8123)?/auth/(oidc|openid)/callback$` — because HA's hostname and scheme are not known to this repo. Consequences:
+The redirect is a **regex** — `^https?://(homeassistant|hass|ha)\.<service domain>(:8123)?/auth/(oidc|openid)/callback$`, with the domain part anchored to the escaped service domain — because HA's *hostname* is not known to this repo. Consequences:
 
 - HA must be reached **by name** (`homeassistant`/`hass`/`ha` + any domain, optional `:8123`). An IP-addressed HA will not match, and an RFC 1918 address cannot go in a tracked file — narrow the provider by hand in the authentik UI for that case.
 - `http` is permitted because HA commonly serves plain HTTP on the LAN, but the authorization code then crosses the network in clear. Prefer https, and once the real URL is settled, replace the regex with a strict URI in `blueprint-internal.yaml`.
 - Group claims arrive via the `profile` scope, so admin mapping in the HA integration can key on `groups` without an extra property mapping.
 
 **Do not enable "Block other login methods" (hass-openid) until an OIDC login has succeeded** — it removes HA's local login and will lock you out otherwise.
+
+## Internal realm — pfSense webConfigurator (SAML2, ADR 0043)
+
+The firewall is the one admin surface with no OIDC client — pfSense speaks Local Database, LDAP and RADIUS only. SSO rides SAML2 through `pfrest/pfSense-pkg-saml2-auth` v2.1.0, so an admin already signed in to authentik reaches the webConfigurator with no second prompt. **Local accounts stay in the authentication server order as break-glass**: the firewall's admin auth now depends on the services plane, and that is the only mitigation when the cluster is down.
+
+The repo side is `blueprint-internal.yaml` (provider `pfsense`, application `pfsense`, group `pfsense-admins` bound to the application). Everything below is a hand step — pfSense's `ansible` sudo is password-gated — and **a pfSense upgrade removes the package**, so expect to redo it after one.
+
+### 1. Install the package
+
+pfSense's own trust store rejects the GitHub download chain (`Certificate verification failed for … Sectigo Public Server Authentication Root E46`), so fetch the asset on a machine with a current CA bundle and copy it over. Pick the build matching the base ABI — `pkg config abi` on the firewall, `FreeBSD:14` → the `2.7` asset, `FreeBSD:15` → `2.8`, `FreeBSD:16` → `2.9`:
+
+    # workstation
+    curl -fL -o saml2-auth.pkg https://github.com/pfrest/pfSense-pkg-saml2-auth/releases/latest/download/pfSense-<2.7|2.8|2.9>-pkg-saml2-auth.pkg
+    scp saml2-auth.pkg root@pfsense.<service domain>:/root/
+    # firewall
+    pkg-static add /root/saml2-auth.pkg
+
+v2.1.0 sha256: `99321193…` (2.7) · `81aed75e…` (2.8) · `e37b4e72…` (2.9).
+
+### 2. Point it at authentik
+
+**System → SAML2** (the package's page), then let it auto-configure from the IdP metadata:
+
+| Field | Value |
+|---|---|
+| IdP Metadata URL | `https://auth.<service domain>/application/saml/pfsense/metadata/` |
+| SP Base URL | `https://pfsense.<service domain>` — must equal the certificate name and what the browser shows |
+| IdP Groups Attribute | `http://schemas.xmlsoap.org/claims/Group` |
+
+The SP Base URL is load-bearing: the package derives the ACS (`…/saml2_auth/sso/acs/`) and the SP entity ID (`…/saml2_auth/sso/metadata/`) from it, and both must match the provider's `acs_url` and `audience` byte for byte. Verify against the API, not the UI:
+
+    curl -sH "authorization: Bearer <token>" https://auth.<service domain>/api/v3/providers/saml/ | jq '.results[] | {acs_url, audience}'
+
+### 3. Grant privileges
+
+Create a pfSense group scoped **Remote** whose name is exactly `pfsense-admins` and give it the privileges admins should have. pfSense matches the assertion's group attribute against that name.
+
+**The trap:** with no groups in the assertion *and* a local account of the same username present, pfSense silently admits the login with that local account's privileges. The blueprint's policy binding is what keeps this unreachable — a user outside `pfsense-admins` never receives an assertion — but it also means **break-glass usernames must not collide with authentik usernames**.
+
+### 4. Keep the local database
+
+Leave Local Database in **System → User Manager → Settings → Authentication Server** order. A cluster outage otherwise locks the firewall's web UI out entirely; the console stays available either way.

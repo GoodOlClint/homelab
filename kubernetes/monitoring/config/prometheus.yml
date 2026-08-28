@@ -202,6 +202,8 @@ scrape_configs:
           - control.${DOMAIN}:9443
           - worklab.${DOMAIN}:8006
           - unifi.${DOMAIN}:11443
+          # 1-year cert on a ~60-day renewal cycle; nothing else watches it (ADR 0043)
+          - pfsense.${DOMAIN}:443
     relabel_configs:
       - source_labels: [__address__]
         regex: 'plex\..*'
