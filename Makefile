@@ -332,8 +332,11 @@ adguard-pause:
 
 # Push every inventory-derived name (guests, nodes, VIPs, MetalLB addresses, mirrored
 # public records) into the flat service zone over RFC 2136 (ADR 0040). Second run = 0 changed.
+# pfsense.yaml is in the list because pfSense does not reliably self-register: both firewalls
+# shipped with the hostname pfSense and collided on one DDNS name (2026-08-28). Its address is
+# static, so the inventory is the authority — keep its own DDNS registration off this name.
 dns-records:
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/dns-records.yml
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml -i ansible/inventory/pfsense.yaml ansible/playbooks/dns-records.yml
 
 update-dns:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/update-dns.yml
