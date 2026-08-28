@@ -50,7 +50,7 @@ pfSense Plus 26.07-RELEASE, ABI `FreeBSD:16:amd64`:
 | `acme` 1.3.2 | `os-acme-client` | re-do the private-CA setup ([docs/pfsense-acme.md](pfsense-acme.md)) — custom directory, RFC 2136, DNS Sleep |
 | `nut` 2.8.2_9 | `os-nut` | both UPSes; `[ups]` name is hardcoded by Synology ([docs/pfsense-nut.md](pfsense-nut.md)) |
 | `udpbroadcastrelay` 1.2.8 | `os-udpbroadcastrelay` | direct |
-| `Avahi` 2.2_10 | `os-mdns-repeater` | **not equivalent** — a repeater, not Avahi. Check against the 6 GHz multicast work |
+| `Avahi` 2.2_10 | `os-mdns-repeater` | **regression, plan around it.** Avahi is a full mDNS stack (record-level reflection, cache, loop-aware, service filtering) and handles **IPv6 `ff02::fb`**; mdns-repeater blindly copies IPv4 packets and is **IPv4-only** (upstream issue still open). Apple advertises over both families and the client VLANs run per-VLAN IPv6 ([ADR 0010](decisions/0010-per-vlan-ipv6-addressing-gua-tracks-the-vlan-id-ula-carries-stable-internal-services.md)), so half of discovery goes dark. Bad given the AirPlay/Sonos history — that traced to the U7 Pro 6 GHz VAP dropping wired-side multicast, and a half-blind reflector would be a plausible wrong suspect next time. Fallback is the FreeBSD `avahi` port direct, outside the plugin system |
 | `pfBlockerNG-devel` 3.2.17_1 | **none** | biggest item. Splits into core Unbound blocklists (DNSBL) + firewall aliases with GeoIP. Full re-derivation |
 | `sudo` 0.3.4 | none in tree | moot — the API is why it exists |
 | `arping` 1.2.2_7 | core diagnostics | trivial |
