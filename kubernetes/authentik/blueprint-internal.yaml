@@ -49,7 +49,7 @@ entries:
       grant_types: [authorization_code, refresh_token]
       client_id: portainer
       client_secret: !Env PORTAINER_OIDC_CLIENT_SECRET
-      redirect_uris: [{matching_mode: regex, url: '^https://control\.[^/]+:9443/?$'}]
+      redirect_uris: [{matching_mode: regex, url: '^https://control\.${DOMAIN_RE}:9443/?$'}]
       authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
       invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
       signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
@@ -69,7 +69,7 @@ entries:
       grant_types: [authorization_code, refresh_token]
       client_id: meshcentral
       client_secret: !Env MESHCENTRAL_OIDC_CLIENT_SECRET
-      redirect_uris: [{matching_mode: regex, url: '^https://control\.[^/]+/auth-oidc-callback$'}]
+      redirect_uris: [{matching_mode: regex, url: '^https://control\.${DOMAIN_RE}/auth-oidc-callback$'}]
       authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
       invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
       signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
@@ -89,7 +89,7 @@ entries:
       grant_types: [authorization_code, refresh_token]
       client_id: pdm
       client_secret: !Env PDM_OIDC_CLIENT_SECRET
-      redirect_uris: [{matching_mode: regex, url: '^https://pdm\.[^/]+:8443/?$'}]
+      redirect_uris: [{matching_mode: regex, url: '^https://pdm\.${DOMAIN_RE}:8443/?$'}]
       authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
       invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
       signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
@@ -129,7 +129,7 @@ entries:
       grant_types: [authorization_code, refresh_token]
       client_id: pbs
       client_secret: !Env PBS_OIDC_CLIENT_SECRET
-      redirect_uris: [{matching_mode: regex, url: '^https://proxmox-backup\.[^/]+:8007/?$'}]
+      redirect_uris: [{matching_mode: regex, url: '^https://proxmox-backup\.${DOMAIN_RE}:8007/?$'}]
       authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
       invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
       signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
@@ -171,7 +171,9 @@ entries:
       client_secret: !Env SYNOLOGY_OIDC_CLIENT_SECRET
       # DSM registers itself in DNS by its own device name over DHCP DDNS; there is no static
       # alias, so the redirect tracks that name. (?i) because DSM reports mixed case.
-      redirect_uris: [{matching_mode: regex, url: '(?i)^https://ds1821plus\.[^/]+(:5001)?/?$'}]
+      redirect_uris:
+        - {matching_mode: strict, url: "https://ds1821plus.${DOMAIN}:5001"}
+        - {matching_mode: strict, url: "http://ds1821plus.${DOMAIN}:5000"}
       authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
       invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
       signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
@@ -196,7 +198,7 @@ entries:
       client_id: homeassistant
       client_secret: !Env HOMEASSISTANT_OIDC_CLIENT_SECRET
       redirect_uris:
-        - {matching_mode: regex, url: '^https?://(homeassistant|hass|ha)\.[^/]+(:8123)?/auth/(oidc|openid)/callback$'}
+        - {matching_mode: regex, url: '^https?://(homeassistant|hass|ha)\.${DOMAIN_RE}(:8123)?/auth/(oidc|openid)/callback$'}
       authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
       invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
       signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]

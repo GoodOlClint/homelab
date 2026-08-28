@@ -48,6 +48,17 @@ realm() {
   helm_apply authentik authentik/authentik "$NS" --version "$CHART_VERSION" -f <(sub < "$HERE/values.yaml")
   [ "$realm" = internal ] && sub < "$HERE/ingress.yaml" | kubectl apply -f -
   kubectl -n "$NS" rollout status deploy postgres authentik-server authentik-worker --timeout=600s
+  # kubelet refreshes a mounted ConfigMap on its own sync period, so the worker can still hold the
+  # PREVIOUS blueprint when the rollout returns. Applying then silently re-applies stale content and
+  # the deploy reports success while the change never lands (hit 2026-08-28 anchoring redirect_uris).
+  _want=$(sub < "$HERE/blueprint-$realm.yaml" | shasum -a 256 | cut -c1-16)
+  for i in $(seq 30); do
+    _got=$(kubectl -n "$NS" exec deploy/authentik-worker -- python3 -c \
+      "import hashlib;print(hashlib.sha256(open('/blueprints/mounted/cm-authentik-blueprint/blueprint.yaml','rb').read()).hexdigest()[:16])" 2>/dev/null || true)
+    [ "$_want" = "$_got" ] && break
+    [ "$i" = 30 ] && { echo "blueprint mount never caught up (want $_want, got ${_got:-none})" >&2; exit 1; }
+    sleep 5
+  done
   # The worker applies mounted blueprints on its own schedule; apply now so a deploy is complete when it returns.
   for i in $(seq 12); do
     kubectl -n "$NS" exec deploy/authentik-worker -- ak apply_blueprint /blueprints/mounted/cm-authentik-blueprint/blueprint.yaml >"$SECRETS/authentik-$realm-blueprint.log" 2>&1 && break
