@@ -46,6 +46,8 @@ HTTP-01 is not usable: the name resolves only internally. Method **DNS-NSupdate 
 | Key Algorithm | `HMAC-SHA256` |
 | Key | Infisical `/infrastructure/acme_tsig_key_secret` |
 
+**Set DNS Sleep to a non-empty value (30 is plenty).** Left empty, acme.sh runs `_check_dns_entries()` — it polls *public* DNS over Cloudflare DoH to confirm the TXT propagated before asking the CA to validate, and even purges Cloudflare's cache for the name. The service zone is internal-only, so that check can never pass and issuance stalls with `Not valid yet, let's wait for 10 seconds then check the next one`. Any value for DNS Sleep replaces the check with a fixed wait (acme.sh's own hint: *"You can use '--dnssleep' to disable public dns checks"*). BIND is authoritative and local, so the record is live as soon as `nsupdate` returns.
+
 The Key Name help text ("(Optional) A name for the key, if it is different than `_acme-challenge.[DomainName]`") is misleading — it is the **TSIG key name** and is required. BIND's policy is `grant acme-key wildcard *.<service domain>. TXT`, so that key may write challenge TXT records in the service zone and nothing else; a refused update means the request was for a name outside it.
 
 ## Known limitation
