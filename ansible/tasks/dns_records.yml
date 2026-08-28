@@ -7,7 +7,7 @@
 - name: Build the service-zone record set
   ansible.builtin.set_fact:
     _dns_primary: "{{ hostvars[groups['dns'][0]].ansible_host }}"
-    _dns_a: "{{ (_hosts + _vips + _lbs + _extra) | unique(attribute='name') }}"
+    _dns_a: "{{ (_hosts + _vips + _lbs) | unique(attribute='name') }}"
   vars:
     dns_lb_offsets:
       registry: 64
@@ -24,12 +24,6 @@
       {{ [{'name': 'adguard', 'ip': network_data.dns_server.dns_ipv4},
           {'name': 'dns', 'ip': network_data.dns_server.bind_ipv4}]
          + ([{'name': 'pve', 'ip': host_bindings.cluster.vip_cidr.split('/')[0]}] if host_bindings is defined else []) }}
-    # Appliances that are not inventory hosts. They DHCP, but pfSense DDNS is enabled
-    # per scope and their VLAN's is off — and even with it on they would register under
-    # their own DHCP hostname, not the name a consumer needs (the DSM OIDC redirect is
-    # synology.<service domain>). Skipped cleanly where the binding is absent.
-    _extra: >-
-      {{ [{'name': 'synology', 'ip': synology_host}] if synology_host is defined else [] }}
     _lbs: >-
       {%- set out = [] -%}
       {%- for n, o in dns_lb_offsets.items() -%}

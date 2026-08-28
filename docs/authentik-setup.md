@@ -58,9 +58,11 @@ Access control (`kubernetes/zot/values.yaml`): `anonymousPolicy: [read]` on `**`
 
 ## Internal realm — Synology DSM (provider ready, DSM side is a hand step)
 
-The `synology` OIDC provider exists in the blueprint. On the NAS: **Control Panel → Domain/LDAP → SSO Client**, tick *Enable OIDC SSO service*, then Profile `OIDC`, Account type `Domain/LDAP/local`, Name `authentik`, Well Known URL `https://auth.<service domain>/application/o/synology/.well-known/openid-configuration`, Application ID `synology`, Application Key from Infisical `/authentik/synology_oidc_client_secret`, Redirect URL `https://synology.<service domain>`, scope `openid profile email`, username claim `preferred_username`.
+The `synology` OIDC provider exists in the blueprint. On the NAS: **Control Panel → Domain/LDAP → SSO Client**, tick *Enable OIDC SSO service*, then Profile `OIDC`, Account type `Domain/LDAP/local`, Name `authentik`, Well Known URL `https://auth.<service domain>/application/o/synology/.well-known/openid-configuration`, Application ID `synology`, Application Key from Infisical `/authentik/synology_oidc_client_secret`, Redirect URL `https://<dsm device name>.<service domain>`, scope `openid profile email`, username claim `preferred_username`.
 
-Two prerequisites: the redirect is matched by regex `^https://synology\.[^/]+(:5001)?/?$`, so DSM must be reached **by name** — an A record for the NAS is not in `make dns-records` today and has to be added by hand. And DSM authenticates existing accounts only: each user must already exist locally on the NAS before SSO will admit them.
+The redirect regex tracks **DSM's own device name** (`ds1821plus`), because that is what pfSense DHCP DDNS registers — there is no static alias for the NAS, and adding one would fight pfSense for the PTR. **Renaming the NAS in DSM changes the DNS name and breaks the redirect**, so update `blueprint-internal.yaml` in the same change. DDNS registers on lease grant/renewal, so a freshly enabled DHCP scope shows nothing until the device renews.
+
+DSM authenticates existing accounts only: each user must already exist locally on the NAS before SSO will admit them.
 
 ## Internal realm — Home Assistant (provider ready, HA side is a hand step)
 
