@@ -43,3 +43,7 @@ For the MCP server integration, also set **Settings → System → Network → H
 ## Renewal
 
 The add-on only renews when it **starts** — there is no daemon. An HA automation (weekly time trigger → action *Add-on: Start* on the Let's Encrypt add-on) keeps it current; certbot no-ops until fewer than 30 days remain. The `TLSCertExpiringSoon` blackbox lane does not watch this host; if that coverage is wanted, add `homeassistant` to the `blackbox-tls` targets in `kubernetes/monitoring/`.
+
+## SSO (authentik OIDC, 2026-09-09)
+
+Login rides the `hass-oidc-auth` HACS integration against the internal realm's `homeassistant` provider (strict redirect, client secret in Infisical `/authentik`). Two known behaviors, not bugs: after logout the same browser may show **"login aborted / start over"** — HA login flows are single-use and the browser resumed a consumed one; *Start over* (or clearing site data once) fixes it. And logging out of HA does not end the authentik session (HA has no OIDC end-session), so the next "Login with Authentik" signs straight back in — the local account stays as break-glass, and its username must not collide with an authentik username.
