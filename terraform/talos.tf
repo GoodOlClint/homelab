@@ -63,6 +63,8 @@ resource "proxmox_virtual_environment_vm" "talos_cp" {
   machine   = "q35"
   bios      = "seabios"
   tags      = ["talos", "control-plane"]
+  # OOM guard added after the 2026-08-31 CI OOM took talos-cp-a down; lives on cephfs so every node can run it.
+  hook_script_file_id = "cephfs:snippets/talos-oom-protect.sh"
 
   agent { enabled = true }
   cpu {
