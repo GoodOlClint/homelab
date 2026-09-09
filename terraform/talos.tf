@@ -28,6 +28,19 @@ locals {
   }
   talos_api_vip = cidrhost(local.talos_services_vlan.subnet, 60)
 
+  # Host memory pressure must never select a services-plane node: -1000 exempts
+  # the kvm process from OOM selection, so the kernel takes the aggressor guest
+  # instead (2026-08-31: a CI provision spike OOM-killed talos-cp-a).
+  talos_oom_hook = <<-EOT
+    #!/bin/bash
+    vmid="$1"
+    phase="$2"
+    if [ "$phase" = "post-start" ]; then
+      echo -1000 > "/proc/$(cat "/var/run/qemu-server/$vmid.pid")/oom_score_adj"
+    fi
+    exit 0
+  EOT
+
   talos_node_addrs = {
     for name, n in local.talos_nodes : name => {
       vm_id        = n.vm_id
@@ -53,6 +66,36 @@ resource "proxmox_virtual_environment_download_file" "talos" {
   upload_timeout     = 600
 }
 
+# cephfs is shared, so one snippet serves every cluster node; the hookscript
+# only fires on the next VM start, so a running VM needs the adj applied once
+# by hand (echo -1000 > /proc/$(cat /var/run/qemu-server/<vmid>.pid)/oom_score_adj).
+resource "proxmox_virtual_environment_file" "talos_oom_hook" {
+  content_type = "snippets"
+  datastore_id = "cephfs"
+  node_name    = var.virtual_environment_node
+  file_mode    = "0755"
+
+  source_raw {
+    data      = local.talos_oom_hook
+    file_name = "talos-oom-protect.sh"
+  }
+}
+
+# Orphaned since the worklab member retired (2026-09-09) — kept so a plan does
+# not destroy another session's in-flight state object; retire it at merge time.
+resource "proxmox_virtual_environment_file" "talos_oom_hook_worklab" {
+  provider     = proxmox.worklab
+  content_type = "snippets"
+  datastore_id = "local"
+  node_name    = "pve"
+  file_mode    = "0755"
+
+  source_raw {
+    data      = local.talos_oom_hook
+    file_name = "talos-oom-protect.sh"
+  }
+}
+
 resource "proxmox_virtual_environment_vm" "talos_cp" {
   for_each = local.talos_node_addrs
 
@@ -63,8 +106,7 @@ resource "proxmox_virtual_environment_vm" "talos_cp" {
   machine   = "q35"
   bios      = "seabios"
   tags      = ["talos", "control-plane"]
-  # OOM guard added after the 2026-08-31 CI OOM took talos-cp-a down; lives on cephfs so every node can run it.
-  hook_script_file_id = "cephfs:snippets/talos-oom-protect.sh"
+  hook_script_file_id = proxmox_virtual_environment_file.talos_oom_hook.id
 
   agent { enabled = true }
   cpu {
