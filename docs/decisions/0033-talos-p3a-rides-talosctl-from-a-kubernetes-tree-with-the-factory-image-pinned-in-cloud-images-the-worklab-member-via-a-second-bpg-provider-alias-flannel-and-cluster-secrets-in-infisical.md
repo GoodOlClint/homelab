@@ -1,6 +1,6 @@
 # ADR 0033 — Talos P3a rides talosctl from a kubernetes tree with the factory image pinned in cloud_images, the worklab member via a second bpg provider alias, Flannel, and cluster secrets in Infisical
 
-- **Status:** Accepted (approved 2026-08-23, built the same day)
+- **Status:** Accepted (approved 2026-08-23, built the same day) — Amended by [ADR 0048](0048-flux-reconciles-the-kubernetes-services-plane-from-the-repo-replacing-the-kubernetes-shell-deploy-layer-in-app-configuration-is-ansible-and-the-talos-lifecycle-stays-on-talos-sh.md) (Flux replaces the `kubernetes/` script layer; Ansible owns the allowlisted seed; `talos.sh` retires later)
 - **Date:** 2026-08-23
 - **Deciders:** operator + agent
 - **Context source:** P3a brownfield gate, [docs/talos-p3a-plan.md](../talos-p3a-plan.md); amends [ADR 0031](0031-a-three-node-talos-kubernetes-cluster-becomes-the-services-plane-and-the-bootstrap-tier-stays-on-proxmox.md)

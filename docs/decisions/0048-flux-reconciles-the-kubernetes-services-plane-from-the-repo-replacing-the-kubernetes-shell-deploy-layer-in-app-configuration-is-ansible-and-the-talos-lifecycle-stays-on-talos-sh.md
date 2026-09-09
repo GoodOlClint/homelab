@@ -1,0 +1,43 @@
+# ADR 0048 — Flux reconciles the Kubernetes services plane from the repo, replacing the kubernetes/ shell deploy layer; in-app configuration is Ansible and the Talos lifecycle stays on talos.sh
+
+- **Status:** Accepted (approved 2026-09-09)
+- **Date:** 2026-09-09
+- **Deciders:** operator + agent
+- **Context source:** brownfield gate + two council rounds 2026-09-09, [docs/kubernetes-iac-plan.md](../kubernetes-iac-plan.md); amends [ADR 0033](0033-talos-p3a-rides-talosctl-from-a-kubernetes-tree-with-the-factory-image-pinned-in-cloud-images-the-worklab-member-via-a-second-bpg-provider-alias-flannel-and-cluster-secrets-in-infisical.md), ADR 0034/0035
+
+## Context
+
+ADR 0033 made `kubernetes/` + `make talos-*` the canonical pipeline. Three weeks on it is 20 shell scripts (~760 non-comment lines) that `envsubst` manifests, `helm template | kubectl apply --server-side`, call the Infisical REST API, poll for readiness and drive application APIs from inside pods. The operator wants no shell layer to maintain, prefers a full migration, and (having first said "Terraform or Ansible" because those are the repo's tools) accepts any approach that is right. Facts that shaped the choice: helm now completes the TLS handshake from the workstation, so the template-and-apply idiom has lost its reason; the live chart objects are server-side-applied by `kubectl` with Helm labels and no release record; every workload is a single replica on an RWO ceph-rbd PVC, so a destroy/recreate migration is data loss; Flux's `${var}` substitution matches the placeholders the manifests already carry and blanks undefined ones (one file, `axosyslog.conf`, carries foreign macros); the repo is public and holds no bindings, so a reconciler can read it directly. Round 1 of the council recommended a Terraform cluster root; round 2, with the constraint lifted, was unanimous for Flux — a Terraform state file that must survive the outage it exists to repair is an invented DR problem, and the repo is already the state Flux wants.
+
+## Decision
+
+- **Flux owns every Kubernetes object it applies.** `HelmRelease` per chart (versions pinned), `Kustomization` per component tree, `postBuild.substituteFrom` a `cluster-bindings` ConfigMap for the `${VAR}` placeholders (never a tracked file), `kustomize.toolkit.fluxcd.io/substitute: disabled` on the two ConfigMaps whose payload carries foreign `${…}` (`axosyslog.conf`, `valheim-playfab-status.mjs`), `configMapGenerator` name-hashing in place of the scripts' `checksum/config` (a binding-only change does not roll a pod — accepted), prune enabled per tree only once its `flux diff` is byte-clean **and** the PVC `Retain` lane has landed. Objects an application creates for itself (authentik's external-realm outpost) are outside Flux by design.
+- **Flux reads the public repo with no credential.** The install + sync manifests are committed by an **operator-local `git push`**; never `flux bootstrap github --token-auth`, never the `goodolclint-claude` GitHub App (Contents RW on every installed repo, one privileged-dind hop from every workload). Each `Kustomization` runs under a namespaced ServiceAccount; kustomize-controller runs `--no-cross-namespace-refs`; no notification-controller GitHub provider. Branch protection is made real before Flux tracks `main`.
+- **Ansible owns the cluster's seed objects and its in-app state; no Terraform touches the cluster.** `ansible/playbooks/kubernetes.yml` creates only an allowlisted set: the `cluster-bindings` ConfigMap (everything `inv_env`, `nodes.json`, `sops` and the `vars.auto.tfvars` `sed` supply today, plus `REGISTRY`, the PVE endpoint host and the ceph fsid/mons read from the proxmox inventory), the generated ConfigMaps `render.py` produces today, the `homelab-root-ca` ConfigMaps, the `homelab-ca` intermediate TLS Secret (CSR signed through the Infisical API, the `api_certificate.yml` pattern), `infisical-universal-auth`, `csi-rbd-secret`, the two ARC Secrets. First-run secrets stay on `generate_secret.yml`. The in-app tail (Jellyfin wizard/plugin/libraries, arr `authenticationMethod`, SAB whitelist, smokes that fail loud) lives in the same play. A pre-commit check asserts the play's objects ⊆ the allowlist. ADR 0033's "never touched by Ansible" becomes "creates only the allowlisted seed objects".
+- **The root CA export joins the fleet PKI pipeline** (`scripts/pki_hosts.sh` / `make pki-hosts`, ADR 0041): `homelab-pki` project + root lookup/create, export to `kubernetes/.secrets/homelab-ca.crt`, `ca-bundle.pem`. `make talos-certs` is `make pki-hosts` + the seed, not a `flux reconcile` wrapper.
+- **`make talos-update` (the `:latest` rollout restart) is an explicit non-idempotent operator action**, batched, outside the convergence play.
+- **The Talos machine lifecycle stays on `kubernetes/talos/talos.sh`** for now. Its retirement is a deliberate later tranche paired with the cluster's rebuild-from-zero work: the siderolabs provider is proven on a worklab scratch cluster, then applied to live nodes one at a time.
+- **`kubernetes/` becomes the Flux tree** plus `talos/`; every `deploy.sh`, `lib.sh`, `update.sh` and `render.py` is deleted, each in the PR that adopts its tree.
+
+## Rejected alternatives
+
+- **Terraform cluster root (council round 1)** — helm/kubernetes/kubectl providers adopting every object via import blocks + Helm adoption. A state file with cluster secrets that must survive the outages it exists to repair; the apiserver, webhooks and Infisical needed at plan time; an import ceremony Flux's server-side apply makes unnecessary. Its mechanics still apply to the Helm adoption pass.
+- **A small Terraform seed root beside Flux (plan v2)** — re-created the same secret-bearing state one size smaller, duplicated `generate_secret.yml` with `random_password`, gave `/infrastructure` a third owner, and had no source for the ceph fsid/mons. Ansible already has every input the seed needs.
+- **All-Ansible (`kubernetes.core`) for the objects** — adopts for free, but nothing prunes, there is no diff of deletions, and Jinja collides with the InfisicalSecret Go templates.
+- **Keep and harden the scripts** — rejected by the operator.
+- **Kubernetes Jobs for the in-app tail** — a third home for logic with its own secrets plumbing. **Runbook hand steps** — a rebuild path that isn't one.
+- **siderolabs Talos provider now** — its first apply re-renders and reboots every etcd member to converge something already converged.
+- **`flux bootstrap github` with the agent GitHub App** — puts a cross-repo write credential in the cluster; the repo is public and Flux needs no credential to read it.
+- **Prune before the PVC `Retain` lane** — with reclaim `Delete`, one bad commit (renamed path, blanked `${NS}`) deletes PVCs and Ceph deletes the images.
+
+## Consequences
+
+- New canonical pipeline: Flux (`kubernetes/`) owns cluster objects; `ansible/playbooks/kubernetes.yml` owns the allowlisted seed + in-app state; `make pki-hosts` owns the root export; `talos.sh` owns the node lifecycle. No component has two owners **except transitionally**: while a tree is adopted with prune off, Flux and its surviving `deploy.sh` both write it — the exception ends when the script is deleted in the adopting PR.
+- ADR 0033 amended (pipeline surface; Ansible boundary); ADR 0034's `helm_apply` idiom retired; ADR 0035's single out-of-band Secret becomes the allowlisted seed; ADR 0041 gains the root export.
+- Flux fails **open** on a blanked `${…}`: `host: ""` is a catch-all router, Zot's `adminPolicy` binds an empty user, a blank `authentik_host` is the `localhost` 302 bug. Two checks gate every adoption: a scan of every ConfigMap-sourced file for foreign `${…}`, and a check that every `${…}` token in `kubernetes/` has a key in `cluster-bindings`.
+- Flux does **not** give the cluster a rebuild-from-zero path (PVC reclaim `Delete`); the `Retain` + static-PV lane lands **before** prune and is the ADR 0015 gap for this layer.
+- The cutover order is fixed by the cold-start cycle: ADR 0049 (Zot OIDC removal, authentik relocation) precedes the Flux install.
+- New CLAUDE.md rule: `flux diff`/`flux logs`/`describe kustomization` output is post-substitution and carries bindings — never paste it into a public PR or issue. renovate gains a Flux manager; the literal `${REGISTRY}` must stay in tracked manifests because its image regex depends on it.
+- `helm` reaching the apiserver from the workstation is a live observation, re-verified as the Helm-adoption pre-flight; the three repo sentences saying the opposite are removed in the same change.
+- Flux's ~6 controllers get resource requests.
+- Sequencing and rollback per work package: [docs/kubernetes-iac-plan.md](../kubernetes-iac-plan.md).
