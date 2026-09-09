@@ -18,9 +18,8 @@ g = yaml.safe_load(open(f"{root}/ansible/group_vars/all.yml"))
 net = yaml.safe_load(open(f"{root}/network-data/vlans.yaml"))
 hosts = yaml.safe_load(open(f"{root}/ansible/inventory/vms.yaml"))["all"]["hosts"]
 
-# Guests that never run the telegraf role (management/hypervisor-plane guests),
-# plus `llm`, deliberately powered off with its host msi at the 14900K RMA.
-TELEGRAF_SKIP = {"control", "pdm", "pxe", "llm"}
+# Guests that never run the telegraf role (management/hypervisor-plane guests).
+TELEGRAF_SKIP = {"control", "pdm", "pxe"}
 
 targets = [
     {"targets": [f"{v['service_ip']}:9273"], "labels": {"instance": h}}
