@@ -91,6 +91,7 @@ locals {
       memory_mb    = 4096
       disk_size_gb = 20
       image        = "debian13" # PBS 4 is Debian-13-only (ADR 0025)
+      ha           = true
     },
     # Out-of-band control plane (ADR 0030): MeshCentral + Portainer server on the
     # management VLAN; mgmt_ip_offset keeps it out of the DHCP pool.
@@ -106,6 +107,7 @@ locals {
       disk_size_gb   = 10
       keyctl         = true
       data_volume    = { name = "control", path = "/opt/control" }
+      ha             = true
     },
     {
       name           = "unifi"
@@ -115,6 +117,7 @@ locals {
       cpu_cores      = 4
       memory_mb      = 4096 # UniFi needs decent RAM for MongoDB
       disk_size_gb   = 50   # Space for MongoDB + backups
+      ha             = true
     },
     {
       name         = "infisical"
@@ -125,6 +128,7 @@ locals {
       memory_mb    = 4096 # PostgreSQL + Redis + Infisical server
       disk_size_gb = 30   # Database growth, audit logs
       protected    = true # Secrets store — protect from accidental deletion
+      ha           = true
     },
     {
       name         = "apt-cache"
@@ -145,6 +149,7 @@ locals {
       memory_mb    = 4096
       disk_size_gb = 20
       image        = "debian13"
+      ha           = true
     },
     {
       name         = "pxe"
@@ -184,6 +189,7 @@ locals {
       bind_mounts = [
         { source = "/mnt/nas/plex/data/media", path = "/mnt/media", read_only = true },
       ]
+      ha          = true
     },
     # Second inference node beside the Mac Studio (ADR 0001/0003/0031): the
     # Quadro RTX 5000 passed through whole (IOMMU group 19 on msi, all four
