@@ -67,6 +67,12 @@ proxmox_host_ceph_pool: "ceph-rbd"
 proxmox_host_cephfs_name: "cephfs"
 proxmox_host_mds_count: 2
 
+# CI ISO/import datastore (ADR 0032): a cephfs subdir with its own storage id,
+# so CI uploads and deletes can never touch the fleet's images on the cephfs
+# root — CI cloud images carry upstream names that collide with the fleet's.
+proxmox_host_ci_iso_storage_id: "ci-isos"
+proxmox_host_ci_iso_quota_gb: 100
+
 # Ceph health-gate waivers: check CODES (e.g. "OSDMAP_FLAGS") that are known,
 # understood, and deliberately accepted — each entry needs a reason comment.
 # Starts empty; HEALTH_WARN with any unwaived check fails the play.

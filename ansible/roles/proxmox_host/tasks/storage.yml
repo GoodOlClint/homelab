@@ -22,3 +22,42 @@
   run_once: true
   changed_when: true
   when: proxmox_host_nas_nfs_id not in (_storage_pvesm.stdout_lines | map('split') | map('first') | list)
+
+# CI ISO datastore: a subdir of the same cephfs under its own storage id, so the
+# CI token's ACL never reaches the fleet's images on the cephfs root.
+- name: Create the CI ISO subdirectory on cephfs
+  ansible.builtin.file:
+    path: "/mnt/pve/{{ proxmox_host_cephfs_name }}/{{ proxmox_host_ci_iso_storage_id }}"
+    state: directory
+    mode: "0755"
+  run_once: true
+
+- name: Install attr for the cephfs quota xattrs
+  ansible.builtin.apt:
+    name: attr
+    state: present
+
+- name: Read the CI ISO tree quota
+  ansible.builtin.command:
+    cmd: getfattr -n ceph.quota.max_bytes --only-values /mnt/pve/{{ proxmox_host_cephfs_name }}/{{ proxmox_host_ci_iso_storage_id }}
+  register: _ci_iso_quota
+  run_once: true
+  changed_when: false
+  failed_when: false
+
+- name: Cap the CI ISO tree
+  ansible.builtin.command:
+    cmd: setfattr -n ceph.quota.max_bytes -v {{ proxmox_host_ci_iso_quota_gb * 1024 * 1024 * 1024 }} /mnt/pve/{{ proxmox_host_cephfs_name }}/{{ proxmox_host_ci_iso_storage_id }}
+  run_once: true
+  changed_when: true
+  when: (_ci_iso_quota.stdout | default('')) != (proxmox_host_ci_iso_quota_gb * 1024 * 1024 * 1024) | string
+
+- name: Register the CI ISO datastore
+  ansible.builtin.command:
+    cmd: >-
+      pvesm add cephfs {{ proxmox_host_ci_iso_storage_id }}
+      --subdir /{{ proxmox_host_ci_iso_storage_id }}
+      --content iso,import
+  run_once: true
+  changed_when: true
+  when: proxmox_host_ci_iso_storage_id not in (_storage_pvesm.stdout_lines | map('split') | map('first') | list)

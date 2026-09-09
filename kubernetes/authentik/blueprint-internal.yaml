@@ -21,6 +21,32 @@ entries:
       providers: [!KeyOf forward-auth]
       config: {authentik_host: https://${HOST}, authentik_host_browser: https://${HOST}}
 
+  # Passkey login: the identification stage's `passwordless_flow` puts a "Use a security key" button on
+  # the login page, and the discoverable credential identifies the user, so no username or password is
+  # asked for. `not_configured_action: deny` and `webauthn_user_verification: required` are what make the
+  # stage passwordless rather than a second factor. The shipped default-authentication-flow already skips
+  # its MFA stage when auth_method == auth_webauthn_pwl, so a passkey login is one prompt, not two.
+  - model: authentik_flows.flow
+    id: passwordless-flow
+    identifiers: {slug: default-authentication-flow-passwordless}
+    attrs: {designation: authentication, name: Passkey login, title: Sign in with your passkey, authentication: none}
+  - model: authentik_stages_authenticator_validate.authenticatorvalidatestage
+    id: passwordless-validation
+    identifiers: {name: passwordless-webauthn-validation}
+    attrs: {device_classes: [webauthn], not_configured_action: deny, webauthn_user_verification: required}
+  - model: authentik_flows.flowstagebinding
+    identifiers: {target: !KeyOf passwordless-flow, stage: !KeyOf passwordless-validation, order: 10}
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf passwordless-flow
+      stage: !Find [authentik_stages_user_login.userloginstage, [name, default-authentication-login]]
+      order: 20
+  # user_fields is repeated because the serializer's validator reads the incoming attrs, not the stored
+  # instance, and rejects a partial update that leaves it unset.
+  - model: authentik_stages_identification.identificationstage
+    identifiers: {name: default-authentication-identification}
+    attrs: {user_fields: [email, username], passwordless_flow: !KeyOf passwordless-flow}
+
   - model: authentik_providers_oauth2.oauth2provider
     id: grafana
     identifiers: {name: grafana}

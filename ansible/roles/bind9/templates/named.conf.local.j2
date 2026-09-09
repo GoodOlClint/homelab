@@ -11,15 +11,29 @@ key "acme-key" {
     secret "{{ secrets.infrastructure.acme_tsig_key_secret }}";
 };
 
+// CI guest registrations (ADR 0032): granted only in the ci zone below, so a
+// leaked runner key can never write the fleet zones
+key "ci-update-key" {
+    algorithm hmac-sha256;
+    secret "{{ secrets.infrastructure.ci_tsig_key_secret }}";
+};
+
 {% set secondaries = bind9_instances[1:] | map('extract', hostvars, 'ansible_host') | list %}
 {% macro zone(name) %}
 zone "{{ name }}" {
+{% if name != bind9_ci_zone %}
+    // per-zone allow-query replaces the global one: restate internal, minus CI
+    allow-query { !{{ bind9_ci_subnet }}; 127.0.0.1; ::1; {{ internal_network_cidr | default(network_data.ipv4_prefix ~ '.0.0/12') }}; };
+{% endif %}
 {% if bind9_primary %}
     type primary;
     file "/var/lib/bind/db.{{ name }}";
     update-policy {
         grant dhcp-update-key zonesub ANY;
         grant acme-key wildcard *.{{ name }}. TXT;
+{% if name == bind9_ci_zone %}
+        grant ci-update-key zonesub ANY;
+{% endif %}
     };
     // external-dns reads the zone by signed AXFR before every reconcile
     allow-transfer { key "dhcp-update-key";{% for s in secondaries %} {{ s }};{% endfor %} };

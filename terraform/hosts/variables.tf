@@ -55,15 +55,15 @@ variable "storage_mtu" {
 
 # CI sandbox (ADR 0032)
 variable "ci_storages" {
-  description = "Datastores the CI token may allocate on (guest disks + ISO uploads)"
+  description = "Datastores the CI token may allocate on (guest disks + ISO uploads). ci-isos is a cephfs subdir datastore (proxmox_host storage.yml) — never the cephfs root, whose images CI's upstream-named uploads would collide with and delete"
   type        = list(string)
-  default     = ["ceph-rbd", "cephfs"]
+  default     = ["ceph-rbd", "ci-isos"]
 }
 
 variable "ci_iso_storage" {
   description = "The ci_storages entry that receives ISO uploads (gets PVEDatastoreAdmin)"
   type        = string
-  default     = "cephfs"
+  default     = "ci-isos"
 }
 
 variable "ci_sdn_zone" {

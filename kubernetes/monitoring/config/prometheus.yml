@@ -202,8 +202,9 @@ scrape_configs:
           - control.${DOMAIN}:9443
           - worklab.${DOMAIN}:8006
           - unifi.${DOMAIN}:11443
-          # 1-year cert on a ~60-day renewal cycle; nothing else watches it (ADR 0043)
+          # 1-year certs on a ~60-day renewal cycle; nothing else watches them (ADR 0043, docs/synology-acme.md)
           - pfsense.${DOMAIN}:443
+          - ds1821plus.${DOMAIN}:5001
     relabel_configs:
       - source_labels: [__address__]
         regex: 'plex\..*'

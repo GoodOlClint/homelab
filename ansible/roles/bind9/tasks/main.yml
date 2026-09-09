@@ -54,6 +54,21 @@
     secret_dict_path: "infrastructure"
   tags: [bind9, dns, secrets]
 
+- name: Auto-generate ci_tsig_key_secret
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/generate_secret.yml"
+  vars:
+    secret_key: "ci_tsig_key_secret"
+    secret_gen_cmd: >-
+      tsig-keygen -a hmac-sha256 ci-update-key
+      | grep secret
+      | awk '{print $2}'
+      | tr -d '";'
+    secret_comment: "BIND9 TSIG key for CI guest registrations — update-policy limits it to the ci zone (hmac-sha256) — auto-generated"
+    secret_run_on: "{{ inventory_hostname }}"
+    secret_infisical_path: "/infrastructure"
+    secret_dict_path: "infrastructure"
+  tags: [bind9, dns, secrets]
+
 - name: Configure named.conf.options
   ansible.builtin.template:
     src: named.conf.options.j2
@@ -98,6 +113,7 @@
   vars:
     zone_name: "{{ item.item }}"
     zone_dns_ip: "{{ bind9_vip_ipv4 }}"
+    zone_ttl: "{{ bind9_ci_zone_ttl if item.item == bind9_ci_zone else 300 }}"
   loop: "{{ forward_zone_files_stat.results | default([]) }}"
   when: bind9_primary and not item.stat.exists
   notify: Restart bind9

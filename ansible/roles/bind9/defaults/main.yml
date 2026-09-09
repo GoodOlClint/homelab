@@ -19,4 +19,16 @@ bind9_vip_state: started
 
 # Forward zones (ADR 0040): the keys of vlans.yaml internal_zones — flat public-domain
 # zones, records are dynamic updates only. dns_zones only drives the reverse zones.
-bind9_forward_zones: "{{ internal_zones | list }}"
+# The CI zone rides along: a child zone whose own TSIG key (ci-update-key) can
+# write nothing outside it, so CI registrations never touch the fleet zones —
+# the DNS half of the ci-isos isolation (ADR 0032).
+bind9_ci_zone: "ci.{{ service_domain }}"
+bind9_forward_zones: "{{ (internal_zones | list) + [bind9_ci_zone] }}"
+# The Ci VLAN subnet is denied queries on every zone except the ci zone: CI
+# guests can resolve their own names but cannot enumerate or resolve fleet
+# names through BIND. IPv4-only — the Ci VLAN carries no v6.
+bind9_ci_subnet: "{{ network_data.ipv4_prefix }}.{{ network_data.vlans.ci.id }}.0/24"
+# CI guests churn per run: a 300s negative TTL blinds a wait-for-registration
+# poll for 5 minutes after the record lands. 30s bounds both stale answers and
+# cached NXDOMAINs; CI's own nsupdate should register records with TTL <= this.
+bind9_ci_zone_ttl: 30
