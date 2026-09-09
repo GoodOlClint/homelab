@@ -28,15 +28,9 @@ certfile: fullchain.pem
 keyfile: privkey.pem
 ```
 
-Then `configuration.yaml`:
+Then point Home Assistant at the pair **in the UI, not `configuration.yaml`** (current HA moved the SSL settings out of the `http:` YAML block): the certificate/key fields take `/ssl/fullchain.pem` and `/ssl/privkey.pem`, and a **full restart** is required — a quick YAML reload does not restart the http server (the symptom of a missing restart is plain HTTP still answering on 8123, which a TLS client reports as `wrong version number` / `tlsv1 alert protocol version`). From then on plain `http://` and raw-IP access are gone — repoint any consumer that used them.
 
-```yaml
-http:
-  ssl_certificate: /ssl/fullchain.pem
-  ssl_key: /ssl/privkey.pem
-```
-
-and restart Home Assistant. From then on plain `http://` and raw-IP access are gone — repoint any consumer that used them.
+For the MCP server integration, also set **Settings → System → Network → Home Assistant URL** (internal and external) to `https://homeassistant.<service domain>:8123` — without it HA's `/.well-known/oauth-authorization-server` document carries relative endpoint paths and no `issuer`, and a spec-compliant MCP client rejects it (`expected string, received undefined` on `issuer`).
 
 ## Traps (all hit on first setup, 2026-09-09)
 
