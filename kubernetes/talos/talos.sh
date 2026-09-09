@@ -1,4 +1,6 @@
-#!/usr/bin/env bash
+#!/bin/bash
+# /bin/bash, not env bash: homebrew bash 5.3.15 deadlocks in this script's render()
+# heredoc (blocked in heredoc_write); macOS system bash 3.2 and Linux bash run it fine.
 # Talos control-plane lifecycle (ADR 0033). Inputs: .secrets/nodes.json from
 # `make talos-build`; cluster secrets in Infisical /talos. Subcommands:
 #   secrets   pull secrets.yaml + talosconfig from Infisical (generate + store on first run)
@@ -11,6 +13,9 @@ SEC="$HERE/.secrets"
 NODES="$SEC/nodes.json"
 BOOTSTRAP="$ROOT/ansible/group_vars/bootstrap.sops.yml"
 CLUSTER=homelab
+# Pinned like the Talos image (ADR 0016): a newer talosctl client defaults to a
+# Kubernetes too new for the running Talos; rolls with `talosctl upgrade-k8s`.
+K8S_VERSION=1.36.2
 export TALOSCONFIG="$SEC/talosconfig"
 
 need() { for c in "$@"; do command -v "$c" >/dev/null || { echo "missing: $c" >&2; exit 1; }; done; }
@@ -98,6 +103,7 @@ YAML
     trust=(--config-patch "@$SEC/trust.patch.yaml")
   fi
   talosctl gen config "$CLUSTER" "https://$VIP:6443" --with-secrets "$SEC/secrets.yaml" \
+    --talos-version "$VERSION" --kubernetes-version "$K8S_VERSION" \
     --install-image "factory.talos.dev/nocloud-installer/$SCHEMATIC:$VERSION" \
     --config-patch "@$HERE/patches/common.yaml" --config-patch "@$SEC/$n.patch.yaml" "${trust[@]}" \
     --output-types controlplane -o "$f" --force >/dev/null
