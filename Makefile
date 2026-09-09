@@ -116,7 +116,7 @@ endif
 # === Talos control plane (ADR 0031/0033) ===
 # Terraform owns the VMs only; everything past first boot is talosctl driven
 # from kubernetes/talos (the canonical pipeline — never Ansible).
-TALOS_TARGETS = -target=proxmox_virtual_environment_download_file.talos -target=proxmox_virtual_environment_download_file.talos_worklab -target=proxmox_virtual_environment_vm.talos_cp -target=proxmox_virtual_environment_vm.talos_cp_worklab
+TALOS_TARGETS = -target=proxmox_virtual_environment_download_file.talos -target=proxmox_virtual_environment_vm.talos_cp
 talos-plan:
 	@cd terraform && terraform init && terraform plan -no-color $(TALOS_TARGETS)
 talos-build:
