@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Zot pull-through registry (ADR 0022/0034): registry.<domain> on a MetalLB IP,
 # TLS from the homelab-ca ClusterIssuer, blobs on a ceph-rbd PVC.
 # `deploy.sh smoke` pulls busybox through it from a node (nodes trust the CA via

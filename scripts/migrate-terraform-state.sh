@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # HISTORICAL: Migration complete 2026-02-18. Kept for reference.
 # migrate-terraform-state.sh
 #

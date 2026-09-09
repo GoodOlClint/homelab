@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Bake a proxmox-auto-install answer file for a node from its committed template.
 #
 # Injects site/secret bindings that are NOT committed (repo is public):

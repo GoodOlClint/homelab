@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Traefik ingress controller (ADR 0035): one MetalLB IP at services offset 65,
 # a Let's Encrypt wildcard (service + media domains) as the default TLS store, so app
 # Ingresses carry no tls: block. Hostnames live on the service domain (ADR 0040,

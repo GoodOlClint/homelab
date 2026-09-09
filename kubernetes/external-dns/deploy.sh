@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # external-dns (ADR 0040): every Ingress host (and hostname-annotated Service) becomes an A
 # record in the flat service zone over RFC 2136 against the BIND VIP — TSIG from Infisical
 # /infrastructure through an InfisicalSecret, owner TXT records so it never touches the

@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # MetalLB L2 on vlan40 (ADR 0034): pool = services offsets 64-79.
 source "$(dirname "$0")/../lib.sh"
 NS=metallb-system

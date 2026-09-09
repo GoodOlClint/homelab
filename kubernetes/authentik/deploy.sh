@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # authentik on the cluster (ADR 0040 P5c): one tree, two realms.
 #   deploy.sh internal   — namespace authentik, auth.<service domain> Ingress, Traefik forward-auth via the
 #                          embedded outpost, OIDC providers for Grafana/Portainer/MeshCentral/PDM/PVE/PBS

@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Cluster metrics API. Talos calls --kubelet-insecure-tls unsuitable for production,
 # so kubelet serves a CA-signed cert (rotate-server-certificates in talos.sh) and this
 # approver signs the CSR — nothing built into Kubernetes approves kubelet-serving CSRs.

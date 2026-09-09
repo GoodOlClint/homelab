@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Fleet-host PKI on Infisical (ADR 0041): certificate policy + profile `fleet-hosts` under the
 # `Homelab Root CA` (ADR 0039), one application with ACME (DNS-01, no EAB) and API enrollment.
 # Idempotent by name. Publishes the ACME directory URL to Infisical /infrastructure.

@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # cert-manager + the internal CA `homelab-ca` (ADR 0039): an intermediate held in the
 # cluster, signed by the Infisical internal root `Homelab Root CA` (Certificate Manager
 # project `homelab-pki`, both created here if absent). Exports the ROOT to

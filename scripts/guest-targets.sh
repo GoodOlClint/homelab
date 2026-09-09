@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Resolve a guest's Terraform resource address(es) by name, VM-or-LXC aware.
 #
 # Usage: guest-targets.sh <guest-name> <mode>

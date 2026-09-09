@@ -191,6 +191,12 @@ terraform/worklab-campaign/
 ansible/roles/*.*/
 kubernetes/talos/.secrets/
 kubernetes/.secrets/
+# also as bare names: a worktree may carry these (and .venv) as SYMLINKS into the main
+# checkout, and the dir-only patterns above do not match a symlink (cost the real
+# .secrets dirs to a fast-forward on 2026-09-09)
+kubernetes/talos/.secrets
+kubernetes/.secrets
+.venv
 
 # InfisicalSecret CRDs (key references only, no values) — ADR 0035
 !kubernetes/*/secrets.yaml

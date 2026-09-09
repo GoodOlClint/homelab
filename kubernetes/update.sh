@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Cluster half of `make update`. Restarts only the workloads whose image tag is :latest —
 # those carry imagePullPolicy Always, so recreating the pod re-pulls through Zot, which
 # re-checks the tag upstream. Chart images are version-pinned with IfNotPresent and a

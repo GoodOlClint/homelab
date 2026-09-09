@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Ceph CSI (RBD) on the Talos cluster against the PVE Ceph pool (ADR 0033).
 # Reads fsid, monitors and the client.csi-rbd key from the first cluster node
 # at deploy time. `deploy.sh smoke` runs the PVC write/read probe.

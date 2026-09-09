@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # One-time: Organize flat Infisical secrets into per-VM folders
 # This copies secrets from / into scoped folders for per-VM agent access.
 # Secrets at / are preserved for deploy-time backward compatibility.

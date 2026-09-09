@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Restore-bridge (ADR 0024/0027): restore one old-fleet VM from PBS onto a new
 # cluster node, re-home its NICs from the old SDN VNETs onto the VLAN-aware
 # vmbr0, stop the original on the old host, start the copy.

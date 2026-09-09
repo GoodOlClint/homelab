@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Rehearse the DR seed path against a DISPOSABLE local Infisical. Spins
 # postgres+redis+infisical in throwaway containers, bootstraps
 # an admin + project exactly like ansible/tasks/bootstrap_infisical_setup.yml

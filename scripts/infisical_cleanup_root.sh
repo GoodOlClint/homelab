@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Phase 15: Purge root / and remove orphan copies from Infisical
 # Run AFTER all other phases are deployed via `make apply`.
 #

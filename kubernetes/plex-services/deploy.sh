@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # plex-services stack on the cluster (ADR 0037): the arr suite + postgres + Libation, media via a
 # kubelet-mounted NFS PV, one InfisicalSecret on /plex-services (+ /shared for the PBS CronJob),
 # UIs through Traefik. The four *arr apps run authenticationMethod=external: Traefik's authentik

@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Export ALL Infisical secrets → SOPS-encrypted DR backup (the ONLY export path).
 #
 # Authenticates via Machine Identity (Universal Auth) using SOPS bootstrap

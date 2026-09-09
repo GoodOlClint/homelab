@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Jellyfin on the cluster (ADR 0040 P5d): config + transcode cache on ceph-rbd, the NAS media export
 # read-only at /data, jellyfin.<media domain> through Traefik, auth = the LDAP-Auth plugin against the
 # authentik external realm's outpost. The first-run wizard, the plugin install + config and the libraries

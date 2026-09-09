@@ -1,3 +1,5 @@
+# Sourced by /bin/bash scripts only — homebrew bash 5.3.15 deadlocks in heredoc_write
+# under these trees (see kubernetes/talos/talos.sh); every deploy.sh pins #!/bin/bash.
 # Shared by kubernetes/*/deploy.sh: kubeconfig, nodes.json accessors, helm-template apply.
 set -euo pipefail
 K8S="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

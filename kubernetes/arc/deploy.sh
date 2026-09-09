@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Actions Runner Controller + per-repo scale sets (ADR 0032/0034). GitHub App
 # creds come from Infisical /github-runner; the pool-scoped PVE token for the
 # reaper from terraform/hosts. Runner pods are hostNetwork dind on talos-cp-a

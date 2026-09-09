@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # The single hand-off step (ADR-0002): after a fresh answer-file install, create
 # the terraform@pve user + API token so Terraform can own the host plane with a
 # dedicated least-privilege identity instead of root.

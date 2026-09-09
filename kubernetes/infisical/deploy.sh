@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Infisical Kubernetes operator (ADR 0035): the cluster's secret path. The only
 # out-of-band secret is `infisical-universal-auth` (the bootstrap.sops.yml
 # machine identity); every runtime secret is an InfisicalSecret in its

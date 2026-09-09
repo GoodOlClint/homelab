@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Restore a PBS `databases/infisical` dump into an Infisical stack (make infisical-restore).
 # ADR 0039: the PBS dump (pg_dump -Fc + ENCRYPTION_KEY/AUTH_SECRET) is the vault's
 # DR path — org, project, machine identities and the PKI root survive; the SOPS

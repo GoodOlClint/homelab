@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Monitoring stack on the cluster (ADR 0036): configs translated from the old role with
 # ${VAR} placeholders filled from the inventory, one InfisicalSecret on /monitoring,
 # axosyslog on a MetalLB address at services offset 66, UIs through Traefik.

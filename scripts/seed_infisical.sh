@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Disaster recovery restore: SOPS backup → Infisical (make infisical-seed).
 # Invariants: pure-API against a single endpoint (folders and secrets must
 # never target different endpoints), secret values never on argv, and any

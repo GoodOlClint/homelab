@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # games stack on the cluster (ADR 0038): the crossplay Valheim server + its PlayFab status sidecar on a
 # MetalLB UDP LB (services offset 67), one InfisicalSecret on /docker. Kiwix lives in kubernetes/kiwix.
 #   deploy.sh migrate <old ip>   — player-gated: refuse while 204 reports players > 0, clean stop, rsync

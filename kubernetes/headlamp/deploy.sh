@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Read-only Kubernetes dashboard on the ingress (ADR 0035 pattern): image through
 # Zot, wildcard cert from Traefik's default store, host published by external-dns.
 source "$(dirname "$0")/../lib.sh"

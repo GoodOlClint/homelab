@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # homepage on the cluster (ADR 0035): first ADR 0022 templated image ref, config
 # translated from the old role templates with ${VAR} placeholders filled from
 # the terraform inventory, secrets via InfisicalSecret, Ingress on Traefik.

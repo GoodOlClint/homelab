@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Kiwix ZIM library. Split out of the games namespace 2026-08-27: it only shared one
 # with Valheim because both came off the same pre-cluster guest (ADR 0038), and games
 # is pod-security enforce=privileged for Valheim's SYS_NICE, which Kiwix must not inherit.
