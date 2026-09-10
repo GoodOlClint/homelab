@@ -66,13 +66,17 @@ resource "proxmox_virtual_environment_download_file" "talos" {
   upload_timeout     = 600
 }
 
-# cephfs is shared, so one snippet serves every cluster node; the hookscript
-# only fires on the next VM start, so a running VM needs the adj applied once
-# by hand (echo -1000 > /proc/$(cat /var/run/qemu-server/<vmid>.pid)/oom_score_adj).
+# One copy per node on its local datastore: pve-guests autostarts the VM before
+# pvestatd has mounted cephfs, and a hookscript on an unmounted datastore fails
+# the start. The hookscript only fires on the next VM start, so a running VM
+# needs the adj applied once by hand
+# (echo -1000 > /proc/$(cat /var/run/qemu-server/<vmid>.pid)/oom_score_adj).
 resource "proxmox_virtual_environment_file" "talos_oom_hook" {
+  for_each = toset([for n in values(local.talos_node_addrs) : n.node_name])
+
   content_type = "snippets"
-  datastore_id = "cephfs"
-  node_name    = var.virtual_environment_node
+  datastore_id = "local"
+  node_name    = each.key
   file_mode    = "0755"
 
   source_raw {
@@ -106,7 +110,7 @@ resource "proxmox_virtual_environment_vm" "talos_cp" {
   machine   = "q35"
   bios      = "seabios"
   tags      = ["talos", "control-plane"]
-  hook_script_file_id = proxmox_virtual_environment_file.talos_oom_hook.id
+  hook_script_file_id = proxmox_virtual_environment_file.talos_oom_hook[each.value.node_name].id
 
   agent { enabled = true }
   cpu {
