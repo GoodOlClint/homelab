@@ -29,6 +29,16 @@
         "image:\\s*\\$\\{REGISTRY\\}/(?<depName>[^:\\s]+):(?<currentValue>[^\\s\"]+)"
       ],
       "datasourceTemplate": "docker"
+    },
+    {
+      "description": "AdGuard Home tarball pin in the adguard role (#10): the PR must also carry the new sha256 in adguard_checksum, which the download verifies.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^ansible/roles/adguard/defaults/main\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>[a-z-]+) depName=(?<depName>[^\\s]+)\\nadguard_version: (?<currentValue>[^\\s]+)"
+      ]
     }
   ],
   "packageRules": [

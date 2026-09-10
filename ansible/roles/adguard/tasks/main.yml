@@ -57,11 +57,23 @@
     - dns
     - users
 
-- name: Download AdGuard Home
+- name: Read the installed AdGuard Home version
+  ansible.builtin.command: /usr/local/bin/adguardhome --version
+  register: _adguard_installed
+  changed_when: false
+  failed_when: false
+  tags:
+    - adguard
+    - dns
+    - install
+
+- name: Download AdGuard Home {{ adguard_version }}
   ansible.builtin.get_url:
-    url: "https://github.com/AdguardTeam/AdGuardHome/releases/latest/download/AdGuardHome_linux_amd64.tar.gz"
+    url: "https://github.com/AdguardTeam/AdGuardHome/releases/download/{{ adguard_version }}/AdGuardHome_linux_amd64.tar.gz"
     dest: /tmp/adguardhome.tar.gz
+    checksum: "{{ adguard_checksum }}"
     mode: '0644'
+  when: _adguard_needs_install
   tags:
     - adguard
     - dns
@@ -72,7 +84,7 @@
     src: /tmp/adguardhome.tar.gz
     dest: /tmp
     remote_src: true
-
+  when: _adguard_needs_install
   tags:
     - adguard
     - dns
@@ -86,7 +98,8 @@
     owner: root
     group: root
     remote_src: true
-
+  when: _adguard_needs_install
+  notify: Restart adguardhome
   tags:
     - adguard
     - dns
@@ -382,7 +395,7 @@
 - name: Test external DNS resolution through AdGuard Home
   ansible.builtin.command: dig @127.0.0.1 google.com +short
   register: external_dns_test
-  failed_when: external_dns_test.rc != 0 or external_dns_test.stdout == ""
+  until: external_dns_test.rc == 0 and external_dns_test.stdout != ""
   changed_when: false
   retries: 5
   delay: 10
@@ -395,7 +408,7 @@
 - name: Test local zone resolution through AdGuard Home
   ansible.builtin.command: dig @127.0.0.1 ns.{{ service_domain }} +short
   register: local_dns_test
-  failed_when: local_dns_test.rc != 0 or local_dns_test.stdout == ""
+  until: local_dns_test.rc == 0 and local_dns_test.stdout != ""
   changed_when: false
   retries: 5
   delay: 10
@@ -409,7 +422,8 @@
 - name: Test IPv6 DNS resolution through AdGuard Home (if IPv6 available)
   ansible.builtin.command: dig @{{ dns_listen_ipv6s[0] | default('::1') }} google.com AAAA +short
   register: ipv6_dns_test
-  failed_when: false  # Don't fail if IPv6 is not available
+  until: ipv6_dns_test.rc == 0
+  failed_when: false
   changed_when: false
   retries: 3
   delay: 5
@@ -424,7 +438,8 @@
 - name: Test IPv4 DNS resolution through AdGuard Home IPv6 interface (if IPv6 available)
   ansible.builtin.command: dig @{{ dns_listen_ipv6s[0] | default('::1') }} google.com A +short
   register: ipv6_to_ipv4_dns_test
-  failed_when: false  # Don't fail if IPv6 is not available
+  until: ipv6_to_ipv4_dns_test.rc == 0
+  failed_when: false
   changed_when: false
   retries: 3
   delay: 5

@@ -1,4 +1,12 @@
 ---
+# Pinned + checksummed (ADR 0016 shape); downloaded only when the installed binary reports
+# another version, and the copy restarts the service. A version bump must bring the new
+# tarball's sha256 with it, or the download fails loudly on the resolvers.
+# renovate: datasource=github-releases depName=AdguardTeam/AdGuardHome
+adguard_version: v0.107.79
+adguard_checksum: sha256:c48f4a43000665484c5ec28177de11a004759b620dae8f77b2aabefc9ef3687f
+adguard_installed_version: "{{ (_adguard_installed.stdout | default('')) | regex_search('v[0-9.]+') }}"
+_adguard_needs_install: "{{ adguard_installed_version != adguard_version }}"
 # Bootstrap mode flag (skips local zone DNS test during bootstrap)
 bootstrap_mode: false
 
