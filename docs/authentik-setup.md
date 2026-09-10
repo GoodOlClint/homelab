@@ -47,9 +47,9 @@ Forward-auth: any Ingress opts in with `traefik.ingress.kubernetes.io/router.mid
 
 A realm rebuild is `kubectl delete ns` + `make talos-authentik REALM=…`; the Infisical folder survives, so every secret and client secret stays stable and the consumers need nothing. Data comes back from the PBS dump: restore `pg_dumpall-<date>.sql.gz` from ns `databases` and `psql -U authentik -f` into the fresh Postgres before the server starts (or after, then restart both Deployments). Verify the lane by snapshot recency on PBS, never by the CronJob's exit code.
 
-## Internal realm — Zot registry (2026-08-27)
+## Internal realm — Zot registry (2026-08-27; OIDC login removed 2026-09-10)
 
-The `zot` provider backs the registry **web UI only**. Zot's own docs are explicit that OIDC cannot authenticate `docker`/`containerd`: CLI pushes use the `push` htpasswd identity instead (`/infrastructure/zot_push_password`, consumed by `make plex-pbs-image`), and pulls stay anonymous so every node's containerd is unaffected.
+The `zot` OIDC provider is gone (ADR 0049, WP1 of the Kubernetes-IaC plan): Zot panics at startup when its OIDC issuer is unreachable, which made the registry depend on authentik and closed the Zot/Traefik/authentik cold-start cycle. The web UI is now htpasswd-only (the `push` identity, `/infrastructure/zot_push_password`); CLI pushes were always htpasswd because Zot's OIDC cannot authenticate `docker`/`containerd`. `/authentik/zot_oidc_client_secret` is deleted by hand after the redeploy (`infisical secrets delete`).
 
 Access control (`kubernetes/zot/values.yaml`): `anonymousPolicy: [read]` on `**`, `defaultPolicy: [read]` for any authenticated user, and `adminPolicy` limited to `push`. Before this, the registry had no `auth` block at all and accepted **anonymous pushes** — anyone on the LAN could overwrite a tag the cluster pulls. Verify after any change to that file:
 

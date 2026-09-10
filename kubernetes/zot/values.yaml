@@ -20,15 +20,7 @@ configFiles:
         "address": "0.0.0.0", "port": "5000",
         "externalUrl": "https://${HOST}",
         "tls": {"cert": "/etc/zot-tls/tls.crt", "key": "/etc/zot-tls/tls.key"},
-        "auth": {
-          "htpasswd": {"path": "/secret/htpasswd"},
-          "openid": {"providers": {"oidc": {
-            "credentialsFile": "/secret/oidc-credentials.json",
-            "issuer": "https://auth.${DOMAIN}/application/o/zot/",
-            "keypath": "",
-            "scopes": ["openid", "profile", "email"]
-          }}}
-        },
+        "auth": {"htpasswd": {"path": "/secret/htpasswd"}},
         "accessControl": {
           "repositories": {"**": {"anonymousPolicy": ["read"], "defaultPolicy": ["read"]}},
           "adminPolicy": {"users": ["${ZOT_PUSH_USER}"], "actions": ["read", "create", "update", "delete"]}

@@ -31,15 +31,14 @@ kubectl -n "$NS" wait --for=condition=Ready certificate/zot-tls --timeout=120s
 # Anonymous PUSH was accepted until 2026-08-27 (no auth block at all), so anyone on the LAN
 # could overwrite a tag the cluster pulls. Read stays anonymous — every node's containerd
 # pulls unchanged and the on-demand sync still fills the mirror — and write now needs the
-# htpasswd identity below. OIDC covers the web UI only; zot's own docs are explicit that
-# CLI push/pull cannot use it, which is why the htpasswd user exists alongside.
+# htpasswd identity below (zot's CLI push/pull cannot use OIDC). The web UI's OIDC login was
+# removed 2026-09-10 (ADR 0049): Zot panics at startup when the issuer is unreachable, which made
+# the registry depend on authentik and closed the Zot/Traefik/authentik cold-start cycle.
 FOLDER=infrastructure ensure_folder infrastructure >/dev/null
 FOLDER=infrastructure ensure_secret zot_push_password 24 "Zot registry: push credential for $ZOT_PUSH_USER"
 PUSH_PW=$(inf_get /infrastructure zot_push_password)
-OIDC_SECRET=$(inf_get /authentik zot_oidc_client_secret)
 kubectl create secret generic zot-secret -n "$NS" --dry-run=client -o yaml \
   --from-literal=htpasswd="$(htpasswd -nbB "$ZOT_PUSH_USER" "$PUSH_PW")" \
-  --from-literal=oidc-credentials.json="{\"clientid\": \"zot\", \"clientsecret\": \"$OIDC_SECRET\"}" \
   | kubectl apply -f -
 
 helm_apply zot project-zot/zot "$NS" -f <(envsubst < "$HERE/values.yaml")
