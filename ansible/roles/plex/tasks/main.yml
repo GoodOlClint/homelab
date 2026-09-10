@@ -29,6 +29,9 @@
   ansible.builtin.set_fact:
     _plex_token_needs_gen: >-
       {{ (secrets.plex | default({})).plex_token | default('REPLACE_ME') in ['REPLACE_ME', ''] }}
+    _plex_tv_creds: >-
+      {{ (secrets.plex | default({})).plex_tv_username | default('REPLACE_ME') not in ['REPLACE_ME', '']
+         and (secrets.plex | default({})).plex_tv_password | default('REPLACE_ME') not in ['REPLACE_ME', ''] }}
   tags: [plex, secrets]
 
 - name: Retrieve Plex token from plex.tv
@@ -41,8 +44,8 @@
       X-Plex-Version: "1.0"
     body_format: form-urlencoded
     body:
-      user[login]: "{{ bootstrap.plex_username }}"
-      user[password]: "{{ bootstrap.plex_password }}"
+      user[login]: "{{ secrets.plex.plex_tv_username }}"
+      user[password]: "{{ secrets.plex.plex_tv_password }}"
     status_code: [200, 201]
   delegate_to: localhost
   become: false
@@ -50,8 +53,7 @@
   no_log: true
   when:
     - _plex_token_needs_gen | bool
-    - bootstrap.plex_username | default('REPLACE_ME') != 'REPLACE_ME'
-    - bootstrap.plex_password | default('REPLACE_ME') != 'REPLACE_ME'
+    - _plex_tv_creds
   tags: [plex, secrets]
 
 - name: Update secrets fact with plex_token
@@ -110,12 +112,12 @@
 - name: Warn if plex.tv credentials not configured
   ansible.builtin.debug:
     msg: >-
-      WARNING: plex_token is empty and plex.tv credentials are not configured in bootstrap.sops.yml.
+      WARNING: plex_token is empty and Infisical /plex has no plex_tv_username / plex_tv_password.
       Backup scripts will not be able to check for active sessions.
-      Set bootstrap.plex_username and bootstrap.plex_password, then re-run.
+      Set them (external_secrets.plex in bootstrap.sops.yml seeds them at bootstrap), then re-run.
   when:
     - _plex_token_needs_gen | bool
-    - (bootstrap.plex_username | default('REPLACE_ME') == 'REPLACE_ME') or (bootstrap.plex_password | default('REPLACE_ME') == 'REPLACE_ME')
+    - not _plex_tv_creds
   tags: [plex, secrets]
 
 - name: Ensure required packages.
