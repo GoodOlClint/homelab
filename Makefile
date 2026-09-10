@@ -134,7 +134,7 @@ talos-smoke:
 	@kubernetes/ceph-csi/deploy.sh smoke
 # P3b (ADR 0034): MetalLB L2, internal CA, Zot, ARC runners
 talos-lb:
-	@kubernetes/metallb/deploy.sh
+	@flux reconcile kustomization metallb --with-source
 talos-certs: pki-hosts k8s-seed
 	@flux reconcile kustomization cert-manager --with-source
 talos-trust:
@@ -149,14 +149,14 @@ talos-arc:
 talos-ingress:
 	@kubernetes/traefik/deploy.sh
 talos-infisical:
-	@kubernetes/infisical/deploy.sh
+	@flux reconcile kustomization infisical --with-source
 infisical-smoke:
-	@kubernetes/infisical/deploy.sh smoke
+	@echo 'moved to the Ansible tail (WP7): make k8s-seed then check an InfisicalSecret is ReadyToSyncSecrets'
 talos-homepage:
 	@flux reconcile kustomization homepage --with-source
 # P5a (ADR 0040): external-dns publishes every Ingress host into the service zone over RFC 2136
 talos-dns:
-	@kubernetes/external-dns/deploy.sh
+	@flux reconcile kustomization external-dns --with-source
 # P5c (ADR 0040): authentik, both realms (REALM=internal|external for one); generates each realm's Infisical folder on first run
 talos-authentik:
 	@kubernetes/authentik/deploy.sh $(REALM)
@@ -192,11 +192,11 @@ talos-jellyfin:
 
 # Read-only Kubernetes dashboard (Headlamp) on headlamp.<service domain>, behind authentik forward-auth
 talos-headlamp:
-	@kubernetes/headlamp/deploy.sh
+	@flux reconcile kustomization headlamp --with-source
 
 # Cluster metrics API: kubelet-csr-approver (kubelet serving certs, see talos.sh) + metrics-server
 talos-metrics:
-	@kubernetes/metrics/deploy.sh
+	@flux reconcile kustomization metrics --with-source
 
 # Kiwix ZIM library on kiwix.<service domain> (split out of the games namespace)
 talos-kiwix:
