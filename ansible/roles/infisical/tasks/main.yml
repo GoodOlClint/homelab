@@ -75,12 +75,6 @@
   retries: 30
   delay: 10
 
-- name: Scope the ansible-admin identity's trusted IPs (#21)
-  ansible.builtin.include_tasks: admin_trusted_ips.yml
-  vars:
-    _admin_identity_id: "{{ (_infisical_identities.json.identities | default([]) | selectattr('identity.name', 'equalto', 'ansible-admin') | map(attribute='identity.id') | first) | default('') }}"
-  when: infisical_login.login_data is defined
-
 - name: Display Infisical setup URL
   ansible.builtin.debug:
     msg: >-

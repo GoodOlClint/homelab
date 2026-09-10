@@ -145,6 +145,7 @@ Each Infisical folder is owned by the role that generates/provisions its secrets
 | `/talos` | `kubernetes/talos/talos.sh` (`make talos-secrets`, no Ansible role) | — (no agent) | talos_secrets_yaml, talosconfig (base64) | — |
 
 **Key rules:**
+- The `ansible-admin` identity's universal auth trusts `0.0.0.0/0` with a non-expiring client secret — deliberately, not by omission: Infisical's IP allowlist is a paid-plan feature and the self-hosted free instance answers any other value with a 400 (#21, 2026-09-10). The compensating control is the vault's reach: the services VLAN and pfSense's rules, not the identity.
 - "Owner Role" is the Ansible role whose tasks write secrets to this folder via `generate_secret.yml` or `infisical_write_secret.yml`.
 - "Agent Readers" are VMs whose Infisical Agent templates include `with secret` blocks reading from this folder, or cluster namespaces with an `InfisicalSecret` on it (ADR 0035).
 - VMs without agents (vps, pfsense, pbs, infrastructure) consume secrets at Ansible deploy time via the `secrets` fact — not via agent.
