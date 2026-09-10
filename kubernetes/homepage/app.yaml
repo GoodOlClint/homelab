@@ -17,7 +17,7 @@ spec:
           ports: [{containerPort: 3000}]
           env:
             - {name: TZ, value: "${TZ}"}
-            - {name: HOMEPAGE_ALLOWED_HOSTS, value: "${HOSTS}"}
+            - {name: HOMEPAGE_ALLOWED_HOSTS, value: "homepage.${DOMAIN},${HOST_ALIAS},homepage.homepage.svc.cluster.local"}
           envFrom:
             - secretRef: {name: homepage-homepage}
             - secretRef: {name: homepage-plex-services}
@@ -29,7 +29,7 @@ spec:
             - {name: config, mountPath: /app/config/widgets.yaml, subPath: widgets.yaml}
             - {name: config, mountPath: /app/config/bookmarks.yaml, subPath: bookmarks.yaml}
             - {name: config, mountPath: /app/config/docker.yaml, subPath: docker.yaml}
-          readinessProbe: {httpGet: {path: /, port: 3000, httpHeaders: [{name: Host, value: "${HOST}"}]}, initialDelaySeconds: 10}
+          readinessProbe: {httpGet: {path: /, port: 3000, httpHeaders: [{name: Host, value: "homepage.${DOMAIN}"}]}, initialDelaySeconds: 10}
       volumes:
         - name: config
           configMap: {name: homepage-config}
@@ -50,7 +50,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-    - host: ${HOST}
+    - host: homepage.${DOMAIN}
       http: {paths: [{path: /, pathType: Prefix, backend: {service: {name: homepage, port: {number: 80}}}}]}
     - host: ${HOST_ALIAS}
       http: {paths: [{path: /, pathType: Prefix, backend: {service: {name: homepage, port: {number: 80}}}}]}

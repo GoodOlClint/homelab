@@ -4,6 +4,7 @@ resources:
   - flux-system/gotk-components.yaml
   - flux-system/gotk-sync.yaml
   - apps/kiwix.yaml
+  - apps/homepage.yaml
 patches:
   # A Kustomization may only reference sources and secrets in its own namespace (ADR 0048).
   - target: {kind: Deployment, name: kustomize-controller}
