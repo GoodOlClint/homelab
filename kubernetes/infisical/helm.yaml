@@ -1,0 +1,32 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata: {name: infisical-helm-charts, namespace: infisical-operator}
+spec: {interval: 12h, url: https://dl.cloudsmith.io/public/infisical/helm-charts/helm/charts/}
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata: {name: infisical-operator, namespace: infisical-operator}
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: secrets-operator
+      version: "v0.11.8"
+      sourceRef: {kind: HelmRepository, name: infisical-helm-charts}
+  install: {crds: CreateReplace}
+  upgrade: {crds: CreateReplace}
+  values:
+    hostAPI: ${HOST_API}
+    controllerManager:
+      extraVolumes:
+      - name: homelab-root-ca
+        configMap:
+          name: homelab-root-ca
+      manager:
+        image:
+          repository: ${REGISTRY}/docker.io/infisical/kubernetes-operator
+        extraVolumeMounts:
+        - name: homelab-root-ca
+          mountPath: /etc/ssl/certs/homelab-root-ca.crt
+          subPath: homelab-ca.crt
+          readOnly: true

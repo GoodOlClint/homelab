@@ -10,6 +10,11 @@ resources:
   - apps/plex-services.yaml
   - apps/monitoring.yaml
   - apps/cert-manager.yaml
+  - apps/metallb.yaml
+  - apps/metrics.yaml
+  - apps/external-dns.yaml
+  - apps/infisical.yaml
+  - apps/headlamp.yaml
 patches:
   # A Kustomization may only reference sources and secrets in its own namespace (ADR 0048).
   - target: {kind: Deployment, name: kustomize-controller}

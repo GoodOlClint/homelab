@@ -1,0 +1,74 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata: {name: postfinance, namespace: kube-system}
+spec: {interval: 12h, url: https://postfinance.github.io/kubelet-csr-approver}
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata: {name: kubelet-csr-approver, namespace: kube-system}
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: kubelet-csr-approver
+      version: "1.2.14"
+      sourceRef: {kind: HelmRepository, name: postfinance}
+  install: {crds: CreateReplace}
+  upgrade: {crds: CreateReplace}
+  values:
+    bypassDnsResolution: true
+    providerRegex: ^talos-cp-[a-z]+$
+    maxExpirationSeconds: 86400
+    image:
+      repository: ${REGISTRY}/ghcr.io/postfinance/kubelet-csr-approver
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata: {name: metrics-server, namespace: kube-system}
+spec: {interval: 12h, url: https://kubernetes-sigs.github.io/metrics-server/}
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata: {name: metrics-server, namespace: kube-system}
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: metrics-server
+      version: "3.14.0"
+      sourceRef: {kind: HelmRepository, name: metrics-server}
+  install: {crds: CreateReplace}
+  upgrade: {crds: CreateReplace}
+  values:
+    image:
+      repository: ${REGISTRY}/registry.k8s.io/metrics-server/metrics-server
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata: {name: prometheus-community, namespace: kube-system}
+spec: {interval: 12h, url: https://prometheus-community.github.io/helm-charts}
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata: {name: kube-state-metrics, namespace: kube-system}
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: kube-state-metrics
+      version: "8.4.1"
+      sourceRef: {kind: HelmRepository, name: prometheus-community}
+  install: {crds: CreateReplace}
+  upgrade: {crds: CreateReplace}
+  values:
+    image:
+      registry: ${REGISTRY}/registry.k8s.io
+      repository: kube-state-metrics/kube-state-metrics
+    resources:
+      requests:
+        cpu: 25m
+        memory: 128Mi

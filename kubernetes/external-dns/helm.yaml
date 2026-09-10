@@ -1,0 +1,44 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata: {name: external-dns, namespace: external-dns}
+spec: {interval: 12h, url: https://kubernetes-sigs.github.io/external-dns/}
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata: {name: external-dns, namespace: external-dns}
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: external-dns
+      version: "1.21.1"
+      sourceRef: {kind: HelmRepository, name: external-dns}
+  install: {crds: CreateReplace}
+  upgrade: {crds: CreateReplace}
+  values:
+    image:
+      repository: ${REGISTRY}/registry.k8s.io/external-dns/external-dns
+    provider:
+      name: rfc2136
+    sources:
+    - ingress
+    - service
+    domainFilters: ${INTERNAL_ZONES_JSON}
+    policy: sync
+    txtOwnerId: talos
+    interval: 1m
+    deploymentAnnotations:
+      secrets.infisical.com/auto-reload: 'true'
+    env:
+    - name: EXTERNAL_DNS_RFC2136_TSIG_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: external-dns-tsig
+          key: EXTERNAL_DNS_RFC2136_TSIG_SECRET
+    extraArgs:
+      rfc2136-host: ${BIND}
+      rfc2136-port: '53'
+      rfc2136-zone: ${INTERNAL_ZONES_JSON}
+      rfc2136-tsig-keyname: dhcp-update-key
+      rfc2136-tsig-secret-alg: hmac-sha256
+      rfc2136-tsig-axfr: true

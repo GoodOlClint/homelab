@@ -6,13 +6,13 @@ metadata: {name: flux-{{ tree }}, namespace: {{ k8s_seed_flux_namespace }}}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
-metadata: {name: flux-{{ tree }}, namespace: {{ tree }}}
+metadata: {name: flux-{{ tree }}, namespace: {{ tree_ns }}}
 roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: admin}
 subjects: [{kind: ServiceAccount, name: flux-{{ tree }}, namespace: {{ k8s_seed_flux_namespace }}}]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
-metadata: {name: flux-{{ tree }}-crds, namespace: {{ tree }}}
+metadata: {name: flux-{{ tree }}-crds, namespace: {{ tree_ns }}}
 roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: flux-tree-crds}
 subjects: [{kind: ServiceAccount, name: flux-{{ tree }}, namespace: {{ k8s_seed_flux_namespace }}}]
 {% if tree in k8s_seed_cluster_cr_trees %}

@@ -24,6 +24,7 @@ data:
   MEDIA_DOMAIN: "{{ media_domain }}"
   INTERNAL_ZONES: "{{ network_data.internal_zones | join(' ') }}"
   INTERNAL_ZONES_YAML: "{{ network_data.internal_zones | join(', ') }}"
+  INTERNAL_ZONES_JSON: {{ network_data.internal_zones | to_json | to_json }}
   HOST_ALIAS: "home.{{ service_domain }}"
   AUTH_HOST: "auth.{{ service_domain }}"
   REGISTRY: "registry.{{ _nodes.domain }}"

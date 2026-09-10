@@ -1,0 +1,11 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata: {name: external-dns, namespace: flux-system}
+spec:
+  interval: 10m
+  path: ./kubernetes/external-dns
+  prune: false
+  sourceRef: {kind: GitRepository, name: homelab}
+  serviceAccountName: flux-external-dns
+  postBuild:
+    substituteFrom: [{kind: ConfigMap, name: cluster-bindings}]
