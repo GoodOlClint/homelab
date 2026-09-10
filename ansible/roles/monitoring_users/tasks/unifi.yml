@@ -4,7 +4,6 @@
   ansible.builtin.uri:
     url: "{{ unifi_controller_url }}/status"
     method: GET
-    validate_certs: false
     timeout: 5
   register: unifi_reachable
   ignore_errors: true
@@ -25,7 +24,6 @@
         body:
           username: "{{ unifi_admin_user | default('admin') }}"
           password: "{{ secrets.infrastructure.unifi_admin_password }}"
-        validate_certs: false
         timeout: 10
         status_code: [200]
       register: unifi_login
@@ -41,7 +39,6 @@
         body_format: json
         body:
           cmd: "get-admins"
-        validate_certs: false
         headers:
           Cookie: "{{ unifi_login.cookies_string }}"
         status_code: [200]
@@ -63,7 +60,6 @@
           x_password: "{{ secrets.monitoring.unifi_monitoring_password }}"
           role: "{{ unifi_monitoring_role }}"
           requires_new_password: false
-        validate_certs: false
         headers:
           Cookie: "{{ unifi_login.cookies_string }}"
         status_code: [200]
@@ -80,7 +76,6 @@
           cmd: "set-admin"
           admin: "{{ unifi_monitoring_user }}"
           x_password: "{{ secrets.monitoring.unifi_monitoring_password }}"
-        validate_certs: false
         headers:
           Cookie: "{{ unifi_login.cookies_string }}"
         status_code: [200]
@@ -91,7 +86,6 @@
       ansible.builtin.uri:
         url: "{{ unifi_controller_url }}/api/logout"
         method: POST
-        validate_certs: false
         headers:
           Cookie: "{{ unifi_login.cookies_string }}"
         status_code: [200]

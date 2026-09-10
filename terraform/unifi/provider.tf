@@ -7,6 +7,6 @@ provider "unifi" {
   api_url  = var.unifi_api_url
   site     = var.unifi_site
 
-  # Allow unverified TLS for local controllers
-  allow_insecure = true
+  # The controller serves a root-chained fleet cert (ADR 0041); api_url must be its name.
+  allow_insecure = false
 }

@@ -1,7 +1,8 @@
 #!/bin/bash
 # The single hand-off step (ADR-0002): after a fresh answer-file install, create
-# the terraform@pve user + API token so Terraform can own the host plane with a
-# dedicated least-privilege identity instead of root.
+# the terraform@pve user + API token so Terraform can own the host plane with its
+# own identity instead of root. The ACL is Administrator on / — root-equivalent;
+# scoping it to the host-plane paths is still owed to ADR-0002.
 #
 # Runs over SSH to the freshly-installed node's VLAN 30 mgmt IP (the stable link).
 # Idempotent: skips the user/token if they already exist.

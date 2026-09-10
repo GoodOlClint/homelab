@@ -5,6 +5,12 @@ proxmox_monitoring_user: "monitoring@pve"
 proxmox_monitoring_role: "PVEAuditor"
 proxmox_monitoring_comment: "Monitoring user for Prometheus PVE Exporter"
 
+# TLS endpoints are dialed by the names their fleet certs carry (ADR 0041) and verified
+# against the root; the DSM name is the one DHCP registers (docs/synology-acme.md).
+unifi_controller_port: 11443
+unifi_controller_url: "https://unifi.{{ service_domain }}:{{ unifi_controller_port }}"
+synology_dsm_url: "https://ds1821plus.{{ service_domain }}:5001"
+
 # UniFi monitoring user configuration
 # unifi_monitoring_user is defined in group_vars/all.yml (not here, to avoid shadowing)
 unifi_monitoring_role: "readonly"  # Options: admin, readonly
