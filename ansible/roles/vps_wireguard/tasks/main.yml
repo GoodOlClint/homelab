@@ -86,11 +86,32 @@
     - vps_wireguard
     - config
 
+# A host that already carries a key is never re-keyed from an empty vault: pfSense holds the
+# peer's public key, and a fresh pair kills the tunnel that sshd is bound to.
+- name: Check for an existing WireGuard config
+  ansible.builtin.stat:
+    path: "/etc/wireguard/{{ wg_interface }}.conf"
+  register: wg_existing_conf
+  when: not wg_key_from_sops
+  tags:
+    - vps_wireguard
+    - config
+
+- name: Reuse the host's WireGuard private key
+  ansible.builtin.shell: "set -o pipefail; grep -m1 '^PrivateKey' /etc/wireguard/{{ wg_interface }}.conf | cut -d= -f2- | tr -d ' '"
+  register: wg_host_key
+  changed_when: false
+  when: not wg_key_from_sops and wg_existing_conf.stat.exists
+  no_log: true
+  tags:
+    - vps_wireguard
+    - config
+
 - name: Generate new WireGuard private key (first deploy)
   ansible.builtin.command: wg genkey
   register: wg_genkey_result
   changed_when: false
-  when: not wg_key_from_sops
+  when: not wg_key_from_sops and not wg_existing_conf.stat.exists
   no_log: true
   tags:
     - vps_wireguard
@@ -98,7 +119,7 @@
 
 - name: Set generated private key fact
   ansible.builtin.set_fact:
-    wg_private_key: "{{ wg_genkey_result.stdout }}"
+    wg_private_key: "{{ wg_genkey_result.stdout if wg_genkey_result is not skipped else wg_host_key.stdout }}"
   when: not wg_key_from_sops
   no_log: true
   tags:
