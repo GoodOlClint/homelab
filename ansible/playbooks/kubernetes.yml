@@ -1,16 +1,52 @@
 ---
-# The cluster's Ansible half (ADR 0048): the allowlisted seed objects Flux does not own, and in-app
-# configuration reached through application APIs. Runs from the workstation against the kubeconfig
-# kubernetes/talos/talos.sh writes. Never creates a workload object — those are Flux's.
-- name: Kubernetes seed and in-app configuration
+# The cluster's Ansible half (ADR 0048): the allowlisted seed objects Flux does not own, in-app
+# configuration reached through application APIs, the fail-loud smokes and the deliberate :latest
+# re-pull. Runs from the workstation against the kubeconfig kubernetes/talos/talos.sh writes. Never
+# creates a workload object — those are Flux's. One play per entry point because a play tag is the
+# only tag that reaches the dynamically included pre_tasks (`make k8s-seed`, `--tags apps|smoke|update|pbs-image`).
+- name: Kubernetes seed
   hosts: localhost
   gather_facts: false
-  vars_files:
-    - ../group_vars/all.yml
-  pre_tasks:
+  tags: [seed]
+  vars_files: [../group_vars/all.yml]
+  pre_tasks: &pre
     - name: Load all configuration and secrets
       ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/full_pre_tasks.yml"
-      tags: [always]
   roles:
-    - role: k8s_seed
-      tags: [seed]
+    - k8s_seed
+
+- name: Kubernetes in-app configuration
+  hosts: localhost
+  gather_facts: false
+  tags: [apps]
+  vars_files: [../group_vars/all.yml]
+  pre_tasks: *pre
+  roles:
+    - k8s_apps
+
+- name: Kubernetes smokes
+  hosts: localhost
+  gather_facts: false
+  tags: [never, smoke]
+  vars_files: [../group_vars/all.yml]
+  pre_tasks: *pre
+  tasks:
+    - ansible.builtin.import_role: {name: k8s_apps, tasks_from: smoke}
+
+- name: Kubernetes :latest re-pull
+  hosts: localhost
+  gather_facts: false
+  tags: [never, update]
+  vars_files: [../group_vars/all.yml]
+  pre_tasks: *pre
+  tasks:
+    - ansible.builtin.import_role: {name: k8s_apps, tasks_from: update}
+
+- name: proxmox-backup-client image
+  hosts: localhost
+  gather_facts: false
+  tags: [never, pbs-image]
+  vars_files: [../group_vars/all.yml]
+  pre_tasks: *pre
+  tasks:
+    - ansible.builtin.import_role: {name: k8s_apps, tasks_from: pbs_image}

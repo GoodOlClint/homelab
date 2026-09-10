@@ -1,0 +1,52 @@
+---
+# The four *arr apps run authenticationMethod=external: Traefik's authentik forward-auth is the
+# login, so the in-cluster Services answer unauthenticated — only pods reach them.
+- name: arr host config
+  ansible.builtin.shell:
+    cmd: >-
+      {{ k8s_apps_kubectl }} -n plex-services exec deploy/{{ item.key }} -- sh -c
+      'K=$(sed -n "s|.*<ApiKey>\(.*\)</ApiKey>.*|\1|p" /config/config.xml);
+      curl -sf -H "X-Api-Key: $K" localhost:{{ item.value[0] }}/api/{{ item.value[1] }}/config/host'
+  loop: "{{ k8s_apps_arr | dict2items }}"
+  loop_control: {label: "{{ item.key }}"}
+  register: _arr_host
+  changed_when: false
+  no_log: true
+
+- name: arr auth → external
+  ansible.builtin.shell:
+    cmd: >-
+      {{ k8s_apps_kubectl }} -n plex-services exec -i deploy/{{ item.item.key }} -- sh -c
+      'K=$(sed -n "s|.*<ApiKey>\(.*\)</ApiKey>.*|\1|p" /config/config.xml);
+      curl -sf -H "X-Api-Key: $K" -H "content-type: application/json" -X PUT -d @-
+      localhost:{{ item.item.value[0] }}/api/{{ item.item.value[1] }}/config/host/{{ (item.stdout | from_json).id }}'
+    stdin: "{{ item.stdout | from_json | combine({'authenticationMethod': 'external'}) | to_json }}"
+  loop: "{{ _arr_host.results }}"
+  loop_control: {label: "{{ item.item.key }}"}
+  when: (item.stdout | from_json).authenticationMethod != 'external'
+  no_log: true
+
+# SAB rejects any Host header outside host_whitelist (403); the list lives only in its live config,
+# and localhost bypasses the check, so the ingress path cannot fix itself.
+- name: SAB host_whitelist
+  ansible.builtin.shell:
+    cmd: >-
+      {{ k8s_apps_kubectl }} -n plex-services exec deploy/sabnzbd -- sh -c
+      'K=$(sed -n "s/^api_key = //p" /config/sabnzbd.ini);
+      curl -sf "localhost:8080/api?mode=get_config&section=misc&keyword=host_whitelist&output=json&apikey=$K"'
+  register: _sab
+  changed_when: false
+  no_log: true
+
+- name: SAB host_whitelist (additive)
+  vars:
+    _have: "{{ (_sab.stdout | from_json).config.misc.host_whitelist }}"
+    _missing: "{{ k8s_apps_sab_hosts | difference(_have) }}"
+  ansible.builtin.shell:
+    cmd: >-
+      {{ k8s_apps_kubectl }} -n plex-services exec deploy/sabnzbd -- sh -c
+      'K=$(sed -n "s/^api_key = //p" /config/sabnzbd.ini);
+      curl -sf "localhost:8080/api?mode=set_config&section=misc&keyword=host_whitelist&output=json&apikey=$K"
+      --data-urlencode "value={{ (_have + _missing) | join(",") }}"'
+  when: _missing | length > 0
+  no_log: true

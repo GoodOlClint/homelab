@@ -1,0 +1,87 @@
+---
+- name: authentik-ext secrets (hex only, so nothing downstream quotes them)
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/generate_secret.yml"
+  vars:
+    secret_key: "{{ sk.key }}"
+    secret_gen_cmd: "openssl rand -hex {{ sk.bytes }}"
+    secret_comment: "authentik external: {{ sk.comment }}"
+    secret_infisical_path: /authentik-ext
+    secret_dict_path: authentik_ext
+  loop:
+    - {key: secret_key, bytes: 48, comment: Django secret key}
+    - {key: postgres_password, bytes: 24, comment: Postgres password}
+    - {key: bootstrap_password, bytes: 16, comment: akadmin initial password}
+    - {key: bootstrap_token, bytes: 32, comment: akadmin API token}
+    - {key: ldap_bind_password, bytes: 24, comment: LDAP outpost bind password (Jellyfin)}
+  loop_control: {loop_var: sk, label: "{{ sk.key }}"}
+
+- name: authentik-ext rolled out
+  ansible.builtin.command: "{{ k8s_apps_kubectl }} -n authentik-ext rollout status deploy postgres authentik-server authentik-worker --timeout=600s"
+  changed_when: false
+
+- name: Blueprint instance (the worker discovers the mounted file; last_applied_hash is sha512 of its content)
+  ansible.builtin.command:
+    cmd: "{{ k8s_apps_kubectl }} -n authentik-ext exec -i deploy/authentik-server -- python3 -"
+    stdin: |
+      import json, urllib.request
+      r = urllib.request.urlopen(urllib.request.Request('http://localhost:9000/api/v3/managed/blueprints/?page_size=100', headers={'Authorization': 'Bearer {{ secrets.authentik_ext.bootstrap_token }}'}))
+      print(json.dumps([b for b in json.load(r)['results'] if b['path'] == '{{ k8s_apps_blueprint_mount | regex_replace("^/blueprints/", "") }}']))
+  register: _bp
+  changed_when: false
+  no_log: true
+
+- name: Blueprint facts
+  ansible.builtin.set_fact:
+    _bp_want: "{{ lookup('file', k8s_apps_blueprint, rstrip=False) | hash('sha512') }}"
+    _bp_have: "{{ (_bp.stdout | from_json | first | default({})).last_applied_hash | default('') }}"
+    _bp_pk: "{{ (_bp.stdout | from_json | first | default({})).pk | default('') }}"
+
+- name: Apply the blueprint
+  when: _bp_want != _bp_have
+  block:
+    # kubelet refreshes a mounted ConfigMap on its own sync period: apply before it lands re-applies
+    # the PREVIOUS blueprint and reports success (2026-08-28).
+    - name: Wait for the mounted blueprint to match the repo
+      ansible.builtin.command: >-
+        {{ k8s_apps_kubectl }} -n authentik-ext exec deploy/authentik-worker -- python3 -c
+        "import hashlib;print(hashlib.sha512(open('{{ k8s_apps_blueprint_mount }}','rb').read()).hexdigest())"
+      register: _mounted
+      until: _mounted.stdout == _bp_want
+      retries: 30
+      delay: 5
+      changed_when: false
+    - name: Wait for the worker to discover it (fresh cluster)
+      ansible.builtin.command:
+        cmd: "{{ k8s_apps_kubectl }} -n authentik-ext exec -i deploy/authentik-server -- python3 -"
+        stdin: |
+          import json, urllib.request
+          r = urllib.request.urlopen(urllib.request.Request('http://localhost:9000/api/v3/managed/blueprints/?page_size=100', headers={'Authorization': 'Bearer {{ secrets.authentik_ext.bootstrap_token }}'}))
+          print(*[b['pk'] for b in json.load(r)['results'] if b['path'] == '{{ k8s_apps_blueprint_mount | regex_replace("^/blueprints/", "") }}'])
+      register: _bp_found
+      until: _bp_found.stdout | length > 0
+      retries: 30
+      delay: 5
+      changed_when: false
+      no_log: true
+    - ansible.builtin.set_fact:
+        _bp_pk: "{{ _bp_found.stdout | trim }}"
+    - name: Trigger the apply through the API
+      ansible.builtin.command:
+        cmd: "{{ k8s_apps_kubectl }} -n authentik-ext exec -i deploy/authentik-server -- python3 -"
+        stdin: |
+          import urllib.request
+          urllib.request.urlopen(urllib.request.Request('http://localhost:9000/api/v3/managed/blueprints/{{ _bp_pk }}/apply/', method='POST', headers={'Authorization': 'Bearer {{ secrets.authentik_ext.bootstrap_token }}'}))
+      no_log: true
+    - name: Wait for the apply to succeed
+      ansible.builtin.command:
+        cmd: "{{ k8s_apps_kubectl }} -n authentik-ext exec -i deploy/authentik-server -- python3 -"
+        stdin: |
+          import json, urllib.request
+          r = urllib.request.urlopen(urllib.request.Request('http://localhost:9000/api/v3/managed/blueprints/{{ _bp_pk }}/', headers={'Authorization': 'Bearer {{ secrets.authentik_ext.bootstrap_token }}'}))
+          b = json.load(r); print(b['status'], b['last_applied_hash'])
+      register: _applied
+      until: _applied.stdout == 'successful ' ~ _bp_want
+      retries: 24
+      delay: 5
+      changed_when: false
+      no_log: true

@@ -1,0 +1,107 @@
+---
+- name: rbd
+  ansible.builtin.include_tasks: smoke_pod.yml
+  vars:
+    smoke_name: rbd-smoke
+    smoke_ns: default
+    smoke_marker: hello-rbd
+    smoke_objects:
+      - apiVersion: v1
+        kind: PersistentVolumeClaim
+        metadata: {name: rbd-smoke}
+        spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 1Gi}}, storageClassName: ceph-rbd}
+      - apiVersion: v1
+        kind: Pod
+        metadata: {name: rbd-smoke}
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: smoke
+              image: "{{ k8s_apps_registry }}/public.ecr.aws/docker/library/busybox:latest"
+              command: [sh, -c, "echo hello-rbd > /data/probe && cat /data/probe"]
+              volumeMounts: [{name: data, mountPath: /data}]
+          volumes: [{name: data, persistentVolumeClaim: {claimName: rbd-smoke}}]
+
+- name: registry (a docker.io pull through Zot)
+  ansible.builtin.include_tasks: smoke_pod.yml
+  vars:
+    smoke_name: zot-smoke
+    smoke_ns: default
+    smoke_marker: hello-zot
+    smoke_objects:
+      - apiVersion: v1
+        kind: Pod
+        metadata: {name: zot-smoke}
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: smoke
+              image: "{{ k8s_apps_registry }}/docker.io/library/busybox:latest"
+              imagePullPolicy: Always
+              command: [sh, -c, echo hello-zot]
+
+- name: nfs (the plex-services media PV, as the arr uid)
+  ansible.builtin.include_tasks: smoke_pod.yml
+  vars:
+    smoke_name: nfs-smoke
+    smoke_ns: plex-services
+    smoke_marker: NFS-SMOKE-PASS
+    smoke_objects:
+      - apiVersion: v1
+        kind: Pod
+        metadata: {name: nfs-smoke}
+        spec:
+          restartPolicy: Never
+          securityContext: {runAsUser: 2003, runAsGroup: 2000}
+          containers:
+            - name: smoke
+              image: "{{ k8s_apps_registry }}/public.ecr.aws/docker/library/alpine:latest"
+              command: [sh, -ec, "ls /data/media >/dev/null && touch /data/usenet/.k8s-nfs-smoke && rm /data/usenet/.k8s-nfs-smoke && echo NFS-SMOKE-PASS"]
+              volumeMounts: [{name: media, mountPath: /data, subPath: data}]
+          volumes: [{name: media, persistentVolumeClaim: {claimName: media}}]
+
+- name: infisical (sync one /shared key through the operator, then delete)
+  block:
+    - name: "infisical smoke: InfisicalSecret"
+      kubernetes.core.k8s:
+        kubeconfig: "{{ k8s_apps_kubeconfig }}"
+        definition:
+          apiVersion: secrets.infisical.com/v1alpha1
+          kind: InfisicalSecret
+          metadata: {name: smoke, namespace: infisical-operator}
+          spec:
+            hostAPI: "{{ bootstrap_config.infisical_url }}/api"
+            resyncInterval: 10
+            authentication:
+              universalAuth:
+                credentialsRef: {secretName: infisical-universal-auth, secretNamespace: infisical-operator}
+                secretsScope: {projectId: "{{ bootstrap_config.infisical_project_id }}", envSlug: prod, secretsPath: /shared}
+            managedKubeSecretReferences: [{secretName: infisical-smoke, secretNamespace: infisical-operator}]
+      changed_when: false
+    - name: "infisical smoke: managed Secret"
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ k8s_apps_kubeconfig }}"
+        kind: Secret
+        namespace: infisical-operator
+        name: infisical-smoke
+      register: _inf_smoke
+      until: _inf_smoke.resources | length > 0 and 'pbs_backup_token' in (_inf_smoke.resources[0].data | default({}))
+      retries: 30
+      delay: 5
+      no_log: true
+  always:
+    - name: "infisical smoke: delete"
+      kubernetes.core.k8s:
+        kubeconfig: "{{ k8s_apps_kubeconfig }}"
+        kind: "{{ item }}"
+        api_version: "{{ 'secrets.infisical.com/v1alpha1' if item == 'InfisicalSecret' else 'v1' }}"
+        namespace: infisical-operator
+        name: "{{ 'smoke' if item == 'InfisicalSecret' else 'infisical-smoke' }}"
+        state: absent
+      loop: [InfisicalSecret, Secret]
+      changed_when: false
+    - name: "infisical smoke: verdict"
+      ansible.builtin.assert:
+        that: _inf_smoke is succeeded
+        fail_msg: "infisical smoke: FAIL — the operator never synced /shared/pbs_backup_token"
+        success_msg: "infisical smoke: PASS"

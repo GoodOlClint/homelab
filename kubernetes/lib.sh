@@ -1,6 +1,5 @@
-# Sourced by /bin/bash scripts only — homebrew bash 5.3.15 deadlocks in heredoc_write
-# under these trees (see kubernetes/talos/talos.sh); every deploy.sh pins #!/bin/bash.
-# Shared by kubernetes/*/deploy.sh: kubeconfig, nodes.json accessors, helm-template apply.
+# Sourced by /bin/bash only — homebrew bash 5.3.15 deadlocks in heredoc_write (see kubernetes/talos/talos.sh).
+# Survives for scripts/pki_hosts.sh alone (WP8 gives it its own helpers); the deploy.sh layer is gone (ADR 0048 WP7).
 set -euo pipefail
 K8S="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$K8S/.." && pwd)"

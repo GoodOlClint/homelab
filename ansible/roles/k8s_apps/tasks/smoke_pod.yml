@@ -1,0 +1,58 @@
+---
+# create → wait Succeeded → assert the log marker → delete. Vars: smoke_name, smoke_ns, smoke_marker,
+# smoke_objects (list of definitions; the Pod is named smoke_name).
+- name: "{{ smoke_name }} smoke: clear a leftover"
+  kubernetes.core.k8s:
+    kubeconfig: "{{ k8s_apps_kubeconfig }}"
+    namespace: "{{ smoke_ns }}"
+    definition: "{{ item }}"
+    state: absent
+    wait: true
+  loop: "{{ smoke_objects }}"
+  loop_control: {label: "{{ item.kind }}/{{ item.metadata.name }}"}
+  changed_when: false
+
+- name: "{{ smoke_name }} smoke: create"
+  kubernetes.core.k8s:
+    kubeconfig: "{{ k8s_apps_kubeconfig }}"
+    namespace: "{{ smoke_ns }}"
+    definition: "{{ item }}"
+  loop: "{{ smoke_objects }}"
+  loop_control: {label: "{{ item.kind }}/{{ item.metadata.name }}"}
+  changed_when: false
+
+- name: "{{ smoke_name }} smoke: wait for the pod to finish"
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ k8s_apps_kubeconfig }}"
+    kind: Pod
+    namespace: "{{ smoke_ns }}"
+    name: "{{ smoke_name }}"
+  register: _smoke_pod
+  until: _smoke_pod.resources[0].status.phase | default('') in ['Succeeded', 'Failed']
+  retries: 60
+  delay: 5
+
+- name: "{{ smoke_name }} smoke: log"
+  kubernetes.core.k8s_log:
+    kubeconfig: "{{ k8s_apps_kubeconfig }}"
+    namespace: "{{ smoke_ns }}"
+    name: "{{ smoke_name }}"
+  register: _smoke_log
+
+- name: "{{ smoke_name }} smoke: delete"
+  kubernetes.core.k8s:
+    kubeconfig: "{{ k8s_apps_kubeconfig }}"
+    namespace: "{{ smoke_ns }}"
+    definition: "{{ item }}"
+    state: absent
+  loop: "{{ smoke_objects }}"
+  loop_control: {label: "{{ item.kind }}/{{ item.metadata.name }}"}
+  changed_when: false
+
+- name: "{{ smoke_name }} smoke: verdict"
+  ansible.builtin.assert:
+    that:
+      - _smoke_pod.resources[0].status.phase == 'Succeeded'
+      - smoke_marker in _smoke_log.log
+    fail_msg: "{{ smoke_name }} smoke: FAIL — phase {{ _smoke_pod.resources[0].status.phase }}, log: {{ _smoke_log.log | trim }}"
+    success_msg: "{{ smoke_name }} smoke: PASS"

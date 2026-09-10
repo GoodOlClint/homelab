@@ -1,0 +1,4 @@
+---
+- ansible.builtin.import_tasks: authentik_ext.yml
+- ansible.builtin.import_tasks: jellyfin.yml
+- ansible.builtin.import_tasks: plex_services.yml

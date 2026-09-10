@@ -1,0 +1,18 @@
+---
+# The pg-backup CronJob's proxmox-backup-client image: the registry's one local push. Re-run when the
+# PBS server major rolls (the client suite tracks the Debian base). The image bakes the root so the
+# client verifies PBS through it (ADR 0041).
+- ansible.builtin.copy:
+    src: "{{ k8s_apps_root_ca }}"
+    dest: "{{ k8s_apps_pbs_image_dir }}/homelab-ca.crt"
+    mode: "0644"
+
+- ansible.builtin.command:
+    cmd: docker login {{ k8s_apps_registry }} -u push --password-stdin
+    stdin: "{{ secrets.infrastructure.zot_push_password }}"
+  changed_when: false
+  no_log: true
+
+- ansible.builtin.command: docker build --platform linux/amd64 -t {{ k8s_apps_pbs_image }} {{ k8s_apps_pbs_image_dir }}
+
+- ansible.builtin.command: docker push {{ k8s_apps_pbs_image }}

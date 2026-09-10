@@ -47,7 +47,7 @@ ifneq (,$(filter build rebuild plan ansible docker-config update,$(firstword $(M
 endif
 
 # === Core Operations ===
-.PHONY: refresh talos-authentik talos-plan talos-build talos-secrets talos-apply talos-bootstrap talos-csi talos-smoke talos-lb talos-certs talos-registry talos-trust registry-smoke talos-arc talos-ingress talos-infisical infisical-smoke talos-homepage all apply plan init terraform-apply terraform-bootstrap inventory bootstrap ansible-bootstrap build rebuild rebuild-infisical data-volumes backup-jobs sdn-apply
+.PHONY: refresh k8s-seed k8s-apps k8s-smoke plex-services-smoke plex-pbs-image talos-update flux-check talos-authentik talos-plan talos-build talos-secrets talos-apply talos-bootstrap talos-csi talos-smoke talos-lb talos-certs talos-registry talos-trust registry-smoke talos-arc talos-ingress talos-infisical infisical-smoke talos-homepage all apply plan init terraform-apply terraform-bootstrap inventory bootstrap ansible-bootstrap build rebuild rebuild-infisical data-volumes backup-jobs sdn-apply
 
 all: apply
 
@@ -130,8 +130,8 @@ talos-bootstrap:
 	@kubernetes/talos/talos.sh bootstrap
 talos-csi:
 	@flux reconcile kustomization ceph-csi --with-source
-talos-smoke:
-	@kubectl --kubeconfig kubernetes/talos/.secrets/kubeconfig delete -f kubernetes/ceph-csi/smoke.yaml --ignore-not-found >/dev/null; kubectl --kubeconfig kubernetes/talos/.secrets/kubeconfig apply -f kubernetes/ceph-csi/smoke.yaml >/dev/null && kubectl --kubeconfig kubernetes/talos/.secrets/kubeconfig wait --for=jsonpath='{.status.phase}'=Succeeded pod/rbd-smoke --timeout=300s >/dev/null && kubectl --kubeconfig kubernetes/talos/.secrets/kubeconfig logs rbd-smoke | grep -q hello-rbd && echo 'rbd smoke: PASS' || { echo 'rbd smoke: FAIL' >&2; exit 1; }; kubectl --kubeconfig kubernetes/talos/.secrets/kubeconfig delete -f kubernetes/ceph-csi/smoke.yaml >/dev/null
+# Smokes (rbd, registry, nfs, infisical) all ride the smoke play — each fails the play loud
+talos-smoke registry-smoke plex-services-smoke infisical-smoke: k8s-smoke
 # P3b (ADR 0034): MetalLB L2, internal CA, Zot, ARC runners
 talos-lb:
 	@flux reconcile kustomization metallb --with-source
@@ -141,8 +141,6 @@ talos-trust:
 	@kubernetes/talos/talos.sh apply
 talos-registry:
 	@flux reconcile kustomization zot --with-source
-registry-smoke:
-	@kubectl --kubeconfig kubernetes/talos/.secrets/kubeconfig run zot-smoke --rm -i --restart=Never --image=registry.$$(jq -r .domain kubernetes/talos/.secrets/nodes.json)/docker.io/library/busybox:latest --command -- sh -c 'echo hello-zot' | grep -q hello-zot && echo 'registry smoke: PASS' || { echo 'registry smoke: FAIL' >&2; exit 1; }
 talos-arc:
 	@flux reconcile kustomization arc --with-source
 # P4a (ADR 0035): Traefik ingress, Infisical operator (the k8s secret path), homepage
@@ -150,16 +148,13 @@ talos-ingress:
 	@flux reconcile kustomization traefik --with-source
 talos-infisical:
 	@flux reconcile kustomization infisical --with-source
-infisical-smoke:
-	@echo 'moved to the Ansible tail (WP7): make k8s-seed then check an InfisicalSecret is ReadyToSyncSecrets'
 talos-homepage:
 	@flux reconcile kustomization homepage --with-source
 # P5a (ADR 0040): external-dns publishes every Ingress host into the service zone over RFC 2136
 talos-dns:
 	@flux reconcile kustomization external-dns --with-source
-# P5c (ADR 0040): authentik, both realms (REALM=internal|external for one); generates each realm's Infisical folder on first run
-talos-authentik:
-	@kubernetes/authentik/deploy.sh
+# P5c (ADR 0040): the external authentik realm's in-app tail (secrets on first run, blueprint apply); the internal realm is `make ansible authentik`
+talos-authentik: k8s-apps
 # P4b (ADR 0036): monitoring stack; axosyslog LB on services offset 66; history migration from the old guest
 talos-monitoring:
 	@flux reconcile kustomization monitoring --with-source
@@ -168,27 +163,18 @@ talos-monitoring:
 monitoring-users:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/infrastructure.yml --tags monitoring-users --skip-tags unifi-user
 # P4c (ADR 0037): plex-services stack; media via a kubelet-mounted NFS PV; pg dumps pushed to PBS
-talos-plex-services:
-	@kubernetes/plex-services/deploy.sh   # objects via Flux; the script is the in-app API tail until WP7
-plex-services-smoke:
-	@kubernetes/plex-services/deploy.sh smoke
+talos-plex-services: k8s-apps
 # Build + push the pg-backup CronJob's proxmox-backup-client image (the registry's one local push);
 # re-run when the PBS server major rolls (client suite tracks the Debian base)
 plex-pbs-image:
-	@cp kubernetes/.secrets/homelab-ca.crt kubernetes/plex-services/pbs-client/homelab-ca.crt
-	@DOMAIN=$$(jq -r .domain kubernetes/talos/.secrets/nodes.json); \
-	PW=$$(bash -c 'source kubernetes/lib.sh; inf_get /infrastructure zot_push_password'); \
-	echo "$$PW" | docker login "registry.$$DOMAIN" -u push --password-stdin && \
-	docker build --platform linux/amd64 -t registry.$$DOMAIN/homelab/proxmox-backup-client:trixie kubernetes/plex-services/pbs-client && \
-	docker push registry.$$DOMAIN/homelab/proxmox-backup-client:trixie
+	@$(K8S_PLAY) --tags pbs-image
 
 # P4d (ADR 0038): Valheim + PlayFab sidecar on a MetalLB UDP LB (offset 67), Kiwix over NFS; player-gated migration from 204
 talos-games:
 	@flux reconcile kustomization games --with-source
 
 # P5d (ADR 0040): Jellyfin on jellyfin.<media domain> — LDAP auth against the authentik external realm, media read-only over NFS
-talos-jellyfin:
-	@kubernetes/jellyfin/deploy.sh   # objects via Flux; the script is the in-app API tail until WP7
+talos-jellyfin: k8s-apps
 
 # Read-only Kubernetes dashboard (Headlamp) on headlamp.<service domain>, behind authentik forward-auth
 talos-headlamp:
@@ -209,11 +195,17 @@ talos-kiwix:
 flux-check:
 	@.venv/bin/python3 scripts/flux_check.py $(CURDIR)
 
+K8S_PLAY = ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/kubernetes.yml $(if $(CHECK),--check --diff,)
 k8s-seed:
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/kubernetes.yml $(if $(CHECK),--check --diff,)
-
+	@$(K8S_PLAY) --tags seed
+# In-app tail (jellyfin wizard/LDAP plugin/libraries, arr external auth + SAB whitelist, authentik-ext secrets + blueprint)
+k8s-apps:
+	@$(K8S_PLAY) --tags apps
+k8s-smoke:
+	@$(K8S_PLAY) --tags smoke
+# Deletes the pods of every :latest workload (never rollout restart — Flux reverts the annotation and it bounces twice); NS= scopes it
 talos-update:
-	@kubernetes/update.sh
+	@$(K8S_PLAY) --tags update $(if $(NS),-e k8s_apps_update_ns=$(NS),)
 
 # Fleet-root terraform passthrough with the TF_VAR_* exports (raw terraform hangs prompting for them);
 # the retirement step is `make tf ARGS='state rm <address>'` (ADR 0028: stopped, never destroyed)

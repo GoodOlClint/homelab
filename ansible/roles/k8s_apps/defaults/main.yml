@@ -1,0 +1,20 @@
+---
+# ADR 0048: the in-app tail Flux cannot express (application APIs reached from inside the pods), the
+# fail-loud smokes, and the deliberate :latest re-pull. Never creates a workload object.
+k8s_apps_kubeconfig: "{{ playbook_dir }}/../../kubernetes/talos/.secrets/kubeconfig"
+k8s_apps_kubectl: "kubectl --kubeconfig {{ k8s_apps_kubeconfig }}"
+k8s_apps_registry: "registry.{{ service_domain }}"
+k8s_apps_root_ca: "{{ playbook_dir }}/../../kubernetes/.secrets/homelab-ca.crt"
+k8s_apps_blueprint: "{{ playbook_dir }}/../../kubernetes/authentik/blueprint-external.yaml"
+k8s_apps_blueprint_mount: /blueprints/mounted/cm-authentik-blueprint/blueprint.yaml
+# /Plugins lists the Id without dashes
+k8s_apps_jellyfin_ldap_plugin: 958aad66-3784-4d2a-b89a-a7b6fab6e25c
+k8s_apps_jellyfin_ldap_base: dc=ldap,dc=goauthentik,dc=io
+k8s_apps_jellyfin_libraries: {Movies: movies, TV: tvshows, Music: music}
+# app → [port, api version]; the key is the pod's own config.xml ApiKey
+k8s_apps_arr: {sonarr: [8989, v3], radarr: [7878, v3], lidarr: [8686, v1], prowlarr: [9696, v1]}
+# every Host header the ingress and the in-cluster probes send SAB
+k8s_apps_sab_hosts: ["sabnzbd.{{ service_domain }}", sabnzbd.plex-services.svc, sabnzbd.plex-services.svc.cluster.local]
+k8s_apps_update_ns: ""
+k8s_apps_pbs_image: "{{ k8s_apps_registry }}/homelab/proxmox-backup-client:trixie"
+k8s_apps_pbs_image_dir: "{{ playbook_dir }}/../../kubernetes/plex-services/pbs-client"

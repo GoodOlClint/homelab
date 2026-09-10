@@ -37,7 +37,7 @@ scrape_configs:
     static_configs:
       - targets: ['blackbox:9115']
 
-  # One target per internal zone (all answered by the AdGuard VIP); rendered by deploy.sh from vlans.yaml.
+  # One target per internal zone (all answered by the AdGuard VIP); rendered by the seed from vlans.yaml.
   - job_name: 'blackbox-dns'
     metrics_path: /probe
     params:
@@ -130,7 +130,7 @@ scrape_configs:
     static_configs:
       - targets: ['smokeping-prober:9374']
 
-  # Every fleet guest's telegraf; rendered by deploy.sh from vms.yaml.
+  # Every fleet guest's telegraf; rendered by the seed from vms.yaml.
   - job_name: 'telegraf'
     honor_labels: true
     file_sd_configs:

@@ -1,0 +1,39 @@
+---
+# Cluster half of `make update`: only :latest workloads carry imagePullPolicy Always, so recreating
+# their pods re-pulls through Zot, which re-checks the tag upstream. Pods are DELETED, never
+# rollout-restarted — Flux strips the restart annotation at its next reconcile and the workload
+# bounces twice. Pinned chart images roll by bumping the chart (ADR 0016).
+- name: Workloads
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ k8s_apps_kubeconfig }}"
+    kind: "{{ item }}"
+    namespace: "{{ k8s_apps_update_ns | default(omit, true) }}"
+  loop: [Deployment, StatefulSet]
+  register: _wl
+
+- name: Those on :latest
+  ansible.builtin.set_fact:
+    _latest: >-
+      {%- set out = [] -%}
+      {%- for r in _wl.results | map(attribute='resources') | flatten -%}
+      {%- if r.spec.template.spec.containers | map(attribute='image') | select('match', '.*:latest$') | list -%}
+      {%- set sel = [] -%}
+      {%- for k, v in r.spec.selector.matchLabels.items() -%}{{- sel.append(k ~ '=' ~ v) -}}{%- endfor -%}
+      {{- out.append({'ns': r.metadata.namespace, 'kind': r.kind | lower, 'name': r.metadata.name, 'selector': sel | join(',')}) -}}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ out }}
+
+- ansible.builtin.debug:
+    msg: "{{ _latest | map(attribute='ns') | zip(_latest | map(attribute='name')) | map('join', '/') | list or 'nothing on :latest' }}"
+
+- name: Delete their pods
+  ansible.builtin.command: "{{ k8s_apps_kubectl }} -n {{ item.ns }} delete pod -l {{ item.selector }} --wait=false"
+  loop: "{{ _latest }}"
+  loop_control: {label: "{{ item.ns }}/{{ item.name }}"}
+
+- name: Wait for each to settle
+  ansible.builtin.command: "{{ k8s_apps_kubectl }} -n {{ item.ns }} rollout status {{ item.kind }}/{{ item.name }} --timeout=600s"
+  loop: "{{ _latest }}"
+  loop_control: {label: "{{ item.ns }}/{{ item.name }}"}
+  changed_when: false
