@@ -37,3 +37,6 @@ k8s_seed_cluster_cr_trees: [cert-manager, ceph-csi]
 k8s_seed_lb_offsets: {registry: 64, ingress: 65, syslog: "{{ monitoring_syslog_offset }}", valheim: 67}
 # Guests that never run the telegraf role.
 k8s_seed_telegraf_skip: [control, pdm, pxe]
+
+# UniFi console port (the UNIFI_PORT binding; also the monitoring_users default).
+unifi_controller_port: 11443
