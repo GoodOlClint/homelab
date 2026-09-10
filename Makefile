@@ -205,6 +205,10 @@ talos-kiwix:
 # Cluster half of `make update`: restart every :latest workload so it re-pulls through Zot (NS= to scope)
 # ADR 0048: the cluster's Ansible half — allowlisted seed objects (bindings, RBAC, root-CA ConfigMaps,
 # the intermediate, bootstrap Secrets) + in-app configuration. Needs vms.yaml and proxmox.yaml.
+# ADR 0048: refuse to adopt a tree whose ${VAR}s are not all bound — Flux blanks the rest and fails open.
+flux-check:
+	@.venv/bin/python3 scripts/flux_check.py $(CURDIR)
+
 k8s-seed:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/kubernetes.yml $(if $(CHECK),--check --diff,)
 
