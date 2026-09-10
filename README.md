@@ -282,7 +282,7 @@ Prometheus also monitors DNS resolution across VLAN zones, HTTP endpoints, ICMP 
 
 ### Media Automation (Talos cluster, `kubernetes/plex-services/`)
 
-One Deployment per service in the `plex-services` namespace (`make talos-plex-services`, ADR 0037); UIs are `sonarr|radarr|lidarr|prowlarr|bazarr|sabnzbd|tautulli|seerr.<domain>` through Traefik:
+One Deployment per service in the `plex-services` namespace (Flux-reconciled; the in-app tail is `make k8s-apps`, ADR 0037/0048); UIs are `sonarr|radarr|lidarr|prowlarr|bazarr|sabnzbd|tautulli|seerr.<domain>` through Traefik:
 
 | Service | Purpose |
 |-----------|---------|
@@ -324,7 +324,7 @@ Self-hosted secret management platform deployed via Docker Compose:
 
 ### Talos Kubernetes services plane (`kubernetes/`)
 
-Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-manager (`homelab-ca`, an intermediate signed by the Infisical root — ADR 0039; plus `letsencrypt` DNS-01 via Cloudflare for Traefik's default wildcard — ADR 0040), Zot pull-through registry, ARC CI runners (ADR 0034), Traefik ingress + the Infisical Kubernetes operator + **homepage** (ADR 0035 — `make talos-ingress`, `make talos-infisical`, `make talos-homepage`), and the **monitoring stack** (ADR 0036 — `make talos-monitoring`, `make monitoring-users`) the **plex-services stack** (ADR 0037 — `make talos-plex-services`, `make plex-services-migrate`, `make plex-pbs-image`), the **games stack** (ADR 0038 — `make talos-games`, ), **Jellyfin** (ADR 0040 P5d — `make talos-jellyfin`: `jellyfin.<media domain>`, LDAP auth against the authentik external realm, media read-only over NFS, external path over the VPS relay on 443), **external-dns** (ADR 0040 — `make talos-dns`: Ingress hosts on `<service domain>` become BIND records; AdGuard rewrites are gone), and **authentik** (ADR 0040 P5c — `make talos-authentik`: `auth.<service domain>` for Traefik forward-auth + OIDC, `auth.<media domain>` through the tunnel with an LDAP outpost for Jellyfin). Each `kubernetes/<component>/deploy.sh` renders with `helm template | kubectl apply`; runtime secrets are `InfisicalSecret` CRDs; images pull through `registry.<domain>`.
+Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-manager (`homelab-ca`, an intermediate signed by the Infisical root — ADR 0039; plus `letsencrypt` DNS-01 via Cloudflare for Traefik's default wildcard — ADR 0040), Zot pull-through registry, ARC CI runners (ADR 0034), Traefik ingress + the Infisical Kubernetes operator + **homepage** (ADR 0035 — `make talos-ingress`, `make talos-infisical`, `make talos-homepage`), and the **monitoring stack** (ADR 0036 — `make talos-monitoring`, `make monitoring-users`) the **plex-services stack** (ADR 0037 — `make k8s-apps`, `make plex-pbs-image`), the **games stack** (ADR 0038 — `make talos-games`, ), **Jellyfin** (ADR 0040 P5d — Flux-reconciled, in-app tail via `make k8s-apps`: `jellyfin.<media domain>`, LDAP auth against the authentik external realm, media read-only over NFS, external path over the VPS relay on 443), **external-dns** (ADR 0040 — `make talos-dns`: Ingress hosts on `<service domain>` become BIND records; AdGuard rewrites are gone), and **authentik** (ADR 0040 P5c — `make talos-authentik`: `auth.<service domain>` for Traefik forward-auth + OIDC, `auth.<media domain>` through the tunnel with an LDAP outpost for Jellyfin). Each `kubernetes/<component>/deploy.sh` renders with `helm template | kubectl apply`; runtime secrets are `InfisicalSecret` CRDs; images pull through `registry.<domain>`.
 
 ## Ansible Roles
 
@@ -554,8 +554,12 @@ The Makefile is the primary operational interface.
 | `adguard-pause MINUTES=n` | Pause AdGuard filtering on every resolver instance for n minutes (default 10) |
 | `dns-records` | Push guests, nodes, VIPs, MetalLB names and the mirrored public records into `<service domain>` on BIND (nsupdate, TSIG); second run = 0 changed |
 | `talos-dns` | external-dns on the cluster: every Ingress host becomes an A record in the service zone over RFC 2136 (ADR 0040) |
-| `talos-jellyfin` | Jellyfin on `jellyfin.<media domain>` (ADR 0040 P5d): config + transcode cache on ceph-rbd, the NAS media export read-only, LDAP-Auth plugin against the authentik external realm's outpost, libraries + wizard driven through the API; generates Infisical `/jellyfin` on first run |
-| `talos-authentik` | authentik, both realms (`REALM=internal\|external` for one): generates each realm's Infisical folder on first run, applies the blueprint; internal = Traefik forward-auth + OIDC providers, external = LDAP outpost for Jellyfin (ADR 0040 P5c) |
+| `k8s-seed` | The cluster's Ansible seed (ADR 0048): namespaces, Flux RBAC, bindings, generated ConfigMaps, root-CA ConfigMaps, bootstrap Secrets, the cert-manager intermediate; `CHECK=1` = `--check --diff`; second run = 0 changed |
+| `k8s-apps` | The in-app tail (WP7): jellyfin wizard/LDAP plugin/libraries, arr external auth + SAB whitelist, authentik-ext secrets + blueprint apply — all through the pods' own APIs; `talos-jellyfin`, `talos-plex-services` and `talos-authentik` are aliases; second run = 0 changed |
+| `k8s-smoke` | The fail-loud smokes: rbd, registry, nfs, infisical (`talos-smoke`, `registry-smoke`, `plex-services-smoke`, `infisical-smoke` are aliases) |
+| `talos-update` | Delete the pods of every `:latest` workload so they re-pull through Zot (`NS=` scopes it); never a rollout restart, which Flux would revert |
+| `plex-pbs-image` | Build + push the pg-backup CronJob's `proxmox-backup-client` image (root from `make pki-hosts`, push password from Infisical) |
+| `flux-check` | Pre-flight: every `${VAR}` a Flux tree emits has a binding |
 
 ### Targeted Operations
 

@@ -1,6 +1,15 @@
 ---
 # Driven from inside the pod, so neither DNS nor the ingress is in the loop; the pod takes nothing
 # from the environment — its Secrets exist only for this tail.
+- name: jellyfin admin password (the tail drives the API with it)
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/generate_secret.yml"
+  vars:
+    secret_key: admin_password
+    secret_gen_cmd: openssl rand -hex 16
+    secret_comment: "Jellyfin: local admin password (the k8s_apps tail drives the API with it)"
+    secret_infisical_path: /jellyfin
+    secret_dict_path: jellyfin
+
 - name: jellyfin rolled out
   ansible.builtin.command: "{{ k8s_apps_kubectl }} -n jellyfin rollout status deploy/jellyfin --timeout=600s"
   changed_when: false
