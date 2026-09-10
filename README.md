@@ -239,7 +239,7 @@ All VMs are defined in `terraform/vm-configs.tf` and provisioned with cloud-init
 
 ### Monitoring stack (Talos cluster, `kubernetes/monitoring/`)
 
-One Deployment per service in the `monitoring` namespace (`make talos-monitoring`, ADR 0036); UIs are `grafana|openobserve|prometheus|alertmanager|uptime-kuma.<domain>` through Traefik, syslog/netconsole ingestion is a MetalLB address at services offset 66:
+One Deployment per service in the `monitoring` namespace (Flux tree `monitoring`, ADR 0036); UIs are `grafana|openobserve|prometheus|alertmanager|uptime-kuma.<domain>` through Traefik, syslog/netconsole ingestion is a MetalLB address at services offset 66:
 
 | Service | Port | Purpose |
 |-----------|------|---------|
@@ -302,14 +302,14 @@ The NAS media tree reaches the pods through a kubelet-mounted NFS PersistentVolu
 
 ### Games (cluster namespace `games`)
 
-`make talos-games` (ADR 0038): one `valheim` pod — the crossplay dedicated server, the `valheim-status` PlayFab lobby sidecar (keyed by server name, serves `status.json` for Uptime Kuma) — with UDP 2456-2458 on a MetalLB LoadBalancer (services offset 67, `externalTrafficPolicy: Local`) that the VPS relay/pfSense forward targets; `kiwix.<domain>` serves the NAS ZIM library through a read-only NFS PV. The one-off migration from the retired guest is done; its state copy and Kuma repoint paths were removed 2026-09-09.
+Flux tree `games` (ADR 0038): one `valheim` pod — the crossplay dedicated server, the `valheim-status` PlayFab lobby sidecar (keyed by server name, serves `status.json` for Uptime Kuma) — with UDP 2456-2458 on a MetalLB LoadBalancer (services offset 67, `externalTrafficPolicy: Local`) that the VPS relay/pfSense forward targets; `kiwix.<domain>` serves the NAS ZIM library through a read-only NFS PV. The one-off migration from the retired guest is done; its state copy and Kuma repoint paths were removed 2026-09-09.
 
 ### Infisical Secret Vault (infisical VM)
 
 Self-hosted secret management platform deployed via Docker Compose:
 
 - **Stack**: Infisical server + PostgreSQL 16 + Redis 7, behind Caddy on 443 with a root-chained cert (ADR 0041)
-- **Machine URL**: `bootstrap_config.infisical_url` = `https://infisical.<service domain>` (ADR 0042) — every consumer (Ansible, the fleet agents, the Kubernetes operator, `lib.sh`, the scripts) derives from that one binding; 8080 is localhost-only once the binding is https (a greenfield `make bootstrap` writes the http URL and flips it after `make pki-hosts` + `make ansible infisical`). Python on the workstation trusts the root through `kubernetes/.secrets/ca-bundle.pem` (written by `make talos-certs`, exported by the Makefile), so run Ansible through `make`
+- **Machine URL**: `bootstrap_config.infisical_url` = `https://infisical.<service domain>` (ADR 0042) — every consumer (Ansible, the fleet agents, the Kubernetes operator, `scripts/pki_hosts.sh`) derives from that one binding; 8080 is localhost-only once the binding is https (a greenfield `make bootstrap` writes the http URL and flips it after `make pki-hosts` + `make ansible infisical`). Python on the workstation trusts the root through `kubernetes/.secrets/ca-bundle.pem` (written by `make talos-certs`, exported by the Makefile), so run Ansible through `make`
 - **Machine identities**: Each service VM gets a unique identity (`{hostname}-vm`) with Universal Auth credentials stored in `/etc/infisical/`
 - **Infisical Agent**: Runs as a systemd service on each VM, authenticating with its machine identity and rendering secrets to environment files via Go templates
 - **Polling interval**: 60 seconds -- secret updates propagate within one minute
@@ -324,7 +324,9 @@ Self-hosted secret management platform deployed via Docker Compose:
 
 ### Talos Kubernetes services plane (`kubernetes/`)
 
-Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-manager (`homelab-ca`, an intermediate signed by the Infisical root — ADR 0039; plus `letsencrypt` DNS-01 via Cloudflare for Traefik's default wildcard — ADR 0040), Zot pull-through registry, ARC CI runners (ADR 0034), Traefik ingress + the Infisical Kubernetes operator + **homepage** (ADR 0035 — `make talos-ingress`, `make talos-infisical`, `make talos-homepage`), and the **monitoring stack** (ADR 0036 — `make talos-monitoring`, `make monitoring-users`) the **plex-services stack** (ADR 0037 — `make k8s-apps`, `make plex-pbs-image`), the **games stack** (ADR 0038 — `make talos-games`, ), **Jellyfin** (ADR 0040 P5d — Flux-reconciled, in-app tail via `make k8s-apps`: `jellyfin.<media domain>`, LDAP auth against the authentik external realm, media read-only over NFS, external path over the VPS relay on 443), **external-dns** (ADR 0040 — `make talos-dns`: Ingress hosts on `<service domain>` become BIND records; AdGuard rewrites are gone), and **authentik** (ADR 0040 P5c — `make talos-authentik`: `auth.<service domain>` for Traefik forward-auth + OIDC, `auth.<media domain>` through the tunnel with an LDAP outpost for Jellyfin). Each `kubernetes/<component>/deploy.sh` renders with `helm template | kubectl apply`; runtime secrets are `InfisicalSecret` CRDs; images pull through `registry.<domain>`.
+Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-manager (`homelab-ca`, an intermediate signed by the Infisical root — ADR 0039; plus `letsencrypt` DNS-01 via Cloudflare for Traefik's default wildcard — ADR 0040), Zot pull-through registry, ARC CI runners (ADR 0034), Traefik ingress + the Infisical Kubernetes operator + **homepage** (ADR 0035 — trees `traefik`, `infisical`, `homepage`), and the **monitoring stack** (ADR 0036 — tree `monitoring`, `make monitoring-users`) the **plex-services stack** (ADR 0037 — `make k8s-apps`, `make plex-pbs-image`), the **games stack** (ADR 0038 — tree `games`), **Jellyfin** (ADR 0040 P5d — Flux-reconciled, in-app tail via `make k8s-apps`: `jellyfin.<media domain>`, LDAP auth against the authentik external realm, media read-only over NFS, external path over the VPS relay on 443), **external-dns** (ADR 0040 — tree `external-dns`: Ingress hosts on `<service domain>` become BIND records; AdGuard rewrites are gone), and **authentik** (ADR 0040 P5c + ADR 0049 — the internal realm `auth.<service domain>` for Traefik forward-auth + OIDC is Proxmox LXC 213, `make ansible authentik`; the external realm `auth.<media domain>` through the tunnel with an LDAP outpost for Jellyfin is tree `authentik-ext`, tail `make k8s-apps`).
+
+**Flux owns every workload** (ADR 0048): one `Kustomization` per tree in `kubernetes/flux/apps/`, charts as pinned `HelmRelease`s in `kubernetes/<tree>/helm.yaml`, `${VAR}` placeholders substituted from the `cluster-bindings` ConfigMap — a push to `main` is the deploy, `make flux-reconcile TREE=<tree>` skips the interval, `make flux-check` proves every placeholder has a binding. Ansible owns the seed objects and the in-app tail (`make k8s-seed`, `make k8s-apps`, `make k8s-smoke`, `make k8s-update`); `kubernetes/talos/talos.sh` owns the node lifecycle. Runtime secrets are `InfisicalSecret` CRDs; images pull through `registry.<domain>`. Flux output (`flux diff`, `flux logs`, `describe kustomization`) is post-substitution and carries the bindings — never paste it into a public PR or issue.
 
 ## Ansible Roles
 
@@ -553,13 +555,14 @@ The Makefile is the primary operational interface.
 | `inventory` | Generate Ansible inventory from Terraform outputs |
 | `adguard-pause MINUTES=n` | Pause AdGuard filtering on every resolver instance for n minutes (default 10) |
 | `dns-records` | Push guests, nodes, VIPs, MetalLB names and the mirrored public records into `<service domain>` on BIND (nsupdate, TSIG); second run = 0 changed |
-| `talos-dns` | external-dns on the cluster: every Ingress host becomes an A record in the service zone over RFC 2136 (ADR 0040) |
+| `flux-reconcile TREE=<tree>` | Reconcile one Flux tree now (`kubernetes/flux/apps/<tree>.yaml`) instead of waiting for its interval |
 | `k8s-seed` | The cluster's Ansible seed (ADR 0048): namespaces, Flux RBAC, bindings, generated ConfigMaps, root-CA ConfigMaps, bootstrap Secrets, the cert-manager intermediate; `CHECK=1` = `--check --diff`; second run = 0 changed |
-| `k8s-apps` | The in-app tail (WP7): jellyfin wizard/LDAP plugin/libraries, arr external auth + SAB whitelist, authentik-ext secrets + blueprint apply — all through the pods' own APIs; `talos-jellyfin`, `talos-plex-services` and `talos-authentik` are aliases; second run = 0 changed |
-| `k8s-smoke` | The fail-loud smokes: rbd, registry, nfs, infisical (`talos-smoke`, `registry-smoke`, `plex-services-smoke`, `infisical-smoke` are aliases) |
-| `talos-update` | Delete the pods of every `:latest` workload so they re-pull through Zot (`NS=` scopes it); never a rollout restart, which Flux would revert |
+| `k8s-apps` | The in-app tail (WP7): jellyfin wizard/LDAP plugin/libraries, arr external auth + SAB whitelist, authentik-ext secrets + blueprint apply — all through the pods' own APIs; second run = 0 changed |
+| `k8s-smoke` | The fail-loud smokes: rbd, registry, nfs, infisical |
+| `k8s-update` | Delete the pods of every `:latest` workload so they re-pull through Zot (`NS=` scopes it); never a rollout restart, which Flux would revert |
 | `plex-pbs-image` | Build + push the pg-backup CronJob's `proxmox-backup-client` image (root from `make pki-hosts`, push password from Infisical) |
 | `flux-check` | Pre-flight: every `${VAR}` a Flux tree emits has a binding |
+| `talos-plan` / `talos-build` / `talos-secrets` / `talos-apply` / `talos-bootstrap` | The Talos node lifecycle (ADR 0033): plan / targeted-apply the three control-plane VMs; pull the cluster secrets from Infisical `/talos`; render + apply every machine config (also how nodes pick up a changed root CA); bootstrap etcd + fetch kubeconfig |
 
 ### Targeted Operations
 
@@ -588,7 +591,7 @@ All `ansible-*` targets support `TAGS=<tag>` to filter by play-level tags (e.g.,
 | `expand-disk` | Expand root filesystem on service VMs |
 | `uptime-kuma` | Converge Uptime Kuma monitors + the ntfy channel from `ansible/playbooks/uptime-kuma.yml` (`goodolclint.uptime_kuma` collection; `CHECK=1` for check mode) |
 | `apt-proxy` | Point apt on every node and guest at the apt-cacher-ng cache via `Proxy-Auto-Detect` (falls back to `DIRECT` when the cache is down; `LIMIT=<host>`) |
-| `pki-hosts` | ADR 0041: Infisical `fleet-hosts` policy/profile/application + ACME (DNS-01) and API enrollment under the RSA intermediate `Homelab Hosts CA`; publishes the directory URL to `/infrastructure` |
+| `pki-hosts` | ADR 0039 + 0041: the Infisical `homelab-pki` project + root (created when absent, root exported to `kubernetes/.secrets/`), then the `fleet-hosts` policy/profile/application + ACME (DNS-01) and API enrollment under the RSA intermediate `Homelab Hosts CA`; publishes the directory URL to `/infrastructure` |
 | `ca-trust` | ADR 0041: install the Homelab Root CA into every node's, worklab's and guest's trust store (`LIMIT=<host>`) |
 | `proxmox-hosts LIMIT=worklab` | ADR 0041: worklab's root-chained node cert (its own name only, no `pve` SAN) — the `proxmox.worklab` Terraform alias verifies it |
 | `refresh` | Refresh Terraform state + outputs so `make plan` reads clean after a guest's interfaces change |
