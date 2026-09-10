@@ -163,8 +163,6 @@ talos-authentik:
 # P4b (ADR 0036): monitoring stack; axosyslog LB on services offset 66; history migration from the old guest
 talos-monitoring:
 	@kubernetes/monitoring/deploy.sh
-monitoring-migrate:
-	@kubernetes/monitoring/deploy.sh migrate $(FROM)
 # monitoring@pve + its token on the cluster: needs proxmox.yaml so proxmox_host resolves to a live node;
 # the play tag (not a task tag) so its pre_tasks load; the UniFi half is skipped (never probe the controller with monitor creds)
 monitoring-users:
@@ -174,8 +172,6 @@ talos-plex-services:
 	@kubernetes/plex-services/deploy.sh
 plex-services-smoke:
 	@kubernetes/plex-services/deploy.sh smoke
-plex-services-migrate:
-	@kubernetes/plex-services/deploy.sh migrate $(FROM)
 # Build + push the pg-backup CronJob's proxmox-backup-client image (the registry's one local push);
 # re-run when the PBS server major rolls (client suite tracks the Debian base)
 plex-pbs-image:
@@ -189,8 +185,6 @@ plex-pbs-image:
 # P4d (ADR 0038): Valheim + PlayFab sidecar on a MetalLB UDP LB (offset 67), Kiwix over NFS; player-gated migration from 204
 talos-games:
 	@kubernetes/games/deploy.sh
-games-migrate:
-	@kubernetes/games/deploy.sh migrate $(FROM)
 
 # P5d (ADR 0040): Jellyfin on jellyfin.<media domain> — LDAP auth against the authentik external realm, media read-only over NFS
 talos-jellyfin:

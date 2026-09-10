@@ -2,7 +2,6 @@
 # Monitoring stack on the cluster (ADR 0036): configs translated from the old role with
 # ${VAR} placeholders filled from the inventory, one InfisicalSecret on /monitoring,
 # axosyslog on a MetalLB address at services offset 66, UIs through Traefik.
-# `deploy.sh migrate <old guest ip>` copies the old guest's /var/lib/monitoring trees into the PVCs.
 source "$(dirname "$0")/../lib.sh"
 NS=monitoring
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -18,29 +17,6 @@ export CONFIG_HASH="$(cat "$HERE"/config/* "$GEN"/*.json | shasum -a 256 | cut -
 SUBST='${REGISTRY} ${HOST_API} ${PROJECT_ID} ${SYSLOG_IP} ${AUTH_HOST} ${GRAFANA_HOST} ${OO_HOST} ${PROM_HOST} ${AM_HOST} ${KUMA_HOST} ${PVE_API_HOST} ${DOMAIN} ${ADGUARD} ${BIND} ${PLEX} ${PBS} ${UNIFI} ${UNIFI_PORT} ${SYNOLOGY} ${SYNOLOGY_SNMP_COMMUNITY} ${SMOKEPING_ARGS} ${OO_EMAIL} ${TZ} ${MEDIA_DOMAIN} ${CONFIG_HASH}'
 sub() { envsubst "$SUBST"; }
 
-migrate() {
-  local old=$1 key="$SECRETS/monitoring-migrate-key" tag="monitoring-migrate-p4b"
-  [ -n "$old" ] || { echo "usage: deploy.sh migrate <old guest address>" >&2; exit 1; }
-  kubectl -n "$NS" scale deploy --all --replicas=0
-  kubectl -n "$NS" wait --for=delete pod -l 'app in (openobserve,prometheus,grafana,uptime-kuma,alertmanager)' --timeout=120s || true
-  ssh "root@$old" 'docker compose -f /opt/monitoring/docker-compose.yml down'
-  rm -f "$key" "$key.pub"; ssh-keygen -q -N '' -t ed25519 -C "$tag" -f "$key"
-  ssh "root@$old" "cat >> ~/.ssh/authorized_keys" < "$key.pub"
-  sub < "$HERE/migrate.yaml" | kubectl apply -f -
-  kubectl -n "$NS" wait --for=condition=Ready pod/migrate --timeout=180s
-  kubectl -n "$NS" exec -i migrate -- sh -c 'mkdir -p /root/.ssh && cat > /root/.ssh/id_ed25519 && chmod 600 /root/.ssh/id_ed25519' < "$key"
-  for s in openobserve prometheus grafana uptime-kuma alertmanager; do
-    echo "== rsync $s"
-    kubectl -n "$NS" exec migrate -- sh -c "mkdir -p /$s/data && rsync -a --delete --bwlimit=80m --info=progress2 -e 'ssh -o StrictHostKeyChecking=no' root@$old:/var/lib/monitoring/$s/ /$s/data/"
-  done
-  kubectl -n "$NS" delete pod migrate
-  ssh "root@$old" "sed -i '/ $tag\$/d' ~/.ssh/authorized_keys"
-  rm -f "$key" "$key.pub"
-  kubectl -n "$NS" scale deploy --all --replicas=1
-  kubectl -n "$NS" rollout status deploy --timeout=300s
-  (cd "$ROOT" && make -s uptime-kuma)
-}
-[ "${1:-}" = migrate ] && { migrate "${2:-}"; exit; }
 
 ns "$NS"
 cm() { local n=$1; shift; kubectl create configmap "$n" -n "$NS" --dry-run=client -o yaml "$@" | sub | kubectl apply --server-side --force-conflicts -f -; }   # server-side: the dashboards exceed the last-applied annotation cap

@@ -42,8 +42,12 @@ inf() { infisical "$@" --env prod --projectId "$PROJECT" --domain "$DOMAIN" --to
 
 cmd_secrets() {
   infisical_token
-  local existing
-  existing=$(inf secrets get talos_secrets_yaml --plain 2>/dev/null || true)
+  local existing rc
+  existing=$(inf secrets get talos_secrets_yaml --plain 2>"$SEC/.inf.err") && rc=0 || rc=$?
+  if [ "$rc" -ne 0 ] && ! grep -qi 'not found' "$SEC/.inf.err"; then
+    echo "infisical read of /talos/talos_secrets_yaml failed (rc=$rc) — refusing to generate over a possibly live cluster PKI" >&2
+    cat "$SEC/.inf.err" >&2; exit 1
+  fi
   if [ -z "$existing" ]; then
     echo "generating cluster secrets -> Infisical /talos"
     infisical secrets folders create --name talos --path / --env prod --projectId "$PROJECT" --domain "$DOMAIN" --token "$TOKEN" >/dev/null 2>&1 || true
@@ -127,7 +131,9 @@ cmd_apply() {
   done
   echo "waiting for Talos API on static addresses"
   for n in $NODE_NAMES; do
-    ip=$(ip_of "$n"); until talosctl -n "$ip" -e "$ip" version --short >/dev/null 2>&1; do sleep 5; done; echo "$n up"
+    ip=$(ip_of "$n")
+    for i in $(seq 120); do talosctl -n "$ip" -e "$ip" version --short >/dev/null 2>&1 && break; [ "$i" = 120 ] && { echo "$n: Talos API at $ip not up after 10 min" >&2; exit 1; }; sleep 5; done
+    echo "$n up"
   done
 }
 

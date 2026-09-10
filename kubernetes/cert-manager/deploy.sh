@@ -45,7 +45,7 @@ if ! kubectl -n "$NS" get secret homelab-ca -o jsonpath='{.data.tls\.crt}' 2>/de
     --dry-run=client -o yaml | kubectl apply -f -
   echo "intermediate homelab-ca signed by the root"
 fi
-until envsubst < "$HERE/issuer.yaml" | kubectl apply -f - 2>/dev/null; do sleep 5; done   # webhook readiness lags the rollout
+for i in $(seq 24); do envsubst < "$HERE/issuer.yaml" | kubectl apply -f - 2>"$SECRETS/.issuer.err" && break; [ "$i" = 24 ] && { echo "issuer apply never succeeded:" >&2; cat "$SECRETS/.issuer.err" >&2; exit 1; }; sleep 5; done   # webhook readiness lags the rollout
 kubectl wait --for=condition=Ready clusterissuer/homelab-ca --timeout=120s
 if kubectl get crd infisicalsecrets.secrets.infisical.com >/dev/null 2>&1; then
   envsubst < "$HERE/secrets.yaml" | kubectl apply -f -

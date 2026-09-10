@@ -15,7 +15,8 @@ smoke() {
   kubectl delete pod zot-smoke --ignore-not-found >/dev/null
   kubectl run zot-smoke --image="$HOST/docker.io/library/busybox:latest" --restart=Never --command -- sh -c 'echo hello-zot' >/dev/null
   kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/zot-smoke --timeout=180s >/dev/null
-  kubectl logs zot-smoke | grep -q hello-zot && echo "registry smoke: PASS"
+  kubectl logs zot-smoke | grep -q hello-zot || { echo "registry smoke: FAIL" >&2; exit 1; }
+echo "registry smoke: PASS"
   kubectl delete pod zot-smoke >/dev/null
   kubectl -n "$NS" get pvc
 }

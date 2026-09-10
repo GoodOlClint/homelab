@@ -4,9 +4,7 @@
 # UIs through Traefik. The four *arr apps run authenticationMethod=external: Traefik's authentik
 # forward-auth is the login, so the in-cluster Services answer unauthenticated — only pods reach them
 # (MetalLB exposes Traefik alone). Subcommands:
-#   deploy.sh smoke              — NFS PV gate: mount + write test before anything migrates
-#   deploy.sh migrate <old ip>   — copy the old guest's /opt/plex-services trees into the PVCs
-#   deploy.sh kuma               — repoint the five Kuma rows at the in-cluster Services
+#   deploy.sh smoke              — NFS PV gate: mount + write test
 source "$(dirname "$0")/../lib.sh"
 NS=plex-services
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -44,33 +42,9 @@ EOF
   kubectl -n "$NS" delete pod nfs-smoke >/dev/null
 }
 
-migrate() {
-  local old=$1 key="$SECRETS/plex-services-migrate-key" tag="plex-services-migrate-p4c"
-  [ -n "$old" ] || { echo "usage: deploy.sh migrate <old guest address>" >&2; exit 1; }
-  kubectl -n "$NS" scale deploy --all --replicas=0
-  kubectl -n "$NS" wait --for=delete pod --all --timeout=180s || true
-  ssh "root@$old" 'docker compose -f /opt/plex-services/docker-compose.yml down'
-  rm -f "$key" "$key.pub"; ssh-keygen -q -N '' -t ed25519 -C "$tag" -f "$key"
-  ssh "root@$old" "cat >> ~/.ssh/authorized_keys" < "$key.pub"
-  sub < "$HERE/migrate.yaml" | kubectl apply -f -
-  kubectl -n "$NS" wait --for=condition=Ready pod/migrate --timeout=180s
-  kubectl -n "$NS" exec -i migrate -- sh -c 'mkdir -p /root/.ssh && cat > /root/.ssh/id_ed25519 && chmod 600 /root/.ssh/id_ed25519' < "$key"
-  for s in postgres sonarr radarr lidarr prowlarr bazarr sabnzbd tautulli seerr recyclarr libation backups; do
-    echo "== rsync $s"
-    kubectl -n "$NS" exec migrate -- sh -c "mkdir -p /$s/data && rsync -a --delete --bwlimit=80m --info=progress2 -e 'ssh -o StrictHostKeyChecking=no' root@$old:/opt/plex-services/$s/ /$s/data/"
-  done
-  kubectl -n "$NS" delete pod migrate
-  ssh "root@$old" "sed -i '/ $tag\$/d' ~/.ssh/authorized_keys"
-  rm -f "$key" "$key.pub"
-  kubectl -n "$NS" scale deploy --all --replicas=1
-  kubectl -n "$NS" rollout status deploy --timeout=600s
-}
 
 
-case "${1:-}" in
-  smoke) smoke; exit ;;
-  migrate) migrate "${2:-}"; exit ;;
-esac
+[ "${1:-}" = smoke ] && { smoke; exit; }
 
 ns "$NS"
 kubectl create configmap recyclarr-config -n "$NS" --dry-run=client -o yaml --from-file="$HERE/config/recyclarr.yml" | kubectl apply --server-side --force-conflicts -f -

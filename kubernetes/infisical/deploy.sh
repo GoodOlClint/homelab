@@ -24,7 +24,8 @@ spec:
     - {secretName: smoke, secretNamespace: $NS, creationPolicy: Owner}
 EOT
   for i in $(seq 30); do kubectl -n "$NS" get secret smoke >/dev/null 2>&1 && break; sleep 2; done
-  kubectl -n "$NS" get secret smoke -o jsonpath='{.data}' | jq -r 'keys[]' | grep -q pbs_backup_token && echo "infisical operator smoke: PASS"
+  kubectl -n "$NS" get secret smoke -o jsonpath='{.data}' | jq -r 'keys[]' | grep -q pbs_backup_token || { echo "infisical operator smoke: FAIL" >&2; exit 1; }
+echo "infisical operator smoke: PASS"
   kubectl -n "$NS" delete infisicalsecret smoke >/dev/null
 }
 [ "${1:-}" = smoke ] && { smoke; exit; }

@@ -14,7 +14,8 @@ smoke() {
   kubectl apply -f "$HERE/smoke.yaml"
   kubectl wait --for=jsonpath='{.status.phase}'=Bound pvc/rbd-smoke --timeout=120s
   kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/rbd-smoke --timeout=180s
-  kubectl logs rbd-smoke | grep -q hello-rbd && echo "rbd smoke: PASS"
+  kubectl logs rbd-smoke | grep -q hello-rbd || { echo "rbd smoke: FAIL" >&2; exit 1; }
+echo "rbd smoke: PASS"
   kubectl delete -f "$HERE/smoke.yaml" >/dev/null
 }
 [ "${1:-}" = smoke ] && { smoke; exit; }
