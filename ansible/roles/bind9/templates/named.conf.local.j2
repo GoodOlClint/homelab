@@ -5,11 +5,13 @@ key "dhcp-update-key" {
     secret "{{ secrets.infrastructure.bind_tsig_key_secret }}";
 };
 
-// ACME DNS-01 clients (ADR 0041): TXT records only, every fleet host holds this key
-key "acme-key" {
+// ACME DNS-01 clients (ADR 0050): one key per enrolling host, granted only its own challenge name
+{% for h in bind9_acme_hosts %}
+key "acme-{{ h }}" {
     algorithm hmac-sha256;
-    secret "{{ secrets.infrastructure.acme_tsig_key_secret }}";
+    secret "{{ secrets.infrastructure['acme_tsig_' ~ (h | replace('-', '_'))] }}";
 };
+{% endfor %}
 
 // CI guest registrations (ADR 0032): granted only in the ci zone below, so a
 // leaked runner key can never write the fleet zones
@@ -30,7 +32,14 @@ zone "{{ name }}" {
     file "/var/lib/bind/db.{{ name }}";
     update-policy {
         grant dhcp-update-key zonesub ANY;
-        grant acme-key wildcard *.{{ name }}. TXT;
+{% if name == service_domain %}
+{% for h in bind9_acme_hosts %}
+        grant acme-{{ h }} name _acme-challenge.{{ h }}.{{ name }}. TXT;
+{% endfor %}
+{% for h in bind9_acme_node_hosts %}
+        grant acme-{{ h }} name _acme-challenge.{{ bind9_acme_vip_name }}.{{ name }}. TXT;
+{% endfor %}
+{% endif %}
 {% if name == bind9_ci_zone %}
         grant ci-update-key zonesub ANY;
 {% endif %}

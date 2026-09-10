@@ -32,3 +32,14 @@ bind9_ci_subnet: "{{ network_data.ipv4_prefix }}.{{ network_data.vlans.ci.id }}.
 # poll for 5 minutes after the record lands. 30s bounds both stale answers and
 # cached NXDOMAINs; CI's own nsupdate should register records with TTL <= this.
 bind9_ci_zone_ttl: 30
+
+# ACME DNS-01 clients (ADR 0050): every host that enrolls for a fleet-hosts cert holds its own
+# TSIG key `acme-<host>` (Infisical /infrastructure/acme_tsig_<host>, `-` → `_`), granted only
+# `_acme-challenge.<host>.<service domain>` — nothing gets a wildcard. Guests with a client in
+# this inventory, the cluster nodes (host-bindings.yaml `nodes`, which also carry the `pve`
+# SAN), and the hosts enrolled by hand (worklab's play, docs/{pfsense,synology,homeassistant}-acme.md).
+bind9_acme_guest_hosts: [proxmox-backup, pdm, unifi]
+bind9_acme_extra_hosts: [worklab, pfsense, ds1821plus, homeassistant]
+bind9_acme_node_hosts: "{{ host_bindings.nodes | list }}"
+bind9_acme_hosts: "{{ bind9_acme_guest_hosts + bind9_acme_node_hosts + bind9_acme_extra_hosts }}"
+bind9_acme_vip_name: pve

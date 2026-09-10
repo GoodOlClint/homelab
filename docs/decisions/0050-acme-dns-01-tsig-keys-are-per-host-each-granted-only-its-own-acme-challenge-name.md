@@ -1,6 +1,6 @@
 # ADR 0050 — ACME DNS-01 TSIG keys are per-host, each granted only its own _acme-challenge name
 
-- **Status:** Proposed
+- **Status:** Accepted (implemented 2026-09-10, audit tranche 2)
 - **Date:** 2026-09-10
 - **Deciders:** operator + agent
 - **Context source:** audit 2026-09-09 finding S3 (issue #20), tranche 1
@@ -34,7 +34,7 @@ Pinning test (from the issue): from a host holding only its key, an `nsupdate` o
 
 ## Consequences
 
-- Implementation lands in tranche 2 of the 2026-09-09 audit (issue #20 stays open until then): `bind9` generates and renders the per-host keys (a key for every host in `groups['all']` + the proxmox inventory that carries an ACME consumer — nodes, worklab, PBS, PDM, UniFi, any `cert_client` host), `cert_client` / `proxmox_backup` / `pdm` / `unifi` switch to their own key, and the shared key is removed last. The bind9 pair runs twice on the first pass (paired `generate_secret.yml`, CLAUDE.md).
+- As built (2026-09-10, #20): the `bind9` role owns the host list — `bind9_acme_hosts` = `bind9_acme_guest_hosts` (proxmox-backup, pdm, unifi) + the nodes from `host-bindings.yaml` (`nodes`, which also get the `pve` grant) + `bind9_acme_extra_hosts` (worklab and the three hand-enrolled appliances: pfsense, ds1821plus, homeassistant) — and generates `acme_tsig_<host>` for each. Grants are rendered only in the service zone. `cert_client` (`rfc2136.ini`), `proxmox_backup` and `pdm` (`tsig.key`) read `secrets.infrastructure['acme_tsig_' ~ inventory_hostname]`; the shared key and its wildcard grant are gone. Pin test passed from proxmox-backup: TXT updates under `_acme-challenge.{pdm,pve,infisical}` REFUSED, its own accepted; forced renewals passed on ms-01b (certbot), PBS and PDM (native). The bind9 pair needed the two passes.
+- The three hand-enrolled appliances keep the retired shared key until the operator re-keys them ([docs/operator-hand-steps.md](../operator-hand-steps.md)); their next renewal fails with a REFUSED update until then. `/infrastructure/acme_tsig_key_secret` is deleted by hand after that.
 - ADR 0041 is amended by this ADR: its "scoped TSIG key" is now per-host, and its consequence "a third TSIG key for anything but its own scoped grant" reads as "one key per grant" — a new ACME host means a new key and a new grant, never a wider one.
 - A renamed or replaced host needs a new key and grant before its first enrollment; a retired host's key and grant come out with the retired-guest sweep, and its vault secret is deleted by hand.
-- Until the implementation lands, the shared key stays and the finding is an accepted interim: every host holding it is already inside the fleet's trust boundary.

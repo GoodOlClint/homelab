@@ -2,11 +2,13 @@
 # ADR 0041: node certs come from certbot (cert_client) — PVE's own ACME client rejects the
 # CRLF-terminated PEM Infisical serves — and land through `pvenode cert set`, which reloads
 # pveproxy. The cert carries the node name and the cluster VIP name (worklab, standalone, sets
-# proxmox_host_cert_extra_domains to []). Needs runtime secrets (the acme-key TSIG secret +
+# proxmox_host_cert_extra_domains to []). Needs runtime secrets (the node's own acme-<host> TSIG secret, ADR 0050, +
 # directory URL) — skipped on a Day-1 node.
 - name: Node certificate (certbot, DNS-01 via BIND)
   ansible.builtin.include_role:
     name: cert_client
+    apply:
+      tags: [acme]
   vars:
     cert_client_fqdn: "{{ inventory_hostname }}.{{ network_data.service_domain }}"
     cert_client_extra_domains: "{{ proxmox_host_cert_extra_domains }}"

@@ -38,19 +38,20 @@
     secret_dict_path: "infrastructure"
   tags: [bind9, dns, secrets]
 
-- name: Auto-generate acme_tsig_key_secret
+- name: Auto-generate the per-host ACME TSIG keys (ADR 0050)
   ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/generate_secret.yml"
   vars:
-    secret_key: "acme_tsig_key_secret"
+    secret_key: "acme_tsig_{{ item | replace('-', '_') }}"
     secret_gen_cmd: >-
-      tsig-keygen -a hmac-sha256 acme-key
+      tsig-keygen -a hmac-sha256 acme-{{ item }}
       | grep secret
       | awk '{print $2}'
       | tr -d '";'
-    secret_comment: "BIND9 TSIG key for ACME DNS-01 challenge TXT records (hmac-sha256, TXT-only update-policy) — auto-generated"
+    secret_comment: "BIND9 TSIG key for {{ item }}'s ACME DNS-01 challenge — granted only its own _acme-challenge name (ADR 0050) — auto-generated"
     secret_run_on: "{{ inventory_hostname }}"
     secret_infisical_path: "/infrastructure"
     secret_dict_path: "infrastructure"
+  loop: "{{ bind9_acme_hosts }}"
   tags: [bind9, dns, secrets]
 
 - name: Auto-generate ci_tsig_key_secret

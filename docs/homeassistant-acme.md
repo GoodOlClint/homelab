@@ -21,8 +21,8 @@ dns:
   provider: dns-rfc2136
   rfc2136_server: <dns_server.bind_ipv4>   # the BIND VIP
   rfc2136_port: '53'
-  rfc2136_name: acme-key
-  rfc2136_secret: <acme_tsig_key_secret>
+  rfc2136_name: acme-homeassistant
+  rfc2136_secret: <acme_tsig_homeassistant>
   rfc2136_algorithm: hmac-sha256
 certfile: fullchain.pem
 keyfile: privkey.pem
@@ -37,7 +37,7 @@ For the MCP server integration, also set **Settings → System → Network → H
 - **`acme_server` validates as a URL** — a bare hostname fails `expected a URL` at save. It is the full Infisical directory URL (`…/acme/applications/<id>/profiles/<id>/directory`).
 - **`acme_root_ca_cert` must be a literal block (`|-`)** — the UI editor is happy to fold it (`>-`), which collapses the PEM to one line and certbot rejects it.
 - **`rfc2136_algorithm` is lowercase `hmac-sha256`** — the add-on routes dns-rfc2136 through certbot-dns-multi (lego, Go), which rejects certbot's uppercase `HMAC-SHA256` form with `unsupported TSIG algorithm`.
-- **The secret is `acme_tsig_key_secret`, not `bind_tsig_key_secret`** — both live in `/infrastructure` and both are 44-char base64; the wrong one fails as `dns: bad authentication` because the signature does not verify for the key *name* `acme-key`. To bisect a bad-auth from the workstation: `nsupdate -y "hmac-sha256:acme-key:<secret>"` adding a TXT under `_acme-challenge.…` proves the key server-side (the acme-key's grant is TXT-only, wildcard).
+- **The secret is `acme_tsig_homeassistant`, not `bind_tsig_key_secret`** — every key in `/infrastructure` is 44-char base64; the wrong one fails as `dns: bad authentication` because the signature does not verify for the key *name* `acme-homeassistant`. To bisect a bad-auth from the workstation: `nsupdate -y "hmac-sha256:acme-homeassistant:<secret>"` adding a TXT at `_acme-challenge.homeassistant.<service domain>` proves the key server-side (the grant is that one name, TXT only — ADR 0050; any other name is REFUSED).
 - **`key_type: rsa` is load-bearing** — the `fleet-hosts` intermediate is RSA and Infisical only signs a CSR of the CA's key family.
 
 ## Renewal

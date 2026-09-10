@@ -2,7 +2,7 @@
 # ADR 0041: a per-host cert for guests with no native ACME client — certbot with DNS-01.
 # certbot.timer renews; the deploy hook is the consumer's install step.
 #   issuer fleet       — the Infisical fleet-hosts directory through BIND's dynamic-update path on the
-#                        TXT-only acme-key; RSA keys because the Proxmox clients need them (ADR 0041).
+#                        host's own acme-<host> key (ADR 0050); RSA keys because the Proxmox clients need them (ADR 0041).
 #   issuer letsencrypt — a browser-trusted cert for a public name, DNS-01 at Cloudflare (ADR 0049); the
 #                        token is per consumer so an identity box never holds edit rights it does not need.
 cert_client_issuer: fleet

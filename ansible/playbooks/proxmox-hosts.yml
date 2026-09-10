@@ -77,6 +77,8 @@
       ansible.builtin.include_role:
         name: proxmox_host
         tasks_from: acme
+        apply:
+          tags: [acme]
       vars:
         proxmox_host_cert_extra_domains: []
       tags: [acme]

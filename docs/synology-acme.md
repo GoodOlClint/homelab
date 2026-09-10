@@ -22,11 +22,11 @@ Everything below is run over SSH as `goodolclint`. `curl`, `openssl` and `nsupda
     sh /tmp/acme-install.sh email=<acme_email> --nocron
     mv -f ~/homelab-ca.crt ~/.acme.sh/homelab-ca.crt
 
-**3. TSIG key** for the DNS-01 challenge — the TXT-only `acme-key`, `/infrastructure/acme_tsig_key_secret`, in `nsupdate`'s key-file format, mode 0600 at `~/.acme.sh/acme-tsig.key`:
+**3. TSIG key** for the DNS-01 challenge — the NAS's own key `acme-ds1821plus`, `/infrastructure/acme_tsig_ds1821plus` (granted only `_acme-challenge.ds1821plus.<service domain>`, ADR 0050), in `nsupdate`'s key-file format, mode 0600 at `~/.acme.sh/acme-tsig.key`:
 
-    key "acme-key" {
+    key "acme-ds1821plus" {
         algorithm hmac-sha256;
-        secret "<acme_tsig_key_secret>";
+        secret "<acme_tsig_ds1821plus>";
     };
 
 **4. Register the account** against the fleet directory. `--ca-bundle` is saved into `account.conf`, so every later run — including the scheduled one — trusts the root without being told again.
