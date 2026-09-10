@@ -200,7 +200,7 @@ talos-metrics:
 
 # Kiwix ZIM library on kiwix.<service domain> (split out of the games namespace)
 talos-kiwix:
-	@kubernetes/kiwix/deploy.sh
+	@flux reconcile kustomization kiwix --with-source
 
 # Cluster half of `make update`: restart every :latest workload so it re-pulls through Zot (NS= to scope)
 # ADR 0048: the cluster's Ansible half — allowlisted seed objects (bindings, RBAC, root-CA ConfigMaps,
