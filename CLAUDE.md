@@ -306,6 +306,7 @@ make ansible-services TAGS=plex,homepage  # plex + homepage plays
 | `make ca-trust` | ADR 0041: the root into every node's, worklab's and guest's trust store (both inventories, `LIMIT=`); steady state rides `proxmox_host` and the Phase 0 play |
 | `make refresh` | `terraform apply -refresh-only` in the fleet root — settles agent-reported output drift (a docker guest's veths change on every container restart) so `make plan` reads clean |
 | `make nut-clients` | Deploy NUT `upsmon` secondaries to the physical hosts (`nut_clients` group in `inventory/proxmox.yaml`; server = pfSense NUT package, `docs/pfsense-nut.md`) |
+| `make validate` | The CI set (`.github/workflows/validate.yml`, issue #5): terraform fmt + validate ×3 roots, `ansible-lint` (production profile; pre-existing findings baselined in `ansible/.ansible-lint-ignore` — drain it, never grow it), `--syntax-check` of every playbook against a stub inventory, `flux_check.py --build-only`, the public-policy validator, `test_axosyslog_routing.py`. CI adds the guardrails on the pushed range and the renovate validator. No credential, no cluster (ADR 0048) |
 | `make setup-hooks` | Install pre-commit hooks |
 | `make init` | Create venv, install deps, terraform init, galaxy install |
 

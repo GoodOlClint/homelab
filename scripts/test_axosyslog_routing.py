@@ -140,12 +140,19 @@ def main() -> int:
                 sock.sendto(payload, ("127.0.0.1", port))
                 time.sleep(0.3)
             sock.close()
-            time.sleep(3)
 
-            landed = {}
-            for stream in DESTS.values():
-                p = out / f"{stream}.log"
-                landed[stream] = p.read_text() if p.exists() else ""
+            # use_dns(yes) on s_netconsole holds a message for the reverse lookup's timeout
+            # (~5-10 s in a container with no resolver), so wait for arrival, not a fixed delay.
+            deadline = time.monotonic() + 60
+            while True:
+                landed = {}
+                for stream in DESTS.values():
+                    p = out / f"{stream}.log"
+                    landed[stream] = p.read_text() if p.exists() else ""
+                if all(any(v in b for b in landed.values()) for *_, v in CASES) \
+                        or time.monotonic() > deadline:
+                    break
+                time.sleep(1)
 
             print("=== stream contents ===")
             for stream, body in landed.items():

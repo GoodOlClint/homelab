@@ -4,15 +4,19 @@ substitutes an undefined variable with an empty string and fails open (`host: ""
 A resource carrying `kustomize.toolkit.fluxcd.io/substitute: disabled` is exempt — that is how a
 ConfigMap whose payload has its own `${…}` syntax (syslog-ng macros, JS template literals) is shipped.
 
-usage: flux_check.py <repo root>   (reads kubernetes/flux/apps/*.yaml and the live cluster-bindings)
+usage: flux_check.py <repo root> [--build-only]   (reads kubernetes/flux/apps/*.yaml and the live cluster-bindings;
+--build-only skips the binding check so a clone with no cluster — CI — still proves every tree builds)
 """
 import re, subprocess, sys, json
 import yaml
 
 root = sys.argv[1]
 TOKEN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")   # a token with a :-/:= default is bound by definition
-kc = ["kubectl", "--kubeconfig", f"{root}/kubernetes/talos/.secrets/kubeconfig"]
-bindings = set(json.loads(subprocess.check_output(kc + ["-n", "flux-system", "get", "cm", "cluster-bindings", "-o", "json"]))["data"])
+build_only = "--build-only" in sys.argv[2:]
+bindings = set()
+if not build_only:
+    kc = ["kubectl", "--kubeconfig", f"{root}/kubernetes/talos/.secrets/kubeconfig"]
+    bindings = set(json.loads(subprocess.check_output(kc + ["-n", "flux-system", "get", "cm", "cluster-bindings", "-o", "json"]))["data"])
 bad = 0
 for app in sorted(__import__("glob").glob(f"{root}/kubernetes/flux/apps/*.yaml")):
     for ks in yaml.safe_load_all(open(app)):
@@ -24,6 +28,9 @@ for app in sorted(__import__("glob").glob(f"{root}/kubernetes/flux/apps/*.yaml")
             known = set(pb.get("substitute", {}))
         path = f"{root}/{ks['spec']['path']}"
         docs = yaml.safe_load_all(subprocess.check_output(["kubectl", "kustomize", path]))
+        if build_only:
+            print(f"{ks['metadata']['name']}: {sum(1 for d in docs if d)} resources")
+            continue
         for d in docs:
             if not d:
                 continue

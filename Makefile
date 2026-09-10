@@ -394,7 +394,7 @@ refresh-identity:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/refresh-identity.yml $(if $(LIMIT),--limit $(LIMIT)) $(if $(TAGS),--tags $(TAGS)) $(if $(FORCE),-e force=true)
 
 # === Setup & Security ===
-.PHONY: setup-hooks bootstrap-local validate-public-policy security-check security-check-range
+.PHONY: setup-hooks bootstrap-local validate validate-public-policy security-check security-check-range
 
 setup-hooks:
 	@pre-commit install --install-hooks
@@ -410,6 +410,16 @@ security-check:
 
 security-check-range:
 	@bash scripts/security_guardrails.sh --range HEAD~1..HEAD
+
+# What CI runs (.github/workflows/validate.yml) — the three terraform roots must already be init'd.
+TF_ROOTS := terraform terraform/hosts terraform/unifi
+validate:
+	@for r in $(TF_ROOTS); do terraform -chdir=$$r fmt -check -recursive -diff && terraform -chdir=$$r validate -no-color >/dev/null && echo "$$r: validate ok" || exit 1; done
+	@cd ansible && ../.venv/bin/ansible-lint --offline playbooks/*.yml
+	@cd ansible && for p in playbooks/*.yml; do ANSIBLE_INVENTORY=/dev/null ../.venv/bin/ansible-playbook --syntax-check -i localhost, $$p >/dev/null || exit 1; done && echo "syntax-check: $$(ls playbooks/*.yml | wc -l | tr -d ' ') playbooks ok"
+	@$(VENV_PYTHON) scripts/flux_check.py $(CURDIR) --build-only >/dev/null && echo "flux trees build"
+	@$(VENV_PYTHON) scripts/validate_public_policy.py network-data/public_policy.yaml
+	@$(VENV_PYTHON) scripts/test_axosyslog_routing.py
 
 # === Cleanup ===
 .PHONY: clean clean-ssh clean-infisical-sops

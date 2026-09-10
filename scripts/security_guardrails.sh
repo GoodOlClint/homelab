@@ -79,6 +79,8 @@ SUPERNET_ALLOW='10\.0\.0\.0/8|172\.16\.0\.0/12|192\.168\.0\.0/16'
 INTERNAL_DOMAINS=""
 if [[ -f network-data/vlans.yaml ]]; then
   INTERNAL_DOMAINS=$(sed -nE 's/^(service_domain|media_domain): *"([^"]*)".*/\2/p' network-data/vlans.yaml | grep -v REPLACE_WITH || true)
+else
+  echo "[guardrails] warning: network-data/vlans.yaml absent — the site-domain scan is OFF for this run" >&2
 fi
 
 added_lines() {

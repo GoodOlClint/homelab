@@ -103,13 +103,13 @@ resource "proxmox_virtual_environment_file" "talos_oom_hook_worklab" {
 resource "proxmox_virtual_environment_vm" "talos_cp" {
   for_each = local.talos_node_addrs
 
-  name      = each.key
-  vm_id     = each.value.vm_id
-  node_name = each.value.node_name
-  on_boot   = true
-  machine   = "q35"
-  bios      = "seabios"
-  tags      = ["talos", "control-plane"]
+  name                = each.key
+  vm_id               = each.value.vm_id
+  node_name           = each.value.node_name
+  on_boot             = true
+  machine             = "q35"
+  bios                = "seabios"
+  tags                = ["talos", "control-plane"]
   hook_script_file_id = proxmox_virtual_environment_file.talos_oom_hook[each.value.node_name].id
 
   agent { enabled = true }

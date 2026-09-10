@@ -1,0 +1,21 @@
+# Style-only rules are skipped; everything else that was open on 2026-09-10 is baselined in
+# .ansible-lint-ignore (issue #5). A new violation fails CI; drain the baseline in later tranches.
+profile: production
+skip_list:
+  - var-naming[no-role-prefix]
+  - name[casing]
+  - name[missing]
+  - name[template]
+  - run-once[task]
+  - key-order[task]
+  - jinja[spacing]
+  - yaml[line-length]
+exclude_paths:
+  - roles/geerlingguy.docker/
+  - roles/mitre.yedit/
+  - roles/juju4.openobserve/
+  - roles/plex_services/
+  - inventory/
+kinds:
+  - playbook: playbooks/*.yml
+  - tasks: tasks/*.yml

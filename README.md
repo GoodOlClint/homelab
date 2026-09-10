@@ -626,6 +626,7 @@ All `ansible-*` targets support `TAGS=<tag>` to filter by play-level tags (e.g.,
 | `setup-hooks` | Install pre-commit hooks |
 | `bootstrap-local` | Copy example files to local gitignored config |
 | `validate-public-policy` | Validate public_policy.yaml schema |
+| `validate` | What CI runs (`.github/workflows/validate.yml`): terraform fmt/validate on the three roots, ansible-lint (baseline in `ansible/.ansible-lint-ignore`), syntax-check of every playbook, every Flux tree builds, the public-policy validator, the axosyslog routing test (Docker) |
 | `security-check` | Run security guardrails on staged files |
 | `security-check-range` | Run security guardrails on a commit range |
 
