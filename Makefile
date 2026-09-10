@@ -162,7 +162,7 @@ talos-authentik:
 	@kubernetes/authentik/deploy.sh $(REALM)
 # P4b (ADR 0036): monitoring stack; axosyslog LB on services offset 66; history migration from the old guest
 talos-monitoring:
-	@kubernetes/monitoring/deploy.sh
+	@flux reconcile kustomization monitoring --with-source
 # monitoring@pve + its token on the cluster: needs proxmox.yaml so proxmox_host resolves to a live node;
 # the play tag (not a task tag) so its pre_tasks load; the UniFi half is skipped (never probe the controller with monitor creds)
 monitoring-users:
