@@ -428,7 +428,6 @@
   ansible.builtin.shell: proxmox-backup-manager datastore list --output-format json
   register: pbs_datastore_list
   changed_when: false
-  failed_when: false
   tags:
     - proxmox_backup
     - pbs
@@ -459,7 +458,6 @@
     - pbs_datastore_list.stdout is defined
     - ((pbs_datastore_list.stdout | default('', true)) or '[]') | from_json | selectattr('name', 'equalto', item.name) | list | length == 0
   register: datastore_created
-  failed_when: false
   tags:
     - proxmox_backup
     - pbs
@@ -467,23 +465,28 @@
     - datastore
     - config
 
-# If CLI fails with "path not empty", register existing datastore via config file
-# Note: PBS config parser does not tolerate comment markers, so use copy instead of blockinfile
-- name: Register existing datastores via config (path not empty)
-  ansible.builtin.copy:
-    dest: /etc/proxmox-backup/datastore.cfg
-    content: |
-      {% for item in datastore_created.results | default([]) if item.rc is defined and item.rc != 0 %}
-      datastore: {{ item.item.name }}
-      	path {{ item.item.path }}
-      	comment {{ item.item.comment | default('Managed by Ansible') }}
+# The GC schedule is a datastore property (PBS has no gc-job); --reuse-datastore keeps the
+# reused store's own config, so it is converged here rather than at create time.
+- name: Read datastore config
+  ansible.builtin.command: proxmox-backup-manager datastore show {{ item.name }} --output-format json
+  loop: "{{ pbs_datastores }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: pbs_datastore_show
+  changed_when: false
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - datastore
+    - config
 
-      {% endfor %}
-    owner: root
-    group: backup
-    mode: '0640'
-  when: datastore_created.results | default([]) | selectattr('rc', 'defined') | selectattr('rc', 'ne', 0) | list | length > 0
-  notify: Restart proxmox-backup-proxy
+- name: Set datastore GC schedule
+  ansible.builtin.command: proxmox-backup-manager datastore update {{ item.item.name }} --gc-schedule "{{ item.item.gc_schedule | default('daily') }}"
+  loop: "{{ pbs_datastore_show.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  when: (item.stdout | from_json).get('gc-schedule') != item.item.gc_schedule | default('daily')
   tags:
     - proxmox_backup
     - pbs
@@ -701,19 +704,8 @@
       --schedule "{{ pbs_verify_schedule | default('weekly') }}"
   loop: "{{ pbs_datastores }}"
   register: verify_job_created
-  failed_when: false
-  changed_when: "'created' in verify_job_created.stdout or verify_job_created.rc == 0"
-
-# GC jobs
-- name: Configure garbage collection jobs
-  ansible.builtin.shell: |
-    proxmox-backup-manager gc-job create gc-{{ item.name }} \
-      --store {{ item.name }} \
-      --schedule "{{ item.gc_schedule | default('daily') }}"
-  loop: "{{ pbs_datastores }}"
-  register: gc_job_created
-  failed_when: false
-  changed_when: "'created' in gc_job_created.stdout or gc_job_created.rc == 0"
+  failed_when: verify_job_created.rc != 0 and 'already exists' not in verify_job_created.stderr
+  changed_when: verify_job_created.rc == 0
 
 # Prune jobs
 - name: Configure prune jobs
@@ -728,8 +720,8 @@
       --keep-yearly {{ item.keep_yearly | default(3) }}
   loop: "{{ pbs_datastores }}"
   register: prune_job_created
-  failed_when: false
-  changed_when: "'created' in prune_job_created.stdout or prune_job_created.rc == 0"
+  failed_when: prune_job_created.rc != 0 and 'already exists' not in prune_job_created.stderr
+  changed_when: prune_job_created.rc == 0
 
 - name: Display PBS configuration summary
   ansible.builtin.debug:
