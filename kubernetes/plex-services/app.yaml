@@ -362,7 +362,6 @@ spec:
   template:
     metadata:
       labels: {app: recyclarr}
-      annotations: {checksum/config: "${CONFIG_HASH}"}
     spec:
       enableServiceLinks: false
       affinity: {nodeAffinity: {preferredDuringSchedulingIgnoredDuringExecution: [{weight: 100, preference: {matchExpressions: [{key: kubernetes.io/hostname, operator: NotIn, values: [talos-cp-w]}]}}]}}

@@ -18,8 +18,6 @@ sub() { envsubst "$SUBST"; }
 HOSTS=(sonarr radarr lidarr prowlarr bazarr sabnzbd tautulli seerr)
 
 smoke() {
-  ns "$NS"
-  sub < "$HERE/pv.yaml" | kubectl apply -f -
   kubectl -n "$NS" delete pod nfs-smoke --ignore-not-found >/dev/null
   sub <<'EOF' | kubectl apply -f -
 apiVersion: v1
@@ -46,14 +44,9 @@ EOF
 
 [ "${1:-}" = smoke ] && { smoke; exit; }
 
-ns "$NS"
-kubectl create configmap recyclarr-config -n "$NS" --dry-run=client -o yaml --from-file="$HERE/config/recyclarr.yml" | kubectl apply --server-side --force-conflicts -f -
-sub < "$HERE/pv.yaml" | kubectl apply -f -
-sub < "$HERE/pvc.yaml" | kubectl apply -f -
-sub < "$HERE/secrets.yaml" | kubectl apply -f -
-sub < "$HERE/app.yaml" | kubectl apply -f -
-for i in $(seq 30); do kubectl -n "$NS" get secret plex-services-secrets >/dev/null 2>&1 && break; sleep 2; done
-# Pre-migration the db-backed pods crashloop until their data lands — the rollout wait is advisory.
+# Objects are Flux-owned (kubernetes/flux/apps/plex-services.yaml); this script is the in-app API tail until
+# it moves into ansible/playbooks/kubernetes.yml (ADR 0048 WP7).
+flux reconcile kustomization plex-services --with-source >/dev/null
 kubectl -n "$NS" rollout status deploy --timeout=300s || true
 # app:port:apiversion — the key is the pod's own config.xml ApiKey; PUT only when the method differs.
 for spec in sonarr:8989:v3 radarr:7878:v3 lidarr:8686:v1 prowlarr:9696:v1; do

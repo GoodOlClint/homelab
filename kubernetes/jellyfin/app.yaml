@@ -20,7 +20,7 @@ spec:
           ports: [{containerPort: 8096}]
           env:
             - {name: TZ, value: "${TZ}"}
-            - {name: JELLYFIN_PublishedServerUrl, value: "https://jellyfin.${DOMAIN}"}
+            - {name: JELLYFIN_PublishedServerUrl, value: "https://jellyfin.${MEDIA_DOMAIN}"}
           volumeMounts:
             - {name: config, mountPath: /config, subPath: data}
             - {name: cache, mountPath: /cache, subPath: data}
@@ -43,5 +43,5 @@ metadata: {name: jellyfin, namespace: jellyfin}
 spec:
   ingressClassName: traefik
   rules:
-    - host: jellyfin.${DOMAIN}
+    - host: jellyfin.${MEDIA_DOMAIN}
       http: {paths: [{path: /, pathType: Prefix, backend: {service: {name: jellyfin, port: {number: 8096}}}}]}

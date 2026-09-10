@@ -6,6 +6,8 @@ resources:
   - apps/kiwix.yaml
   - apps/homepage.yaml
   - apps/games.yaml
+  - apps/jellyfin.yaml
+  - apps/plex-services.yaml
 patches:
   # A Kustomization may only reference sources and secrets in its own namespace (ADR 0048).
   - target: {kind: Deployment, name: kustomize-controller}

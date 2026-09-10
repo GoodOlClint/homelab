@@ -14,12 +14,11 @@ sub() { envsubst "$SUBST"; }
 LDAP_PLUGIN=958aad66-3784-4d2a-b89a-a7b6fab6e25c   # /Plugins lists the Id without dashes
 LDAP_BASE='dc=ldap,dc=goauthentik,dc=io'
 
+# Objects are Flux-owned (kubernetes/flux/apps/jellyfin.yaml); this script is the in-app API tail until
+# it moves into ansible/playbooks/kubernetes.yml (ADR 0048 WP7).
 ensure_folder "$FOLDER"
 ensure_secret admin_password 16 "Jellyfin: local admin password (deploy.sh drives the API with it)"
-ns "$NS"
-sub < "$HERE/pv.yaml" | kubectl apply -f -
-sub < "$HERE/secrets.yaml" | kubectl apply -f -
-sub < "$HERE/app.yaml" | kubectl apply -f -
+flux reconcile kustomization jellyfin --with-source >/dev/null
 for i in $(seq 30); do kubectl -n "$NS" get secret jellyfin-admin jellyfin-ldap >/dev/null 2>&1 && break; sleep 2; done
 kubectl -n "$NS" rollout status deploy/jellyfin --timeout=600s
 
