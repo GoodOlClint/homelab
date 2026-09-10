@@ -1,6 +1,8 @@
 ---
 # Full pre_tasks for all main playbooks.
 # Loads: local overrides, bootstrap SOPS, secrets (Infisical), VLANs, prefixes.
+# Infisical is read once per run: the first play to get here loads and publishes the
+# secrets fact to localhost, every later play copies it from hostvars['localhost'].
 #
 # Optional variables:
 #   skip_vlan_computation: true  — skip VLAN prefix computation (e.g., for VPS playbook)
@@ -26,8 +28,17 @@
     expressions: evaluate-on-load
   run_once: true
 
-- name: Load secrets from Infisical or SOPS
+- name: Reuse the secrets loaded earlier in this run
+  ansible.builtin.set_fact:
+    secrets: "{{ hostvars['localhost']['secrets'] }}"
+    infisical_login: "{{ hostvars['localhost']['infisical_login'] }}"
+  run_once: true
+  no_log: true
+  when: hostvars['localhost']['secrets'] is defined
+
+- name: Load secrets from Infisical
   ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/load_secrets.yml"
+  when: hostvars['localhost']['secrets'] is not defined
 
 - name: Load canonical VLAN definitions
   ansible.builtin.include_vars:

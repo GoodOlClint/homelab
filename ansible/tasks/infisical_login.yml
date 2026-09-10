@@ -4,8 +4,7 @@
 #
 # Reads secrets from all known paths and builds a `secrets` fact that matches
 # the secrets.sops.yml structure:
-#   /          → flat keys (secrets.key_name)
-#   /shared    → flat keys merged into root (secrets.key_name)
+#   /shared    → flat keys (secrets.key_name); root / is empty by policy and never read
 #   /monitoring, /plex, etc. → nested dicts (secrets.monitoring.key_name)
 #
 # Reads authenticate with url + token_auth, never login_data: that dict is a no_log module
@@ -19,22 +18,6 @@
     universal_auth_client_id: "{{ bootstrap.infisical_client_id }}"
     universal_auth_client_secret: "{{ bootstrap.infisical_client_secret }}"
   register: infisical_login
-  delegate_to: localhost
-  become: false
-  run_once: true
-  check_mode: false
-
-# Read root-level secrets (/)
-- name: Read root secrets from Infisical
-  infisical.vault.read_secrets:
-    url: "{{ bootstrap_config.infisical_url }}"
-    auth_method: token_auth
-    token: "{{ infisical_login.login_data.access_token }}"
-    project_id: "{{ bootstrap_config.infisical_project_id }}"
-    env_slug: "prod"
-    path: "/"
-    as_dict: true
-  register: _infisical_root
   delegate_to: localhost
   become: false
   run_once: true
@@ -72,15 +55,11 @@
   loop:
     - monitoring
     - plex
-    - plex-services
-    - docker
     - vps
-    - pfsense
     - pbs
     - infrastructure
     - homepage
     - control
-    - talos
     - authentik
     - authentik-ext
     - jellyfin
@@ -98,10 +77,8 @@
     secrets: >-
       {{ _flat | combine(_nested_dicts) }}
   vars:
-    # Root + shared → flat keys (all secret names must already be lowercase)
-    _root_items: "{{ (_infisical_root.secrets | default({}, true)) | dict2items }}"
-    _shared_items: "{{ (_infisical_shared.secrets | default({}, true)) | dict2items }}"
-    _flat: "{{ dict((_root_items + _shared_items) | map(attribute='key') | list | zip((_root_items + _shared_items) | map(attribute='value') | list)) }}"
+    # /shared → flat keys (all secret names must already be lowercase)
+    _flat: "{{ _infisical_shared.secrets | default({}, true) }}"
     # Nested paths → dict keyed by folder name (hyphens→underscores), secrets as-is
     # Filter to results that have a secrets dict (skip paths that don't exist yet)
     _ok_results: "{{ _infisical_nested.results | default([]) | selectattr('secrets', 'defined') | list }}"
