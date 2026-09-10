@@ -7,7 +7,7 @@
 - name: Build the service-zone record set
   ansible.builtin.set_fact:
     _dns_primary: "{{ hostvars[groups['dns'][0]].ansible_host }}"
-    _dns_a: "{{ (_hosts + _vips + _lbs) | unique(attribute='name') }}"
+    _dns_a: "{{ (_hosts + _vips + _lbs + _aliases) | unique(attribute='name') }}"
   vars:
     dns_lb_offsets:
       registry: 64
@@ -24,6 +24,15 @@
       {{ [{'name': 'adguard', 'ip': network_data.dns_server.dns_ipv4},
           {'name': 'dns', 'ip': network_data.dns_server.bind_ipv4}]
          + ([{'name': 'pve', 'ip': host_bindings.cluster.vip_cidr.split('/')[0]}] if host_bindings is defined else []) }}
+    # Extra names on an inventory host's address; listed last so the host's own name keeps the PTR.
+    dns_aliases:
+      auth: authentik
+    _aliases: >-
+      {%- set out = [] -%}
+      {%- for n, h in dns_aliases.items() if h in hostvars and hostvars[h].ansible_host is defined -%}
+      {{- out.append({'name': n, 'ip': hostvars[h].service_ip | default(hostvars[h].ansible_host)}) -}}
+      {%- endfor -%}
+      {{ out }}
     _lbs: >-
       {%- set out = [] -%}
       {%- for n, o in dns_lb_offsets.items() -%}

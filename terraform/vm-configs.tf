@@ -20,6 +20,7 @@ locals {
     docker        = { index = 4, size_gb = 20 }  # no consumer (ADR 0038); disk still holds state — never drop or renumber
     control       = { index = 5, size_gb = 10 }  # MeshCentral data/files + Portainer state (ADR 0030)
     llm           = { index = 6, size_gb = 100 } # Ollama model cache (rebuild matrix: re-download is the fallback, not the routine)
+    authentik     = { index = 7, size_gb = 10 }  # internal realm: Postgres + media + blueprints (ADR 0049)
   }
 
   # --- Infrastructure VMs ---
@@ -109,6 +110,23 @@ locals {
       data_volume    = { name = "control", path = "/opt/control" }
       ha             = true
     },
+    # Identity for the bootstrap tier (ADR 0049): the internal authentik realm, single-homed on the
+    # services VLAN like every guest (ADR 0017) — its vlan30/vlan10 consumers already reach the
+    # services ingress, so no new firewall rule. Caddy terminates a Let's Encrypt cert on 443.
+    {
+      name         = "authentik"
+      type         = "lxc"
+      node_name    = "ms-01a"
+      vm_id        = 213
+      vlans        = ["vlan40"]
+      ip_offset    = 113
+      cpu_cores    = 2
+      memory_mb    = 3072
+      disk_size_gb = 10
+      keyctl       = true
+      data_volume  = { name = "authentik", path = "/opt/authentik" }
+      ha           = true
+    },
     {
       name           = "unifi"
       vm_id          = 200 # old 100 + 100 (ADR 0028)
@@ -189,7 +207,7 @@ locals {
       bind_mounts = [
         { source = "/mnt/nas/plex/data/media", path = "/mnt/media", read_only = true },
       ]
-      ha          = true
+      ha = true
     },
     # Second inference node beside the Mac Studio (ADR 0001/0003/0031): the
     # Quadro RTX 5000 passed through whole (IOMMU group 19 on msi, all four

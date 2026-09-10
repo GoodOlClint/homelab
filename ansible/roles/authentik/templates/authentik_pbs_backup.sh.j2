@@ -1,0 +1,11 @@
+#!/bin/bash
+# Nightly pg_dumpall of the internal authentik realm to PBS ns {{ authentik_pbs_namespace }} (ADR 0049).
+# Verify by snapshot recency on PBS, never by this script exiting 0.
+set -euo pipefail
+WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
+F="$WORK/pg_dumpall-$(date +%F).sql.gz"
+docker exec authentik-postgres pg_dumpall -U authentik | gzip > "$F"
+[ -s "$F" ] || { echo "empty dump" >&2; exit 1; }
+. /etc/proxmox-backup/pbs-client.env
+proxmox-backup-client namespace create {{ authentik_pbs_namespace }} 2>/dev/null || true
+proxmox-backup-client backup dump.pxar:"$WORK" --ns {{ authentik_pbs_namespace }} --backup-type host --backup-id {{ authentik_pbs_backup_id }} </dev/null

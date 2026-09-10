@@ -1,0 +1,72 @@
+services:
+  caddy:
+    image: {{ authentik_caddy_image }}
+    container_name: authentik-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - {{ authentik_base_dir }}/Caddyfile:/etc/caddy/Caddyfile:ro
+      - {{ authentik_base_dir }}/tls:/tls:ro
+    depends_on:
+      - server
+
+  postgres:
+    image: {{ authentik_postgres_image }}
+    container_name: authentik-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=authentik
+      - POSTGRES_DB=authentik
+    env_file:
+      - {{ authentik_env_file }}
+    volumes:
+      - {{ authentik_base_dir }}/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U authentik"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  server:
+    image: {{ authentik_image }}
+    container_name: authentik-server
+    restart: unless-stopped
+    command: server
+    environment:
+      - TZ={{ timezone }}
+      - AUTHENTIK_POSTGRESQL__HOST=postgres
+      - AUTHENTIK_POSTGRESQL__NAME=authentik
+      - AUTHENTIK_POSTGRESQL__USER=authentik
+      - AUTHENTIK_WEB__BASE_URL=https://{{ authentik_host }}
+      - AUTHENTIK_BOOTSTRAP_EMAIL={{ acme_email }}
+    env_file:
+      - {{ authentik_env_file }}
+    volumes:
+      - {{ authentik_base_dir }}/media:/media
+      - {{ authentik_base_dir }}/blueprints:/blueprints/custom:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    image: {{ authentik_image }}
+    container_name: authentik-worker
+    restart: unless-stopped
+    command: worker
+    environment:
+      - TZ={{ timezone }}
+      - AUTHENTIK_POSTGRESQL__HOST=postgres
+      - AUTHENTIK_POSTGRESQL__NAME=authentik
+      - AUTHENTIK_POSTGRESQL__USER=authentik
+      - AUTHENTIK_WEB__BASE_URL=https://{{ authentik_host }}
+      - AUTHENTIK_BOOTSTRAP_EMAIL={{ acme_email }}
+    env_file:
+      - {{ authentik_env_file }}
+    volumes:
+      - {{ authentik_base_dir }}/media:/media
+      - {{ authentik_base_dir }}/blueprints:/blueprints/custom:ro
+    depends_on:
+      postgres:
+        condition: service_healthy

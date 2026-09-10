@@ -1,0 +1,10 @@
+{
+    auto_https off
+}
+:80 {
+    redir https://{{ authentik_host }}{uri} permanent
+}
+:443 {
+    tls /tls/fullchain.pem /tls/privkey.pem
+    reverse_proxy server:9000
+}

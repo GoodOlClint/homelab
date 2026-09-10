@@ -1,0 +1,120 @@
+---
+- name: Verify required pre_tasks facts
+  ansible.builtin.assert:
+    that:
+      - secrets is defined
+      - secrets.authentik.secret_key is defined
+      - secrets.authentik.postgres_password is defined
+    fail_msg: "/authentik must already hold secret_key and postgres_password — this role never generates them (a restored database is undecryptable under a new key)."
+    quiet: true
+
+- name: Python docker bindings for the compose module (an LXC template ships none)
+  ansible.builtin.apt:
+    name: python3-docker
+    state: present
+  tags: [authentik, docker]
+
+- name: Configure Docker syslog logging
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/configure_docker_logging.yml"
+  tags: [authentik, docker, logging]
+
+- name: Create authentik directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    mode: "0755"
+    owner: "{{ item.owner | default('root') }}"
+  loop:
+    - { path: "{{ authentik_base_dir }}" }
+    - { path: "{{ authentik_base_dir }}/media", owner: "1000" }
+    - { path: "{{ authentik_base_dir }}/blueprints" }
+    - { path: "{{ authentik_base_dir }}/tls" }
+  tags: [authentik, config]
+
+# The realm blueprint is the cluster tree's file with its deploy-time placeholders filled here;
+# authentik's worker discovers /blueprints/custom/*.yaml and re-applies on change — no hash wait.
+- name: Render the realm blueprint
+  ansible.builtin.copy:
+    content: >-
+      {{ lookup('file', authentik_blueprint_src)
+         | replace('${HOST}', authentik_host)
+         | replace('${DOMAIN}', service_domain)
+         | replace('${DOMAIN_RE}', service_domain | replace('.', '\\.')) }}
+    dest: "{{ authentik_base_dir }}/blueprints/homelab-internal.yaml"
+    mode: "0644"
+  tags: [authentik, config]
+
+- name: Let's Encrypt certificate for the login host
+  ansible.builtin.include_role:
+    name: cert_client
+  vars:
+    cert_client_issuer: letsencrypt
+    cert_client_fqdn: "{{ authentik_host }}"
+    cert_client_cloudflare_token: "{{ authentik_cloudflare_token }}"
+    cert_client_deploy_hook: >-
+      install -m 0644 "$RENEWED_LINEAGE/fullchain.pem" {{ authentik_base_dir }}/tls/fullchain.pem &&
+      install -m 0600 "$RENEWED_LINEAGE/privkey.pem" {{ authentik_base_dir }}/tls/privkey.pem &&
+      (docker compose -f {{ authentik_base_dir }}/docker-compose.yml exec -T caddy caddy reload --config /etc/caddy/Caddyfile || true)
+  tags: [authentik, tls]
+
+- name: Certificate files for Caddy
+  ansible.builtin.copy:
+    src: "/etc/letsencrypt/live/{{ authentik_host }}/{{ item.src }}"
+    dest: "{{ authentik_base_dir }}/tls/{{ item.dest }}"
+    remote_src: true
+    mode: "{{ item.mode }}"
+  loop:
+    - { src: fullchain.pem, dest: fullchain.pem, mode: "0644" }
+    - { src: privkey.pem, dest: privkey.pem, mode: "0600" }
+  notify: restart authentik compose
+  tags: [authentik, tls]
+
+- name: Template Caddyfile
+  ansible.builtin.template:
+    src: Caddyfile.j2
+    dest: "{{ authentik_base_dir }}/Caddyfile"
+    mode: "0644"
+  notify: restart authentik compose
+  tags: [authentik, config]
+
+- name: Template docker-compose.yml
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ authentik_base_dir }}/docker-compose.yml"
+    mode: "0600"
+  notify: restart authentik compose
+  tags: [authentik, compose]
+
+- name: Deploy authentik containers
+  community.docker.docker_compose_v2:
+    project_src: "{{ authentik_base_dir }}"
+    state: present
+  tags: [authentik, compose, deploy]
+
+- name: Wait for authentik
+  ansible.builtin.uri:
+    url: "http://localhost:80/-/health/ready/"
+    status_code: [200, 301, 308]
+    follow_redirects: none
+  register: _authentik_ready
+  until: _authentik_ready.status in [200, 301, 308]
+  retries: 30
+  delay: 5
+  tags: [authentik, deploy]
+
+- name: PBS dump script
+  ansible.builtin.template:
+    src: authentik_pbs_backup.sh.j2
+    dest: /usr/local/bin/authentik_pbs_backup.sh
+    mode: "0750"
+  tags: [authentik, backup]
+
+- name: Nightly PBS dump
+  ansible.builtin.cron:
+    name: authentik PBS dump
+    cron_file: authentik_pbs_backup
+    user: root
+    minute: "20"
+    hour: "2"
+    job: "/usr/local/bin/authentik_pbs_backup.sh >> /var/log/authentik_pbs_backup.log 2>&1"
+  tags: [authentik, backup]

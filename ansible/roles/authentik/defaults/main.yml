@@ -1,0 +1,17 @@
+---
+# ADR 0049: the internal authentik realm as a compose stack on a Proxmox LXC. Same hostname, database
+# and secret_key as the cluster realm it replaces, so no consumer changes. Image pins follow the
+# cluster deploy (kubernetes/authentik/deploy.sh CHART_VERSION, app.yaml postgres:17).
+authentik_base_dir: /opt/authentik
+authentik_host: "auth.{{ service_domain }}"
+authentik_version: "2026.8.0"
+authentik_image: "ghcr.io/goauthentik/server:{{ authentik_version }}"
+authentik_postgres_image: "postgres:17"
+authentik_caddy_image: "caddy:latest"
+# The realm's blueprint is the cluster tree's file — one source until the cluster copy is retired.
+authentik_blueprint_src: "{{ playbook_dir }}/../../kubernetes/authentik/blueprint-internal.yaml"
+authentik_env_file: /etc/infisical/secrets/authentik.env
+authentik_pbs_namespace: databases
+authentik_pbs_backup_id: authentik-postgres
+# The identity box holds only a token scoped to the service zone (ADR 0049), never the shared one.
+authentik_cloudflare_token: "{{ secrets.infrastructure.authentik_cloudflare_dns_api_token }}"

@@ -192,6 +192,34 @@
     - phase1
     - control
 
+# Identity for the bootstrap tier (ADR 0049): the internal authentik realm on its own LXC.
+- name: Configure authentik
+  hosts: authentik
+  become: true
+  vars_files:
+    - ../group_vars/all.yml
+  pre_tasks:
+    - *load_all_config_task
+  vars:
+    infisical_secret_paths: ["/shared", "/authentik"]
+    infisical_agent_templates:
+      - name: pbs
+        dest_path: /etc/infisical/secrets/pbs.env
+        template_src: secrets/pbs.env.tpl.j2
+      - name: authentik
+        dest_path: /etc/infisical/secrets/authentik.env
+        template_src: secrets/authentik.env.tpl.j2
+        post_command: "docker compose -f /opt/authentik/docker-compose.yml up -d --force-recreate server worker"
+  roles:
+    - infisical_client
+    - pbs_client
+    - authentik
+    - rsyslog_client
+    - telegraf
+  tags:
+    - phase1
+    - authentik
+
 - name: "Phase 1: Configure pdm VM (Proxmox Datacenter Manager, ADR 0030)"
   hosts: pdm
   become: true

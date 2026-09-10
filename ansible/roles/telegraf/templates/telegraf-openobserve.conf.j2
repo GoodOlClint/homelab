@@ -86,7 +86,7 @@
 {% else %}
   files = ["/var/log/syslog"]
 {% endif %}
-  from_beginning = false
+  initial_read_offset = "saved-or-end"
   data_format = "grok"
   grok_patterns = ["%{SYSLOGTIMESTAMP:timestamp} %{SYSLOGHOST:host} %{DATA:program}(?:\\[%{POSINT:pid}\\])?: %{GREEDYDATA:message}"]
   name_override = "syslog"

@@ -1,0 +1,10 @@
+---
+- name: restart authentik compose
+  community.docker.docker_compose_v2:
+    project_src: "{{ authentik_base_dir }}"
+    state: restarted
+
+- name: restart docker
+  ansible.builtin.systemd:
+    name: docker
+    state: restarted
