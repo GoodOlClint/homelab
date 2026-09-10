@@ -53,7 +53,6 @@ This repository separates **policy** (what the infrastructure should look like) 
 ### Policy/Intent (git-tracked)
 
 - `network-data/vlans.example.yaml` -- Schema template defining all 12 VLANs with `REPLACE` placeholders
-- `network-data/public_policy.yaml` -- Abstract zone-to-zone firewall rules (no IPs)
 - `ansible/group_vars/secrets.sops.example.yml` -- Secrets template with `REPLACE_ME` values
 - `ansible/group_vars/bootstrap.sops.example.yml` -- Bootstrap secrets template (Infisical deployment parameters)
 - All Terraform and Ansible code
@@ -114,7 +113,7 @@ VNETs use the VNET name as the bridge identifier (e.g., "Mgmt", "Core", "Service
 
 ### Firewall Policy
 
-Zone-to-zone rules from `network-data/public_policy.yaml`:
+Zone-to-zone intent (pfSense stays hand-managed per ADR 0005; this table is the record):
 
 | From | To | Service | Action | Notes |
 |------|----|---------|--------|-------|
@@ -386,7 +385,6 @@ Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-m
 | pfsense.yml | pfSense | DHCP scopes + RFC 2136 DNS registration |
 | vps.yml | VPS | WireGuard, nftables, hardening, monitoring agents |
 | unifi.yml | UniFi VM | UniFi Controller deployment |
-| docker-config.yml | Service VMs | Lightweight compose+config deploy (no full role) |
 | update-all.yml | All + VPS | OS patching (apt/apk) |
 | update-dns.yml | DNS VMs | DNS configuration updates |
 | adguard-pause.yml | adguard group | Disable filtering on both AdGuard instances for n minutes (`make adguard-pause`) |
@@ -562,7 +560,6 @@ The Makefile is the primary operational interface.
 | `rebuild <vm>` | Replace the guest in one atomic apply (`-replace`), clean SSH key, re-run Ansible. Also reconciles VM↔LXC conversions and HA registration changes |
 | `data-volumes` | Apply the data-volume holder VM alone, then format+chown any new volume (ADR 0020). Run after adding a `data_volumes` entry and before `build` of its consumer |
 | `ansible <vm>` | Run site.yml limited to a single host (supports `TAGS=`) |
-| `docker-config <vm>` | Deploy only compose+config templates and restart (no full role) |
 
 ### Ansible Playbooks
 
@@ -593,7 +590,6 @@ All `ansible-*` targets support `TAGS=<tag>` to filter by play-level tags (e.g.,
 | `infisical-seed` | Migrate secrets from SOPS to Infisical |
 | `infisical-backup` | Export Infisical secrets to SOPS format |
 | `infisical-restore` | Restore the vault from its newest PBS `databases/infisical` dump (ADR 0039; the dump also carries the vault's Caddy key + cert since ADR 0042, so a restored vault verifies at once); `HOST=`/`DIR=` point it at a throwaway stack for a rehearsal |
-| `infisical-organize` | Organize flat secrets into per-VM folders |
 | `refresh-identity` | Refresh Infisical machine identity credentials |
 | `plex-token` | Retrieve Plex authentication token |
 
@@ -614,7 +610,6 @@ All `ansible-*` targets support `TAGS=<tag>` to filter by play-level tags (e.g.,
 |--------|-------------|
 | `setup-hooks` | Install pre-commit hooks |
 | `bootstrap-local` | Copy example files to local gitignored config |
-| `validate-public-policy` | Validate public_policy.yaml schema |
 | `validate` | What CI runs (`.github/workflows/validate.yml`): terraform fmt/validate on the three roots, ansible-lint (production profile, zero tolerated findings), syntax-check of every playbook, every Flux tree builds, the public-policy validator, the axosyslog routing test (Docker) |
 | `security-check` | Run security guardrails on staged files |
 | `security-check-range` | Run security guardrails on a commit range |
@@ -676,15 +671,12 @@ homelab/
 │   └── roles/                      # 32 roles (flat directory)
 ├── network-data/
 │   ├── vlans.example.yaml          # Schema template (tracked)
-│   ├── vlans.yaml                  # Site-specific bindings (gitignored)
-│   └── public_policy.yaml          # Zone-to-zone firewall intent (tracked)
+│   └── vlans.yaml                  # Site-specific bindings (gitignored)
 ├── scripts/
 │   ├── bootstrap_local_config.sh   # Copy example files to local config
 │   ├── seed_infisical.sh           # SOPS to Infisical secret migration
 │   ├── infisical_to_sops.py        # Infisical to SOPS backup export
-│   ├── organize_infisical_folders.sh  # Organize secrets into per-VM folders
-│   ├── security_guardrails.sh      # Pre-commit security checks
-│   └── validate_public_policy.py   # Policy YAML schema validator
+│   └── security_guardrails.sh      # Pre-commit security checks
 ├── docs/                           # Operational runbooks
 └── archive/                        # Deprecated configs (Packer, old projects)
 ```

@@ -48,7 +48,7 @@ $(TF_TARGETS): export TF_VAR_worklab_password = $(call _secret,worklab_password)
 # Enables: make plan <vm>, make build <vm>, make rebuild <vm>
 # Captures the VM name from the second word in MAKECMDGOALS and creates a no-op
 # target for it so Make doesn't error on the unknown target name.
-ifneq (,$(filter build rebuild plan ansible docker-config update,$(firstword $(MAKECMDGOALS))))
+ifneq (,$(filter build rebuild plan ansible update,$(firstword $(MAKECMDGOALS))))
   VM := $(wordlist 2,2,$(MAKECMDGOALS))
   ifneq (,$(VM))
     $(eval $(VM):;@:)
@@ -250,16 +250,9 @@ endif
 	@echo "Running Ansible for: $(VM)"
 	@$(ANSIBLE_PLAYBOOK) ansible/playbooks/site.yml --limit $(VM) $(if $(TAGS),--tags $(TAGS)) $(if $(CHECK),--check --diff,)
 
-# make docker-config <vm> — deploy only docker-compose, config templates, and restart
-docker-config:
-ifndef VM
-	$(error Usage: make docker-config <vm-name>)
-endif
-	@echo "Deploying docker configs for: $(VM)"
-	@$(ANSIBLE_PLAYBOOK) ansible/playbooks/docker-config.yml --limit $(VM)
 
 # === Ansible Playbooks ===
-.PHONY: ansible ansible-all ansible-infra ansible-services ansible-pfsense docker-config update update-dns expand-disk
+.PHONY: ansible ansible-all ansible-infra ansible-services ansible-pfsense update update-dns expand-disk
 
 ansible-all:
 	@$(ANSIBLE_PLAYBOOK) ansible/playbooks/site.yml --skip-tags unifi-user $(if $(TAGS),--tags $(TAGS))
@@ -368,7 +361,7 @@ vps-rotate-keys:
 	  ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vps.yaml ansible/playbooks/vps-rotate-keys.yml -e "ansible_host=$$VPS_IP"
 
 # === Secrets Management ===
-.PHONY: infisical-seed infisical-backup infisical-restore infisical-organize refresh-identity plex-token
+.PHONY: infisical-seed infisical-backup infisical-restore refresh-identity plex-token
 
 # Restore Infisical from backup (disaster recovery)
 infisical-seed:
@@ -388,9 +381,6 @@ infisical-restore:
 	@HOST=$(HOST) DIR=$(DIR) SNAPSHOT=$(SNAPSHOT) SSH_USER=$(SSH_USER) bash scripts/infisical_pbs_restore.sh
 
 # One-time: organize flat Infisical secrets into per-VM folders
-infisical-organize:
-	@bash scripts/organize_infisical_folders.sh
-
 # Retrieve Plex token from plex.tv and store in Infisical
 # Requires plex_username and plex_password in bootstrap.sops.yml
 plex-token:
@@ -402,16 +392,13 @@ refresh-identity:
 	@$(ANSIBLE_PLAYBOOK) ansible/playbooks/refresh-identity.yml $(if $(LIMIT),--limit $(LIMIT)) $(if $(TAGS),--tags $(TAGS)) $(if $(FORCE),-e force=true)
 
 # === Setup & Security ===
-.PHONY: setup-hooks bootstrap-local validate validate-public-policy security-check security-check-range
+.PHONY: setup-hooks bootstrap-local validate security-check security-check-range
 
 setup-hooks:
 	@pre-commit install --install-hooks
 
 bootstrap-local:
 	@bash scripts/bootstrap_local_config.sh
-
-validate-public-policy:
-	@python3 scripts/validate_public_policy.py network-data/public_policy.yaml
 
 security-check:
 	@bash scripts/security_guardrails.sh --staged
@@ -428,7 +415,6 @@ validate:
 	@cd ansible && $(VENV_PYTHON) -c "import re,glob,json,sys; g={h for f in glob.glob('playbooks/*.yml') for h in re.findall(r'^\s*hosts:\s*([\w,:-]+)', open(f).read(), re.M) for h in h.split(',') if h not in ('all','localhost')}; json.dump({'all':{'children':{k:{'hosts':{'stub':{}}} for k in sorted(g)}}}, open('/tmp/stub-inventory.json','w'))" \
 	  && for p in playbooks/*.yml; do ANSIBLE_TRANSFORM_INVALID_GROUP_CHARS=ignore ../.venv/bin/ansible-playbook --syntax-check -i /tmp/stub-inventory.json $$p >/dev/null || exit 1; done && echo "syntax-check: $$(ls playbooks/*.yml | wc -l | tr -d ' ') playbooks ok"
 	@$(VENV_PYTHON) scripts/flux_check.py $(CURDIR) --build-only >/dev/null && echo "flux trees build"
-	@$(VENV_PYTHON) scripts/validate_public_policy.py network-data/public_policy.yaml
 	@$(VENV_PYTHON) scripts/test_axosyslog_routing.py
 	@bash scripts/test_security_guardrails.sh
 	@! grep -rnE "from-literal=|(echo|printf '%s') '\{\{[^}]*(password|secret|token|private_key)" ansible/roles ansible/tasks ansible/playbooks kubernetes scripts || { echo "secret on argv (#17): use stdin: / --value-stdin"; exit 1; }

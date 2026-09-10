@@ -124,9 +124,6 @@ if [[ "$leak_fail" == "1" ]]; then
   exit 1
 fi
 
-echo "[guardrails] validating publishable policy files"
-python3 scripts/validate_public_policy.py network-data/public_policy.yaml
-
 if ! command -v gitleaks >/dev/null 2>&1; then
   echo "[guardrails] gitleaks not found in PATH. Install it to enable secret scanning." >&2
   echo "[guardrails] macOS: brew install gitleaks" >&2

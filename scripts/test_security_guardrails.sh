@@ -5,8 +5,7 @@ set -euo pipefail
 GUARD="$(cd "$(dirname "$0")/.." && pwd)/scripts/security_guardrails.sh"
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 cd "$T" && git init -q && git config user.email t@t && git config user.name t
-mkdir -p network-data scripts && cp "$(dirname "$GUARD")/validate_public_policy.py" scripts/
-cp "$(dirname "$GUARD")/../network-data/public_policy.yaml" network-data/
+printf "seed\n" > README.md
 git add -A && git commit -qm base
 # gitleaks runs after the leak scan; a stub keeps the test hermetic
 mkdir -p bin && printf '#!/bin/sh\nexit 0\n' > bin/gitleaks && chmod +x bin/gitleaks
