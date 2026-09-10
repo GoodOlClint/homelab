@@ -39,7 +39,7 @@
       {{ lookup('file', authentik_blueprint_src)
          | replace('${HOST}', authentik_host)
          | replace('${DOMAIN}', service_domain)
-         | replace('${DOMAIN_RE}', service_domain | replace('.', '\\.')) }}
+         | replace('${DOMAIN_RE}', service_domain | regex_escape) }}
     dest: "{{ authentik_base_dir }}/blueprints/homelab-internal.yaml"
     mode: "0644"
   tags: [authentik, config]
