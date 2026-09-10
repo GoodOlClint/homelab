@@ -46,7 +46,7 @@ kind: Ingress
 metadata:
   name: homepage
   namespace: homepage
-  annotations: {traefik.ingress.kubernetes.io/router.middlewares: authentik-forward-auth@kubernetescrd}
+  annotations: {traefik.ingress.kubernetes.io/router.middlewares: traefik-forward-auth@kubernetescrd}
 spec:
   ingressClassName: traefik
   rules:

@@ -484,7 +484,7 @@ kind: Ingress
 metadata:
   name: plex-services
   namespace: plex-services
-  annotations: {traefik.ingress.kubernetes.io/router.middlewares: authentik-forward-auth@kubernetescrd}
+  annotations: {traefik.ingress.kubernetes.io/router.middlewares: traefik-forward-auth@kubernetescrd}
 spec:
   ingressClassName: traefik
   rules:
