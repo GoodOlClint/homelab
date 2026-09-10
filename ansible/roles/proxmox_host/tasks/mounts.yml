@@ -65,6 +65,7 @@
     # into guests. (ls through the automount triggers the real mount.)
     - name: Verify NAS mounts are live and non-empty
       ansible.builtin.shell: |
+        set -o pipefail
         timeout 20 ls -A "{{ item.path }}" | head -1 | grep -q . && timeout 5 mountpoint -q "{{ item.path }}"
       loop: "{{ host_bindings.cluster.nas_mounts }}"
       loop_control:

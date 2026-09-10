@@ -98,6 +98,7 @@
       register: _cli_bootstrap
       no_log: true
       failed_when: false
+      changed_when: _cli_bootstrap.rc == 0
 
     - name: Check if bootstrap returned valid JSON
       ansible.builtin.set_fact:
@@ -126,6 +127,7 @@
         cmd: >-
           sops --set '["bootstrap_config"]["infisical_org_id"] "{{ _org_id }}"'
           {{ playbook_dir }}/../group_vars/bootstrap.sops.yml
+      changed_when: true
       when: _bootstrap_fresh | bool
 
     - name: Set org ID from config (instance already bootstrapped)
@@ -146,6 +148,7 @@
           --plain --silent
       register: _cli_login
       no_log: true
+      changed_when: false
 
     - name: Set admin JWT from CLI login
       ansible.builtin.set_fact:
@@ -278,24 +281,28 @@
         cmd: >-
           sops --set '["bootstrap_config"]["infisical_url"] "{{ _infisical_url }}"'
           {{ playbook_dir }}/../group_vars/bootstrap.sops.yml
+      changed_when: true
 
     - name: Update infisical_project_id in bootstrap_config
       ansible.builtin.command:
         cmd: >-
           sops --set '["bootstrap_config"]["infisical_project_id"] "{{ _project_id }}"'
           {{ playbook_dir }}/../group_vars/bootstrap.sops.yml
+      changed_when: true
 
     - name: Update infisical_org_id in bootstrap_config
       ansible.builtin.command:
         cmd: >-
           sops --set '["bootstrap_config"]["infisical_org_id"] "{{ _org_id }}"'
           {{ playbook_dir }}/../group_vars/bootstrap.sops.yml
+      changed_when: true
 
     - name: Update infisical_client_id in bootstrap
       ansible.builtin.command:
         cmd: >-
           sops --set '["bootstrap"]["infisical_client_id"] "{{ _client_id }}"'
           {{ playbook_dir }}/../group_vars/bootstrap.sops.yml
+      changed_when: true
       no_log: true
 
     - name: Update infisical_client_secret in bootstrap
@@ -303,6 +310,7 @@
         cmd: >-
           sops --set '["bootstrap"]["infisical_client_secret"] "{{ _client_secret }}"'
           {{ playbook_dir }}/../group_vars/bootstrap.sops.yml
+      changed_when: true
       no_log: true
 
     # --- Refresh in-memory facts to match SOPS updates ---

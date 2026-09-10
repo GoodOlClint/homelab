@@ -10,8 +10,8 @@
   tags:
     - aide
 
-- name: Update apk cache after enabling testing repo
-  ansible.builtin.apk:
+- name: Update apk cache after enabling testing repo # noqa: no-handler
+  community.general.apk:
     update_cache: true
 
   when: testing_repo.changed
@@ -54,6 +54,7 @@
 
 - name: Initialize AIDE database
   ansible.builtin.command: aide --init
+  changed_when: true
   when: not aide_db.stat.exists
   tags:
     - aide

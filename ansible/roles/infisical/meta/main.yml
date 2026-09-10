@@ -1,10 +1,6 @@
 ---
 dependencies: []
 
-galaxy_info:
-  role_name: infisical
-  description: "Infisical secrets management server"
-
 # Docker must be installed by a preceding role or playbook
 collections:
   - community.docker

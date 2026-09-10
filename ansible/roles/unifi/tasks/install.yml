@@ -39,8 +39,9 @@
 
 - name: Run UniFi OS Server installer
   ansible.builtin.shell:
-    cmd: echo "y" | /tmp/uos-installer
+    cmd: set -o pipefail; echo "y" | /tmp/uos-installer
   when: not uos_installed.stat.exists
+  changed_when: true
   notify: Restart UniFi OS Server
 
 - name: Clean up installer

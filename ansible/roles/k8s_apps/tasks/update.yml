@@ -29,6 +29,7 @@
 
 - name: Delete their pods
   ansible.builtin.command: "{{ k8s_apps_kubectl }} -n {{ item.ns }} delete pod -l {{ item.selector }} --wait=false"
+  changed_when: true
   loop: "{{ _latest }}"
   loop_control: {label: "{{ item.ns }}/{{ item.name }}"}
 

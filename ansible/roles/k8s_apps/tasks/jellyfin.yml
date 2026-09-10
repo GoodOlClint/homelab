@@ -45,16 +45,21 @@
     - ansible.builtin.command:
         cmd: "{{ _jfi }}/Startup/Configuration -X POST -d @-"
         stdin: '{"UICulture":"en-US","MetadataCountryCode":"US","PreferredMetadataLanguage":"en"}'
+      changed_when: true
     # the GET initializes the first user; the POST 404s without it
     - ansible.builtin.command: "{{ _jf }}/Startup/User"
+      changed_when: false
     - ansible.builtin.command:
         cmd: "{{ _jfi }}/Startup/User -X POST -d @-"
         stdin: "{{ {'Name': 'admin', 'Password': _jf_admin_pw} | to_json }}"
       no_log: true
+      changed_when: true
     - ansible.builtin.command:
         cmd: "{{ _jfi }}/Startup/RemoteAccess -X POST -d @-"
         stdin: '{"EnableRemoteAccess":true,"EnableAutomaticPortMapping":false}'
+      changed_when: true
     - ansible.builtin.command: "{{ _jf }}/Startup/Complete -X POST"
+      changed_when: true
 
 - name: Admin session
   ansible.builtin.command:
@@ -80,8 +85,10 @@
   when: _jf_plugins.stdout | from_json | selectattr('Id', 'equalto', k8s_apps_jellyfin_ldap_plugin | replace('-', '')) | list | length == 0
   block:
     - ansible.builtin.command: "{{ _jf }}/Packages/Installed/LDAP%20Authentication -X POST {{ _jf_h }}"
+      changed_when: true
     - ansible.builtin.command: "{{ _jf }}/System/Restart -X POST {{ _jf_h }}"
       failed_when: false
+      changed_when: true
     - ansible.builtin.pause: {seconds: 10}
     - ansible.builtin.command: "{{ _jf }}/Plugins {{ _jf_h }}"
       register: _jf_plugins
@@ -126,6 +133,7 @@
     cmd: "{{ _jfi }}/Plugins/{{ k8s_apps_jellyfin_ldap_plugin }}/Configuration -X POST {{ _jf_h }} -d @-"
     stdin: "{{ _have | combine(_want) | to_json }}"
   when: _have | combine(_want) != _have
+  changed_when: true
   no_log: true
 
 - name: Libraries
@@ -143,11 +151,13 @@
     stdin: '{"LibraryOptions":{"EnableRealtimeMonitor":false}}'
   loop: "{{ k8s_apps_jellyfin_libraries | dict2items }}"
   loop_control: {label: "{{ item.key }}"}
+  changed_when: true
   when: item.key not in (_jf_libs.stdout | from_json | map(attribute='Name') | list)
   register: _jf_lib_add
   no_log: true
 
-- name: Scan the new libraries
+- name: Scan the new libraries # noqa: no-handler
   ansible.builtin.command: "{{ _jf }}/Library/Refresh -X POST {{ _jf_h }}"
   when: _jf_lib_add is changed
+  changed_when: true
   no_log: true

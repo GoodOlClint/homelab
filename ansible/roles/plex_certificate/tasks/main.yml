@@ -53,6 +53,7 @@
 - name: Run deploy hook to (re)create the PKCS#12 certificate
   ansible.builtin.command:
     cmd: "{{ plex_certbot_deploy_hook }}"
+  changed_when: true
   when: not plex_pfx_file.stat.exists or plex_pfx_file.stat.mtime < plex_live_cert.stat.mtime
   tags: [plex, certificate, tls]
 
@@ -85,6 +86,7 @@
       -i '//Preferences[not(@customCertificateDomain)]' -t attr -n customCertificateDomain -v '{{ plex_cert_domain }}'
       "{{ plex_preferences_path }}"
   when: _plex_cert_prefs.stdout != plex_pfx_path ~ '|' ~ secrets.plex.plex_cert_pfx_password ~ '|' ~ plex_cert_domain
+  changed_when: true
   no_log: true
   notify: restart plex
   tags: [plex, certificate, tls]

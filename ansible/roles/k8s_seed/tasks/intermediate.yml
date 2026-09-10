@@ -13,7 +13,7 @@
 - name: Verify it against the root
   ansible.builtin.shell:
     cmd: >-
-      printf '%s' '{{ _ca_secret.resources[0].data["tls.crt"] }}' | base64 -d
+      set -o pipefail; printf '%s' '{{ _ca_secret.resources[0].data["tls.crt"] }}' | base64 -d
       | openssl verify -CAfile {{ k8s_seed_root_ca }} >/dev/null
   register: _ca_verify
   changed_when: false

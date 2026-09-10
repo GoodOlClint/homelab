@@ -27,7 +27,7 @@
 
     - name: Derive new public key
       ansible.builtin.shell:
-        cmd: "echo '{{ new_private_key.stdout }}' | wg pubkey"
+        cmd: "set -o pipefail; echo '{{ new_private_key.stdout }}' | wg pubkey"
       register: new_public_key
       changed_when: false
 

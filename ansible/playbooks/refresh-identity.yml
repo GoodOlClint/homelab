@@ -122,7 +122,7 @@
     - refresh
   tasks:
     # --- Health check: skip healthy hosts unless forced ---
-    - name: Check if infisical-agent service is active
+    - name: Check if infisical-agent service is active # noqa: command-instead-of-module
       ansible.builtin.command: systemctl is-active infisical-agent
       register: _agent_active
       changed_when: false

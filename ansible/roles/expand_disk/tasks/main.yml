@@ -13,7 +13,7 @@
     - packages
 
 - name: Find root filesystem device
-  ansible.builtin.shell: df / | tail -1 | awk '{print $1}' | sed 's/[0-9]*$//'
+  ansible.builtin.shell: set -o pipefail; df / | tail -1 | awk '{print $1}' | sed 's/[0-9]*$//'
   register: root_device
   changed_when: false
   tags:
@@ -21,7 +21,7 @@
     - storage
 
 - name: Find root partition number
-  ansible.builtin.shell: df / | tail -1 | awk '{print $1}' | sed 's/.*[^0-9]//'
+  ansible.builtin.shell: set -o pipefail; df / | tail -1 | awk '{print $1}' | sed 's/.*[^0-9]//'
   register: root_partition
   changed_when: false
   tags:
@@ -47,10 +47,11 @@
     - storage
     - resize
 
-- name: Resize filesystem to use expanded partition
+- name: Resize filesystem to use expanded partition # noqa: no-handler
   ansible.builtin.command: resize2fs {{ root_device.stdout }}{{ root_partition.stdout }}
   when: growpart_result.changed
   register: resize_result
+  changed_when: true
   tags:
     - expand_disk
     - storage

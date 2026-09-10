@@ -22,7 +22,7 @@
     - validate
 
 - name: Install WireGuard tools
-  ansible.builtin.apk:
+  community.general.apk:
     name: wireguard-tools
     state: present
     update_cache: true
@@ -128,7 +128,7 @@
 
 - name: Derive public key from private key
   ansible.builtin.shell:
-    cmd: "echo '{{ wg_private_key }}' | wg pubkey"
+    cmd: "set -o pipefail; echo '{{ wg_private_key }}' | wg pubkey"
   register: wg_pubkey_result
   changed_when: false
   no_log: true

@@ -24,6 +24,7 @@
     - name: Wait for SSH to accept key-based authentication
       ansible.builtin.raw: /bin/true
       register: ssh_ready
+      changed_when: false
       until: ssh_ready is succeeded
       retries: 30
       delay: 10
@@ -47,6 +48,7 @@
     - name: Wait for startup script to install Python3
       ansible.builtin.raw: test -f /tmp/.bootstrap_complete || command -v python3
       register: bootstrap_check
+      changed_when: false
       until: bootstrap_check is succeeded
       retries: 30
       delay: 10
@@ -121,6 +123,7 @@
 
     - name: Wait for WireGuard handshake (up to 60s, rebuild only)
       ansible.builtin.shell: |
+        set -o pipefail
         wg show wg0 latest-handshakes | awk '{print $2}'
       register: wg_handshake
       changed_when: false

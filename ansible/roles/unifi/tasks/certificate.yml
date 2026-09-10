@@ -19,9 +19,10 @@
   changed_when: _unifi_cert_cmp.rc == 1
   failed_when: _unifi_cert_cmp.rc > 1
 
-- name: Install the issued certificate
+- name: Install the issued certificate # noqa: no-handler
   ansible.builtin.command:
     cmd: /etc/letsencrypt/renewal-hooks/deploy/{{ inventory_hostname }}.sh
   environment:
     RENEWED_LINEAGE: /etc/letsencrypt/live/{{ inventory_hostname }}.{{ service_domain }}
+  changed_when: true
   when: _unifi_cert_cmp is changed

@@ -15,6 +15,7 @@
 - name: Ceph fsid, monitors and the CSI key (from the first cluster node)
   ansible.builtin.shell:
     cmd: |
+      set -o pipefail
       ceph fsid
       ceph mon dump -f json 2>/dev/null | jq -r '[.mons[].public_addrs.addrvec[] | select(.type=="v1") | .addr] | join(",")'
       ceph auth get-key client.csi-rbd; echo

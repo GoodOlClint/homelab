@@ -12,7 +12,7 @@
     - packages
 
 - name: Install Telegraf via apk
-  ansible.builtin.apk:
+  community.general.apk:
     name: telegraf
     state: present
     update_cache: true

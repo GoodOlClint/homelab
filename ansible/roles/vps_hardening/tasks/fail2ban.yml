@@ -2,7 +2,7 @@
 # fail2ban — monitor SSH auth logs
 
 - name: Install fail2ban
-  ansible.builtin.apk:
+  community.general.apk:
     name: fail2ban
     state: present
   tags:

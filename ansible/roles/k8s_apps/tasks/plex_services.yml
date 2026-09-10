@@ -1,7 +1,7 @@
 ---
 # The four *arr apps run authenticationMethod=external: Traefik's authentik forward-auth is the
 # login, so the in-cluster Services answer unauthenticated — only pods reach them.
-- name: arr host config
+- name: arr host config # noqa: risky-shell-pipe
   ansible.builtin.shell:
     cmd: >-
       {{ k8s_apps_kubectl }} -n plex-services exec deploy/{{ item.key }} -- sh -c
@@ -13,7 +13,7 @@
   changed_when: false
   no_log: true
 
-- name: arr auth → external
+- name: arr auth → external # noqa: risky-shell-pipe
   ansible.builtin.shell:
     cmd: >-
       {{ k8s_apps_kubectl }} -n plex-services exec -i deploy/{{ item.item.key }} -- sh -c
@@ -21,6 +21,7 @@
       curl -sf -H "X-Api-Key: $K" -H "content-type: application/json" -X PUT -d @-
       localhost:{{ item.item.value[0] }}/api/{{ item.item.value[1] }}/config/host/{{ (item.stdout | from_json).id }}'
     stdin: "{{ item.stdout | from_json | combine({'authenticationMethod': 'external'}) | to_json }}"
+  changed_when: true
   loop: "{{ _arr_host.results }}"
   loop_control: {label: "{{ item.item.key }}"}
   when: (item.stdout | from_json).authenticationMethod != 'external'
@@ -49,4 +50,5 @@
       curl -sf "localhost:8080/api?mode=set_config&section=misc&keyword=host_whitelist&output=json&apikey=$K"
       --data-urlencode "value={{ (_have + _missing) | join(",") }}"'
   when: _missing | length > 0
+  changed_when: true
   no_log: true

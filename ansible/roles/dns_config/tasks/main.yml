@@ -128,6 +128,7 @@
 
 - name: Apply DNS config now so dependent roles see the new resolver
   ansible.builtin.command: netplan apply
+  changed_when: true
   become: true
   when:
     - ansible_virtualization_type != 'lxc'

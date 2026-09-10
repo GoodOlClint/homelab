@@ -15,7 +15,7 @@
 # ufw races nftables in the default runlevel — whichever wins owns the ruleset.
 # ufw only permits 22/tcp, so when it wins the WireGuard tunnel dies silently.
 - name: Ensure ufw is absent (conflicts with nftables ruleset)
-  ansible.builtin.apk:
+  community.general.apk:
     name: ufw
     state: absent
   tags:
@@ -23,7 +23,7 @@
     - packages
 
 - name: Install nftables
-  ansible.builtin.apk:
+  community.general.apk:
     name: nftables
     state: present
     update_cache: true
@@ -62,7 +62,7 @@
 
 # GeoIP filtering (optional)
 - name: Install GeoIP dependencies
-  ansible.builtin.apk:
+  community.general.apk:
     name:
       - wget
       - unzip

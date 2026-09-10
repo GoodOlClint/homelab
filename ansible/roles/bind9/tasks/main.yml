@@ -1,4 +1,3 @@
-
 ---
 - name: Verify required pre_tasks facts
   ansible.builtin.assert:
@@ -259,6 +258,7 @@
     rm -f /var/lib/bind/db.{{ item }}.jnl
     rndc reload {{ item }}
   loop: "{{ bind9_unloaded_zones.stdout_lines | default([]) }}"
+  changed_when: true
   when: bind9_primary
   tags:
     - bind9

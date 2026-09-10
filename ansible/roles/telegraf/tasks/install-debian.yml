@@ -94,7 +94,7 @@
     - packages
 
 - name: Check if Telegraf is installed
-  ansible.builtin.shell: dpkg -l | grep -qw telegraf
+  ansible.builtin.shell: set -o pipefail; dpkg -l | grep -qw telegraf
   register: telegraf_installed
   changed_when: false
   failed_when: false

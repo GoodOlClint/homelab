@@ -24,6 +24,7 @@
   when: not monitoring_user_exists
   delegate_to: "{{ proxmox_host }}"
   register: user_created
+  changed_when: true
   vars:
     ansible_connection: ssh
     ansible_user: root
@@ -69,6 +70,7 @@
   ansible.builtin.command:
     cmd: "/usr/sbin/pveum user token add {{ proxmox_monitoring_user }} monitoring --privsep 0 --output-format json"
   register: _pve_token_create
+  changed_when: true
   delegate_to: "{{ proxmox_host }}"
   when: not _pve_monitoring_token_exists | bool
   no_log: true

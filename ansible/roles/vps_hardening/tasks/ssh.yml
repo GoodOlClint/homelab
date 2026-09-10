@@ -2,7 +2,7 @@
 # SSH Hardening — key-only, tunnel IP only
 
 - name: Install sudo
-  ansible.builtin.apk:
+  community.general.apk:
     name: sudo
     state: present
   tags:

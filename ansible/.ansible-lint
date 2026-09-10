@@ -16,6 +16,18 @@ exclude_paths:
   - roles/juju4.openobserve/
   - roles/plex_services/
   - inventory/
+  # Retired-guest roles, deleted by the audit's retired-guest sweep (#24); not worth polishing
+  - roles/nvidia/
+  - roles/nvidia_licensing/
+  - roles/squid/
+  - roles/minio/
+  # Shared task files are included as "{{ playbook_dir }}/../tasks/<file>", which the linter cannot
+  # template, so it looks for them under the including role and reports a phantom load-failure
+  - roles/*/tasks/generate_secret.yml
+  - roles/*/tasks/infisical_write_secret.yml
+  - roles/*/tasks/configure_docker_logging.yml
+  - roles/*/tasks/api_certificate.yml
+  - roles/*/tasks/configure_pbs_backup.yml
 kinds:
   - playbook: playbooks/*.yml
   - tasks: tasks/*.yml

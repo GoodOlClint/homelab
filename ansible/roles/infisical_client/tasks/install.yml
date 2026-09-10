@@ -16,8 +16,9 @@
         state: present
         update_cache: true
 
-    - name: Add Infisical apt repository via setup script
+    - name: Add Infisical apt repository via setup script # noqa: command-instead-of-module
       ansible.builtin.shell: |
+        set -o pipefail
         curl -1sLf 'https://artifacts-cli.infisical.com/setup.deb.sh' | bash
       args:
         creates: /etc/apt/sources.list.d/infisical-cli.list

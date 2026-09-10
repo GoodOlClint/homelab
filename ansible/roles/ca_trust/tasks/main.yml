@@ -8,7 +8,8 @@
   register: _ca_trust_root
   tags: [ca-trust]
 
-- name: Update the CA bundle
+- name: Update the CA bundle # noqa: no-handler
   ansible.builtin.command: update-ca-certificates
+  changed_when: true
   when: _ca_trust_root is changed
   tags: [ca-trust]

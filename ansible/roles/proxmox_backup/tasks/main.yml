@@ -425,7 +425,7 @@
     - config
 
 - name: Check if datastores are already configured
-  ansible.builtin.shell: proxmox-backup-manager datastore list --output-format json
+  ansible.builtin.command: proxmox-backup-manager datastore list --output-format json
   register: pbs_datastore_list
   changed_when: false
   tags:
@@ -458,6 +458,7 @@
     - pbs_datastore_list.stdout is defined
     - ((pbs_datastore_list.stdout | default('', true)) or '[]') | from_json | selectattr('name', 'equalto', item.name) | list | length == 0
   register: datastore_created
+  changed_when: true
   tags:
     - proxmox_backup
     - pbs
@@ -487,6 +488,7 @@
   loop_control:
     label: "{{ item.item.name }}"
   when: (item.stdout | from_json).get('gc-schedule') != item.item.gc_schedule | default('daily')
+  changed_when: true
   tags:
     - proxmox_backup
     - pbs
@@ -496,7 +498,7 @@
 
 # User Management
 - name: Check if backup user exists
-  ansible.builtin.shell: proxmox-backup-manager user list --output-format json
+  ansible.builtin.command: proxmox-backup-manager user list --output-format json
   register: pbs_user_list
   changed_when: false
   failed_when: false
@@ -513,6 +515,7 @@
       {% if secrets.pbs.pbs_backup_user_password is defined %}--password "{{ secrets.pbs.pbs_backup_user_password }}"{% endif %}
   loop: "{{ pbs_users }}"
   when: ((pbs_user_list.stdout | default('', true)) or '[]') | from_json | selectattr('userid', 'equalto', item.username + '@' + item.realm) | list | length == 0
+  changed_when: true
   no_log: true
   tags:
     - proxmox_backup
@@ -551,6 +554,7 @@
   when: _pbs_acls | selectattr('path', 'eq', '/datastore/' ~ item.name)
         | selectattr('roleid', 'eq', 'DatastoreAdmin')
         | selectattr('ugid', 'eq', 'backup@pbs') | list | length == 0
+  changed_when: true
   tags:
     - proxmox_backup
     - pbs
@@ -559,7 +563,7 @@
 
 # API Token Generation (must happen before ACL grants that reference tokens)
 - name: Check if API token exists for backup user
-  ansible.builtin.shell: proxmox-backup-manager user list-tokens backup@pbs --output-format json
+  ansible.builtin.command: proxmox-backup-manager user list-tokens backup@pbs --output-format json
   register: pbs_token_list
   changed_when: false
   failed_when: false
@@ -569,6 +573,7 @@
     proxmox-backup-manager user generate-token backup@pbs backup-token
   register: pbs_token_output
   when: ((pbs_token_list.stdout | default('', true)) or '[]') | from_json | length == 0
+  changed_when: true
 
 - name: Store PBS backup token in Infisical
   ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/infisical_write_secret.yml"
@@ -594,7 +599,7 @@
 
 # API Token Generation - Monitoring User
 - name: Check if API token exists for monitoring user
-  ansible.builtin.shell: proxmox-backup-manager user list-tokens monitoring@pbs --output-format json
+  ansible.builtin.command: proxmox-backup-manager user list-tokens monitoring@pbs --output-format json
   register: pbs_monitoring_token_list
   changed_when: false
   failed_when: false
@@ -604,6 +609,7 @@
     proxmox-backup-manager user generate-token monitoring@pbs monitoring-token
   register: pbs_monitoring_token_output
   when: ((pbs_monitoring_token_list.stdout | default('', true)) or '[]') | from_json | length == 0
+  changed_when: true
 
 - name: Store PBS monitoring token in Infisical
   ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/infisical_write_secret.yml"
@@ -636,6 +642,7 @@
   when: _pbs_acls | selectattr('path', 'eq', '/datastore/' ~ item.name)
         | selectattr('roleid', 'eq', 'DatastoreAdmin')
         | selectattr('ugid', 'eq', 'backup@pbs!backup-token') | list | length == 0
+  changed_when: true
   tags:
     - proxmox_backup
     - pbs
@@ -650,6 +657,7 @@
   when: _pbs_acls | selectattr('path', 'eq', '/datastore/' ~ item.name)
         | selectattr('roleid', 'eq', 'Audit')
         | selectattr('ugid', 'eq', 'monitoring@pbs') | list | length == 0
+  changed_when: true
   tags:
     - proxmox_backup
     - pbs
@@ -664,6 +672,7 @@
   when: _pbs_acls | selectattr('path', 'eq', '/datastore/' ~ item.name)
         | selectattr('roleid', 'eq', 'Audit')
         | selectattr('ugid', 'eq', 'monitoring@pbs!monitoring-token') | list | length == 0
+  changed_when: true
   tags:
     - proxmox_backup
     - pbs
@@ -677,6 +686,7 @@
   when: _pbs_acls | selectattr('path', 'eq', '/')
         | selectattr('roleid', 'eq', 'Audit')
         | selectattr('ugid', 'eq', 'monitoring@pbs') | list | length == 0
+  changed_when: true
   tags:
     - proxmox_backup
     - pbs
@@ -690,6 +700,7 @@
   when: _pbs_acls | selectattr('path', 'eq', '/')
         | selectattr('roleid', 'eq', 'Audit')
         | selectattr('ugid', 'eq', 'monitoring@pbs!monitoring-token') | list | length == 0
+  changed_when: true
   tags:
     - proxmox_backup
     - pbs

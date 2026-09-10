@@ -71,6 +71,7 @@
         stdin: |
           import urllib.request
           urllib.request.urlopen(urllib.request.Request('http://localhost:9000/api/v3/managed/blueprints/{{ _bp_pk }}/apply/', method='POST', headers={'Authorization': 'Bearer {{ secrets.authentik_ext.bootstrap_token }}'}))
+      changed_when: true
       no_log: true
     - name: Wait for the apply to succeed
       ansible.builtin.command:

@@ -50,7 +50,7 @@
     - sysctl
 
 - name: Remove unnecessary packages
-  ansible.builtin.apk:
+  community.general.apk:
     name:
       - fortify-headers
       - apk-tools-doc

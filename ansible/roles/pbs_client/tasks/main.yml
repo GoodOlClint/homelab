@@ -64,7 +64,7 @@
     - backup
     - packages
 
-- name: Update apt cache if repo was added
+- name: Update apt cache if repo was added # noqa: no-handler
   ansible.builtin.apt:
     update_cache: true
 
@@ -112,6 +112,7 @@
 
 - name: Verify PBS connection
   ansible.builtin.shell: |
+    set -o pipefail
     . /etc/proxmox-backup/pbs-client.env
     if [ -z "$PBS_PASSWORD" ]; then
       echo "SKIP: PBS credentials not yet available"

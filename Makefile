@@ -416,7 +416,8 @@ TF_ROOTS := terraform terraform/hosts terraform/unifi
 validate:
 	@for r in $(TF_ROOTS); do terraform -chdir=$$r fmt -check -recursive -diff && terraform -chdir=$$r validate -no-color >/dev/null && echo "$$r: validate ok" || exit 1; done
 	@cd ansible && ../.venv/bin/ansible-lint --offline playbooks/*.yml
-	@cd ansible && for p in playbooks/*.yml; do ANSIBLE_INVENTORY=/dev/null ../.venv/bin/ansible-playbook --syntax-check -i localhost, $$p >/dev/null || exit 1; done && echo "syntax-check: $$(ls playbooks/*.yml | wc -l | tr -d ' ') playbooks ok"
+	@cd ansible && $(VENV_PYTHON) -c "import re,glob,json,sys; g={h for f in glob.glob('playbooks/*.yml') for h in re.findall(r'^\s*hosts:\s*([\w,:-]+)', open(f).read(), re.M) for h in h.split(',') if h not in ('all','localhost')}; json.dump({'all':{'children':{k:{'hosts':{'stub':{}}} for k in sorted(g)}}}, open('/tmp/stub-inventory.json','w'))" \
+	  && for p in playbooks/*.yml; do ANSIBLE_TRANSFORM_INVALID_GROUP_CHARS=ignore ../.venv/bin/ansible-playbook --syntax-check -i /tmp/stub-inventory.json $$p >/dev/null || exit 1; done && echo "syntax-check: $$(ls playbooks/*.yml | wc -l | tr -d ' ') playbooks ok"
 	@$(VENV_PYTHON) scripts/flux_check.py $(CURDIR) --build-only >/dev/null && echo "flux trees build"
 	@$(VENV_PYTHON) scripts/validate_public_policy.py network-data/public_policy.yaml
 	@$(VENV_PYTHON) scripts/test_axosyslog_routing.py

@@ -46,6 +46,7 @@
 - name: Drop an account registered against another directory
   ansible.builtin.command:
     cmd: proxmox-backup-manager acme account deactivate default
+  changed_when: true
   when:
     - _pbs_acme.stdout_lines[0] != 'account='
     - _pbs_acme.stdout_lines[0] != 'account=' ~ secrets.infrastructure.acme_directory_url
@@ -53,8 +54,9 @@
 
 - name: Register the ACME account
   ansible.builtin.shell:
-    cmd: printf 'n\n' | proxmox-backup-manager acme account register default {{ acme_email }} --directory {{ secrets.infrastructure.acme_directory_url }}
+    cmd: set -o pipefail; printf 'n\n' | proxmox-backup-manager acme account register default {{ acme_email }} --directory {{ secrets.infrastructure.acme_directory_url }}
   when: _pbs_acme.stdout_lines[0] != 'account=' ~ secrets.infrastructure.acme_directory_url
+  changed_when: true
   tags: [proxmox_backup, pbs, acme]
 
 - name: Configure the nsupdate DNS plugin
@@ -71,17 +73,20 @@
     - name: Add the plugin
       ansible.builtin.command:
         cmd: proxmox-backup-manager acme plugin add dns bind --api nsupdate --data /etc/proxmox-acme/bind.data --validation-delay 30
+      changed_when: true
   tags: [proxmox_backup, pbs, acme]
 
 - name: Point the node config at the account and domain
   ansible.builtin.command:
     cmd: proxmox-backup-manager node update --acme account=default --acmedomain0 domain={{ pbs_fqdn }},plugin=bind
+  changed_when: true
   when: _pbs_acme.stdout_lines[2] != 'domain=domain=' ~ pbs_fqdn ~ ',plugin=bind'
   tags: [proxmox_backup, pbs, acme]
 
 - name: Order the certificate
   ansible.builtin.command:
     cmd: proxmox-backup-manager acme cert order --force
+  changed_when: true
   register: _acme_order
   failed_when: "'TASK ERROR' in (_acme_order.stdout ~ _acme_order.stderr) or _acme_order.rc != 0"
   when: >-

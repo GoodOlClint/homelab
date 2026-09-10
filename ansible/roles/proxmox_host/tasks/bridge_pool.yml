@@ -15,7 +15,7 @@
   loop: "{{ proxmox_host_bridge_disks }}"
   register: _bridge_parted
 
-- name: Settle the new partition links
+- name: Settle the new partition links # noqa: no-handler
   ansible.builtin.shell: partprobe && udevadm settle
   when: _bridge_parted is changed
   changed_when: false

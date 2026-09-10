@@ -110,6 +110,7 @@
     state: directory
     owner: adguardhome
     group: adguardhome
+    mode: '0755'
   tags:
     - adguard
     - dns
