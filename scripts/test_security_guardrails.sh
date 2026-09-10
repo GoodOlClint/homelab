@@ -20,6 +20,6 @@ stage foo-example.md "host example.test"; expect 1 bash "$GUARD" --staged; git r
 stage vlans.example.yaml 'service_domain: "example.test"'; expect 0 bash "$GUARD" --staged; git rm -qf --cached vlans.example.yaml; rm vlans.example.yaml
 stage notes.md "host 10.0.0.$((9))"; expect 1 bash "$GUARD" --staged; git rm -qf --cached notes.md; rm notes.md
 stage plain.md "nothing here"
-expect 1 env -u GUARDRAILS_INTERNAL_DOMAINS bash "$GUARD" --staged
+expect 1 env -u GUARDRAILS_INTERNAL_DOMAINS -u CI bash "$GUARD" --staged
 expect 0 env -u GUARDRAILS_INTERNAL_DOMAINS CI=1 bash "$GUARD" --staged
 echo "PASS: security_guardrails pins"
