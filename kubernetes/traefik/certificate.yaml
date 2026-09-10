@@ -5,4 +5,4 @@ metadata: {name: wildcard-tls, namespace: traefik}
 spec:
   dnsNames: ["*.${DOMAIN}", "*.${MEDIA_DOMAIN}"]
   secretName: wildcard-tls
-  issuerRef: {name: ${ISSUER}, kind: ClusterIssuer}
+  issuerRef: {name: "${ISSUER:=letsencrypt}", kind: ClusterIssuer}

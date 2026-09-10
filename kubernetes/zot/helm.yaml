@@ -1,0 +1,63 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata: {name: project-zot, namespace: zot}
+spec: {interval: 12h, url: https://zotregistry.dev/helm-charts}
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata: {name: zot, namespace: zot}
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: zot
+      version: "0.1.124"
+      sourceRef: {kind: HelmRepository, name: project-zot}
+  install: {crds: CreateReplace}
+  upgrade: {crds: CreateReplace}
+  values:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+    service:
+      type: LoadBalancer
+      port: 443
+    httpGet:
+      scheme: HTTPS
+    persistence: true
+    pvc:
+      storage: 50Gi
+    mountConfig: true
+    mountSecret: true
+    secretFiles: null
+    configFiles:
+      config.json: "{\n  \"distSpecVersion\": \"1.1.1\",\n  \"storage\": {\"rootDirectory\"\
+        : \"/var/lib/registry\", \"gc\": true, \"dedupe\": true},\n  \"http\": {\n   \
+        \ \"address\": \"0.0.0.0\", \"port\": \"5000\",\n    \"externalUrl\": \"https://registry.${DOMAIN}\"\
+        ,\n    \"tls\": {\"cert\": \"/etc/zot-tls/tls.crt\", \"key\": \"/etc/zot-tls/tls.key\"\
+        },\n    \"auth\": {\"htpasswd\": {\"path\": \"/secret/htpasswd\"}},\n    \"accessControl\"\
+        : {\n      \"repositories\": {\"**\": {\"anonymousPolicy\": [\"read\"], \"defaultPolicy\"\
+        : [\"read\"]}},\n      \"adminPolicy\": {\"users\": [\"push\"], \"actions\": [\"\
+        read\", \"create\", \"update\", \"delete\"]}\n    }\n  },\n  \"log\": {\"level\"\
+        : \"info\"},\n  \"extensions\": {\n    \"ui\": {\"enable\": true},\n    \"search\"\
+        : {\"enable\": true},\n    \"sync\": {\n      \"enable\": true,\n      \"registries\"\
+        : [\n        {\"urls\": [\"https://docker.io\"], \"onDemand\": true, \"tlsVerify\"\
+        : true, \"content\": [{\"prefix\": \"**\", \"destination\": \"/docker.io\"}]},\n\
+        \        {\"urls\": [\"https://ghcr.io\"],   \"onDemand\": true, \"tlsVerify\"\
+        : true, \"content\": [{\"prefix\": \"**\", \"destination\": \"/ghcr.io\"}]},\n\
+        \        {\"urls\": [\"https://quay.io\"],   \"onDemand\": true, \"tlsVerify\"\
+        : true, \"content\": [{\"prefix\": \"**\", \"destination\": \"/quay.io\"}]},\n\
+        \        {\"urls\": [\"https://public.ecr.aws\"], \"onDemand\": true, \"tlsVerify\"\
+        : true, \"content\": [{\"prefix\": \"**\", \"destination\": \"/public.ecr.aws\"\
+        }]},\n        {\"urls\": [\"https://registry.k8s.io\"], \"onDemand\": true, \"\
+        tlsVerify\": true, \"content\": [{\"prefix\": \"**\", \"destination\": \"/registry.k8s.io\"\
+        }]}\n      ]\n    }\n  }\n}"
+    extraVolumes:
+    - name: tls
+      secret:
+        secretName: zot-tls
+    extraVolumeMounts:
+    - name: tls
+      mountPath: /etc/zot-tls
+      readOnly: true

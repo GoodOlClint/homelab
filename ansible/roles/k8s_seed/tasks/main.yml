@@ -157,8 +157,12 @@
       kind: Secret
       metadata: {name: pve-ci-token, namespace: arc-runners}
       stringData: {token: "{{ _ci_token.stdout }}"}
+    - apiVersion: v1
+      kind: Secret
+      metadata: {name: zot-secret, namespace: zot}
+      stringData: {htpasswd: "push:{{ secrets.infrastructure.zot_push_password | password_hash('bcrypt', (secrets.infrastructure.zot_push_password | hash('sha256'))[:22]) }}"}
   loop_control: {label: "{{ item.metadata.namespace }}/{{ item.metadata.name }}"}
-  no_log: true
+  no_log: "{{ k8s_seed_debug is not defined }}"
 
 - name: Intermediate CA for cert-manager's homelab-ca issuer
   ansible.builtin.include_tasks: intermediate.yml

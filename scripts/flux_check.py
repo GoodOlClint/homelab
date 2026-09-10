@@ -10,7 +10,7 @@ import re, subprocess, sys, json
 import yaml
 
 root = sys.argv[1]
-TOKEN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::[-=][^}]*)?\}")
+TOKEN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")   # a token with a :-/:= default is bound by definition
 kc = ["kubectl", "--kubeconfig", f"{root}/kubernetes/talos/.secrets/kubeconfig"]
 bindings = set(json.loads(subprocess.check_output(kc + ["-n", "flux-system", "get", "cm", "cluster-bindings", "-o", "json"]))["data"])
 bad = 0
