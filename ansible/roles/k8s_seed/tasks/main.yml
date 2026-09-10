@@ -61,6 +61,21 @@
       rules:
         - {apiGroups: [""], resources: [persistentvolumes], verbs: [get, list, watch, create, update, patch, delete]}
 
+- name: ClusterRole for the custom resource kinds the trees declare (admin covers none of them)
+  kubernetes.core.k8s:
+    kubeconfig: "{{ k8s_seed_kubeconfig }}"
+    definition:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRole
+      metadata: {name: flux-tree-crds}
+      rules:
+        - {apiGroups: [secrets.infisical.com], resources: [infisicalsecrets], verbs: ["*"]}
+        - {apiGroups: [cert-manager.io], resources: [certificates, issuers], verbs: ["*"]}
+        - {apiGroups: [traefik.io], resources: [middlewares, ingressroutes, ingressroutetcps, ingressrouteudps, tlsstores, tlsoptions, serverstransports], verbs: ["*"]}
+        - {apiGroups: [metallb.io], resources: [ipaddresspools, l2advertisements], verbs: ["*"]}
+        - {apiGroups: [helm.toolkit.fluxcd.io], resources: [helmreleases], verbs: ["*"]}
+        - {apiGroups: [source.toolkit.fluxcd.io], resources: [helmrepositories, ocirepositories], verbs: ["*"]}
+
 - name: Flux service account + RBAC per tree
   kubernetes.core.k8s:
     kubeconfig: "{{ k8s_seed_kubeconfig }}"

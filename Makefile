@@ -153,7 +153,7 @@ talos-infisical:
 infisical-smoke:
 	@kubernetes/infisical/deploy.sh smoke
 talos-homepage:
-	@kubernetes/homepage/deploy.sh
+	@flux reconcile kustomization homepage --with-source
 # P5a (ADR 0040): external-dns publishes every Ingress host into the service zone over RFC 2136
 talos-dns:
 	@kubernetes/external-dns/deploy.sh
