@@ -11,3 +11,13 @@ providers:
     allowUiUpdates: true
     options:
       path: /etc/grafana/dashboards
+  - name: 'Generated'
+    orgId: 1
+    folder: ''
+    type: file
+    disableDeletion: false
+    editable: true
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/dashboards-generated

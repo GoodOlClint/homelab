@@ -1,0 +1,29 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources: [pvc.yaml, secrets.yaml, app.yaml]
+# Name-hashed per consumer, so editing one config rolls only the pods that mount it (audit P5).
+# prometheus-targets, grafana-dashboards-generated and homelab-root-ca come from the Ansible seed.
+configMapGenerator:
+  - name: prometheus-config
+    namespace: monitoring
+    files: [config/prometheus.yml, config/alert.rules.yml]
+  - name: alertmanager-config
+    namespace: monitoring
+    files: [config/alertmanager.yml]
+  - name: blackbox-config
+    namespace: monitoring
+    files: [config/blackbox.yml]
+  - name: snmp-config
+    namespace: monitoring
+    files: [config/snmp.yml]
+  - name: axosyslog-config
+    namespace: monitoring
+    files: [syslog-ng.conf=config/axosyslog.conf]
+    options:
+      annotations: {kustomize.toolkit.fluxcd.io/substitute: disabled}
+  - name: grafana-provisioning
+    namespace: monitoring
+    files: [config/grafana-datasource.yml, config/grafana-dashboards.yml]
+  - name: grafana-dashboards
+    namespace: monitoring
+    files: [dashboards/dns.json, dashboards/docker.json, dashboards/isp-quality.json, dashboards/pbs-overview.json, dashboards/proxmox.json, dashboards/synology.json, dashboards/system-overview.json, dashboards/unifi-clients.json, dashboards/unifi-sites.json]

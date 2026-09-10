@@ -73,9 +73,9 @@ scrape_configs:
       module: [http_2xx]
     static_configs:
       - targets:
-          - https://${GRAFANA_HOST}/api/health
-          - https://${OO_HOST}/healthz
-          - https://${KUMA_HOST}/
+          - https://grafana.${DOMAIN}/api/health
+          - https://openobserve.${DOMAIN}/healthz
+          - https://uptime-kuma.${DOMAIN}/
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
