@@ -28,6 +28,7 @@
     executable: /bin/bash
   register: _api_cert_state
   changed_when: false
+  check_mode: false
 
 - name: Generate the RSA private key
   ansible.builtin.shell: |

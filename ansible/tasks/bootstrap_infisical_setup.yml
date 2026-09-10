@@ -224,13 +224,13 @@
           accessTokenTTL: 7200
           accessTokenMaxTTL: 86400
           accessTokenNumUsesLimit: 0
-          clientSecretTrustedIps:
-            - ipAddress: "0.0.0.0/0"
-          accessTokenTrustedIps:
-            - ipAddress: "0.0.0.0/0"
+          clientSecretTrustedIps: "{{ _admin_trusted_ips }}"
+          accessTokenTrustedIps: "{{ _admin_trusted_ips }}"
         status_code: [200, 201, 400]
       register: _auth_method
       no_log: true
+      vars:
+        _admin_trusted_ips: "{{ infisical_admin_trusted_ips }}"
 
     - name: Set client ID fact
       ansible.builtin.set_fact:

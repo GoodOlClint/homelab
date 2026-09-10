@@ -7,3 +7,13 @@ infisical_encryption_key: "{{ bootstrap.infisical_encryption_key | default(secre
 infisical_auth_secret: "{{ bootstrap.infisical_auth_secret | default(secrets.infisical_auth_secret | default('')) }}"
 infisical_fqdn: "infisical.{{ service_domain }}"
 infisical_tls_dir: "{{ infisical_data_dir }}/tls"
+
+# VLANs an ansible-admin universal-auth login may come from (#21); bootstrap and the converge
+# task share the list. The API echoes /24s back as CIDRs, so compare on ipAddress only.
+infisical_admin_trusted_vlans: [management, infrastructure, services, core, vpn]
+infisical_admin_trusted_ips: >-
+  {%- set out = [] -%}
+  {%- for v in infisical_admin_trusted_vlans -%}
+  {{- out.append({'ipAddress': network_data.ipv4_prefix ~ '.' ~ network_data.vlans[v].id ~ '.0/24'}) -}}
+  {%- endfor -%}
+  {{ out }}

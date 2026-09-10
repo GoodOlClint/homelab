@@ -17,12 +17,13 @@
     owner: root
     group: root
 
+# The postgres image chowns its data dir to uid 70 / 0700 on every start.
 - name: Create Infisical postgres directory
   ansible.builtin.file:
     path: "{{ infisical_data_dir }}/postgres"
     state: directory
-    mode: '0755'
-    owner: root
+    mode: '0700'
+    owner: '70'
     group: root
 
 - name: Create Infisical redis directory
@@ -73,6 +74,12 @@
   until: infisical_health.status == 200
   retries: 30
   delay: 10
+
+- name: Scope the ansible-admin identity's trusted IPs (#21)
+  ansible.builtin.include_tasks: admin_trusted_ips.yml
+  vars:
+    _admin_identity_id: "{{ (_infisical_identities.json.identities | default([]) | selectattr('identity.name', 'equalto', 'ansible-admin') | map(attribute='identity.id') | first) | default('') }}"
+  when: infisical_login.login_data is defined
 
 - name: Display Infisical setup URL
   ansible.builtin.debug:

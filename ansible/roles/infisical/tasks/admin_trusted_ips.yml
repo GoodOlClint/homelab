@@ -1,0 +1,42 @@
+---
+# The ansible-admin identity (org admin, non-expiring client secret) may only log in from the
+# VLANs its callers sit on: the operator workstation (core, vpn when remote), the nodes, the
+# cluster. Bootstrap sets the same list on creation; this converges a live instance.
+- name: Find the ansible-admin identity
+  ansible.builtin.uri:
+    url: "{{ bootstrap_config.infisical_url }}/api/v1/identities?orgId={{ bootstrap_config.infisical_org_id }}"
+    headers:
+      Authorization: "Bearer {{ infisical_login.login_data.access_token }}"
+  register: _infisical_identities
+  delegate_to: localhost
+  become: false
+  check_mode: false
+
+- name: Read ansible-admin's universal-auth config
+  ansible.builtin.uri:
+    url: "{{ bootstrap_config.infisical_url }}/api/v1/auth/universal-auth/identities/{{ _admin_identity_id }}"
+    headers:
+      Authorization: "Bearer {{ infisical_login.login_data.access_token }}"
+  register: _admin_ua
+  delegate_to: localhost
+  become: false
+  check_mode: false
+
+- name: Scope ansible-admin's trusted IPs to the caller VLANs
+  ansible.builtin.uri:
+    url: "{{ bootstrap_config.infisical_url }}/api/v1/auth/universal-auth/identities/{{ _admin_identity_id }}"
+    method: PATCH
+    headers:
+      Authorization: "Bearer {{ infisical_login.login_data.access_token }}"
+    body_format: json
+    body:
+      clientSecretTrustedIps: "{{ infisical_admin_trusted_ips }}"
+      accessTokenTrustedIps: "{{ infisical_admin_trusted_ips }}"
+  delegate_to: localhost
+  become: false
+  changed_when: true
+  when: >-
+    (_admin_ua.json.identityUniversalAuth.clientSecretTrustedIps | map(attribute='ipAddress') | sort | list)
+      != (infisical_admin_trusted_ips | map(attribute='ipAddress') | sort | list)
+    or (_admin_ua.json.identityUniversalAuth.accessTokenTrustedIps | map(attribute='ipAddress') | sort | list)
+      != (infisical_admin_trusted_ips | map(attribute='ipAddress') | sort | list)
