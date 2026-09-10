@@ -9,6 +9,13 @@ PROJ=$(inf /v1/workspace | jq -r '.workspaces[] | select(.type=="cert-manager" a
 CA=$(inf "/v1/cert-manager/ca?projectId=$PROJ" | jq -r '.certificateAuthorities[] | select(.name=="homelab-root-ca") | .id')
 [ -n "$CA" ] || { echo "homelab-root-ca missing — run make talos-certs first" >&2; exit 1; }
 
+# The root is what every node, guest, pod and the workstation's python trust (ADR 0039/0042); the cluster's
+# intermediate is signed by the Ansible seed (make k8s-seed) and never exported.
+ROOT_CRT="$ROOT/kubernetes/.secrets/homelab-ca.crt"
+inf "/v1/cert-manager/ca/internal/$CA/certificate" | jq -r .certificate > "$ROOT_CRT"
+cat "$("$ROOT/.venv/bin/python3" -c 'import certifi; print(certifi.where())')" "$ROOT_CRT" > "$ROOT/kubernetes/.secrets/ca-bundle.pem"
+echo "root CA exported to $ROOT_CRT"
+
 # Infisical only signs a CSR whose key family matches the CA's; the Proxmox ACME clients make RSA
 # keys, so the fleet issuer is an RSA intermediate under the EC root (root pathlen 1).
 plus_years() { "$ROOT/.venv/bin/python3" -c "import datetime as d;print((d.datetime.now(d.timezone.utc)+d.timedelta(days=365*$1)).strftime('%Y-%m-%dT%H:%M:%S.000Z'))"; }
