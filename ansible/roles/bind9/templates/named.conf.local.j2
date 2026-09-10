@@ -35,18 +35,18 @@ zone "{{ name }}" {
         grant ci-update-key zonesub ANY;
 {% endif %}
     };
-    // external-dns reads the zone by signed AXFR before every reconcile
-    allow-transfer { key "dhcp-update-key";{% for s in secondaries %} {{ s }};{% endfor %} };
+    // external-dns and the secondaries read the zone by signed AXFR only
+    allow-transfer { key "dhcp-update-key"; };
 {% if secondaries %}
     also-notify { {{ secondaries | join('; ') }}; };
 {% endif %}
 {% else %}
     type secondary;
     file "/var/cache/bind/db.{{ name }}";
-    primaries { {{ hostvars[bind9_instances[0]].ansible_host }}; };
+    primaries { {{ hostvars[bind9_instances[0]].ansible_host }} key "dhcp-update-key"; };
     allow-transfer { key "dhcp-update-key"; };
     // DDNS lands on the VIP, which may sit on a secondary: forward to the primary
-    allow-update-forwarding { any; };
+    allow-update-forwarding { 127.0.0.1; ::1; {{ internal_network_cidr | default(network_data.ipv4_prefix ~ '.0.0/12') }}; };
 {% endif %}
 };
 {% endmacro %}

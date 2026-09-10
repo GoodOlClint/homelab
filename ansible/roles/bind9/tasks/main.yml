@@ -84,7 +84,9 @@
   ansible.builtin.template:
     src: named.conf.local.j2
     dest: /etc/bind/named.conf.local
-    mode: '0644'
+    owner: root
+    group: bind
+    mode: '0640'
   notify: Restart bind9
   tags:
     - bind9
@@ -235,57 +237,45 @@
     - dns
     - validate
 
-- name: Check if forward zones are loaded in BIND
+- name: Find forward zones BIND did not load
   ansible.builtin.shell: |
-    loaded=0
-    failed=0
+    set -o pipefail
     for zone in {{ bind9_forward_zones | join(' ') }}; do
-      if rndc zonestatus "$zone" > /dev/null 2>&1; then
-        loaded=$((loaded + 1))
-      else
-        failed=$((failed + 1))
-      fi
+      rndc zonestatus "$zone" >/dev/null 2>&1 || echo "$zone"
     done
-    echo "loaded=$loaded failed=$failed"
-  register: zone_status_check
+  register: bind9_unloaded_zones
   changed_when: false
-  failed_when: false
+  when: bind9_primary
   tags:
     - bind9
     - dns
     - zones
     - validate
 
-- name: Remove all journal files if zones failed to load
-  block:
-    - name: Stop BIND service
-      ansible.builtin.systemd:
-        name: named
-        state: stopped
-
-    - name: Remove all journal files
-      ansible.builtin.shell: rm -f /var/lib/bind/*.jnl
-
-    - name: Start BIND service
-      ansible.builtin.systemd:
-        name: named
-        state: started
-
-    - name: Wait for DNS to restart
-      ansible.builtin.wait_for:
-        host: 127.0.0.1
-        port: 53
-        timeout: 30
-
-    - name: Pause for DNS initialization
-      ansible.builtin.pause:
-        seconds: 3
-  when: bind9_primary and 'failed=0' not in zone_status_check.stdout
+# A zone whose journal no longer matches its file refuses to load; only that zone's journal
+# goes, never the fleet's DDNS history.
+- name: Drop the journal of each unloaded zone and reload it
+  ansible.builtin.shell: |
+    rm -f /var/lib/bind/db.{{ item }}.jnl
+    rndc reload {{ item }}
+  loop: "{{ bind9_unloaded_zones.stdout_lines | default([]) }}"
+  when: bind9_primary
   tags:
     - bind9
     - dns
     - zones
     - service
+
+- name: Require every forward zone loaded
+  ansible.builtin.command: rndc zonestatus {{ item }}
+  loop: "{{ bind9_forward_zones }}"
+  changed_when: false
+  when: bind9_primary
+  tags:
+    - bind9
+    - dns
+    - zones
+    - validate
 
 - name: Verify BIND answers the local zone SOA (secondaries wait for the first AXFR)
   ansible.builtin.command: dig +short +time=2 +tries=3 @127.0.0.1 {{ service_domain }} SOA
