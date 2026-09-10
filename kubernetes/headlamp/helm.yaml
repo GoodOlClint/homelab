@@ -15,7 +15,6 @@ spec:
       sourceRef: {kind: HelmRepository, name: headlamp}
   install: {crds: CreateReplace}
   upgrade: {crds: CreateReplace}
-  serviceAccountName: flux-headlamp
   values:
     image:
       registry: ${REGISTRY}/ghcr.io

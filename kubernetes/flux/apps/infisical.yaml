@@ -6,6 +6,6 @@ spec:
   path: ./kubernetes/infisical
   prune: false
   sourceRef: {kind: GitRepository, name: homelab}
-  serviceAccountName: flux-infisical-operator
+  serviceAccountName: flux-infisical
   postBuild:
     substituteFrom: [{kind: ConfigMap, name: cluster-bindings}]

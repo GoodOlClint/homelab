@@ -27,7 +27,7 @@ k8s_seed_namespaces:
   traefik: baseline
   zot: baseline
 # Trees whose namespace is not their own name (kube-system is never labelled by the seed).
-k8s_seed_tree_namespaces: {metrics: kube-system}
+k8s_seed_tree_namespaces: {metrics: kube-system, metallb: metallb-system, infisical: infisical-operator}
 # Trees whose Flux Kustomization manages PersistentVolumes (cluster-scoped) beside its namespace.
 k8s_seed_pv_trees: [jellyfin, kiwix, plex-services]
 # Trees that declare cluster-scoped custom resources (ClusterIssuer).
