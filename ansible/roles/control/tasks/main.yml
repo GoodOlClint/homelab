@@ -54,10 +54,10 @@
     src: "{{ control_base_dir }}/tls/{{ item.src }}"
     dest: "{{ control_base_dir }}/meshcentral/data/{{ item.dest }}"
     remote_src: true
-    mode: "0644"
+    mode: "{{ item.mode }}"
   loop:
-    - { src: cert.pem, dest: webserver-cert-public.crt }
-    - { src: key.pem, dest: webserver-cert-private.key }
+    - { src: cert.pem, dest: webserver-cert-public.crt, mode: "0644" }
+    - { src: key.pem, dest: webserver-cert-private.key, mode: "0600" }
   notify: restart control compose
   tags: [control, config]
 
@@ -109,6 +109,7 @@
     status_code: [200, 409]
   register: _portainer_init
   changed_when: _portainer_init.status == 200
+  no_log: true
   tags: [control, portainer]
 
 - name: Authenticate to Portainer
