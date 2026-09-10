@@ -7,7 +7,7 @@ VENV_PYTHON := $(CURDIR)/.venv/bin/python3
 export PATH := $(CURDIR)/.venv/bin:$(PATH)
 
 # Python clients (ansible uri, infisicalsdk/requests, proxmoxer) trust certifi only; the fleet root
-# rides a certifi+root bundle written by make talos-certs (ADR 0042). Go/curl use the keychain.
+# rides a certifi+root bundle written by make pki-hosts (ADR 0042). Go/curl use the keychain.
 CA_BUNDLE := $(CURDIR)/kubernetes/.secrets/ca-bundle.pem
 ifneq ($(wildcard $(CA_BUNDLE)),)
 export SSL_CERT_FILE := $(CA_BUNDLE)
@@ -47,7 +47,7 @@ ifneq (,$(filter build rebuild plan ansible docker-config update,$(firstword $(M
 endif
 
 # === Core Operations ===
-.PHONY: refresh k8s-seed k8s-apps k8s-smoke plex-services-smoke plex-pbs-image talos-update flux-check talos-authentik talos-plan talos-build talos-secrets talos-apply talos-bootstrap talos-csi talos-smoke talos-lb talos-certs talos-registry talos-trust registry-smoke talos-arc talos-ingress talos-infisical infisical-smoke talos-homepage all apply plan init terraform-apply terraform-bootstrap inventory bootstrap ansible-bootstrap build rebuild rebuild-infisical data-volumes backup-jobs sdn-apply
+.PHONY: refresh k8s-seed k8s-apps k8s-smoke k8s-update plex-pbs-image flux-check flux-reconcile monitoring-users talos-plan talos-build talos-secrets talos-apply talos-bootstrap all apply plan init terraform-apply terraform-bootstrap inventory bootstrap ansible-bootstrap build rebuild rebuild-infisical data-volumes backup-jobs sdn-apply
 
 all: apply
 
@@ -124,88 +124,44 @@ talos-build:
 	@cd terraform && terraform output -json talos_nodes > ../kubernetes/talos/.secrets/nodes.json
 talos-secrets:
 	@kubernetes/talos/talos.sh secrets
+# apply is also how the nodes pick up a changed root CA (machine.registries) or kubelet args
 talos-apply:
 	@kubernetes/talos/talos.sh apply
 talos-bootstrap:
 	@kubernetes/talos/talos.sh bootstrap
-talos-csi:
-	@flux reconcile kustomization ceph-csi --with-source
-# Smokes (rbd, registry, nfs, infisical) all ride the smoke play — each fails the play loud
-talos-smoke registry-smoke plex-services-smoke infisical-smoke: k8s-smoke
-# P3b (ADR 0034): MetalLB L2, internal CA, Zot, ARC runners
-talos-lb:
-	@flux reconcile kustomization metallb --with-source
-talos-certs: pki-hosts k8s-seed
-	@flux reconcile kustomization cert-manager --with-source
-talos-trust:
-	@kubernetes/talos/talos.sh apply
-talos-registry:
-	@flux reconcile kustomization zot --with-source
-talos-arc:
-	@flux reconcile kustomization arc --with-source
-# P4a (ADR 0035): Traefik ingress, Infisical operator (the k8s secret path), homepage
-talos-ingress:
-	@flux reconcile kustomization traefik --with-source
-talos-infisical:
-	@flux reconcile kustomization infisical --with-source
-talos-homepage:
-	@flux reconcile kustomization homepage --with-source
-# P5a (ADR 0040): external-dns publishes every Ingress host into the service zone over RFC 2136
-talos-dns:
-	@flux reconcile kustomization external-dns --with-source
-# P5c (ADR 0040): the external authentik realm's in-app tail (secrets on first run, blueprint apply); the internal realm is `make ansible authentik`
-talos-authentik: k8s-apps
-# P4b (ADR 0036): monitoring stack; axosyslog LB on services offset 66; history migration from the old guest
-talos-monitoring:
-	@flux reconcile kustomization monitoring --with-source
-# monitoring@pve + its token on the cluster: needs proxmox.yaml so proxmox_host resolves to a live node;
-# the play tag (not a task tag) so its pre_tasks load; the UniFi half is skipped (never probe the controller with monitor creds)
-monitoring-users:
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/infrastructure.yml --tags monitoring-users --skip-tags unifi-user
-# P4c (ADR 0037): plex-services stack; media via a kubelet-mounted NFS PV; pg dumps pushed to PBS
-talos-plex-services: k8s-apps
-# Build + push the pg-backup CronJob's proxmox-backup-client image (the registry's one local push);
-# re-run when the PBS server major rolls (client suite tracks the Debian base)
-plex-pbs-image:
-	@$(K8S_PLAY) --tags pbs-image
 
-# P4d (ADR 0038): Valheim + PlayFab sidecar on a MetalLB UDP LB (offset 67), Kiwix over NFS; player-gated migration from 204
-talos-games:
-	@flux reconcile kustomization games --with-source
-
-# P5d (ADR 0040): Jellyfin on jellyfin.<media domain> — LDAP auth against the authentik external realm, media read-only over NFS
-talos-jellyfin: k8s-apps
-
-# Read-only Kubernetes dashboard (Headlamp) on headlamp.<service domain>, behind authentik forward-auth
-talos-headlamp:
-	@flux reconcile kustomization headlamp --with-source
-
-# Cluster metrics API: kubelet-csr-approver (kubelet serving certs, see talos.sh) + metrics-server
-talos-metrics:
-	@flux reconcile kustomization metrics --with-source
-
-# Kiwix ZIM library on kiwix.<service domain> (split out of the games namespace)
-talos-kiwix:
-	@flux reconcile kustomization kiwix --with-source
-
-# Cluster half of `make update`: restart every :latest workload so it re-pulls through Zot (NS= to scope)
-# ADR 0048: the cluster's Ansible half — allowlisted seed objects (bindings, RBAC, root-CA ConfigMaps,
-# the intermediate, bootstrap Secrets) + in-app configuration. Needs vms.yaml and proxmox.yaml.
-# ADR 0048: refuse to adopt a tree whose ${VAR}s are not all bound — Flux blanks the rest and fails open.
+# === Services plane (ADR 0048) ===
+# Flux owns every workload from kubernetes/<tree> (one Kustomization per tree in kubernetes/flux/apps/);
+# a push to main is the deploy. Ansible owns the seed (bindings, generated ConfigMaps, root-CA ConfigMaps,
+# the cert-manager intermediate, bootstrap Secrets) and the in-app tail. Needs vms.yaml and proxmox.yaml.
+K8S_PLAY = ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/kubernetes.yml $(if $(CHECK),--check --diff,)
+# Refuse to adopt a tree whose ${VAR}s are not all bound — Flux blanks the rest and fails open.
 flux-check:
 	@.venv/bin/python3 scripts/flux_check.py $(CURDIR)
-
-K8S_PLAY = ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/kubernetes.yml $(if $(CHECK),--check --diff,)
+# Reconcile one tree now instead of waiting for its interval: make flux-reconcile TREE=traefik
+flux-reconcile:
+	@test -n "$(TREE)" || { echo "usage: make flux-reconcile TREE=<name from kubernetes/flux/apps/>"; exit 1; }
+	@flux reconcile kustomization $(TREE) --with-source
 k8s-seed:
 	@$(K8S_PLAY) --tags seed
 # In-app tail (jellyfin wizard/LDAP plugin/libraries, arr external auth + SAB whitelist, authentik-ext secrets + blueprint)
 k8s-apps:
 	@$(K8S_PLAY) --tags apps
+# Fail-loud smokes: rbd, registry, nfs, infisical
 k8s-smoke:
 	@$(K8S_PLAY) --tags smoke
-# Deletes the pods of every :latest workload (never rollout restart — Flux reverts the annotation and it bounces twice); NS= scopes it
-talos-update:
+# Cluster half of `make update`: deletes the pods of every :latest workload so they re-pull through Zot
+# (never rollout restart — Flux reverts the annotation and it bounces twice); NS= scopes it
+k8s-update:
 	@$(K8S_PLAY) --tags update $(if $(NS),-e k8s_apps_update_ns=$(NS),)
+# Build + push the pg-backup CronJob's proxmox-backup-client image (the registry's one local push);
+# re-run when the PBS server major rolls (client suite tracks the Debian base)
+plex-pbs-image:
+	@$(K8S_PLAY) --tags pbs-image
+# monitoring@pve + its token on the cluster: needs proxmox.yaml so proxmox_host resolves to a live node;
+# the play tag (not a task tag) so its pre_tasks load; the UniFi half is skipped (never probe the controller with monitor creds)
+monitoring-users:
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/infrastructure.yml --tags monitoring-users --skip-tags unifi-user
 
 # Fleet-root terraform passthrough with the TF_VAR_* exports (raw terraform hangs prompting for them);
 # the retirement step is `make tf ARGS='state rm <address>'` (ADR 0028: stopped, never destroyed)

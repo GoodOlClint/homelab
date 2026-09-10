@@ -8,7 +8,7 @@
 #   1. Fill in provider credentials (proxmox, vultr, cloudflare)
 #   2. Set infisical_admin_email
 #   3. Set infisical_url (http://<services_vlan_ip>:8080 — plain http until the PKI exists;
-#      after `make talos-certs`, `make pki-hosts` and `make ansible infisical` flip it to
+#      after `make pki-hosts` and `make ansible infisical` flip it to
 #      https://infisical.<service domain> with `sops --set` (ADR 0042) and re-run `make ansible-all`)
 #   4. Run: make bootstrap
 #
