@@ -125,6 +125,11 @@ resource "proxmox_virtual_environment_container" "containers" {
     # 0017 makes most of the fleet LXC, and a null gateway VLAN here silently
     # emits no gateway at all (see the ip_config block below) — a guest that
     # boots unreachable off-subnet with nothing in the plan to say so.
+    # ADR 0003: an LXC leg is static or it is a defect — a null ip would render "/24".
+    precondition {
+      condition     = alltrue([for k, i in local.build_vm_interfaces[each.value.name] : i.ip != null])
+      error_message = "LXC '${each.value.name}' has a leg with no address: ${jsonencode([for k, i in local.build_vm_interfaces[each.value.name] : k if i.ip == null])} — set ip_offset (or vm_id / mgmt_ip_offset for the management leg); containers never DHCP."
+    }
     precondition {
       condition     = local.vm_gateway_vlans[each.value.name] != null
       error_message = "Guest '${each.value.name}' has no VLAN with a router: every leg in ${jsonencode(each.value.vlans)} is gateway-less (or names a VLAN not defined in var.vlans) and the management VLAN '${var.management_vlan}' is not among them (or has no gateway either). It would boot with no default route."

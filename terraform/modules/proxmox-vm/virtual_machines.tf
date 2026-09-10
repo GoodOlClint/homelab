@@ -122,24 +122,26 @@ locals {
 
   # Management IP: mgmt_ip_offset > vm_id > actual VMID (fallback chain)
   # Explicit values avoid resource dependency — safe for -target operations
+  # Management-leg address; null for a guest with no management leg (ADR 0017 makes that the
+  # norm) instead of a fabricated management-subnet address (#13).
   vm_management_ips = {
     for vm_config in var.vm_configurations : vm_config.name =>
-    cidrhost(
-      local.merged_vlans[var.management_vlan].subnet,
-      coalesce(vm_config.mgmt_ip_offset, vm_config.vm_id, try(proxmox_virtual_environment_vm.vms[vm_config.name].vm_id, 0))
-    )
+    contains(vm_config.vlans, var.management_vlan) && coalesce(vm_config.mgmt_ip_offset, vm_config.vm_id, try(proxmox_virtual_environment_vm.vms[vm_config.name].vm_id, null)) != null
+    ? cidrhost(local.merged_vlans[var.management_vlan].subnet, coalesce(vm_config.mgmt_ip_offset, vm_config.vm_id, try(proxmox_virtual_environment_vm.vms[vm_config.name].vm_id, null)))
+    : null
   }
 
-  # Service-facing IP: services VLAN leg, else management leg, else the guest's
-  # first leg — a guest on neither plane (vlan30, ADR 0030) has no address on
-  # the management subnet.
+  # Service-facing IP: services leg, else management leg, else the guest's first static leg;
+  # null when it has none (the inventory then skips the guest).
   vm_service_ips = {
     for vm_config in var.vm_configurations : vm_config.name =>
     contains(vm_config.vlans, var.services_vlan) && vm_config.ip_offset != null
     ? cidrhost(local.merged_vlans[var.services_vlan].subnet, vm_config.ip_offset)
-    : (contains(vm_config.vlans, var.management_vlan) || vm_config.ip_offset == null
+    : (local.vm_management_ips[vm_config.name] != null
       ? local.vm_management_ips[vm_config.name]
-    : cidrhost(local.merged_vlans[vm_config.vlans[0]].subnet, vm_config.ip_offset))
+      : (vm_config.ip_offset != null && length(vm_config.vlans) > 0
+        ? cidrhost(local.merged_vlans[vm_config.vlans[0]].subnet, vm_config.ip_offset)
+    : null))
   }
 }
 # Generate cloud-init user data files for each VM (only when not using Packer)

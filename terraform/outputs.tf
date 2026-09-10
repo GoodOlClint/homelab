@@ -5,7 +5,7 @@ locals {
   # already falls back to the management IP for guests without a services leg.
   inventory_ansible_host = {
     for vm_name, ip in module.vms.vm_management_ips :
-    vm_name => var.guest_access_plane == "services" ? coalesce(module.vms.vm_service_ips[vm_name], ip) : ip
+    vm_name => var.guest_access_plane == "services" ? try(coalesce(module.vms.vm_service_ips[vm_name], ip), null) : ip
   }
 
   # Service-instance groups (ADR 0003 redundancy pairs): numbered instances
@@ -43,7 +43,7 @@ output "ansible_inventory_yaml" {
             },
             # LXCs are root-only by module design (no cloud-init user)
             module.vms.guest_types[vm_name] == "lxc" ? { ansible_user = "root" } : {}
-          )
+          ) if local.inventory_ansible_host[vm_name] != null
         }
       },
       length(local.inventory_groups) > 0 ? { children = local.inventory_groups } : {}
