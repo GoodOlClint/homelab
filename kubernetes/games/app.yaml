@@ -11,7 +11,6 @@ spec:
   template:
     metadata:
       labels: {app: valheim}
-      annotations: {checksum/config: "${CONFIG_HASH}"}
     spec:
       enableServiceLinks: false
       # The server only writes the world on a clean SIGINT/SIGTERM; the image's shutdown waits 29s before escalating and supervisord allows 90s.
