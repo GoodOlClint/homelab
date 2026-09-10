@@ -150,7 +150,7 @@ flux-check:
 # Reconcile one tree now instead of waiting for its interval: make flux-reconcile TREE=traefik
 flux-reconcile:
 	@test -n "$(TREE)" || { echo "usage: make flux-reconcile TREE=<name from kubernetes/flux/apps/>"; exit 1; }
-	@flux reconcile kustomization $(TREE) --with-source
+	@flux --kubeconfig kubernetes/talos/.secrets/kubeconfig reconcile kustomization $(TREE) --with-source
 k8s-seed:
 	@$(K8S_PLAY) --tags seed
 # In-app tail (jellyfin wizard/LDAP plugin/libraries, arr external auth + SAB whitelist, authentik-ext secrets + blueprint)
