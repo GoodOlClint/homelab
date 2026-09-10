@@ -1,7 +1,6 @@
 ---
-# Let's Encrypt certificate for Plex
+# Let's Encrypt certificate for Plex (issued through cert_client, issuer letsencrypt)
 plex_cert_domain: "plex.{{ media_domain }}"
-plex_cert_email: "{{ acme_email }}"
 
 # Paths
 plex_cert_dir: "/etc/letsencrypt/live/{{ plex_cert_domain }}"

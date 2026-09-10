@@ -1,9 +1,9 @@
 ---
-- name: Install certbot with the RFC 2136 plugin
+- name: Install certbot with the DNS plugin for the issuer
   ansible.builtin.apt:
     name:
       - certbot
-      - python3-certbot-dns-rfc2136
+      - "{{ 'python3-certbot-dns-cloudflare' if cert_client_issuer == 'letsencrypt' else 'python3-certbot-dns-rfc2136' }}"
     state: present
   tags: [cert_client]
 
@@ -13,6 +13,16 @@
     dest: /etc/letsencrypt/rfc2136.ini
     mode: "0600"
   no_log: true
+  when: cert_client_issuer == 'fleet'
+  tags: [cert_client]
+
+- name: Cloudflare credentials
+  ansible.builtin.template:
+    src: cloudflare.ini.j2
+    dest: /etc/letsencrypt/cloudflare.ini
+    mode: "0600"
+  no_log: true
+  when: cert_client_issuer == 'letsencrypt'
   tags: [cert_client]
 
 - name: Deploy hook directory
@@ -36,15 +46,20 @@
   register: _cert_client_cert
   tags: [cert_client]
 
-- name: Request the certificate (DNS-01 via BIND)
+- name: Request the certificate (DNS-01)
   ansible.builtin.command:
     cmd: >-
       certbot certonly --non-interactive --agree-tos --email {{ acme_email }}
+      --cert-name {{ cert_client_fqdn }} --domain {{ ([cert_client_fqdn] + cert_client_extra_domains) | join(',') }}
+      {% if cert_client_issuer == 'letsencrypt' %}
+      --server {{ cert_client_letsencrypt_server }}
+      --dns-cloudflare --dns-cloudflare-credentials /etc/letsencrypt/cloudflare.ini
+      {% else %}
       --server {{ secrets.infrastructure.acme_directory_url }}
       --dns-rfc2136 --dns-rfc2136-credentials /etc/letsencrypt/rfc2136.ini
       --dns-rfc2136-propagation-seconds 30
-      --cert-name {{ cert_client_fqdn }} --domain {{ ([cert_client_fqdn] + cert_client_extra_domains) | join(',') }}
       --key-type rsa
+      {% endif %}
   when: not _cert_client_cert.stat.exists
   register: _cert_client_issue
   tags: [cert_client]

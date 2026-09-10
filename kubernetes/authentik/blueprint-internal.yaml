@@ -13,8 +13,14 @@ entries:
       authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
       invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
   - model: authentik_core.application
+    id: forward-auth-app
     identifiers: {slug: traefik-forward-auth}
     attrs: {name: Traefik forward auth, provider: !KeyOf forward-auth}
+  # Forward-auth is the only control on Headlamp, Prometheus and Alertmanager; without a binding every
+  # authenticated user of the realm reaches them (audit S8). Family accounts arrive with ADR 0046.
+  - model: authentik_policies.policybinding
+    identifiers: {target: !KeyOf forward-auth-app, group: !Find [authentik_core.group, [name, authentik Admins]], order: 0}
+    attrs: {enabled: true}
   - model: authentik_outposts.outpost
     identifiers: {managed: goauthentik.io/outposts/embedded}
     attrs:

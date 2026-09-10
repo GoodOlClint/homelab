@@ -7,7 +7,6 @@
     fail_msg: "Required facts not available. This role must run from a playbook that includes full_pre_tasks.yml."
     quiet: true
 
-# --- Auto-generate Plex certificate PFX password if not already set ---
 - name: Auto-generate plex_cert_pfx_password
   ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/generate_secret.yml"
   vars:
@@ -18,35 +17,7 @@
     secret_dict_path: "plex"
   tags: [plex, certificate, secrets]
 
-# Step 1: Install certbot and Cloudflare DNS plugin
-- name: Install certbot and Cloudflare DNS plugin
-  ansible.builtin.apt:
-    name:
-      - certbot
-      - python3-certbot-dns-cloudflare
-    state: present
-    update_cache: true
-
-  tags:
-    - plex
-    - certificate
-    - tls
-
-# Step 2: Create Cloudflare API credentials file
-- name: Create Cloudflare API credentials file
-  ansible.builtin.template:
-    src: cloudflare.ini.j2
-    dest: /etc/letsencrypt/cloudflare.ini
-    owner: root
-    group: root
-    mode: "0600"
-  tags:
-    - plex
-    - certificate
-    - tls
-
-# Step 3: Deploy the PKCS#12 conversion + restart script
-# Must exist before certbot runs (certbot validates --deploy-hook path)
+# Must exist before certbot runs: cert_client's first-issue hook calls it.
 - name: Deploy certbot deploy hook script
   ansible.builtin.template:
     src: plex-cert-deploy.sh.j2
@@ -54,76 +25,42 @@
     owner: root
     group: root
     mode: "0750"
-  tags:
-    - plex
-    - certificate
-    - tls
+  tags: [plex, certificate, tls]
 
-# Step 4: Request certificate (idempotent)
-- name: Check if certificate already exists
-  ansible.builtin.stat:
-    path: "{{ plex_cert_dir }}/fullchain.pem"
-  register: plex_cert_file
-  tags:
-    - plex
-    - certificate
-    - tls
-
-- name: Request Let's Encrypt certificate via DNS-01
-  ansible.builtin.command:
-    cmd: >
-      certbot certonly
-      --dns-cloudflare
-      --dns-cloudflare-credentials /etc/letsencrypt/cloudflare.ini
-      --domain {{ plex_cert_domain }}
-      --email {{ plex_cert_email }}
-      --agree-tos
-      --non-interactive
-      --deploy-hook {{ plex_certbot_deploy_hook }}
-  when: not plex_cert_file.stat.exists
-  tags:
-    - plex
-    - certificate
-    - tls
+- name: Issue the Let's Encrypt certificate
+  ansible.builtin.include_role:
+    name: cert_client
+  vars:
+    cert_client_issuer: letsencrypt
+    cert_client_fqdn: "{{ plex_cert_domain }}"
+    cert_client_deploy_hook: "{{ plex_certbot_deploy_hook }}"
+  tags: [plex, certificate, tls]
 
 - name: Check the PKCS#12 bundle against the live certificate
   ansible.builtin.stat:
     path: "{{ plex_pfx_path }}"
   register: plex_pfx_file
-  tags:
-    - plex
-    - certificate
-    - tls
+  tags: [plex, certificate, tls]
 
 - name: Check the live certificate's mtime
   ansible.builtin.stat:
     path: "{{ plex_cert_dir }}/fullchain.pem"
     follow: true
   register: plex_live_cert
-  tags:
-    - plex
-    - certificate
-    - tls
+  tags: [plex, certificate, tls]
 
 # Re-pack whenever the bundle predates the certificate (re-issue, restored guest): Plex silently falls back to plex.direct on a stale one.
 - name: Run deploy hook to (re)create the PKCS#12 certificate
   ansible.builtin.command:
     cmd: "{{ plex_certbot_deploy_hook }}"
   when: not plex_pfx_file.stat.exists or plex_pfx_file.stat.mtime < plex_live_cert.stat.mtime
-  tags:
-    - plex
-    - certificate
-    - tls
+  tags: [plex, certificate, tls]
 
-# Step 6: Configure Plex to use the custom certificate
 - name: Install xmlstarlet for XML manipulation
   ansible.builtin.apt:
     name: xmlstarlet
     state: present
-  tags:
-    - plex
-    - certificate
-    - tls
+  tags: [plex, certificate, tls]
 
 - name: Read current Plex certificate preferences
   ansible.builtin.command:
@@ -134,10 +71,7 @@
   register: _plex_cert_prefs
   changed_when: false
   no_log: true
-  tags:
-    - plex
-    - certificate
-    - tls
+  tags: [plex, certificate, tls]
 
 - name: Configure Plex custom certificate path, key and domain
   ansible.builtin.command:
@@ -153,19 +87,4 @@
   when: _plex_cert_prefs.stdout != plex_pfx_path ~ '|' ~ secrets.plex.plex_cert_pfx_password ~ '|' ~ plex_cert_domain
   no_log: true
   notify: restart plex
-  tags:
-    - plex
-    - certificate
-    - tls
-
-# Step 7: Verify certbot auto-renewal timer
-- name: Ensure certbot renewal timer is enabled
-  ansible.builtin.systemd:
-    name: certbot.timer
-    enabled: true
-
-    state: started
-  tags:
-    - plex
-    - certificate
-    - tls
+  tags: [plex, certificate, tls]

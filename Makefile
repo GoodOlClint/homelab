@@ -282,7 +282,7 @@ ifndef VM
 	$(error Usage: make ansible <vm-name>)
 endif
 	@echo "Running Ansible for: $(VM)"
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/site.yml --limit $(VM) $(if $(TAGS),--tags $(TAGS))
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/site.yml --limit $(VM) $(if $(TAGS),--tags $(TAGS)) $(if $(CHECK),--check --diff,)
 
 # make docker-config <vm> — deploy only docker-compose, config templates, and restart
 docker-config:
