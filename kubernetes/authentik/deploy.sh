@@ -67,4 +67,10 @@ realm() {
   echo "authentik $realm: https://$HOST ($NS; akadmin password = Infisical /$FOLDER/bootstrap_password)"
 }
 
-for r in ${1:-internal external}; do realm "$r"; done
+# The internal realm moved to its LXC 2026-09-10 (ADR 0049): deploying it here would recreate the Ingress
+# external-dns owns and scale the frozen cluster copy back up beside the live one. Its blueprint file stays
+# because the `authentik` Ansible role renders it.
+for r in ${1:-external}; do
+  [ "$r" = internal ] && { echo "internal realm is the authentik LXC now — \`make ansible authentik\` (ADR 0049)" >&2; exit 1; }
+  realm "$r"
+done
