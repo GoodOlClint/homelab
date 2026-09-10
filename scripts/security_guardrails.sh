@@ -7,7 +7,7 @@ RANGE=""
 # Paths match the CONSOLIDATED terraform layout (single root + hosts/ + unifi/).
 # nodes.auto.tfvars carries per-node MAC/IP/root-hash bindings and is protected
 # like state.
-PROTECTED_CORE_PATH_REGEX='(^|/)(ansible/group_vars/all\.yml|terraform/(hosts/|unifi/)?terraform\.tfstate(\.backup)?|ansible/inventory/vms\.yaml)$'
+PROTECTED_CORE_PATH_REGEX='(^|/)(ansible/group_vars/all\.yml|terraform/(hosts/|unifi/)?terraform\.tfstate[^/]*|ansible/inventory/vms\.yaml)$'
 PROTECTED_TFVARS_REGEX='(^|/)terraform/((hosts/|unifi/)?vars\.auto\.tfvars|hosts/nodes\.auto\.tfvars)$'
 ALLOW_TFVARS_MIGRATION="${GUARDRAILS_ALLOW_TFVARS_EDIT:-0}"
 
@@ -65,9 +65,8 @@ fi
 # vs binding split). Scans ADDED lines only, so legacy context never blocks a
 # commit. Allowlisted: example files (placeholder addressing) and the generic
 # supernet literals used in firewall/ACL config.
-# Exclusion anchored to the basename: only files NAMED *example* are exempt,
-# not any path that happens to contain the substring somewhere.
-LEAK_EXCLUDE_REGEX='(^|/)[^/]*example[^/]*$|\.gitignore$'
+# Only files with an .example suffix (x.example, x.example.yml) are exempt.
+LEAK_EXCLUDE_REGEX='\.example(\.[a-z]+)?$|\.gitignore$'
 RFC1918_REGEX='(^|[^0-9.])(10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|172\.(1[6-9]|2[0-9]|3[01])\.[0-9]{1,3}\.[0-9]{1,3}|192\.168\.[0-9]{1,3}\.[0-9]{1,3})'
 # IPv6 ULA prefixes (fd00::/8) are site bindings too (ADR 0010 derives them);
 # MACs identify real hardware (terraform builds them from format strings, never literals).
@@ -76,11 +75,20 @@ MAC_REGEX='([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}'
 SUPERNET_ALLOW='10\.0\.0\.0/8|172\.16\.0\.0/12|192\.168\.0\.0/16'
 # Site domains (the public service/media domains, ADR 0040)
 # are bindings too — one grep pattern per line.
-INTERNAL_DOMAINS=""
-if [[ -f network-data/vlans.yaml ]]; then
+# GUARDRAILS_INTERNAL_DOMAINS (newline-separated) replaces the file; without either, a
+# workstation run fails (a fresh clone must not pass with half the guard off) and only CI,
+# which has no vlans.yaml by design, warns.
+INTERNAL_DOMAINS="${GUARDRAILS_INTERNAL_DOMAINS:-}"
+if [[ -z "$INTERNAL_DOMAINS" && -f network-data/vlans.yaml ]]; then
   INTERNAL_DOMAINS=$(sed -nE 's/^(service_domain|media_domain): *"([^"]*)".*/\2/p' network-data/vlans.yaml | grep -v REPLACE_WITH || true)
-else
-  echo "[guardrails] warning: network-data/vlans.yaml absent — the site-domain scan is OFF for this run" >&2
+fi
+if [[ -z "$INTERNAL_DOMAINS" ]]; then
+  if [[ -n "${CI:-}" ]]; then
+    echo "[guardrails] warning: no site domains (vlans.yaml absent) — the site-domain scan is OFF for this CI run" >&2
+  else
+    echo "[guardrails] network-data/vlans.yaml is absent and GUARDRAILS_INTERNAL_DOMAINS is unset — refusing to run with the site-domain scan off" >&2
+    exit 1
+  fi
 fi
 
 added_lines() {
