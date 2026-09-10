@@ -4,16 +4,10 @@ collections:
     version: ">=5.0.0"
   - name: community.general
     version: ">=12.0.0"
-  - name: community.postgresql
-    version: ">=4.2.0"
   - name: community.proxmox
     version: ">=2.0.0"
   - name: community.sops
     version: ">=2.0.0"
-  - name: devopsarr.prowlarr
-  - name: devopsarr.sonarr
-  - name: devopsarr.radarr
-  - name: devopsarr.lidarr
   - name: infisical.vault
     version: ">=1.0.0"
   - name: pfsensible.core
@@ -24,4 +18,3 @@ collections:
 roles:
   - name: geerlingguy.docker
     version: "8.0.0"
-  - src: mitre.yedit

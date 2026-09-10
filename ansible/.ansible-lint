@@ -1,5 +1,4 @@
-# Style-only rules are skipped; everything else that was open on 2026-09-10 is baselined in
-# .ansible-lint-ignore (issue #5). A new violation fails CI; drain the baseline in later tranches.
+# Style-only rules are skipped; no ignore file — a new violation fails CI (issue #5).
 profile: production
 skip_list:
   - var-naming[no-role-prefix]
@@ -12,15 +11,7 @@ skip_list:
   - yaml[line-length]
 exclude_paths:
   - roles/geerlingguy.docker/
-  - roles/mitre.yedit/
-  - roles/juju4.openobserve/
-  - roles/plex_services/
   - inventory/
-  # Retired-guest roles, deleted by the audit's retired-guest sweep (#24); not worth polishing
-  - roles/nvidia/
-  - roles/nvidia_licensing/
-  - roles/squid/
-  - roles/minio/
   # Shared task files are included as "{{ playbook_dir }}/../tasks/<file>", which the linter cannot
   # template, so it looks for them under the including role and reports a phantom load-failure
   - roles/*/tasks/generate_secret.yml

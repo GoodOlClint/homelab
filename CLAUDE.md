@@ -79,7 +79,7 @@ This repo automates a Proxmox-based homelab with Terraform (VM provisioning, SDN
 ### Two-Tier Architecture
 - **Tier 1 (Bootstrap):** `ansible/group_vars/bootstrap.sops.yml` — SOPS-encrypted. Contains only provider credentials (Proxmox, Vultr, Cloudflare), Infisical auth (client_id, client_secret, admin creds), and external secrets (user-provided API keys, passwords). Referenced as `bootstrap.key_name` or `bootstrap_config.key_name`.
 - **Tier 2 (Runtime):** Infisical VM — stores ALL runtime secrets. Organized into folders:
-  `/shared`, `/monitoring`, `/plex`, `/plex-services`, `/homepage`, `/docker`, `/minio`, `/vps`, `/pfsense`, `/pbs`, `/infrastructure`, `/github-runner`, `/control`
+  `/shared`, `/monitoring`, `/plex`, `/plex-services`, `/homepage`, `/docker`, `/vps`, `/pfsense`, `/pbs`, `/infrastructure`, `/github-runner`, `/control`
   Root `/` is **empty** — all secrets live in named subfolders.
 - **No SOPS fallback.** If Infisical is unreachable, the deploy fails with a clear error. `secrets.sops.yml` is a DR artifact only (produced by `make infisical-backup`), never used at runtime.
 
@@ -140,10 +140,8 @@ Each Infisical folder is owned by the role that generates/provisions its secrets
 | `/infrastructure` | bind9, `scripts/pki_hosts.sh` (`acme_*`) | k8s `external-dns` (InfisicalSecret, TSIG), k8s `cert-manager` (InfisicalSecret, Cloudflare token); `proxmox_host`, `proxmox_backup`, `pdm`, `cert_client`, `api_certificate.yml` read `acme_*` at deploy time | bind_tsig_key_secret, acme_tsig_key_secret, acme_directory_url, acme_profile_id, acme_application_id | unifi_admin_password, synology_admin_password, cloudflare_dns_api_token (DNS:edit on both public zones; also read by `plex_certificate` at deploy time) |
 | `/homepage` | control (portainer_api_key only), adguard (adguard_*) | k8s `homepage` (InfisicalSecret) | portainer_api_key, adguard_* | unifi_* |
 | `/control` | control, pdm | — (no agent) | portainer_admin_password, pdm_root_password | — |
-| `/minio` | minio | minio | minio_root_password | — |
 | `/github-runner` | `k8s_seed` role (`make k8s-seed` writes the `arc-runners/github-app` Secret; no generator) | — (no agent) | — | github_app_id, github_app_private_key, github_app_installation_id |
 | `/github/mcp` | — (operator hand step, [docs/github-agent-identity.md](docs/github-agent-identity.md)) | — (no agent; the PEMs are pulled onto the operator workstation with the CLI from the repo root) | — | claude_app_id, claude_app_installation_id, claude_mcp_app_private_key, codex_app_id, codex_app_installation_id, codex_mcp_app_private_key (the agent GitHub Apps) |
-| `/squid` | squid | — (no agent) | squid_ca_private_key, squid_ca_cert_pem | — |
 | `/talos` | `kubernetes/talos/talos.sh` (`make talos-secrets`, no Ansible role) | — (no agent) | talos_secrets_yaml, talosconfig (base64) | — |
 
 **Key rules:**
@@ -195,7 +193,7 @@ Both `infrastructure.yml` and `services.yml` have play-level tags for targeted d
 
 **infrastructure.yml tags:** `phase1`, `phase2`, `phase3`, `dns`, `adguard`, `infisical`, `proxmox-backup`, `unifi`, `apt-cache`, `pxe`, `control`, `pdm`, `monitoring`, `monitoring-users`, `users`
 
-**services.yml tags:** `nvidia-licensing`, `plex`, `minio`, `squid` (homepage, plex-services and the games host moved to the cluster — Flux trees `homepage`, `plex-services`, `games`)
+**services.yml tags:** `plex` (nvidia-licensing, minio and squid retired 2026-09-10, #24; homepage, plex-services and the games host moved to the cluster — Flux trees `homepage`, `plex-services`, `games`)
 
 **How tags work with pre_tasks:**
 - All `pre_tasks` blocks have `tags: [always]`, so secrets/VLANs/facts always load regardless of `--tags` filter.
@@ -217,7 +215,7 @@ make ansible-services TAGS=plex,homepage  # plex + homepage plays
 
 ## Docker Conventions
 
-- **Compose file location:** `/opt/<service>/docker-compose.yml` on the VM (e.g., `/opt/docker/`, `/opt/plex/`, `/opt/minio/`). Each role defines a `*_base_dir` default variable for its path.
+- **Compose file location:** `/opt/<service>/docker-compose.yml` on the VM (e.g., `/opt/infisical/`, `/opt/control/`). Each role defines a `*_base_dir` default variable for its path.
 - **Restart policy:** `restart: unless-stopped` for all containers
 - **Logging:** Docker daemon configured for syslog to OpenObserve (`configure_docker_logging.yml`)
 - **NFS volumes:** Created as named Docker volumes with `driver_opts` for NFS. Plex-services auto-recreates volumes if mount options change.

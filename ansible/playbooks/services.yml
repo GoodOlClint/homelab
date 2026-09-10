@@ -1,29 +1,14 @@
 ---
-- name: Configure nvidia-licensing VM
-  hosts: nvidia-licensing
-  become: true
-
-  vars_files:
-    - ../group_vars/all.yml
-  pre_tasks: &load_all_config
-    - name: Load all configuration and secrets
-      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/full_pre_tasks.yml"
-      tags: [always]
-  roles:
-    - dns_config
-    - nvidia_licensing
-    - rsyslog_client
-    - telegraf
-  tags:
-    - nvidia-licensing
-
 - name: Configure plex VM
   hosts: plex
   become: true
 
   vars_files:
     - ../group_vars/all.yml
-  pre_tasks: *load_all_config
+  pre_tasks:
+    - name: Load all configuration and secrets
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/full_pre_tasks.yml"
+      tags: [always]
   vars:
     infisical_secret_paths: ["/shared", "/plex"]
     infisical_agent_templates:
@@ -43,46 +28,3 @@
     - telegraf
   tags:
     - plex
-
-- name: Configure minio VM
-  hosts: minio
-  become: true
-
-  vars_files:
-    - ../group_vars/all.yml
-  pre_tasks: *load_all_config
-  vars:
-    infisical_secret_paths: ["/shared", "/minio"]
-    infisical_agent_templates:
-      - name: pbs
-        dest_path: /etc/infisical/secrets/pbs.env
-        template_src: secrets/pbs.env.tpl.j2
-      - name: minio
-        dest_path: /etc/infisical/secrets/minio.env
-        template_src: secrets/minio.env.tpl.j2
-        post_command: "docker compose -f /opt/minio/docker-compose.yml up -d --force-recreate minio"
-  roles:
-    - infisical_client
-    - dns_config
-    - pbs_client
-    - minio
-    - rsyslog_client
-    - telegraf
-  tags:
-    - minio
-
-- name: Configure squid VM
-  hosts: squid
-  become: true
-
-  vars_files:
-    - ../group_vars/all.yml
-  pre_tasks: *load_all_config
-  roles:
-    - dns_config
-    - squid
-    - pbs_client
-    - rsyslog_client
-    - telegraf
-  tags:
-    - squid

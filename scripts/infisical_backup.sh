@@ -24,8 +24,8 @@ OUTPUT_FILE="$REPO_ROOT/ansible/group_vars/secrets.sops.yml"
 # All Infisical folders — keep in lockstep with the CLAUDE.md
 # "Infisical Folder Ownership" table. Root / is exported too (must be empty;
 # any stray keys get captured rather than silently dropped).
-FOLDERS=(shared monitoring plex plex-services homepage docker minio vps
-         pfsense pbs infrastructure github-runner squid control talos
+FOLDERS=(shared monitoring plex plex-services homepage docker vps
+         pfsense pbs infrastructure github-runner control talos
          authentik authentik-ext jellyfin)
 
 if [ ! -x "$VENV_PYTHON" ]; then

@@ -389,7 +389,6 @@
     - infrastructure
     - shared
     - homepage
-    - minio
   delegate_to: localhost
   become: false
 

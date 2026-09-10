@@ -20,7 +20,7 @@ graph TD
     PF --> MEDIA[Media VLAN]
 
     MGMT --- M1[dns<br/>adguard<br/>unifi<br/>proxmox-backup<br/>infisical]
-    SVC --- S1[docker<br/>plex<br/>nvidia-licensing]
+    SVC --- S1[plex<br/>control<br/>authentik]
     CORE --- C1[Clients<br/>Work / IoT<br/>Sonos / Guest / Vivint]
     STOR --- ST1[Synology NAS<br/>NFS / iSCSI<br/>jumbo frames]
     MEDIA --- ME1[Plex / Media<br/>services]
@@ -220,12 +220,8 @@ All VMs are defined in `terraform/vm-configs.tf` and provisioned with cloud-init
 | proxmox-backup | 101 | mgmt, services, storage | 4 | 4 GB | 20 GB | -- | Proxmox Backup Server |
 | adguard1 / adguard2 | 251 / 252 | services | 2 | 2 GB | 10 GB | -- | AdGuard Home LXC pair, one per MS-01, keepalived VIP (ADR 0029) |
 | infisical | 105 | mgmt, services | 4 | 4 GB | 30 GB | -- | Self-hosted secret vault |
-| nvidia-licensing | 107 | mgmt, services | 2 | 2 GB | 20 GB | -- | NVIDIA GRID license server (FastAPI DLS) |
 | plex | 108 | mgmt, services, storage | 8 | 32 GB | 100 GB | NVIDIA | Plex Media Server (hardware transcoding) |
 | dns1 / dns2 | 218 / 219 | services | 2 | 1 GB | 10 GB | -- | BIND9 authoritative LXC pair (primary + AXFR secondary), one per MS-01, keepalived VIP (ADR 0003/0029) |
-| minio | 112 | mgmt, services, storage | 4 | 4 GB | 20 GB | -- | MinIO object storage |
-| github-runner | 113 | mgmt, services | 4 | 8 GB | 50 GB | -- | GitHub Actions self-hosted runner |
-| squid | 114 | mgmt, services, openclaw | 2 | 2 GB | 20 GB | -- | Squid forward proxy (SSL bump) |
 | apt-cache | 116 | mgmt, services | 2 | 2 GB | 100 GB | -- | apt-cacher-ng fleet package cache (ADR 0021) |
 
 **IP addressing:**
@@ -320,7 +316,6 @@ Self-hosted secret management platform deployed via Docker Compose:
 
 - **UniFi Controller** (unifi VM) -- Network management for UniFi switches and APs; the console on 11443 serves a root-chained `fleet-hosts` cert (certbot via `cert_client`, deploy hook into the `uosserver` podman volume + `nginx -s reload`, ADR 0041)
 - **Proxmox Backup Server** (proxmox-backup VM) -- VM backup with deduplication
-- **NVIDIA Licensing Server** (nvidia-licensing VM) -- FastAPI DLS for GRID vGPU drivers
 
 ### Talos Kubernetes services plane (`kubernetes/`)
 
@@ -352,11 +347,6 @@ Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-m
 |------|-------------|
 | plex | Plex Media Server installation, NFS mounts, PBS backup |
 | plex_certificate | Let's Encrypt TLS via DNS-01 (Cloudflare token from Infisical `/infrastructure`, account email = `all.yml` `acme_email`), PKCS#12 conversion |
-| docker | Docker daemon, NVIDIA container toolkit, container workloads |
-| nvidia | NVIDIA GRID vGPU driver installation |
-| nvidia_licensing | FastAPI DLS license server |
-| github_runner | GitHub Actions self-hosted runner for CI integration tests |
-| squid | Squid forward proxy with SSL bump for OpenClaw VLAN |
 
 ### VPS
 
@@ -384,7 +374,6 @@ Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-m
 |------|-------------|
 | geerlingguy.docker | Docker CE installation |
 | infisical.vault | Infisical login and secret reading modules |
-| mitre.yedit | YAML/XML editing utilities |
 
 ## Playbooks
 

@@ -79,8 +79,6 @@
     - pbs
     - infrastructure
     - homepage
-    - minio
-    - squid
     - control
     - talos
     - authentik

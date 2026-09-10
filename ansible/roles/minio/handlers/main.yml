@@ -1,6 +1,0 @@
----
-- name: restart minio
-  community.docker.docker_compose_v2:
-    project_src: /opt/minio
-    state: restarted
-  listen: "restart minio"

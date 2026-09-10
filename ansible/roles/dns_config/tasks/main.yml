@@ -19,12 +19,7 @@
 # then hard-fails, because `netplan apply` shells out to `udevadm control
 # --reload`, which cannot work in a container. Running this unguarded on an
 # LXC fails the play outright.
-#
-# NOTE: skipping is correct but NOT sufficient. An LXC's /etc/resolv.conf is a
-# static file PVE writes from the container's `nameserver` setting, which
-# Terraform fills from the full `dns_servers` list — public bootstrap resolver
-# included. Nothing currently strips it there. See the WP4 open item in
-# docs/ms01-cluster-iac-plan.md.
+# A container's resolv.conf is Terraform-owned instead (ADR 0029).
 - name: Check for a DNS apply left pending by an earlier failed run
   ansible.builtin.stat:
     path: /run/dns-config-apply-pending
