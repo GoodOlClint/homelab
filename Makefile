@@ -169,7 +169,7 @@ monitoring-users:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/infrastructure.yml --tags monitoring-users --skip-tags unifi-user
 # P4c (ADR 0037): plex-services stack; media via a kubelet-mounted NFS PV; pg dumps pushed to PBS
 talos-plex-services:
-	@kubernetes/plex-services/deploy.sh
+	@kubernetes/plex-services/deploy.sh   # objects via Flux; the script is the in-app API tail until WP7
 plex-services-smoke:
 	@kubernetes/plex-services/deploy.sh smoke
 # Build + push the pg-backup CronJob's proxmox-backup-client image (the registry's one local push);
@@ -188,7 +188,7 @@ talos-games:
 
 # P5d (ADR 0040): Jellyfin on jellyfin.<media domain> — LDAP auth against the authentik external realm, media read-only over NFS
 talos-jellyfin:
-	@kubernetes/jellyfin/deploy.sh
+	@kubernetes/jellyfin/deploy.sh   # objects via Flux; the script is the in-app API tail until WP7
 
 # Read-only Kubernetes dashboard (Headlamp) on headlamp.<service domain>, behind authentik forward-auth
 talos-headlamp:
