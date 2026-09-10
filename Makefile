@@ -582,7 +582,7 @@ ca-trust:
 
 # ADR 0041: Infisical PKI policy/profile/application + ACME/API enrollment for the fleet hosts (idempotent by name).
 pki-hosts:
-	@/bin/bash scripts/pki_hosts.sh   # system bash: homebrew bash 5.3 deadlocks in lib.sh's inv_env heredoc
+	@/bin/bash scripts/pki_hosts.sh
 
 # === UniFi plane — terraform/unifi/ (WP5, ADR 0005) ============================
 # Separate root: the unifi provider connects to the controller at plan time, so

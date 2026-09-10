@@ -2,12 +2,31 @@
 # Fleet-host PKI on Infisical (ADR 0041): certificate policy + profile `fleet-hosts` under the
 # `Homelab Root CA` (ADR 0039), one application with ACME (DNS-01, no EAB) and API enrollment.
 # Idempotent by name. Publishes the ACME directory URL to Infisical /infrastructure.
-source "$(dirname "$0")/../kubernetes/lib.sh"
-eval "$(inv_env)"   # SERVICE_DOMAIN
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+BOOT="$ROOT/ansible/group_vars/bootstrap.sops.yml"
+mkdir -p "$ROOT/kubernetes/.secrets"
+boot() { sops -d --extract "$1" "$BOOT"; }
+inf_project_id() { boot '["bootstrap_config"]["infisical_project_id"]'; }
+inf_host_api() { printf '%s/api' "$(boot '["bootstrap_config"]["infisical_url"]')"; }
+inf_token() {
+  curl -sfS -X POST "$(inf_host_api)/v1/auth/universal-auth/login" -H 'content-type: application/json' \
+    -d "$(jq -n --arg id "$(boot '["bootstrap"]["infisical_client_id"]')" --arg s "$(boot '["bootstrap"]["infisical_client_secret"]')" '{clientId:$id,clientSecret:$s}')" | jq -r .accessToken
+}
+inf() { # path [curl args...]
+  : "${_INF_TOK:=$(inf_token)}"
+  curl -sS "$(inf_host_api)$1" -H "authorization: Bearer $_INF_TOK" -H 'content-type: application/json' "${@:2}"
+}
+SERVICE_DOMAIN=$("$ROOT/.venv/bin/python3" -c "import yaml,sys;print(yaml.safe_load(open(sys.argv[1]))['service_domain'])" "$ROOT/network-data/vlans.yaml")
+plus_years() { "$ROOT/.venv/bin/python3" -c "import datetime as d;print((d.datetime.now(d.timezone.utc)+d.timedelta(days=365*$1)).strftime('%Y-%m-%dT%H:%M:%S.000Z'))"; }
+
+# Project + root exist for the life of the vault (they ride the PBS dump, ADR 0039); created only on a virgin vault.
 PROJ=$(inf /v1/workspace | jq -r '.workspaces[] | select(.type=="cert-manager" and .name=="homelab-pki") | .id')
-[ -n "$PROJ" ] || { echo "homelab-pki project missing — run make talos-certs first" >&2; exit 1; }
+[ -n "$PROJ" ] || PROJ=$(inf /v2/workspace -d '{"projectName":"homelab-pki","type":"cert-manager","hasDeleteProtection":true}' | jq -r .project.id)
+[ -n "$PROJ" ] && [ "$PROJ" != null ] || { echo "homelab-pki project create failed" >&2; exit 1; }
 CA=$(inf "/v1/cert-manager/ca?projectId=$PROJ" | jq -r '.certificateAuthorities[] | select(.name=="homelab-root-ca") | .id')
-[ -n "$CA" ] || { echo "homelab-root-ca missing — run make talos-certs first" >&2; exit 1; }
+[ -n "$CA" ] || CA=$(inf "/v1/cert-manager/ca/internal?projectId=$PROJ" -d "$(jq -n --arg na "$(plus_years 20)" --arg alg EC_secp384r1 '{name:"homelab-root-ca",status:"active",configuration:{type:"root",friendlyName:"Homelab Root CA",commonName:"Homelab Root CA",organization:"homelab",keyAlgorithm:$alg,keySource:"infisical",maxPathLength:1,notAfter:$na}}')" | jq -r .id)
+[ -n "$CA" ] && [ "$CA" != null ] || { echo "homelab-root-ca create failed" >&2; exit 1; }
 
 # The root is what every node, guest, pod and the workstation's python trust (ADR 0039/0042); the cluster's
 # intermediate is signed by the Ansible seed (make k8s-seed) and never exported.
@@ -18,7 +37,6 @@ echo "root CA exported to $ROOT_CRT"
 
 # Infisical only signs a CSR whose key family matches the CA's; the Proxmox ACME clients make RSA
 # keys, so the fleet issuer is an RSA intermediate under the EC root (root pathlen 1).
-plus_years() { "$ROOT/.venv/bin/python3" -c "import datetime as d;print((d.datetime.now(d.timezone.utc)+d.timedelta(days=365*$1)).strftime('%Y-%m-%dT%H:%M:%S.000Z'))"; }
 ICA=$(inf "/v1/cert-manager/ca?projectId=$PROJ" | jq -r '.certificateAuthorities[] | select(.name=="homelab-hosts-ca") | .id')
 [ -n "$ICA" ] || ICA=$(inf "/v1/cert-manager/ca/internal?projectId=$PROJ" -d "$(jq -n --arg na "$(plus_years 10)" --arg alg RSA_4096 --arg parent "$CA" \
   '{name:"homelab-hosts-ca",status:"active",configuration:{type:"intermediate",parentCaId:$parent,friendlyName:"Homelab Hosts CA",commonName:"Homelab Hosts CA",organization:"homelab",keyAlgorithm:$alg,keySource:"infisical",maxPathLength:0,notAfter:$na}}')" | jq -r .id)
