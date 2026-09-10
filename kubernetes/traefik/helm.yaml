@@ -38,7 +38,7 @@ spec:
           secretName: wildcard-tls
     service:
       annotations:
-        metallb.io/loadBalancerIPs: ${LB_IP}
+        metallb.io/loadBalancerIPs: ${INGRESS_IP}
     providers:
       kubernetesIngress:
         publishedService:

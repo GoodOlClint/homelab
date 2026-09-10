@@ -101,6 +101,7 @@
   kubernetes.core.k8s:
     kubeconfig: "{{ k8s_seed_kubeconfig }}"
     template: cluster-bindings.yaml.j2
+    apply: true
   no_log: "{{ k8s_seed_debug is not defined }}"
 
 - name: Compute the generated monitoring inputs

@@ -41,6 +41,18 @@ dns_server:
   bind_ipv4: "REPLACE_WITH_BIND_IPV4"             # BIND9 authoritative address
   zone_vlans: ["management", "infrastructure", "services", "core", "storage", "work", "iot", "sonos", "guest"]
 
+# --- MetalLB (services VLAN) ---
+# pool: the L2 pool's first/last services offset; offsets: every pinned LoadBalancer address
+# (metallb.io/loadBalancerIPs in the tree + the A record from `make dns-records`). Add a
+# service here, never as a literal in a manifest.
+metallb:
+  pool: [64, 79]
+  offsets:
+    registry: 64
+    ingress: 65
+    syslog: 66
+    valheim: 67
+
 # --- Proxmox SDN Zones ---
 sdn_zones:
   Homelab:

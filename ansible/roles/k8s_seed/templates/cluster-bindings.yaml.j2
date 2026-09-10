@@ -36,12 +36,9 @@ data:
   CEPH_FSID: "{{ _ceph_fsid }}"
   CEPH_MONITORS: "{{ _ceph_mons }}"
   CEPH_MONITORS_JSON: {{ _ceph_mons.split(",") | to_json | to_json }}
-{% for n, o in k8s_seed_lb_offsets.items() %}
+{% for n, o in network_data.metallb.offsets.items() %}
   {{ n | upper }}_IP: "{{ services_vlan_prefix }}{{ o }}"
 {% endfor %}
-  LB_IP: "{{ services_vlan_prefix }}65"
-  SYSLOG_IP: "{{ services_vlan_prefix }}{{ monitoring_syslog_offset }}"
-  VALHEIM_IP: "{{ services_vlan_prefix }}67"
-  POOL_START: "{{ services_vlan_prefix }}64"
-  POOL_END: "{{ services_vlan_prefix }}79"
+  POOL_START: "{{ services_vlan_prefix }}{{ network_data.metallb.pool[0] }}"
+  POOL_END: "{{ services_vlan_prefix }}{{ network_data.metallb.pool[1] }}"
   SMOKEPING_ARGS: {{ smokeping_targets | map(attribute='ip') | list | to_json | to_json }}

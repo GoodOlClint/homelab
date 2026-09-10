@@ -9,11 +9,6 @@
     _dns_primary: "{{ hostvars[groups['dns'][0]].ansible_host }}"
     _dns_a: "{{ (_hosts + _vips + _lbs + _aliases) | unique(attribute='name') }}"
   vars:
-    dns_lb_offsets:
-      registry: 64
-      ingress: 65
-      syslog: "{{ monitoring_syslog_offset }}"
-      valheim: 67
     _hosts: >-
       {%- set out = [] -%}
       {%- for h in groups['all'] | difference(['localhost']) if hostvars[h].ansible_host is defined -%}
@@ -35,7 +30,7 @@
       {{ out }}
     _lbs: >-
       {%- set out = [] -%}
-      {%- for n, o in dns_lb_offsets.items() -%}
+      {%- for n, o in network_data.metallb.offsets.items() -%}
       {{- out.append({'name': n, 'ip': services_vlan_prefix ~ o}) -}}
       {%- endfor -%}
       {{ out }}

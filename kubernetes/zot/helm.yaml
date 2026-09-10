@@ -23,6 +23,7 @@ spec:
     service:
       type: LoadBalancer
       port: 443
+      annotations: {metallb.io/loadBalancerIPs: "${REGISTRY_IP}"}
     httpGet:
       scheme: HTTPS
     persistence: true
