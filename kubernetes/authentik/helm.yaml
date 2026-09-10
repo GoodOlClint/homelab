@@ -1,0 +1,44 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata: {name: authentik, namespace: authentik-ext}
+spec: {interval: 12h, url: https://charts.goauthentik.io}
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata: {name: authentik, namespace: authentik-ext}
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: authentik
+      version: "2026.8.0"
+      sourceRef: {kind: HelmRepository, name: authentik}
+  install: {crds: CreateReplace}
+  upgrade: {crds: CreateReplace}
+  values:
+    global:
+      image:
+        repository: ${REGISTRY}/ghcr.io/goauthentik/server
+        tag: "2026.8.0"
+      envFrom: [{secretRef: {name: authentik-secrets}}]
+      env:
+        - {name: AUTHENTIK_BOOTSTRAP_EMAIL, value: "${ACME_EMAIL}"}
+        - {name: AUTHENTIK_WEB__BASE_URL, value: "https://auth.${MEDIA_DOMAIN}"}
+        - {name: TZ, value: "${TZ}"}
+      affinity:
+        nodeAffinity:
+          type: soft
+          matchExpressions: [{key: kubernetes.io/hostname, operator: NotIn, values: [talos-cp-w]}]
+      deploymentAnnotations: {secrets.infisical.com/auto-reload: "true"}
+    authentik:
+      postgresql: {host: postgres, name: authentik, user: authentik}
+      outposts:
+        container_image_base: ${REGISTRY}/ghcr.io/goauthentik/%(type)s:%(version)s
+    blueprints:
+      configMaps: [authentik-blueprint]
+    server:
+      deploymentStrategy: {type: Recreate}
+      resources: {requests: {cpu: 100m, memory: 512Mi}}
+    worker:
+      deploymentStrategy: {type: Recreate}
+      resources: {requests: {cpu: 100m, memory: 512Mi}}

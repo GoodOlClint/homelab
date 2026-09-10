@@ -1,76 +1,37 @@
 #!/bin/bash
-# authentik on the cluster (ADR 0040 P5c): one tree, two realms.
-#   deploy.sh internal   — namespace authentik, auth.<service domain> Ingress, Traefik forward-auth via the
-#                          embedded outpost, OIDC providers for Grafana/Portainer/MeshCentral/PDM/PVE/PBS
-#   deploy.sh external   — namespace authentik-ext, Service only (the Cloudflare tunnel route is a dashboard
-#                          step), LDAP outpost for Jellyfin, family/admins groups, enrollment + recovery flows
-#   deploy.sh            — both, internal first
-# Each realm: server + worker (helm chart), Postgres on ceph-rbd, nightly pg_dumpall → PBS ns `databases`,
-# secrets generated into Infisical /authentik resp. /authentik-ext on first run and delivered by InfisicalSecret.
+# authentik external realm (ADR 0040 P5c, ADR 0049): auth.<media domain>, Service only (the Cloudflare tunnel
+# route is a dashboard step), LDAP outpost for Jellyfin, family/admins groups, enrollment + recovery flows.
+# Objects are Flux-owned (kubernetes/flux/apps/authentik-ext.yaml); this script is the in-app tail — secrets
+# generated into Infisical /authentik-ext on first run, then the blueprint applied — until it moves into
+# ansible/playbooks/kubernetes.yml (ADR 0048 WP7). The internal realm is `make ansible authentik`.
 source "$(dirname "$0")/../lib.sh"
 HERE="$(cd "$(dirname "$0")" && pwd)"
-eval "$(inv_env)"   # PBS TZ ACME_EMAIL SERVICE_DOMAIN MEDIA_DOMAIN
-export REGISTRY="registry.$(j .domain)" HOST_API="$(inf_host_api)" PROJECT_ID="$(inf_project_id)" TZ ACME_EMAIL
-export PBS_REPOSITORY="backup@pbs!backup-token@${PBS}:synology"
-export CHART_VERSION=2026.8.0
-SUBST='${NS} ${HOST} ${DOMAIN} ${DOMAIN_RE} ${REGISTRY} ${HOST_API} ${PROJECT_ID} ${FOLDER} ${TZ} ${ACME_EMAIL} ${PBS_REPOSITORY} ${CHART_VERSION}'
-sub() { envsubst "$SUBST"; }
+NS=authentik-ext FOLDER=authentik-ext
 
-helm repo add authentik https://charts.goauthentik.io >/dev/null 2>&1 || true
-helm repo update authentik >/dev/null
+ensure_folder "$FOLDER"
+ensure_secret secret_key 48 "authentik external: Django secret key"
+ensure_secret postgres_password 24 "authentik external: Postgres password"
+ensure_secret bootstrap_password 16 "authentik external: akadmin initial password"
+ensure_secret bootstrap_token 32 "authentik external: akadmin API token"
+ensure_secret ldap_bind_password 24 "authentik external: LDAP outpost bind password (Jellyfin)"
 
-realm() {
-  local realm=$1
-  case "$realm" in
-    internal) export NS=authentik FOLDER=authentik HOST="auth.$SERVICE_DOMAIN" DOMAIN="$SERVICE_DOMAIN" ;;
-    external) export NS=authentik-ext FOLDER=authentik-ext HOST="auth.$MEDIA_DOMAIN" DOMAIN="$MEDIA_DOMAIN" ;;
-    *) echo "usage: deploy.sh [internal|external]" >&2; exit 1 ;;
-  esac
-  export DOMAIN_RE="${DOMAIN//./\\.}"
-  ensure_folder "$FOLDER"
-  ensure_secret secret_key 48 "authentik $realm: Django secret key"
-  ensure_secret postgres_password 24 "authentik $realm: Postgres password"
-  ensure_secret bootstrap_password 16 "authentik $realm: akadmin initial password"
-  ensure_secret bootstrap_token 32 "authentik $realm: akadmin API token"
-  if [ "$realm" = internal ]; then
-    for app in grafana portainer meshcentral pdm pve pbs synology homeassistant; do ensure_secret "${app}_oidc_client_secret" 32 "authentik internal: OIDC client secret for $app"; done
-  else
-    ensure_secret ldap_bind_password 24 "authentik external: LDAP outpost bind password (Jellyfin)"
-  fi
-
-  ns "$NS"
-  kubectl create configmap authentik-blueprint -n "$NS" --dry-run=client -o yaml --from-file="blueprint.yaml=$HERE/blueprint-$realm.yaml" | sub | kubectl apply --server-side --force-conflicts -f -
-  sub < "$HERE/pvc.yaml" | kubectl apply -f -
-  sub < "$HERE/secrets.yaml" | kubectl apply -f -
-  sub < "$HERE/secrets-$realm.yaml" | kubectl apply -f -
-  sub < "$HERE/app.yaml" | kubectl apply -f -
-  for i in $(seq 30); do kubectl -n "$NS" get secret authentik-secrets >/dev/null 2>&1 && break; sleep 2; done
-  helm_apply authentik authentik/authentik "$NS" --version "$CHART_VERSION" -f <(sub < "$HERE/values.yaml")
-  [ "$realm" = internal ] && sub < "$HERE/ingress.yaml" | kubectl apply -f -
-  kubectl -n "$NS" rollout status deploy postgres authentik-server authentik-worker --timeout=600s
-  # kubelet refreshes a mounted ConfigMap on its own sync period, so the worker can still hold the
-  # PREVIOUS blueprint when the rollout returns. Applying then silently re-applies stale content and
-  # the deploy reports success while the change never lands (hit 2026-08-28 anchoring redirect_uris).
-  _want=$(sub < "$HERE/blueprint-$realm.yaml" | shasum -a 256 | cut -c1-16)
-  for i in $(seq 30); do
-    _got=$(kubectl -n "$NS" exec deploy/authentik-worker -- python3 -c \
-      "import hashlib;print(hashlib.sha256(open('/blueprints/mounted/cm-authentik-blueprint/blueprint.yaml','rb').read()).hexdigest()[:16])" 2>/dev/null || true)
-    [ "$_want" = "$_got" ] && break
-    [ "$i" = 30 ] && { echo "blueprint mount never caught up (want $_want, got ${_got:-none})" >&2; exit 1; }
-    sleep 5
-  done
-  # The worker applies mounted blueprints on its own schedule; apply now so a deploy is complete when it returns.
-  for i in $(seq 12); do
-    kubectl -n "$NS" exec deploy/authentik-worker -- ak apply_blueprint /blueprints/mounted/cm-authentik-blueprint/blueprint.yaml >"$SECRETS/authentik-$realm-blueprint.log" 2>&1 && break
-    [ "$i" = 12 ] && { echo "blueprint apply failed — see $SECRETS/authentik-$realm-blueprint.log" >&2; exit 1; }; sleep 10
-  done
-  echo "authentik $realm: https://$HOST ($NS; akadmin password = Infisical /$FOLDER/bootstrap_password)"
-}
-
-# The internal realm moved to its LXC 2026-09-10 (ADR 0049): deploying it here would recreate the Ingress
-# external-dns owns and scale the frozen cluster copy back up beside the live one. Its blueprint file stays
-# because the `authentik` Ansible role renders it.
-for r in ${1:-external}; do
-  [ "$r" = internal ] && { echo "internal realm is the authentik LXC now — \`make ansible authentik\` (ADR 0049)" >&2; exit 1; }
-  realm "$r"
+flux reconcile kustomization authentik-ext --with-source >/dev/null
+kubectl -n "$NS" rollout status deploy postgres authentik-server authentik-worker --timeout=600s
+# kubelet refreshes a mounted ConfigMap on its own sync period, so the worker can still hold the
+# PREVIOUS blueprint when the rollout returns. Applying then silently re-applies stale content and
+# the deploy reports success while the change never lands (hit 2026-08-28 anchoring redirect_uris).
+_want=$(shasum -a 256 < "$HERE/blueprint-external.yaml" | cut -c1-16)
+for i in $(seq 30); do
+  _got=$(kubectl -n "$NS" exec deploy/authentik-worker -- python3 -c \
+    "import hashlib;print(hashlib.sha256(open('/blueprints/mounted/cm-authentik-blueprint/blueprint.yaml','rb').read()).hexdigest()[:16])" 2>/dev/null || true)
+  [ "$_want" = "$_got" ] && break
+  [ "$i" = 30 ] && { echo "blueprint mount never caught up (want $_want, got ${_got:-none})" >&2; exit 1; }
+  sleep 5
 done
+# The worker applies mounted blueprints on its own schedule; apply now so a deploy is complete when it returns.
+for i in $(seq 12); do
+  kubectl -n "$NS" exec deploy/authentik-worker -- ak apply_blueprint /blueprints/mounted/cm-authentik-blueprint/blueprint.yaml >"$SECRETS/authentik-external-blueprint.log" 2>&1 && break
+  [ "$i" = 12 ] && { echo "blueprint apply failed — see $SECRETS/authentik-external-blueprint.log" >&2; exit 1; }; sleep 10
+done
+eval "$(inv_env)"
+echo "authentik external: https://auth.$MEDIA_DOMAIN ($NS; akadmin password = Infisical /$FOLDER/bootstrap_password)"

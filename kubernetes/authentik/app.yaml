@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: postgres
-  namespace: ${NS}
+  namespace: authentik-ext
   annotations: {secrets.infisical.com/auto-reload: "true"}
 spec:
   replicas: 1
@@ -32,12 +32,12 @@ spec:
 ---
 apiVersion: v1
 kind: Service
-metadata: {name: postgres, namespace: ${NS}}
+metadata: {name: postgres, namespace: authentik-ext}
 spec: {selector: {app: postgres}, ports: [{port: 5432}]}
 ---
 apiVersion: batch/v1
 kind: CronJob
-metadata: {name: pg-backup, namespace: ${NS}}
+metadata: {name: pg-backup, namespace: authentik-ext}
 spec:
   schedule: "20 2 * * *"
   suspend: false
@@ -64,7 +64,7 @@ spec:
               image: ${REGISTRY}/homelab/proxmox-backup-client:trixie
               imagePullPolicy: IfNotPresent
               # The trailing snapshot list is the verification signal: judge this lane by snapshot recency in the log, never by exit code.
-              command: [sh, -ec, 'proxmox-backup-client namespace create databases 2>/dev/null || true; proxmox-backup-client backup ${NS}-postgres.pxar:/backups --ns databases --backup-id ${NS}-postgres; proxmox-backup-client snapshot list --ns databases | tail -5']
+              command: [sh, -ec, 'proxmox-backup-client namespace create databases 2>/dev/null || true; proxmox-backup-client backup authentik-ext-postgres.pxar:/backups --ns databases --backup-id authentik-ext-postgres; proxmox-backup-client snapshot list --ns databases | tail -5']
               env:
                 - {name: PBS_REPOSITORY, value: "${PBS_REPOSITORY}"}
                 - {name: PBS_PASSWORD, valueFrom: {secretKeyRef: {name: pbs-secrets, key: PBS_PASSWORD}}}

@@ -1,0 +1,13 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata: {name: authentik-ext, namespace: flux-system}
+spec:
+  interval: 10m
+  path: ./kubernetes/authentik
+  prune: false
+  sourceRef: {kind: GitRepository, name: homelab}
+  serviceAccountName: flux-authentik-ext
+  postBuild:
+    substituteFrom: [{kind: ConfigMap, name: cluster-bindings}]
+  healthChecks:
+    - {apiVersion: helm.toolkit.fluxcd.io/v2, kind: HelmRelease, name: authentik, namespace: authentik-ext}

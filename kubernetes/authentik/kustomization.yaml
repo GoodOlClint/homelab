@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# The external realm only (ADR 0049): the internal realm is the authentik LXC, which renders blueprint-internal.yaml itself.
+resources: [helm.yaml, pvc.yaml, secrets.yaml, secrets-external.yaml, app.yaml]
+# Fixed name: the chart mounts it by name and deploy.sh hashes the mounted file.
+configMapGenerator:
+  - name: authentik-blueprint
+    namespace: authentik-ext
+    files: [blueprint.yaml=blueprint-external.yaml]
+    options: {disableNameSuffixHash: true}

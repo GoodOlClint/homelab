@@ -44,10 +44,10 @@ entries:
       providers: [!KeyOf ldap]
       service_connection: !KeyOf k8s
       config:
-        kubernetes_namespace: ${NS}
+        kubernetes_namespace: authentik-ext
         kubernetes_replicas: 1
         kubernetes_service_type: ClusterIP
-        authentik_host: http://authentik-server.${NS}.svc:80
+        authentik_host: http://authentik-server.authentik-ext.svc:80
 
   - model: authentik_stages_prompt.prompt
     id: p-username

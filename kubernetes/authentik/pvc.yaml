@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
-metadata: {name: postgres, namespace: ${NS}}
+metadata: {name: postgres, namespace: authentik-ext}
 spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 5Gi}}}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
-metadata: {name: backups, namespace: ${NS}}
+metadata: {name: backups, namespace: authentik-ext}
 spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 2Gi}}}

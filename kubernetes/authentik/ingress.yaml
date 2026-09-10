@@ -1,9 +1,0 @@
-# Internal realm only: the login host. The ForwardAuth Middleware lives in kubernetes/traefik/middleware.yaml.
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata: {name: authentik, namespace: ${NS}}
-spec:
-  ingressClassName: traefik
-  rules:
-    - host: ${HOST}
-      http: {paths: [{path: /, pathType: Prefix, backend: {service: {name: authentik-server, port: {number: 80}}}}]}

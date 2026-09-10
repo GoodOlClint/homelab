@@ -159,7 +159,7 @@ talos-dns:
 	@flux reconcile kustomization external-dns --with-source
 # P5c (ADR 0040): authentik, both realms (REALM=internal|external for one); generates each realm's Infisical folder on first run
 talos-authentik:
-	@kubernetes/authentik/deploy.sh $(REALM)
+	@kubernetes/authentik/deploy.sh
 # P4b (ADR 0036): monitoring stack; axosyslog LB on services offset 66; history migration from the old guest
 talos-monitoring:
 	@flux reconcile kustomization monitoring --with-source
