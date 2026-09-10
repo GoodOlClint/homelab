@@ -20,13 +20,3 @@ stop() {
     wg-quick down "${INTERFACE}"
     eend $?
 }
-
-status() {
-    if wg show "${INTERFACE}" >/dev/null 2>&1; then
-        einfo "WireGuard interface ${INTERFACE} is up"
-        return 0
-    else
-        einfo "WireGuard interface ${INTERFACE} is down"
-        return 3
-    fi
-}

@@ -32,3 +32,16 @@
   tags:
     - telegraf
     - config
+
+# Alpine's init reads /etc/telegraf.conf + /etc/telegraf.conf.d; the role's drop-in dir is
+# /etc/telegraf/telegraf.d on every OS, so point the daemon at it (or it runs with no outputs).
+- name: Point the OpenRC service at the role's config directory
+  ansible.builtin.copy:
+    dest: /etc/conf.d/telegraf
+    content: |
+      TELEGRAF_OPTS="-config {{ telegraf_main_conf }} -config-directory /etc/telegraf/telegraf.d"
+    mode: '0644'
+  notify: Restart Telegraf
+  tags:
+    - telegraf
+    - config

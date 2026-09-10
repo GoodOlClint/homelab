@@ -19,7 +19,7 @@
 - name: Grant Telegraf NET_ADMIN capability for WireGuard metrics
   community.general.capabilities:
     path: /usr/bin/telegraf
-    capability: cap_net_admin+epi
+    capability: cap_net_admin=eip
     state: present
   when: inventory_hostname == 'vps'
   notify: Restart Telegraf
@@ -58,7 +58,7 @@
     - config
 
 - name: Validate Telegraf configuration syntax
-  ansible.builtin.command: telegraf --config /etc/telegraf/telegraf.conf --config-directory /etc/telegraf/telegraf.d config
+  ansible.builtin.command: telegraf --config {{ telegraf_main_conf }} --config-directory /etc/telegraf/telegraf.d config
   register: telegraf_test
   changed_when: false
   failed_when: telegraf_test.rc != 0

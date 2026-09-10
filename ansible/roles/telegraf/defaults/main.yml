@@ -8,3 +8,6 @@
 #
 # Required from pre_tasks:
 #   secrets.monitoring.openobserve_root_user_pass
+
+# The package's main config: Alpine ships it at /etc/telegraf.conf, Debian under /etc/telegraf/.
+telegraf_main_conf: "{{ '/etc/telegraf.conf' if ansible_facts['os_family'] == 'Alpine' else '/etc/telegraf/telegraf.conf' }}"
