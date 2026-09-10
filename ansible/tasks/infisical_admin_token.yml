@@ -1,0 +1,26 @@
+---
+# Sets _admin_token for the Infisical management API (identities, folders).
+# The loader's universal-auth session is the same ansible-admin identity, so a play that
+# ran full_pre_tasks.yml reuses it; only a play without the loader logs in (once).
+# The identity's accessTokenTTL is 7200 s (bootstrap_infisical_setup.yml).
+
+- name: Get admin access token from Infisical
+  ansible.builtin.uri:
+    url: "{{ bootstrap_config.infisical_url }}/api/v1/auth/universal-auth/login"
+    method: POST
+    body_format: form-urlencoded
+    body:
+      clientId: "{{ bootstrap.infisical_client_id }}"
+      clientSecret: "{{ bootstrap.infisical_client_secret }}"
+    status_code: 200
+  register: _admin_login
+  delegate_to: localhost
+  become: false
+  run_once: true
+  no_log: true
+  when: infisical_login.login_data.access_token is not defined
+
+- name: Set admin token fact
+  ansible.builtin.set_fact:
+    _admin_token: "{{ _admin_login.json.accessToken if _admin_login is not skipped else infisical_login.login_data.access_token }}"
+  no_log: true

@@ -1,0 +1,25 @@
+---
+# Walks GET /api/v1/identities one page at a time into _all_identities, recursing until
+# a short page. Callers set_fact _admin_token, _all_identities: [] and _page_offset: 0 first
+# (an include var would shadow the set_fact that advances the offset).
+
+- name: "List organization identities (offset {{ _page_offset }})"
+  ansible.builtin.uri:
+    url: "{{ bootstrap_config.infisical_url }}/api/v1/identities?orgId={{ bootstrap_config.infisical_org_id }}&limit={{ _page_size | default(100) }}&offset={{ _page_offset }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ _admin_token }}"
+    status_code: 200
+  register: _identity_page
+  delegate_to: localhost
+  become: false
+  check_mode: false
+
+- name: Collect the page
+  ansible.builtin.set_fact:
+    _all_identities: "{{ _all_identities | default([]) + _identity_page.json.identities }}"
+    _page_offset: "{{ _page_offset | int + (_page_size | default(100) | int) }}"
+
+- name: Fetch the next page
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/infisical_identity_page.yml"
+  when: _identity_page.json.identities | length == (_page_size | default(100) | int)

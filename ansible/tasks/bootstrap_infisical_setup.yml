@@ -352,26 +352,22 @@
     _infisical_url: "http://{{ hostvars['infisical']['ansible_host'] | replace(mgmt_vlan_prefix, services_vlan_prefix) }}:8080"
   when: _infisical_url is not defined
 
-- name: Get Infisical token for folder creation
-  ansible.builtin.uri:
-    url: "{{ _infisical_url }}/api/v1/auth/universal-auth/login"
-    method: POST
-    headers:
-      Content-Type: application/json
-    body_format: json
-    body:
-      clientId: "{{ _client_id | default(bootstrap.infisical_client_id) }}"
-      clientSecret: "{{ _client_secret | default(bootstrap.infisical_client_secret) }}"
-    status_code: [200]
-  register: _seed_login
-  no_log: true
+- name: Authenticate to Infisical for external secret seeding
+  infisical.vault.login:
+    url: "{{ _infisical_url }}"
+    auth_method: universal_auth
+    universal_auth_client_id: "{{ _client_id | default(bootstrap.infisical_client_id) }}"
+    universal_auth_client_secret: "{{ _client_secret | default(bootstrap.infisical_client_secret) }}"
+  register: infisical_login
+  delegate_to: localhost
+  become: false
 
 - name: Create Infisical folders
   ansible.builtin.uri:
     url: "{{ _infisical_url }}/api/v2/folders"
     method: POST
     headers:
-      Authorization: "Bearer {{ _seed_login.json.accessToken }}"
+      Authorization: "Bearer {{ infisical_login.login_data.access_token }}"
     body_format: json
     body:
       projectId: "{{ _project_id | default(bootstrap_config.infisical_project_id) }}"
@@ -390,16 +386,6 @@
     - infrastructure
     - shared
     - homepage
-  delegate_to: localhost
-  become: false
-
-- name: Authenticate to Infisical for external secret seeding
-  infisical.vault.login:
-    url: "{{ _infisical_url }}"
-    auth_method: universal_auth
-    universal_auth_client_id: "{{ _client_id | default(bootstrap.infisical_client_id) }}"
-    universal_auth_client_secret: "{{ _client_secret | default(bootstrap.infisical_client_secret) }}"
-  register: infisical_login
   delegate_to: localhost
   become: false
 

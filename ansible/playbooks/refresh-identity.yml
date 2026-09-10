@@ -31,33 +31,16 @@
     - cleanup
     - never
   tasks:
-    # --- Authenticate as admin ---
-    - name: Get admin access token from Infisical
-      ansible.builtin.uri:
-        url: "{{ bootstrap_config.infisical_url }}/api/v1/auth/universal-auth/login"
-        method: POST
-        body_format: form-urlencoded
-        body:
-          clientId: "{{ bootstrap.infisical_client_id }}"
-          clientSecret: "{{ bootstrap.infisical_client_secret }}"
-        status_code: 200
-      register: _admin_login
-      no_log: true
+    - name: Get the admin token
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/infisical_admin_token.yml"
 
-    - name: Set admin token fact
+    - name: Start the identity listing at the first page
       ansible.builtin.set_fact:
-        _admin_token: "{{ _admin_login.json.accessToken }}"
-      no_log: true
+        _all_identities: []
+        _page_offset: 0
 
-    # --- List all org identities ---
     - name: List all organization identities
-      ansible.builtin.uri:
-        url: "{{ bootstrap_config.infisical_url }}/api/v1/identities?orgId={{ bootstrap_config.infisical_org_id }}&limit=100&offset=0"
-        method: GET
-        headers:
-          Authorization: "Bearer {{ _admin_token }}"
-        status_code: 200
-      register: _org_identities
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/infisical_identity_page.yml"
 
     # --- Build list of expected identity names from inventory ---
     - name: Build expected identity names from all inventory hosts
@@ -68,7 +51,7 @@
     - name: Identify orphaned VM identities
       ansible.builtin.set_fact:
         _orphaned: >-
-          {{ _org_identities.json.identities
+          {{ _all_identities
              | selectattr('identity.name', 'match', '.*-vm$')
              | rejectattr('identity.name', 'in', _expected_names)
              | list }}

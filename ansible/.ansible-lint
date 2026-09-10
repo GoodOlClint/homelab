@@ -16,6 +16,7 @@ exclude_paths:
   # template, so it looks for them under the including role and reports a phantom load-failure
   - roles/*/tasks/generate_secret.yml
   - roles/*/tasks/infisical_write_secret.yml
+  - roles/*/tasks/infisical_admin_token.yml
   - roles/*/tasks/configure_docker_logging.yml
   - roles/*/tasks/api_certificate.yml
   - roles/*/tasks/configure_pbs_backup.yml
