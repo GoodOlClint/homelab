@@ -129,9 +129,9 @@ talos-apply:
 talos-bootstrap:
 	@kubernetes/talos/talos.sh bootstrap
 talos-csi:
-	@kubernetes/ceph-csi/deploy.sh
+	@flux reconcile kustomization ceph-csi --with-source
 talos-smoke:
-	@kubernetes/ceph-csi/deploy.sh smoke
+	@kubectl --kubeconfig kubernetes/talos/.secrets/kubeconfig delete -f kubernetes/ceph-csi/smoke.yaml --ignore-not-found >/dev/null; kubectl --kubeconfig kubernetes/talos/.secrets/kubeconfig apply -f kubernetes/ceph-csi/smoke.yaml >/dev/null && kubectl --kubeconfig kubernetes/talos/.secrets/kubeconfig wait --for=jsonpath='{.status.phase}'=Succeeded pod/rbd-smoke --timeout=300s >/dev/null && kubectl --kubeconfig kubernetes/talos/.secrets/kubeconfig logs rbd-smoke | grep -q hello-rbd && echo 'rbd smoke: PASS' || { echo 'rbd smoke: FAIL' >&2; exit 1; }; kubectl --kubeconfig kubernetes/talos/.secrets/kubeconfig delete -f kubernetes/ceph-csi/smoke.yaml >/dev/null
 # P3b (ADR 0034): MetalLB L2, internal CA, Zot, ARC runners
 talos-lb:
 	@flux reconcile kustomization metallb --with-source

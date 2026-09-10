@@ -35,6 +35,7 @@ data:
   PVE_API_HOST: "pve.{{ service_domain }}"
   CEPH_FSID: "{{ _ceph_fsid }}"
   CEPH_MONITORS: "{{ _ceph_mons }}"
+  CEPH_MONITORS_JSON: {{ _ceph_mons.split(",") | to_json | to_json }}
 {% for n, o in k8s_seed_lb_offsets.items() %}
   {{ n | upper }}_IP: "{{ services_vlan_prefix }}{{ o }}"
 {% endfor %}

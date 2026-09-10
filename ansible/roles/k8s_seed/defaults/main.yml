@@ -30,8 +30,8 @@ k8s_seed_namespaces:
 k8s_seed_tree_namespaces: {metrics: kube-system, metallb: metallb-system, infisical: infisical-operator}
 # Trees whose Flux Kustomization manages PersistentVolumes (cluster-scoped) beside its namespace.
 k8s_seed_pv_trees: [jellyfin, kiwix, plex-services]
-# Trees that declare cluster-scoped custom resources (ClusterIssuer).
-k8s_seed_cluster_cr_trees: [cert-manager]
+# Trees that declare cluster-scoped resources (ClusterIssuer, StorageClass).
+k8s_seed_cluster_cr_trees: [cert-manager, ceph-csi]
 # MetalLB services offsets (ADR 0034): 64 Zot, 65 Traefik, 66 syslog, 67 Valheim.
 k8s_seed_lb_offsets: {registry: 64, ingress: 65, syslog: "{{ monitoring_syslog_offset }}", valheim: 67}
 # Guests that never run the telegraf role.

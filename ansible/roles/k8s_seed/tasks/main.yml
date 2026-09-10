@@ -85,6 +85,7 @@
       metadata: {name: flux-tree-cluster-crs}
       rules:
         - {apiGroups: [cert-manager.io], resources: [clusterissuers], verbs: ["*"]}
+        - {apiGroups: [storage.k8s.io], resources: [storageclasses], verbs: ["*"]}
 
 - name: Flux service account + RBAC per tree
   kubernetes.core.k8s:
