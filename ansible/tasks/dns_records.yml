@@ -108,7 +108,7 @@
     type: "{{ item.type }}"
     value: "{{ item.answers }}"
     ttl: 300
-  loop: "{{ _dns_mirror | selectattr('answers') | list }}"
+  loop: "{{ _dns_mirror | default([]) | selectattr('answers') | list }}"
   loop_control:
     label: "{{ item.name }}.{{ item.zone }} {{ item.type }} → {{ item.answers | join(', ') }}"
   delegate_to: localhost
