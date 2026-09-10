@@ -234,7 +234,7 @@ make ansible-services TAGS=plex,homepage  # plex + homepage plays
 
 ### Secrets Flow
 - Makefile reads `bootstrap.sops.yml` via `sops -d --extract` and exports as `TF_VAR_*` env vars
-- Top-level `export` in Makefile — do NOT use `define`/`$(call)` with `$(eval export)`, it doesn't propagate
+- The five `TF_VAR_*` secrets are target-specific exports on `TF_TARGETS` (the terraform-reaching targets), recursively expanded through the memoized `_secret` helper — a plain `export X := …` at top level decrypts for every target (`make clean-ssh` used to hand the PVE root password to kubectl), and a target-specific `:=` expands once per listed target at parse time (150 sops calls). A new terraform-invoking target must be added to `TF_TARGETS` or its variables prompt (#12, 2026-09-10)
 - `terraform refresh` updates state but NOT outputs — use `terraform apply -refresh-only -auto-approve`
 - Targeted applies (`-target`) don't recompute `ansible_inventory_yaml` either — a brand-new guest never lands in `vms.yaml` from the targeted apply alone; `make build` runs a refresh-only apply before `inventory` for exactly this reason (found building apt-cache, 2026-08-11)
 
@@ -479,7 +479,7 @@ make ansible-services TAGS=plex,homepage  # plex + homepage plays
 - **Never add migration/upgrade logic** — roles must work on fresh VMs
 - **Never skip pre-commit hooks** with `--no-verify`
 - **Never reference `bootstrap.*` secrets in templates** outside the bootstrap/infisical roles
-- **Never use `define`/`$(eval export)` in the Makefile for secret propagation** — use top-level `export`
+- **Never use `define`/`$(eval export)` in the Makefile for secret propagation, and never a top-level `export X :=` for a secret** — target-specific `export X = $(call _secret,…)` on `TF_TARGETS` (#12)
 - **Never bake secrets into docker-compose templates** via `{{ secrets.xxx }}` — use Infisical agent `env_file` exclusively
 - **Never write to Infisical root `/`** — all secrets live in named subfolders. Root must remain empty.
 - **Never reference `secrets.sops.yml` in operational context** — it is a DR artifact only, produced by `make infisical-backup`

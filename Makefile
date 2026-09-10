@@ -19,14 +19,23 @@ endif
 # Supports both SOPS-encrypted and plaintext YAML (for pre-SOPS setup).
 # Top-level exports ensure env vars propagate to ALL child processes.
 SOPS_BOOTSTRAP := ansible/group_vars/bootstrap.sops.yml
+ANSIBLE_PLAYBOOK := ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml
 # Helper: try sops decrypt first, fall back to plaintext YAML read
 _read_secret = $(shell sops -d --extract '["bootstrap"]["$(1)"]' $(SOPS_BOOTSTRAP) 2>/dev/null || $(VENV_PYTHON) -c "import yaml; print(yaml.safe_load(open('$(SOPS_BOOTSTRAP)'))['bootstrap']['$(1)'])" 2>/dev/null)
 
-export TF_VAR_virtual_environment_password := $(call _read_secret,proxmox_password)
-export TF_VAR_vultr_api_key := $(call _read_secret,vultr_api_key)
-export TF_VAR_cloudflare_api_token := $(call _read_secret,cloudflare_api_token)
-export TF_VAR_unifi_password := $(call _read_secret,unifi_admin_password)
-export TF_VAR_worklab_password := $(call _read_secret,worklab_password)
+# Decrypted only for the targets whose recipes reach terraform: a recursively-expanded
+# target-specific export resolves when a recipe line runs (never at parse time), and
+# _secret memoizes each key so the five sops calls happen once per make, not per line.
+_secret = $(if $(_sc_$(1)),,$(eval _sc_$(1) := $$(call _read_secret,$(1))))$(_sc_$(1))
+TF_TARGETS := plan apply init terraform-apply terraform-bootstrap ansible-bootstrap inventory refresh build rebuild \
+  rebuild-infisical data-volumes backup-jobs sdn-apply expand-disk update-dns clean clean-vps-ssh \
+  hosts-plan hosts-apply unifi-plan unifi-apply talos-plan talos-build validate \
+  vps-deploy vps-rebuild vps-destroy vps-close-ssh vps-rotate-keys
+$(TF_TARGETS): export TF_VAR_virtual_environment_password = $(call _secret,proxmox_password)
+$(TF_TARGETS): export TF_VAR_vultr_api_key = $(call _secret,vultr_api_key)
+$(TF_TARGETS): export TF_VAR_cloudflare_api_token = $(call _secret,cloudflare_api_token)
+$(TF_TARGETS): export TF_VAR_unifi_password = $(call _secret,unifi_admin_password)
+$(TF_TARGETS): export TF_VAR_worklab_password = $(call _secret,worklab_password)
 
 # === Bootstrap Terraform Targets ===
 # Only create the AdGuard and Infisical guests (+ network dependencies).
@@ -57,7 +66,7 @@ apply: terraform-apply inventory ansible-all
 bootstrap: terraform-bootstrap inventory ansible-bootstrap
 
 ansible-bootstrap:
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/bootstrap.yml
+	@$(ANSIBLE_PLAYBOOK) ansible/playbooks/bootstrap.yml
 
 # Refresh state + outputs (terraform refresh updates state but NOT outputs) — settles agent-reported drift after a guest change.
 refresh:
@@ -111,7 +120,7 @@ endif
 		&& terraform init && terraform apply -no-color -auto-approve $$TARGETS
 	@$(MAKE) inventory
 	@echo "Configuring guest: $(VM)"
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/site.yml --limit $(VM)
+	@$(ANSIBLE_PLAYBOOK) ansible/playbooks/site.yml --limit $(VM)
 
 # === Talos control plane (ADR 0031/0033) ===
 # Terraform owns the VMs only; everything past first boot is talosctl driven
@@ -134,7 +143,7 @@ talos-bootstrap:
 # Flux owns every workload from kubernetes/<tree> (one Kustomization per tree in kubernetes/flux/apps/);
 # a push to main is the deploy. Ansible owns the seed (bindings, generated ConfigMaps, root-CA ConfigMaps,
 # the cert-manager intermediate, bootstrap Secrets) and the in-app tail. Needs vms.yaml and proxmox.yaml.
-K8S_PLAY = ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/kubernetes.yml $(if $(CHECK),--check --diff,)
+K8S_PLAY = $(ANSIBLE_PLAYBOOK) -i ansible/inventory/proxmox.yaml ansible/playbooks/kubernetes.yml $(if $(CHECK),--check --diff,)
 # Refuse to adopt a tree whose ${VAR}s are not all bound — Flux blanks the rest and fails open.
 flux-check:
 	@.venv/bin/python3 scripts/flux_check.py $(CURDIR)
@@ -161,7 +170,7 @@ plex-pbs-image:
 # monitoring@pve + its token on the cluster: needs proxmox.yaml so proxmox_host resolves to a live node;
 # the play tag (not a task tag) so its pre_tasks load; the UniFi half is skipped (never probe the controller with monitor creds)
 monitoring-users:
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/infrastructure.yml --tags monitoring-users --skip-tags unifi-user
+	@$(ANSIBLE_PLAYBOOK) -i ansible/inventory/proxmox.yaml ansible/playbooks/infrastructure.yml --tags monitoring-users --skip-tags unifi-user
 
 # Fleet-root terraform passthrough with the TF_VAR_* exports (raw terraform hangs prompting for them);
 # the retirement step is `make tf ARGS='state rm <address>'` (ADR 0028: stopped, never destroyed)
@@ -203,7 +212,7 @@ endif
 		&& terraform init && terraform apply -no-color -auto-approve $$TARGETS $$REPLACE
 	@$(MAKE) inventory
 	@echo "Configuring guest: $(VM)"
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/site.yml --limit $(VM)
+	@$(ANSIBLE_PLAYBOOK) ansible/playbooks/site.yml --limit $(VM)
 	@$(MAKE) backup-jobs
 
 # Rebuild the Infisical VM and restore the vault from its PBS dump (ADR 0039):
@@ -239,7 +248,7 @@ ifndef VM
 	$(error Usage: make ansible <vm-name>)
 endif
 	@echo "Running Ansible for: $(VM)"
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/site.yml --limit $(VM) $(if $(TAGS),--tags $(TAGS)) $(if $(CHECK),--check --diff,)
+	@$(ANSIBLE_PLAYBOOK) ansible/playbooks/site.yml --limit $(VM) $(if $(TAGS),--tags $(TAGS)) $(if $(CHECK),--check --diff,)
 
 # make docker-config <vm> — deploy only docker-compose, config templates, and restart
 docker-config:
@@ -247,19 +256,19 @@ ifndef VM
 	$(error Usage: make docker-config <vm-name>)
 endif
 	@echo "Deploying docker configs for: $(VM)"
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/docker-config.yml --limit $(VM)
+	@$(ANSIBLE_PLAYBOOK) ansible/playbooks/docker-config.yml --limit $(VM)
 
 # === Ansible Playbooks ===
 .PHONY: ansible ansible-all ansible-infra ansible-services ansible-pfsense docker-config update update-dns expand-disk
 
 ansible-all:
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/site.yml --skip-tags unifi-user $(if $(TAGS),--tags $(TAGS))
+	@$(ANSIBLE_PLAYBOOK) ansible/playbooks/site.yml --skip-tags unifi-user $(if $(TAGS),--tags $(TAGS))
 
 ansible-infra:
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/infrastructure.yml --skip-tags unifi-user $(if $(TAGS),--tags $(TAGS))
+	@$(ANSIBLE_PLAYBOOK) ansible/playbooks/infrastructure.yml --skip-tags unifi-user $(if $(TAGS),--tags $(TAGS))
 
 ansible-services:
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/services.yml $(if $(TAGS),--tags $(TAGS))
+	@$(ANSIBLE_PLAYBOOK) ansible/playbooks/services.yml $(if $(TAGS),--tags $(TAGS))
 
 ansible-pfsense:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/pfsense.yaml ansible/playbooks/pfsense.yml
@@ -275,27 +284,27 @@ ifndef VM
 	$(error make update is gated until the serialized update play lands (gap-remediation plan B4). Use 'make update <vm>' for a single host, or UNSAFE_UPDATE=true to bypass)
 endif
 endif
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml -i ansible/inventory/vps.yaml ansible/playbooks/update-all.yml $(if $(VM),--limit $(VM),)
+	@$(ANSIBLE_PLAYBOOK) -i ansible/inventory/proxmox.yaml -i ansible/inventory/vps.yaml ansible/playbooks/update-all.yml $(if $(VM),--limit $(VM),)
 
 # Pause AdGuard filtering on BOTH resolver instances (no config sync — IaC deploys them identically)
 adguard-pause:
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/adguard-pause.yml -e "adguard_pause_minutes=$(or $(MINUTES),10)"
+	@$(ANSIBLE_PLAYBOOK) ansible/playbooks/adguard-pause.yml -e "adguard_pause_minutes=$(or $(MINUTES),10)"
 
 # Push every inventory-derived name (guests, nodes, VIPs, MetalLB addresses, mirrored
 # public records) into the flat service zone over RFC 2136 (ADR 0040). Second run = 0 changed.
 dns-records:
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/dns-records.yml
+	@$(ANSIBLE_PLAYBOOK) -i ansible/inventory/proxmox.yaml ansible/playbooks/dns-records.yml
 
 update-dns:
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/update-dns.yml
+	@$(ANSIBLE_PLAYBOOK) -i ansible/inventory/proxmox.yaml ansible/playbooks/update-dns.yml
 
 # B3: register the PBS datastore as PVE storage (run once after PBS provisioning,
 # before the first terraform apply with backup_jobs populated)
 backup-finalize:
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/backup-finalize.yml
+	@$(ANSIBLE_PLAYBOOK) -i ansible/inventory/proxmox.yaml ansible/playbooks/backup-finalize.yml
 
 expand-disk:
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/expand-disk.yml
+	@$(ANSIBLE_PLAYBOOK) ansible/playbooks/expand-disk.yml
 
 # === VPS Management ===
 .PHONY: vps-deploy vps-ansible vps-close-ssh vps-destroy vps-rebuild vps-rotate-keys clean-vps-ssh
@@ -330,8 +339,8 @@ vps-deploy:
 	@echo "Phase 1: Provisioning VPS with SSH access..."
 	@cd terraform && terraform init && terraform apply -no-color -auto-approve -var vps_provisioning=true $(VPS_TF_TARGETS)
 	@echo "Phase 2: Configuring VPS via Ansible (IP from terraform output)..."
-	$(eval VPS_IP := $(shell cd terraform && terraform output -raw vps_reserved_ip))
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vps.yaml -i ansible/inventory/vms.yaml ansible/playbooks/vps.yml -e "ansible_host=$(VPS_IP) ansible_user=root"
+	@VPS_IP=$$(cd terraform && terraform output -raw vps_reserved_ip) && [ -n "$$VPS_IP" ] && \
+	  ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vps.yaml -i ansible/inventory/vms.yaml ansible/playbooks/vps.yml -e "ansible_host=$$VPS_IP ansible_user=root"
 	@echo "Phase 3: Closing SSH in Vultr firewall..."
 	@cd terraform && terraform apply -no-color -auto-approve -var vps_provisioning=false $(VPS_TF_TARGETS)
 	@echo "VPS deployment complete. SSH now only accessible via WireGuard tunnel."
@@ -350,14 +359,13 @@ vps-destroy:
 	@cd terraform && terraform init && terraform destroy -no-color -auto-approve -target=vultr_instance.vps
 
 clean-vps-ssh:
-	$(eval VPS_IP := $(shell cd terraform && terraform output -raw vps_reserved_ip))
-	@ssh-keygen -R $(VPS_IP) 2>/dev/null || true
+	@VPS_IP=$$(cd terraform && terraform output -raw vps_reserved_ip) && ssh-keygen -R "$$VPS_IP" 2>/dev/null || true
 
 vps-rebuild: vps-destroy clean-vps-ssh vps-deploy
 
 vps-rotate-keys:
-	$(eval VPS_IP := $(shell cd terraform && terraform output -raw vps_reserved_ip))
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vps.yaml ansible/playbooks/vps-rotate-keys.yml -e "ansible_host=$(VPS_IP)"
+	@VPS_IP=$$(cd terraform && terraform output -raw vps_reserved_ip) && [ -n "$$VPS_IP" ] && \
+	  ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vps.yaml ansible/playbooks/vps-rotate-keys.yml -e "ansible_host=$$VPS_IP"
 
 # === Secrets Management ===
 .PHONY: infisical-seed infisical-backup infisical-restore infisical-organize refresh-identity plex-token
@@ -386,12 +394,12 @@ infisical-organize:
 # Retrieve Plex token from plex.tv and store in Infisical
 # Requires plex_username and plex_password in bootstrap.sops.yml
 plex-token:
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/services.yml --limit plex
+	@$(ANSIBLE_PLAYBOOK) ansible/playbooks/services.yml --limit plex
 
 # Refresh Infisical Machine Identities (delete + re-provision)
 # Optional: LIMIT=hostname to target specific VMs, TAGS=cleanup to remove orphans, FORCE=true to override health check
 refresh-identity:
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml ansible/playbooks/refresh-identity.yml $(if $(LIMIT),--limit $(LIMIT)) $(if $(TAGS),--tags $(TAGS)) $(if $(FORCE),-e force=true)
+	@$(ANSIBLE_PLAYBOOK) ansible/playbooks/refresh-identity.yml $(if $(LIMIT),--limit $(LIMIT)) $(if $(TAGS),--tags $(TAGS)) $(if $(FORCE),-e force=true)
 
 # === Setup & Security ===
 .PHONY: setup-hooks bootstrap-local validate validate-public-policy security-check security-check-range
@@ -425,6 +433,7 @@ validate:
 	@bash scripts/test_security_guardrails.sh
 	@! grep -rnE "from-literal=|(echo|printf '%s') '\{\{[^}]*(password|secret|token|private_key)" ansible/roles ansible/tasks ansible/playbooks kubernetes scripts || { echo "secret on argv (#17): use stdin: / --value-stdin"; exit 1; }
 	@echo "argv-secrets: none"
+	@$(MAKE) -s -n vps-deploy | grep -q 'VPS_IP=$$(cd terraform' && echo "vps-deploy: IP resolved in-recipe"
 
 # === Cleanup ===
 .PHONY: clean clean-ssh clean-infisical-sops
@@ -469,7 +478,7 @@ clean-ssh:
 	@python3 -c "\
 	import yaml, os, glob;\
 	ips = set();\
-	[ips.update(h.get('ansible_host','') for h in yaml.safe_load(open(f)).get('all',{}).get('hosts',{}).values()) for f in glob.glob('ansible/inventory/*.yaml')];\
+	[ips.update((h or {}).get('ansible_host','') for g in (yaml.safe_load(open(f)) or {}).values() for h in (g or {}).get('hosts',{}).values()) for f in glob.glob('ansible/inventory/*.yaml')];\
 	[os.system(f'ssh-keygen -R {ip}') for ip in ips if ip]"
 
 # === Host/cluster plane — terraform/hosts/ (ADR-0002, WP1) =====================
@@ -540,7 +549,7 @@ uptime-kuma:
 
 # apt Proxy-Auto-Detect on every node + guest (ADR 0021 client half).
 apt-proxy:
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/apt-proxy.yml $(if $(LIMIT),--limit $(LIMIT),)
+	@$(ANSIBLE_PLAYBOOK) -i ansible/inventory/proxmox.yaml ansible/playbooks/apt-proxy.yml $(if $(LIMIT),--limit $(LIMIT),)
 
 # NUT upsmon secondaries on the physical hosts (nut_clients inventory group).
 # Server side is the pfSense NUT package — see docs/pfsense-nut.md.
@@ -549,7 +558,7 @@ nut-clients:
 
 # ADR 0041: the Infisical root into every node's, worklab's and guest's trust store (both inventories, LIMIT=).
 ca-trust:
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/ca-trust.yml $(if $(LIMIT),--limit $(LIMIT),)
+	@$(ANSIBLE_PLAYBOOK) -i ansible/inventory/proxmox.yaml ansible/playbooks/ca-trust.yml $(if $(LIMIT),--limit $(LIMIT),)
 
 # ADR 0041: Infisical PKI policy/profile/application + ACME/API enrollment for the fleet hosts (idempotent by name).
 pki-hosts:
