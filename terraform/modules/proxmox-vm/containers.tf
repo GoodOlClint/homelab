@@ -187,7 +187,7 @@ resource "proxmox_virtual_environment_container" "containers" {
 }
 
 # HA registration for guests that opt in (requires explicit vm_id)
-resource "proxmox_virtual_environment_haresource" "guests" {
+resource "proxmox_haresource" "guests" {
   for_each = { for vm in var.vm_configurations : vm.name => vm if vm.ha }
 
   resource_id = "${each.value.type == "lxc" ? "ct" : "vm"}:${each.value.vm_id}"
@@ -198,4 +198,9 @@ resource "proxmox_virtual_environment_haresource" "guests" {
     proxmox_virtual_environment_vm.vms,
     proxmox_virtual_environment_container.containers,
   ]
+}
+
+moved {
+  from = proxmox_virtual_environment_haresource.guests
+  to   = proxmox_haresource.guests
 }

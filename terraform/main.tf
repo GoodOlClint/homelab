@@ -2,7 +2,6 @@
 module "network" {
   source          = "./modules/network"
   vlans_file_path = "${path.root}/../network-data/vlans.yaml"
-  manage_sdn      = true
   proxmox_nodes   = coalesce(var.proxmox_nodes, [var.virtual_environment_node])
 }
 
@@ -52,8 +51,4 @@ module "vms" {
 
   # Detached data volumes (ADR 0015) — defined alongside the fleet in vm-configs.tf
   data_volumes = local.data_volumes
-
-  # Packer template configuration
-  use_packer_template  = var.use_packer_template
-  packer_template_name = var.packer_template_name
 }

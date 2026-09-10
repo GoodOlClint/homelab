@@ -8,7 +8,6 @@ Reads the canonical `network-data/vlans.yaml` and provides VLAN configuration to
 module "network" {
   source          = "../modules/network"
   vlans_file_path = "${path.root}/../../network-data/vlans.yaml"
-  manage_sdn      = true  # false for read-only (services project)
   proxmox_node    = "pve"
 }
 
@@ -24,7 +23,6 @@ module "vms" {
 | Name | Description | Default |
 |------|-------------|---------|
 | `vlans_file_path` | Path to `vlans.yaml` | (required) |
-| `manage_sdn` | Create/manage SDN zones and VNETs | `true` |
 | `proxmox_node` | Proxmox node for SDN deployment | `"pve"` |
 
 ## Outputs

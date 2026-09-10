@@ -4,7 +4,7 @@
 # Run: cd terraform/modules/proxmox-vm && terraform init -backend=false && terraform test
 
 mock_provider "proxmox" {
-  mock_resource "proxmox_virtual_environment_download_file" {
+  mock_resource "proxmox_download_file" {
     defaults = {
       id = "local:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst"
     }

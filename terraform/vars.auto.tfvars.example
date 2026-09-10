@@ -16,18 +16,11 @@ virtual_machine_timezone     = "America/Chicago"
 # If not set or null, password authentication will be disabled (SSH key only)
 virtual_machine_password_hash = ""  # Use environment variable: TF_VAR_virtual_machine_password_hash
 
-# Storage Configuration
-primary_disk_storage   = "iscsi-ssd-lvm"
-secondary_disk_storage = "iscsi-hdd-lvm"
+# Storage Configuration (ceph-rbd on the cluster; ADR 0015)
+primary_disk_storage = "ceph-rbd"
 
 # SSH Configuration
 ssh_public_key_path = "/home/your_username/.ssh/id_ed25519.pub"  # Update to your SSH key path
-
-# Unifi Configuration
-unifi_username = "your_unifi_username"
-unifi_password = "YOUR_UNIFI_PASSWORD_HERE"  # Use environment variable: TF_VAR_unifi_password
-unifi_api_url  = "https://your_unifi_controller:8443"
-unifi_site     = "default"
 
 # Note: VM configurations are defined in vm-configs.tf
 # Note: service_domain (the cloud-init FQDN domain) is sourced from network-data/vlans.yaml (canonical source of truth)

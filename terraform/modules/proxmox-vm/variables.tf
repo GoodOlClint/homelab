@@ -119,8 +119,7 @@ variable "vm_configurations" {
 
   # `image` selects a VM cloud image. Containers build from var.lxc_template and
   # ignore it entirely, so an LXC carrying one would silently come up on the
-  # wrong OS — the same failure the use_packer_template precondition exists to
-  # stop. Caught here rather than in the container resource so both guest types
+  # wrong OS. Caught here rather than in the container resource so both guest types
   # are covered by one rule.
   validation {
     condition     = alltrue([for vm in var.vm_configurations : vm.image == null || vm.type != "lxc"])
@@ -271,25 +270,6 @@ variable "apt_proxy_host" {
 variable "apt_proxy_port" {
   type    = number
   default = 3142
-}
-
-# Packer template configuration
-variable "use_packer_template" {
-  type        = bool
-  description = "Use Packer-built template instead of cloud image (no cloud-init)"
-  default     = false
-}
-
-variable "packer_template_name" {
-  type        = string
-  description = "Name of Packer template to use (empty = auto-detect latest ubuntu-24.04-base-* template)"
-  default     = ""
-}
-
-variable "packer_template_vm_id" {
-  type        = number
-  description = "Packer template VM ID for cloning (if null, will try auto-detection)"
-  default     = null
 }
 
 variable "management_vlan" {

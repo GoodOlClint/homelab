@@ -53,7 +53,12 @@ locals {
   }
 }
 
-resource "proxmox_virtual_environment_download_file" "talos" {
+moved {
+  from = proxmox_virtual_environment_download_file.talos
+  to   = proxmox_download_file.talos
+}
+
+resource "proxmox_download_file" "talos" {
   content_type       = "iso"
   datastore_id       = var.virtual_environment_storage
   node_name          = var.virtual_environment_node
@@ -122,7 +127,7 @@ resource "proxmox_virtual_environment_vm" "talos_cp" {
 
   disk {
     datastore_id = var.primary_disk_storage
-    file_id      = proxmox_virtual_environment_download_file.talos.id
+    file_id      = proxmox_download_file.talos.id
     interface    = "virtio0"
     iothread     = true
     discard      = "on"

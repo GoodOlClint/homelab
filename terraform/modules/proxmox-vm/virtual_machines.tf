@@ -144,9 +144,19 @@ locals {
     : null))
   }
 }
-# Generate cloud-init user data files for each VM (only when not using Packer)
+locals {
+  # A guest's `image` key selects an entry from var.cloud_images; null = fleet default.
+  # lookup(..., null) rather than [vm.image] so an undefined key surfaces as the
+  # resource precondition below, not an opaque "invalid index".
+  vm_disk_source_by_name = {
+    for vm in var.vm_configurations : vm.name => (
+      vm.image == null ? local.ubuntu_cloud_image_id : lookup(local.extra_cloud_image_ids, vm.image, null)
+    ) if vm.type != "lxc"
+  }
+}
+
 resource "proxmox_virtual_environment_file" "user_data" {
-  for_each = var.use_packer_template ? {} : local.vm_guests
+  for_each = local.vm_guests
 
   content_type = "snippets"
   datastore_id = var.virtual_environment_storage
@@ -167,9 +177,8 @@ resource "proxmox_virtual_environment_file" "user_data" {
   }
 }
 
-# Generate cloud-init network data files for each VM (only when not using Packer)
 resource "proxmox_virtual_environment_file" "network_data" {
-  for_each = var.use_packer_template ? {} : local.vm_guests
+  for_each = local.vm_guests
 
   content_type = "snippets"
   datastore_id = var.virtual_environment_storage
@@ -212,14 +221,6 @@ resource "proxmox_virtual_environment_vm" "vms" {
   node_name  = coalesce(each.value.node_name, var.virtual_environment_node)
   protection = var.unprotect ? false : each.value.protected
 
-  # Clone from Packer template (when using Packer)
-  dynamic "clone" {
-    for_each = var.use_packer_template ? [1] : []
-    content {
-      vm_id = local.packer_template_vm_id
-    }
-  }
-
   agent {
     enabled = true
   }
@@ -237,7 +238,7 @@ resource "proxmox_virtual_environment_vm" "vms" {
 
   disk {
     datastore_id = coalesce(each.value.disk_storage, var.primary_disk_storage)
-    file_id      = local.vm_disk_source_by_name[each.value.name] # Only for cloud images, null for Packer
+    file_id      = local.vm_disk_source_by_name[each.value.name]
     interface    = "virtio0"
     iothread     = true
     discard      = "on"
@@ -281,14 +282,10 @@ resource "proxmox_virtual_environment_vm" "vms" {
     }
   }
 
-  # Conditional cloud-init initialization (only when not using Packer)
-  dynamic "initialization" {
-    for_each = var.use_packer_template ? [] : [1]
-    content {
-      datastore_id         = coalesce(each.value.disk_storage, var.primary_disk_storage)
-      user_data_file_id    = proxmox_virtual_environment_file.user_data[each.key].id
-      network_data_file_id = proxmox_virtual_environment_file.network_data[each.key].id
-    }
+  initialization {
+    datastore_id         = coalesce(each.value.disk_storage, var.primary_disk_storage)
+    user_data_file_id    = proxmox_virtual_environment_file.user_data[each.key].id
+    network_data_file_id = proxmox_virtual_environment_file.network_data[each.key].id
   }
 
   # No lifecycle.ignore_changes on cloud-init file IDs (ADR 0016): a changed
@@ -306,14 +303,6 @@ resource "proxmox_virtual_environment_vm" "vms" {
     precondition {
       condition     = each.value.image == null || contains(keys(var.cloud_images), each.value.image)
       error_message = "Guest '${each.value.name}' sets image = \"${coalesce(each.value.image, "none")}\", which is not a key in var.cloud_images (ADR 0025)."
-    }
-    # Packer mode clones a single module-wide template and ignores disk.file_id
-    # entirely, so a per-guest image would be silently dropped — the guest would
-    # come up on the Ubuntu template while the config claims otherwise. Fail
-    # loudly instead; the two features are mutually exclusive by construction.
-    precondition {
-      condition     = each.value.image == null || !var.use_packer_template
-      error_message = "Guest '${each.value.name}' sets image = \"${coalesce(each.value.image, "none")}\" but use_packer_template is true — Packer clones one template and cannot honour a per-guest image (ADR 0025)."
     }
     # A static guest with no resolvable gateway VLAN gets no default route and
     # no error — it just boots unreachable off-subnet. Fail at plan instead.

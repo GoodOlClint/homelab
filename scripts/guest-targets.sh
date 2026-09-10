@@ -113,7 +113,7 @@ emit_targets() {
   # -target pulls dependencies but NOT dependents — the HA registration must be
   # targeted explicitly or an ha=true guest builds unregistered.
   if [[ "$ha" == "ha" ]]; then
-    echo "-target=module.vms.proxmox_virtual_environment_haresource.guests[\"$name\"]"
+    echo "-target=module.vms.proxmox_haresource.guests[\"$name\"]"
   fi
   # Reconcile type conversions and HA disables within the staged apply: if
   # state still holds the OPPOSITE-type resource (VM->LXC conversion) or an HA
@@ -129,8 +129,8 @@ emit_targets() {
     elif [[ "$type" == "vm" ]] && grep -qF "$(lxc_addr "$name")" <<<"$state_list"; then
       echo "-target=$(lxc_addr "$name")"
     fi
-    if [[ "$ha" != "ha" ]] && grep -qF "proxmox_virtual_environment_haresource.guests[\"$name\"]" <<<"$state_list"; then
-      echo "-target=module.vms.proxmox_virtual_environment_haresource.guests[\"$name\"]"
+    if [[ "$ha" != "ha" ]] && grep -qF "proxmox_haresource.guests[\"$name\"]" <<<"$state_list"; then
+      echo "-target=module.vms.proxmox_haresource.guests[\"$name\"]"
     fi
   fi
 }

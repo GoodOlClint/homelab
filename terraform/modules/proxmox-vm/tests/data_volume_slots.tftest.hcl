@@ -9,7 +9,7 @@
 mock_provider "proxmox" {
   # The auto-generated mock id fails template_file_id's format validator in
   # apply-mode runs; both download resources share this shape harmlessly.
-  mock_resource "proxmox_virtual_environment_download_file" {
+  mock_resource "proxmox_download_file" {
     defaults = {
       id = "local:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst"
     }

@@ -2,7 +2,7 @@
 #
 # This module serves two purposes:
 # 1. Outputs a VLAN map in the format expected by the proxmox-vm module
-# 2. Optionally manages Proxmox SDN zones and VNETs (when manage_sdn = true)
+# 2. Manages Proxmox SDN zones and VNETs
 
 locals {
   network_data = yamldecode(file(var.vlans_file_path))

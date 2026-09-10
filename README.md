@@ -109,7 +109,7 @@ Two SDN zones map physical bridges to VLAN groups:
 | Homelab | vmbr1 | 1500 | All general-purpose VLANs |
 | Storage | vmbr2 | 9000 | Storage VLAN with jumbo frames |
 
-VNETs use the VNET name as the bridge identifier (e.g., "Mgmt", "Core", "Services"). `vlan_id` is **not** set on SDN VNETs -- it is only set on physical bridges (`vmbr*`). SDN is managed by `terraform/modules/network/sdn.tf` via the `manage_sdn` flag.
+VNETs use the VNET name as the bridge identifier (e.g., "Mgmt", "Core", "Services"). `vlan_id` is **not** set on SDN VNETs -- it is only set on physical bridges (`vmbr*`). SDN is managed by `terraform/modules/network/sdn.tf`.
 
 ### Firewall Policy
 
@@ -677,8 +677,7 @@ homelab/
 │   ├── seed_infisical.sh           # SOPS to Infisical secret migration
 │   ├── infisical_to_sops.py        # Infisical to SOPS backup export
 │   └── security_guardrails.sh      # Pre-commit security checks
-├── docs/                           # Operational runbooks
-└── archive/                        # Deprecated configs (Packer, old projects)
+└── docs/                           # Operational runbooks
 ```
 
 ## Further Reading

@@ -5,7 +5,7 @@ output "vlans" {
   # Ensure SDN zones/VNETs are applied before VMs consume this output,
   # and VMs are destroyed before SDN is torn down.
   depends_on = [
-    proxmox_virtual_environment_sdn_applier.apply,
+    proxmox_sdn_applier.apply,
   ]
 }
 

@@ -1,6 +1,6 @@
 # Proxmox VM Module
 # Creates VMs and LXCs with static VLAN configuration: pinned cloud-image /
-# LXC-template download, Packer template cloning, and multi-interface
+# LXC-template download and multi-interface
 # network configuration.
 
 data "local_file" "ssh_public_key" {
@@ -9,7 +9,7 @@ data "local_file" "ssh_public_key" {
 
 # Download the pinned Ubuntu cloud image (ADR 0016: pinned + deliberately rolled —
 # bumping var.cloud_image is the explicit commit that proposes guest rebuilds)
-resource "proxmox_virtual_environment_download_file" "ubuntu_cloud_image" {
+resource "proxmox_download_file" "ubuntu_cloud_image" {
   count = var.create_cloud_image ? 1 : 0
 
   content_type       = "iso"
@@ -30,7 +30,7 @@ resource "proxmox_virtual_environment_download_file" "ubuntu_cloud_image" {
 # address from [0] to ["default"] and force a state mv on both the fleet and
 # campaign roots. Downloads only what some guest actually references, so an
 # unused entry in var.cloud_images costs nothing.
-resource "proxmox_virtual_environment_download_file" "extra_cloud_image" {
+resource "proxmox_download_file" "extra_cloud_image" {
   for_each = var.create_cloud_image ? local.referenced_extra_images : {}
 
   content_type       = "iso"
@@ -46,7 +46,7 @@ resource "proxmox_virtual_environment_download_file" "extra_cloud_image" {
 }
 
 # Download the pinned LXC template (only when containers are defined)
-resource "proxmox_virtual_environment_download_file" "lxc_template" {
+resource "proxmox_download_file" "lxc_template" {
   count = local.lxc_guest_count > 0 ? 1 : 0
 
   content_type       = "vztmpl"
@@ -65,7 +65,7 @@ locals {
   # Data-volume holder is a VM (ADR 0020) — only real LXC guests need the template
   lxc_guest_count = length([for vm in var.vm_configurations : vm.name if vm.type == "lxc"])
 
-  ubuntu_cloud_image_id = var.create_cloud_image ? proxmox_virtual_environment_download_file.ubuntu_cloud_image[0].id : "${var.virtual_environment_storage}:iso/${var.cloud_image.file_name}"
+  ubuntu_cloud_image_id = var.create_cloud_image ? proxmox_download_file.ubuntu_cloud_image[0].id : "${var.virtual_environment_storage}:iso/${var.cloud_image.file_name}"
 
   # Extra images actually referenced by some VM guest (ADR 0025). Unreferenced
   # entries in var.cloud_images are never downloaded.
@@ -78,11 +78,11 @@ locals {
   # image; every other key resolves against var.cloud_images.
   extra_cloud_image_ids = {
     for name, img in local.referenced_extra_images : name => (
-      var.create_cloud_image ? proxmox_virtual_environment_download_file.extra_cloud_image[name].id : "${var.virtual_environment_storage}:iso/${img.file_name}"
+      var.create_cloud_image ? proxmox_download_file.extra_cloud_image[name].id : "${var.virtual_environment_storage}:iso/${img.file_name}"
     )
   }
 
-  lxc_template_id = local.lxc_guest_count > 0 ? proxmox_virtual_environment_download_file.lxc_template[0].id : null
+  lxc_template_id = local.lxc_guest_count > 0 ? proxmox_download_file.lxc_template[0].id : null
 
   merged_vlans = var.vlans
 
@@ -106,4 +106,20 @@ locals {
       : (abs(parseint(substr(sha256(vm_config.name), 0, 8), 16)) % 254) + 1
     )
   }
+}
+
+# proxmox_virtual_environment_download_file is deprecated (removed in bpg v1.0).
+moved {
+  from = proxmox_virtual_environment_download_file.ubuntu_cloud_image
+  to   = proxmox_download_file.ubuntu_cloud_image
+}
+
+moved {
+  from = proxmox_virtual_environment_download_file.extra_cloud_image
+  to   = proxmox_download_file.extra_cloud_image
+}
+
+moved {
+  from = proxmox_virtual_environment_download_file.lxc_template
+  to   = proxmox_download_file.lxc_template
 }

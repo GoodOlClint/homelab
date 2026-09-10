@@ -159,14 +159,8 @@ variable "unprotect" {
 
 variable "primary_disk_storage" {
   type        = string
-  description = "The storage backend for primary VM disks (e.g., iscsi-ssd-lvm)"
-  default     = "iscsi-ssd-lvm"
-}
-
-variable "secondary_disk_storage" {
-  type        = string
-  description = "The storage backend for secondary VM disks (e.g., iscsi-hdd-lvm)"
-  default     = "iscsi-hdd-lvm"
+  description = "The storage backend for guest disks"
+  default     = "ceph-rbd"
 }
 
 variable "ssh_public_key_path" {
@@ -179,19 +173,6 @@ variable "create_cloud_image" {
   type        = bool
   description = "Whether to create/download the Ubuntu cloud image"
   default     = true
-}
-
-# Packer template configuration
-variable "use_packer_template" {
-  type        = bool
-  description = "Use Packer-built template instead of cloud image (no cloud-init)"
-  default     = false
-}
-
-variable "packer_template_name" {
-  type        = string
-  description = "Name of Packer template to use (empty = auto-detect latest)"
-  default     = ""
 }
 
 # ──────────────────────────────────────────────
@@ -244,8 +225,8 @@ variable "cloudflare_api_token" {
 # and vlan10 has zero guests — ansible_host then resolves to the services IP.
 variable "guest_access_plane" {
   type        = string
-  description = "Inventory access plane for ansible_host: management (pre-cutover) or services (ADR 0017 end state)"
-  default     = "management"
+  description = "Inventory access plane for ansible_host: services (ADR 0017 end state) or management (rollback lever)"
+  default     = "services"
 
   validation {
     condition     = contains(["management", "services"], var.guest_access_plane)
