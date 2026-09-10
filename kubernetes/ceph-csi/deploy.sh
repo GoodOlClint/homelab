@@ -33,6 +33,13 @@ helm template ceph-csi-rbd ceph-csi/ceph-csi-rbd -n "$NS" --include-crds \
   | kubectl apply -n "$NS" -f -
 kubectl -n "$NS" create secret generic csi-rbd-secret --from-literal=userID=csi-rbd --from-literal=userKey="$KEY" \
   --dry-run=client -o yaml | kubectl apply -f -
+# reclaimPolicy is immutable on a StorageClass: recreate it when the policy differs (existing PVs are
+# untouched by that), then converge every ceph-rbd PV to Retain — a pruned or mis-deleted PVC must never
+# take its Ceph image with it (ADR 0048). Rebind procedure: docs/ceph-rbd-static-pv.md.
+if [ "$(kubectl get sc ceph-rbd -o jsonpath='{.reclaimPolicy}' 2>/dev/null)" = Delete ]; then kubectl delete sc ceph-rbd; fi
 CLUSTER_ID="$FSID" envsubst < "$HERE/storageclass.yaml" | kubectl apply -f -
+for pv in $(kubectl get pv -o json | jq -r '.items[] | select(.spec.storageClassName=="ceph-rbd" and .spec.persistentVolumeReclaimPolicy=="Delete") | .metadata.name'); do
+  kubectl patch pv "$pv" -p '{"spec":{"persistentVolumeReclaimPolicy":"Retain"}}' >/dev/null && echo "pv/$pv -> Retain"
+done
 kubectl -n "$NS" rollout status ds/ceph-csi-rbd-nodeplugin --timeout=300s
 kubectl -n "$NS" rollout status deploy/ceph-csi-rbd-provisioner --timeout=300s
