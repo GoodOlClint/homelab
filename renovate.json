@@ -20,7 +20,7 @@
       "datasourceTemplate": "docker"
     },
     {
-      "description": "Container image pins in the cluster manifests (the OpenObserve schema pin moved here with P4b, ADR 0036).",
+      "description": "Container image pins in the cluster manifests (the OpenObserve schema pin moved here with P4b, ADR 0036). CONSTRAINT: the literal `${REGISTRY}` must stay in every tracked image ref \u2014 Flux substitutes it from cluster-bindings at reconcile time (ADR 0048) and this regex keys on it; a manifest carrying the registry name literally is both a public-repo leak and invisible to renovate.",
       "customType": "regex",
       "managerFilePatterns": [
         "/^kubernetes/.+/app\\.ya?ml$/"
@@ -42,5 +42,12 @@
       ],
       "versioning": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?:-rc(?<build>\\d+))?-amd64$"
     }
-  ]
+  ],
+  "flux": {
+    "description": "ADR 0048: every chart is a pinned HelmRelease in kubernetes/<tree>/helm.yaml (its HelmRepository sits in the same file, so the manager resolves the source); the Flux components manifest is the operator-local install. kubernetes/flux/apps/*.yaml are Kustomizations and carry no version.",
+    "managerFilePatterns": [
+      "/^kubernetes/[^/]+/helm\\.ya?ml$/",
+      "/^kubernetes/flux/flux-system/gotk-components\\.ya?ml$/"
+    ]
+  }
 }
