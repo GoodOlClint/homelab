@@ -92,8 +92,8 @@
     kubeconfig: "{{ k8s_seed_kubeconfig }}"
     template: flux-rbac.yaml.j2
   vars:
-    tree_ns: "{{ k8s_seed_tree_namespaces[tree] | default(tree) }}"
-  loop: "{{ (k8s_seed_namespaces | dict2items | rejectattr('key', 'equalto', 'flux-system') | map(attribute='key') | list + k8s_seed_tree_namespaces.keys() | list) | unique }}"
+    tree_namespaces: "{{ [k8s_seed_tree_namespaces[tree] | default(tree)] | flatten }}"
+  loop: "{{ (k8s_seed_namespaces | dict2items | rejectattr('key', 'equalto', 'flux-system') | map(attribute='key') | list + k8s_seed_tree_namespaces.keys() | list) | difference(k8s_seed_tree_namespaces.values() | flatten) | unique }}"
   loop_control: {loop_var: tree}
 
 - name: Fleet bindings for Flux post-build substitution
@@ -132,7 +132,7 @@
       kind: ConfigMap
       metadata: {name: homelab-root-ca, namespace: "{{ item }}"}
       data: {homelab-ca.crt: "{{ lookup('file', k8s_seed_root_ca) }}"}
-  loop: [infisical-operator, monitoring]
+  loop: [infisical-operator, monitoring, arc-runners]
 
 - name: Bootstrap Secrets
   kubernetes.core.k8s:

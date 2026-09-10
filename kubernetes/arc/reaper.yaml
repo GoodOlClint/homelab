@@ -18,11 +18,13 @@ spec:
                 - {name: PVE_API, value: "${PVE_API}"}
                 - name: TOKEN
                   valueFrom: {secretKeyRef: {name: pve-ci-token, key: token}}
+              volumeMounts:
+                - {name: ca, mountPath: /ca, readOnly: true}
               command: ["/bin/sh", "-ec"]
               args:
                 - |
                   apk add --no-cache curl jq >/dev/null
-                  api() { curl -sk -H "Authorization: PVEAPIToken=$TOKEN" "$@"; }
+                  api() { curl -s --cacert /ca/homelab-ca.crt -H "Authorization: PVEAPIToken=$TOKEN" "$@"; }
                   now=$(date +%s)
                   api "$PVE_API/api2/json/pools/ci" | jq -r '.data.members[] | select(.type=="qemu" or .type=="lxc") | "\(.node) \(.type) \(.vmid)"' |
                   while read -r node type vmid; do
@@ -33,3 +35,5 @@ spec:
                     sleep 10
                     api -X DELETE "$PVE_API/api2/json/nodes/$node/$type/$vmid?purge=1&destroy-unreferenced-disks=1" >/dev/null
                   done
+          volumes:
+            - {name: ca, configMap: {name: homelab-root-ca}}

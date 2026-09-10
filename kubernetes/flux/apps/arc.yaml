@@ -1,0 +1,15 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata: {name: arc, namespace: flux-system}
+spec:
+  interval: 10m
+  path: ./kubernetes/arc
+  prune: false
+  sourceRef: {kind: GitRepository, name: homelab}
+  serviceAccountName: flux-arc
+  postBuild:
+    substituteFrom: [{kind: ConfigMap, name: cluster-bindings}]
+  healthChecks:
+    - {apiVersion: helm.toolkit.fluxcd.io/v2, kind: HelmRelease, name: arc, namespace: arc-systems}
+    - {apiVersion: helm.toolkit.fluxcd.io/v2, kind: HelmRelease, name: psproxmoxve, namespace: arc-runners}
+    - {apiVersion: helm.toolkit.fluxcd.io/v2, kind: HelmRelease, name: pbs-collection, namespace: arc-runners}

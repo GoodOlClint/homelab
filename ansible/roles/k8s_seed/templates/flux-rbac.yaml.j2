@@ -3,6 +3,7 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata: {name: flux-{{ tree }}, namespace: {{ k8s_seed_flux_namespace }}}
+{% for tree_ns in tree_namespaces %}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -15,6 +16,7 @@ kind: RoleBinding
 metadata: {name: flux-{{ tree }}-crds, namespace: {{ tree_ns }}}
 roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: flux-tree-crds}
 subjects: [{kind: ServiceAccount, name: flux-{{ tree }}, namespace: {{ k8s_seed_flux_namespace }}}]
+{% endfor %}
 {% if tree in k8s_seed_cluster_cr_trees %}
 ---
 apiVersion: rbac.authorization.k8s.io/v1

@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources: [helm.yaml, cache-pvc.yaml, reaper.yaml]
+# Shared scale-set values (both releases valuesFrom it); no hash suffix because a HelmRelease reference is not rewritten.
+configMapGenerator:
+  - name: arc-runner-values
+    namespace: arc-runners
+    files: [values.yaml]
+    options: {disableNameSuffixHash: true}

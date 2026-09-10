@@ -1,0 +1,54 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata: {name: actions-runner-controller, namespace: arc-systems}
+spec: {type: oci, interval: 12h, url: oci://ghcr.io/actions/actions-runner-controller-charts}
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata: {name: arc, namespace: arc-systems}
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: gha-runner-scale-set-controller
+      version: "0.14.2"
+      sourceRef: {kind: HelmRepository, name: actions-runner-controller}
+  install: {crds: CreateReplace}
+  upgrade: {crds: CreateReplace}
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata: {name: actions-runner-controller, namespace: arc-runners}
+spec: {type: oci, interval: 12h, url: oci://ghcr.io/actions/actions-runner-controller-charts}
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata: {name: psproxmoxve, namespace: arc-runners}
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: gha-runner-scale-set
+      version: "0.14.2"
+      sourceRef: {kind: HelmRepository, name: actions-runner-controller}
+  valuesFrom: [{kind: ConfigMap, name: arc-runner-values}]
+  values:
+    githubConfigUrl: https://github.com/GoodOlClint/PSProxmoxVE
+    runnerScaleSetName: psproxmoxve
+    controllerServiceAccount: {namespace: arc-systems, name: arc-gha-rs-controller}
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata: {name: pbs-collection, namespace: arc-runners}
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: gha-runner-scale-set
+      version: "0.14.2"
+      sourceRef: {kind: HelmRepository, name: actions-runner-controller}
+  valuesFrom: [{kind: ConfigMap, name: arc-runner-values}]
+  values:
+    githubConfigUrl: https://github.com/GoodOlClint/ansible-collection-proxmox_backup_server
+    runnerScaleSetName: pbs-collection
+    controllerServiceAccount: {namespace: arc-systems, name: arc-gha-rs-controller}

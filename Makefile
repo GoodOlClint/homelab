@@ -144,7 +144,7 @@ talos-registry:
 registry-smoke:
 	@kubectl --kubeconfig kubernetes/talos/.secrets/kubeconfig run zot-smoke --rm -i --restart=Never --image=registry.$$(jq -r .domain kubernetes/talos/.secrets/nodes.json)/docker.io/library/busybox:latest --command -- sh -c 'echo hello-zot' | grep -q hello-zot && echo 'registry smoke: PASS' || { echo 'registry smoke: FAIL' >&2; exit 1; }
 talos-arc:
-	@kubernetes/arc/deploy.sh
+	@flux reconcile kustomization arc --with-source
 # P4a (ADR 0035): Traefik ingress, Infisical operator (the k8s secret path), homepage
 talos-ingress:
 	@flux reconcile kustomization traefik --with-source
