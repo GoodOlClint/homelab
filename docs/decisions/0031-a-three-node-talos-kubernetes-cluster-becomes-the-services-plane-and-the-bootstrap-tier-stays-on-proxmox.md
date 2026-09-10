@@ -1,6 +1,6 @@
 # ADR 0031 — A three-node Talos Kubernetes cluster becomes the services plane and the bootstrap tier stays on Proxmox
 
-- **Status:** Accepted — Amended by [ADR 0049](0049-the-internal-authentik-realm-joins-the-bootstrap-tier-as-a-proxmox-lxc-with-a-let-s-encrypt-cert-authentik-ext-and-zot-stay-on-the-cluster-and-zot-drops-its-oidc-login.md) (the internal authentik realm joins the bootstrap tier)
+- **Status:** Accepted — Amended by [ADR 0049](0049-the-internal-authentik-realm-joins-the-bootstrap-tier-as-a-proxmox-lxc-with-a-let-s-encrypt-cert-authentik-ext-and-zot-stay-on-the-cluster-and-zot-drops-its-oidc-login.md) (the internal authentik realm joins the bootstrap tier) and [ADR 0048](0048-flux-reconciles-the-kubernetes-services-plane-from-the-repo-replacing-the-kubernetes-shell-deploy-layer-in-app-configuration-is-ansible-and-the-talos-lifecycle-stays-on-talos-sh.md) (the services plane is Flux-reconciled from the repo; the cluster's Make surface is `talos-*` lifecycle + `flux-*` + `k8s-*` — WP8 closed 2026-09-10)
 - **Date:** 2026-08-22
 - **Deciders:** operator + agent
 - **Context source:** migration-remaining review session 2026-08-22 ([docs/migration-remaining-2026-08-22.md](../migration-remaining-2026-08-22.md))

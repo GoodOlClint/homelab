@@ -1,6 +1,6 @@
 # ADR 0034 — P3b: MetalLB L2 on a reserved vlan40 slice, Zot behind an internal cert-manager CA, ARC scale sets as hostNetwork dind pods pinned to one node, and a CronJob reaper
 
-- **Status:** Accepted (approved 2026-08-23)
+- **Status:** Accepted (approved 2026-08-23) — Amended by [ADR 0048](0048-flux-reconciles-the-kubernetes-services-plane-from-the-repo-replacing-the-kubernetes-shell-deploy-layer-in-app-configuration-is-ansible-and-the-talos-lifecycle-stays-on-talos-sh.md) (WP8, 2026-09-10): every chart here is a pinned `HelmRelease` under a Flux `Kustomization` (`helm template | kubectl apply` and `helm_apply` are gone), the ARC Secrets and the CA export are `make k8s-seed` / `make pki-hosts` seed objects, and `make talos-lb|certs|registry|arc|trust` are retired (`make flux-reconcile TREE=`, `make talos-apply`)
 - **Date:** 2026-08-23
 - **Deciders:** operator + agent
 - **Context source:** P3b brownfield gate, [docs/talos-p3b-plan.md](../talos-p3b-plan.md); builds [ADR 0022](0022-container-images-pull-through-a-fleet-local-registry-via-templated-refs-the-registry-rebuilds-itself-from-upstream.md), [ADR 0032](0032-ci-runners-are-ephemeral-and-build-their-own-guests-inside-a-pve-pool-on-an-isolated-vlan-and-the-mac-studio-is-a-separate-trust-tier.md), [ADR 0033](0033-talos-p3a-rides-talosctl-from-a-kubernetes-tree-with-the-factory-image-pinned-in-cloud-images-the-worklab-member-via-a-second-bpg-provider-alias-flannel-and-cluster-secrets-in-infisical.md)
