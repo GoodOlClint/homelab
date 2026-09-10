@@ -467,6 +467,7 @@ clean-ssh:
 	ips = set();\
 	[ips.update((h or {}).get('ansible_host','') for g in (yaml.safe_load(open(f)) or {}).values() for h in (g or {}).get('hosts',{}).values()) for f in glob.glob('ansible/inventory/*.yaml')];\
 	[os.system(f'ssh-keygen -R {ip}') for ip in ips if ip]"
+	@rm -rf .ansible-facts
 
 # === Host/cluster plane — terraform/hosts/ (ADR-0002, WP1) =====================
 # Separate state from the main fleet project. ENDPOINT points at the node's stable

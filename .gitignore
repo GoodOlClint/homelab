@@ -203,3 +203,6 @@ kubernetes/.secrets
 
 # copied into the image build context by make plex-pbs-image (ADR 0041)
 kubernetes/plex-services/pbs-client/homelab-ca.crt
+
+# ansible.cfg fact cache (gathering = smart)
+.ansible-facts/
