@@ -1,0 +1,79 @@
+---
+# cert-manager's `homelab-ca` ClusterIssuer signs with an intermediate held in the cluster, itself signed by
+# the Infisical root `Homelab Root CA` (ADR 0039). Re-signed only when the cluster's copy no longer verifies
+# against the root (absent, self-signed, or a rotated root); the intermediate is disposable, never exported.
+- name: Current intermediate
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ k8s_seed_kubeconfig }}"
+    kind: Secret
+    namespace: cert-manager
+    name: homelab-ca
+  register: _ca_secret
+
+- name: Verify it against the root
+  ansible.builtin.shell:
+    cmd: >-
+      printf '%s' '{{ _ca_secret.resources[0].data["tls.crt"] }}' | base64 -d
+      | openssl verify -CAfile {{ k8s_seed_root_ca }} >/dev/null
+  register: _ca_verify
+  changed_when: false
+  failed_when: false
+  when: _ca_secret.resources | length > 0
+
+- name: Sign a fresh intermediate
+  when: _ca_secret.resources | length == 0 or _ca_verify.rc != 0
+  block:
+    - name: Key and CSR
+      ansible.builtin.tempfile:
+        state: directory
+      register: _t
+    - community.crypto.openssl_privatekey:
+        path: "{{ _t.path }}/tls.key"
+        type: ECC
+        curve: secp256r1
+    - community.crypto.openssl_csr:
+        path: "{{ _t.path }}/csr.pem"
+        privatekey_path: "{{ _t.path }}/tls.key"
+        common_name: homelab-ca
+    - name: Infisical PKI project and root CA ids
+      ansible.builtin.uri:
+        url: "{{ bootstrap_config.infisical_url }}/api/v1/workspace"
+        headers: {Authorization: "Bearer {{ infisical_login.login_data.access_token }}"}
+      register: _ws
+    - ansible.builtin.set_fact:
+        _pki_project: "{{ (_ws.json.workspaces | selectattr('type', 'equalto', 'cert-manager') | selectattr('name', 'equalto', 'homelab-pki') | first).id }}"
+    - ansible.builtin.uri:
+        url: "{{ bootstrap_config.infisical_url }}/api/v1/cert-manager/ca?projectId={{ _pki_project }}"
+        headers: {Authorization: "Bearer {{ infisical_login.login_data.access_token }}"}
+      register: _cas
+    - ansible.builtin.set_fact:
+        _root_ca_id: "{{ (_cas.json.certificateAuthorities | selectattr('name', 'equalto', 'homelab-root-ca') | first).id }}"
+    - name: sign-intermediate
+      ansible.builtin.uri:
+        url: "{{ bootstrap_config.infisical_url }}/api/v1/cert-manager/ca/internal/{{ _root_ca_id }}/sign-intermediate"
+        method: POST
+        headers: {Authorization: "Bearer {{ infisical_login.login_data.access_token }}"}
+        body_format: json
+        body:
+          csr: "{{ lookup('file', _t.path ~ '/csr.pem') }}"
+          maxPathLength: 0
+          notAfter: "{{ '%Y-%m-%dT%H:%M:%S.000Z' | strftime(now(utc=true).timestamp() + 5*365*86400) }}"
+      register: _signed
+    - name: Store the intermediate
+      kubernetes.core.k8s:
+        kubeconfig: "{{ k8s_seed_kubeconfig }}"
+        definition:
+          apiVersion: v1
+          kind: Secret
+          type: kubernetes.io/tls
+          metadata: {name: homelab-ca, namespace: cert-manager}
+          stringData:
+            tls.key: "{{ lookup('file', _t.path ~ '/tls.key') }}"
+            tls.crt: "{{ _signed.json.certificate }}"
+            ca.crt: "{{ lookup('file', k8s_seed_root_ca) }}"
+      no_log: true
+  always:
+    - ansible.builtin.file:
+        path: "{{ _t.path | default('') }}"
+        state: absent
+      when: _t is defined and _t.path is defined

@@ -1,0 +1,16 @@
+---
+# The cluster's Ansible half (ADR 0048): the allowlisted seed objects Flux does not own, and in-app
+# configuration reached through application APIs. Runs from the workstation against the kubeconfig
+# kubernetes/talos/talos.sh writes. Never creates a workload object — those are Flux's.
+- name: Kubernetes seed and in-app configuration
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - ../group_vars/all.yml
+  pre_tasks:
+    - name: Load all configuration and secrets
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/full_pre_tasks.yml"
+      tags: [always]
+  roles:
+    - role: k8s_seed
+      tags: [seed]

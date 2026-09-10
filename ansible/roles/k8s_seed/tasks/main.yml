@@ -1,0 +1,137 @@
+---
+- name: Verify required facts
+  ansible.builtin.assert:
+    that:
+      - secrets is defined
+      - network_data is defined
+      - bootstrap_config is defined
+      - groups['proxmox'] is defined
+    quiet: true
+
+- name: Read the cluster's addressing (talos_nodes output)
+  ansible.builtin.set_fact:
+    _nodes: "{{ lookup('file', k8s_seed_nodes_json) | from_json }}"
+
+- name: Ceph fsid, monitors and the CSI key (from the first cluster node)
+  ansible.builtin.shell:
+    cmd: |
+      ceph fsid
+      ceph mon dump -f json 2>/dev/null | jq -r '[.mons[].public_addrs.addrvec[] | select(.type=="v1") | .addr] | join(",")'
+      ceph auth get-key client.csi-rbd; echo
+  delegate_to: "{{ groups['proxmox'][0] }}"
+  register: _ceph
+  changed_when: false
+  check_mode: false
+  no_log: "{{ k8s_seed_debug is not defined }}"
+
+- name: Ceph facts
+  ansible.builtin.set_fact:
+    _ceph_fsid: "{{ _ceph.stdout_lines[0] }}"
+    _ceph_mons: "{{ _ceph.stdout_lines[1] }}"
+    _ceph_key: "{{ _ceph.stdout_lines[2] }}"
+  no_log: "{{ k8s_seed_debug is not defined }}"
+
+- name: The pool-scoped CI token (hosts root output)
+  ansible.builtin.command:
+    cmd: terraform -chdir={{ playbook_dir }}/../../terraform/hosts output -raw ci_api_token
+  register: _ci_token
+  changed_when: false
+  check_mode: false
+  no_log: true
+
+- name: Namespaces with their pod-security level
+  kubernetes.core.k8s:
+    kubeconfig: "{{ k8s_seed_kubeconfig }}"
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ item.key }}"
+        labels: {pod-security.kubernetes.io/enforce: "{{ item.value }}"}
+  loop: "{{ k8s_seed_namespaces | dict2items }}"
+  loop_control: {label: "{{ item.key }}"}
+
+- name: ClusterRole for trees that bind PersistentVolumes
+  kubernetes.core.k8s:
+    kubeconfig: "{{ k8s_seed_kubeconfig }}"
+    definition:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRole
+      metadata: {name: flux-pv-manager}
+      rules:
+        - {apiGroups: [""], resources: [persistentvolumes], verbs: [get, list, watch, create, update, patch, delete]}
+
+- name: Flux service account + RBAC per tree
+  kubernetes.core.k8s:
+    kubeconfig: "{{ k8s_seed_kubeconfig }}"
+    template: flux-rbac.yaml.j2
+  loop: "{{ k8s_seed_namespaces | dict2items | rejectattr('key', 'equalto', 'flux-system') | map(attribute='key') | list }}"
+  loop_control: {loop_var: tree}
+
+- name: Fleet bindings for Flux post-build substitution
+  kubernetes.core.k8s:
+    kubeconfig: "{{ k8s_seed_kubeconfig }}"
+    template: cluster-bindings.yaml.j2
+  no_log: "{{ k8s_seed_debug is not defined }}"
+
+- name: Compute the generated monitoring inputs
+  ansible.builtin.set_fact:
+    _telegraf_targets: >-
+      {%- set out = [] -%}
+      {%- for h in groups['all'] | difference(['localhost']) | sort if h not in k8s_seed_telegraf_skip and hostvars[h].service_ip is defined -%}
+      {{- out.append({'targets': [hostvars[h].service_ip ~ ':9273'], 'labels': {'instance': h}}) -}}
+      {%- endfor -%}
+      {{ out }}
+    _blackbox_dns: >-
+      {%- set out = [] -%}
+      {%- for z in network_data.internal_zones -%}
+      {{- out.append({'targets': [network_data.dns_server.dns_ipv4], 'labels': {'zone': z}}) -}}
+      {%- endfor -%}
+      {{ out }}
+
+- name: Generated monitoring inputs (Prometheus targets, smokeping dashboard)
+  kubernetes.core.k8s:
+    kubeconfig: "{{ k8s_seed_kubeconfig }}"
+    template: monitoring-generated.yaml.j2
+    apply: true
+    server_side_apply: {field_manager: k8s-seed, force_conflicts: true}
+
+- name: Root CA ConfigMaps (pods that verify fleet hosts)
+  kubernetes.core.k8s:
+    kubeconfig: "{{ k8s_seed_kubeconfig }}"
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata: {name: homelab-root-ca, namespace: "{{ item }}"}
+      data: {homelab-ca.crt: "{{ lookup('file', k8s_seed_root_ca) }}"}
+  loop: [infisical-operator, monitoring]
+
+- name: Bootstrap Secrets
+  kubernetes.core.k8s:
+    kubeconfig: "{{ k8s_seed_kubeconfig }}"
+    definition: "{{ item }}"
+  loop:
+    - apiVersion: v1
+      kind: Secret
+      metadata: {name: infisical-universal-auth, namespace: infisical-operator}
+      stringData: {clientId: "{{ bootstrap.infisical_client_id }}", clientSecret: "{{ bootstrap.infisical_client_secret }}"}
+    - apiVersion: v1
+      kind: Secret
+      metadata: {name: csi-rbd-secret, namespace: ceph-csi}
+      stringData: {userID: csi-rbd, userKey: "{{ _ceph_key }}"}
+    - apiVersion: v1
+      kind: Secret
+      metadata: {name: github-app, namespace: arc-runners}
+      stringData:
+        github_app_id: "{{ secrets.github_runner.github_app_id }}"
+        github_app_installation_id: "{{ secrets.github_runner.github_app_installation_id }}"
+        github_app_private_key: "{{ secrets.github_runner.github_app_private_key }}"
+    - apiVersion: v1
+      kind: Secret
+      metadata: {name: pve-ci-token, namespace: arc-runners}
+      stringData: {token: "{{ _ci_token.stdout }}"}
+  loop_control: {label: "{{ item.metadata.namespace }}/{{ item.metadata.name }}"}
+  no_log: true
+
+- name: Intermediate CA for cert-manager's homelab-ca issuer
+  ansible.builtin.include_tasks: intermediate.yml

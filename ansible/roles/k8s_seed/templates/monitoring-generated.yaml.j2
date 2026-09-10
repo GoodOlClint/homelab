@@ -1,0 +1,17 @@
+# What kubernetes/monitoring/render.py produced: file_sd targets from the inventory and the smokeping
+# dashboard from its template. Flux owns the tracked dashboards and configs in a separate ConfigMap.
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: prometheus-targets, namespace: monitoring}
+data:
+  telegraf.json: |
+    {{ _telegraf_targets | to_nice_json | indent(4) }}
+  blackbox-dns.json: |
+    {{ _blackbox_dns | to_nice_json | indent(4) }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: grafana-dashboards-generated, namespace: monitoring}
+data:
+  smokeping.json: |
+    {{ lookup('template', playbook_dir ~ '/../../kubernetes/monitoring/dashboards/smokeping.json.j2') | indent(4) }}

@@ -84,6 +84,7 @@
     - authentik
     - authentik-ext
     - jellyfin
+    - github-runner
   register: _infisical_nested
   delegate_to: localhost
   become: false

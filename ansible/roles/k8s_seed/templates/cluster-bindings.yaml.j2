@@ -1,0 +1,45 @@
+# Every value kubernetes/lib.sh inv_env, nodes.json, sops and the deploy scripts used to compute — the
+# one place a private address or the domain reaches the cluster (ADR 0048). Never a tracked file.
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: cluster-bindings, namespace: {{ k8s_seed_flux_namespace }}}
+data:
+{% for h in groups['all'] | difference(['localhost']) | sort if hostvars[h].service_ip is defined %}
+  {{ h | upper | replace('-', '_') }}: "{{ hostvars[h].service_ip }}"
+{% endfor %}
+  PBS: "proxmox-backup.{{ service_domain }}"
+  PBS_REPOSITORY: "backup@pbs!backup-token@proxmox-backup.{{ service_domain }}:synology"
+  ADGUARD: "{{ network_data.dns_server.dns_ipv4 }}"
+  BIND: "{{ network_data.dns_server.bind_ipv4 }}"
+  SYNOLOGY: "{{ synology_host }}"
+  SYNOLOGY_STORAGE: "{{ synology_storage_host }}"
+  SYNOLOGY_SNMP_COMMUNITY: "{{ synology_snmp_community }}"
+  TZ: "{{ timezone }}"
+  ACME_EMAIL: "{{ acme_email }}"
+  OO_EMAIL: "{{ openobserve_root_user_email }}"
+  UNIFI_PORT: "{{ unifi_controller_port }}"
+  SERVICE_DOMAIN: "{{ service_domain }}"
+  DOMAIN: "{{ service_domain }}"
+  DOMAIN_RE: {{ service_domain | regex_escape | to_json }}
+  MEDIA_DOMAIN: "{{ media_domain }}"
+  INTERNAL_ZONES: "{{ network_data.internal_zones | join(' ') }}"
+  INTERNAL_ZONES_YAML: "{{ network_data.internal_zones | join(', ') }}"
+  HOST_ALIAS: "home.{{ service_domain }}"
+  AUTH_HOST: "auth.{{ service_domain }}"
+  REGISTRY: "registry.{{ _nodes.domain }}"
+  GATEWAY: "{{ _nodes.gateway }}"
+  HOST_API: "{{ bootstrap_config.infisical_url }}/api"
+  PROJECT_ID: "{{ bootstrap_config.infisical_project_id }}"
+  PVE_API: "{{ proxmox_api_url | default('https://pve.' ~ service_domain ~ ':8006') }}"
+  PVE_API_HOST: "pve.{{ service_domain }}"
+  CEPH_FSID: "{{ _ceph_fsid }}"
+  CEPH_MONITORS: "{{ _ceph_mons }}"
+{% for n, o in k8s_seed_lb_offsets.items() %}
+  {{ n | upper }}_IP: "{{ services_vlan_prefix }}{{ o }}"
+{% endfor %}
+  LB_IP: "{{ services_vlan_prefix }}65"
+  SYSLOG_IP: "{{ services_vlan_prefix }}{{ monitoring_syslog_offset }}"
+  VALHEIM_IP: "{{ services_vlan_prefix }}67"
+  POOL_START: "{{ services_vlan_prefix }}64"
+  POOL_END: "{{ services_vlan_prefix }}79"
+  SMOKEPING_ARGS: {{ smokeping_targets | map(attribute='ip') | list | to_json | to_json }}

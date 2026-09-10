@@ -78,7 +78,7 @@ export PATH := $(CURDIR)/.venv/bin:$(PATH)
 
 init:
 	@python3 -m venv .venv
-	@. .venv/bin/activate && pip install pyyaml infisicalsdk ansible 'proxmoxer>=2.3' requests bcrypt passlib 'python-socketio[client]>=5.0' dnspython
+	@. .venv/bin/activate && pip install pyyaml infisicalsdk ansible 'proxmoxer>=2.3' requests bcrypt passlib 'python-socketio[client]>=5.0' dnspython kubernetes
 	@cd terraform && terraform init
 	@cd ansible && ansible-galaxy install -r requirements.yml --force
 
@@ -203,6 +203,11 @@ talos-kiwix:
 	@kubernetes/kiwix/deploy.sh
 
 # Cluster half of `make update`: restart every :latest workload so it re-pulls through Zot (NS= to scope)
+# ADR 0048: the cluster's Ansible half — allowlisted seed objects (bindings, RBAC, root-CA ConfigMaps,
+# the intermediate, bootstrap Secrets) + in-app configuration. Needs vms.yaml and proxmox.yaml.
+k8s-seed:
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/vms.yaml -i ansible/inventory/proxmox.yaml ansible/playbooks/kubernetes.yml $(if $(CHECK),--check --diff,)
+
 talos-update:
 	@kubernetes/update.sh
 

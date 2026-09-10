@@ -1,0 +1,34 @@
+---
+# ADR 0048: the only Kubernetes objects Ansible creates — Flux owns everything else. Each item here
+# is either fleet-derived (bindings), out-of-band by nature (bootstrap Secrets, the CA material), or
+# generated from the inventory (monitoring targets). Adding an object kind here is an ADR-level change.
+k8s_seed_kubeconfig: "{{ playbook_dir }}/../../kubernetes/talos/.secrets/kubeconfig"
+k8s_seed_root_ca: "{{ playbook_dir }}/../../kubernetes/.secrets/homelab-ca.crt"
+k8s_seed_nodes_json: "{{ playbook_dir }}/../../kubernetes/talos/.secrets/nodes.json"
+k8s_seed_flux_namespace: flux-system
+# namespace → pod-security enforce level (privileged: SYS_NICE/hostNetwork/CSI; baseline: everything else)
+k8s_seed_namespaces:
+  flux-system: baseline
+  arc-systems: baseline
+  arc-runners: privileged
+  authentik-ext: baseline
+  ceph-csi: privileged
+  cert-manager: baseline
+  external-dns: baseline
+  games: privileged
+  headlamp: baseline
+  homepage: baseline
+  infisical-operator: baseline
+  jellyfin: baseline
+  kiwix: baseline
+  metallb-system: privileged
+  monitoring: baseline
+  plex-services: baseline
+  traefik: baseline
+  zot: baseline
+# Trees whose Flux Kustomization manages PersistentVolumes (cluster-scoped) beside its namespace.
+k8s_seed_pv_trees: [jellyfin, kiwix, plex-services]
+# MetalLB services offsets (ADR 0034): 64 Zot, 65 Traefik, 66 syslog, 67 Valheim.
+k8s_seed_lb_offsets: {registry: 64, ingress: 65, syslog: "{{ monitoring_syslog_offset }}", valheim: 67}
+# Guests that never run the telegraf role.
+k8s_seed_telegraf_skip: [control, pdm, pxe]
