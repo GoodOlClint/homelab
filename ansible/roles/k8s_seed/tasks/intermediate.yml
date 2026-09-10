@@ -11,10 +11,9 @@
   register: _ca_secret
 
 - name: Verify it against the root
-  ansible.builtin.shell:
-    cmd: >-
-      set -o pipefail; printf '%s' '{{ _ca_secret.resources[0].data["tls.crt"] }}' | base64 -d
-      | openssl verify -CAfile {{ k8s_seed_root_ca }} >/dev/null
+  ansible.builtin.command:
+    cmd: openssl verify -CAfile {{ k8s_seed_root_ca }}
+    stdin: "{{ _ca_secret.resources[0].data['tls.crt'] | b64decode }}"
   register: _ca_verify
   changed_when: false
   failed_when: false

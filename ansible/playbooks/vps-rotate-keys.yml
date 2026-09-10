@@ -26,10 +26,12 @@
       no_log: true
 
     - name: Derive new public key
-      ansible.builtin.shell:
-        cmd: "set -o pipefail; echo '{{ new_private_key.stdout }}' | wg pubkey"
+      ansible.builtin.command:
+        cmd: wg pubkey
+        stdin: "{{ new_private_key.stdout }}"
       register: new_public_key
       changed_when: false
+      no_log: true
 
     - name: Update WireGuard config with new private key
       ansible.builtin.lineinfile:

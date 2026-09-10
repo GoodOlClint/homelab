@@ -58,7 +58,7 @@ done
 # Root password hash from the tier-1 secret (same password the provider authenticates with).
 ROOT_PW=$(sops -d --extract '["bootstrap"]["proxmox_password"]' "$BOOTSTRAP")
 [ -n "$ROOT_PW" ] && [ "$ROOT_PW" != "REPLACE_ME" ] || { echo "ERROR: bootstrap.proxmox_password not set"; exit 1; }
-ROOT_HASH=$(openssl passwd -6 "$ROOT_PW")
+ROOT_HASH=$(printf '%s\n' "$ROOT_PW" | openssl passwd -6 -stdin)
 
 # MAC with colons stripped, for the ID_NET_NAME_MAC glob filter.
 MAC_NOSEP="${MAC//:/}"
@@ -68,26 +68,21 @@ MAC_NOSEP="${MAC//:/}"
 PXE_URL=$(yread cluster.pxe_url)
 
 OUT="$HOSTS_DIR/answer-${NODE}.toml"
-sed \
-  -e "s|@FQDN@|${FQDN}|g" \
-  -e "s|@MAILTO@|${MAILTO}|g" \
-  -e "s|@ROOT_PW_HASH@|${ROOT_HASH}|g" \
-  -e "s|@ROOT_SSH_KEY@|${SSHKEY}|g" \
-  -e "s|@INSTALL_CIDR@|${CIDR}|g" \
-  -e "s|@INSTALL_GATEWAY@|${GW}|g" \
-  -e "s|@INSTALL_NIC_MAC@|${MAC_NOSEP}|g" \
-  -e "s|@BOOT_DISK_MODEL@|${BOOT_DISK_MODEL}|g" \
-  -e "s|@PXE_URL@|${PXE_URL}|g" \
-  "$TMPL" > "$OUT"
-if [ -z "$PXE_URL" ]; then
-  "$VENV_PYTHON" - "$OUT" <<'PY'
-import re, sys
-p = sys.argv[1]; s = open(p).read()
-s = re.sub(r"\n# First boot:.*?\[first-boot\]\n(?:.*\n)*?(?=\n\[|\Z)", "\n", s, flags=re.S)
-open(p, "w").write(s)
-PY
-fi
-chmod 600 "$OUT"
+FQDN="$FQDN" MAILTO="$MAILTO" ROOT_HASH="$ROOT_HASH" SSHKEY="$SSHKEY" CIDR="$CIDR" GW="$GW" \
+MAC_NOSEP="$MAC_NOSEP" BOOT_DISK_MODEL="$BOOT_DISK_MODEL" PXE_URL="$PXE_URL" \
+"$VENV_PYTHON" -c 'import os, re, sys
+tmpl, out = sys.argv[1], sys.argv[2]
+s = open(tmpl).read()
+for tag, var in [("FQDN", "FQDN"), ("MAILTO", "MAILTO"), ("ROOT_PW_HASH", "ROOT_HASH"), ("ROOT_SSH_KEY", "SSHKEY"),
+                 ("INSTALL_CIDR", "CIDR"), ("INSTALL_GATEWAY", "GW"), ("INSTALL_NIC_MAC", "MAC_NOSEP"),
+                 ("BOOT_DISK_MODEL", "BOOT_DISK_MODEL"), ("PXE_URL", "PXE_URL")]:
+    s = s.replace("@%s@" % tag, os.environ[var])
+if not os.environ["PXE_URL"]:
+    s = re.sub(r"\n# First boot:.*?\[first-boot\]\n(?:.*\n)*?(?=\n\[|\Z)", "\n", s, flags=re.S)
+fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+with os.fdopen(fd, "w") as f:
+    f.write(s)
+' "$TMPL" "$OUT"
 echo "Baked $OUT"
 
 if command -v proxmox-auto-install-assistant >/dev/null 2>&1; then

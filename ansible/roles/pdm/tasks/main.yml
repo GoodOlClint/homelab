@@ -9,18 +9,11 @@
     secret_dict_path: "control"
   tags: [pdm, secrets]
 
-- name: Hash the PDM root password on the guest
-  ansible.builtin.command:
-    argv: ["openssl", "passwd", "-6", "-salt", "pdmroot", "{{ secrets.control.pdm_root_password }}"]
-  register: _pdm_root_hash
-  changed_when: false
-  no_log: true
-  tags: [pdm, users]
-
+# The salt is derived from the secret itself so re-runs hash identically without a fixed salt.
 - name: Set root password for PDM web login (root@pam)
   ansible.builtin.user:
     name: root
-    password: "{{ _pdm_root_hash.stdout }}"
+    password: "{{ secrets.control.pdm_root_password | password_hash('sha512', (secrets.control.pdm_root_password | hash('sha256'))[:16]) }}"
   no_log: true
   tags: [pdm, users]
 

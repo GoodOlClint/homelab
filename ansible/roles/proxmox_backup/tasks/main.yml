@@ -31,7 +31,6 @@
 - name: Refresh PBS bare variable aliases from secrets
   ansible.builtin.set_fact:
     pbs_admin_password: "{{ secrets.pbs.pbs_admin_password }}"
-    pbs_backup_user_password: "{{ secrets.pbs.pbs_backup_user_password }}"
   tags: [proxmox_backup, pbs, secrets]
 
 # Cloud images ship root with a locked password; root@pam (PDM wizard, UI
@@ -511,8 +510,7 @@
 - name: Create PBS users
   ansible.builtin.shell: |
     proxmox-backup-manager user create {{ item.username }}@{{ item.realm }} \
-      {% if item.comment is defined %}--comment "{{ item.comment }}"{% endif %} \
-      {% if secrets.pbs.pbs_backup_user_password is defined %}--password "{{ secrets.pbs.pbs_backup_user_password }}"{% endif %}
+      {% if item.comment is defined %}--comment "{{ item.comment }}"{% endif %}
   loop: "{{ pbs_users }}"
   when: ((pbs_user_list.stdout | default('', true)) or '[]') | from_json | selectattr('userid', 'equalto', item.username + '@' + item.realm) | list | length == 0
   changed_when: true

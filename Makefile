@@ -421,6 +421,8 @@ validate:
 	@$(VENV_PYTHON) scripts/flux_check.py $(CURDIR) --build-only >/dev/null && echo "flux trees build"
 	@$(VENV_PYTHON) scripts/validate_public_policy.py network-data/public_policy.yaml
 	@$(VENV_PYTHON) scripts/test_axosyslog_routing.py
+	@! grep -rnE "from-literal=|(echo|printf '%s') '\{\{[^}]*(password|secret|token|private_key)" ansible/roles ansible/tasks ansible/playbooks kubernetes scripts || { echo "secret on argv (#17): use stdin: / --value-stdin"; exit 1; }
+	@echo "argv-secrets: none"
 
 # === Cleanup ===
 .PHONY: clean clean-ssh clean-infisical-sops
