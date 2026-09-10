@@ -52,6 +52,7 @@
   ansible.builtin.file:
     path: /etc/apt/sources.list.d/influxdata.list
     state: absent
+  register: _influx_old_source
   tags:
     - telegraf
     - packages
@@ -74,21 +75,18 @@
     # The cloud images ship python3-debian; the LXC templates do not, and this
     # role runs on every guest. Let the module bootstrap its own requirement.
     install_python_debian: true
+  register: _influx_source
   tags:
     - telegraf
     - packages
 
-# Ungated on purpose. The install task below carries update_cache but only runs
-# when telegraf is ABSENT — which is false on the whole existing fleet, so the
-# role would swap the source file and exit green without ever asking apt whether
-# the result parses. A malformed .sources would then surface at some unrelated
-# apt call on a different play, which is the hardest class of failure to trace.
-# Refresh here so the role proves its own change; `changed_when: false` because
-# a cache refresh is not a state change worth reporting.
-- name: Refresh apt cache so the source swap is validated here, not later
+# The install task below only runs when telegraf is absent, so this refresh is what
+# validates a changed source in the same role instead of at some later apt call.
+- name: Refresh apt cache so the source swap is validated here, not later # noqa: no-handler
   ansible.builtin.apt:
     update_cache: true
   changed_when: false
+  when: _influx_old_source is changed or _influx_source is changed
   tags:
     - telegraf
     - packages

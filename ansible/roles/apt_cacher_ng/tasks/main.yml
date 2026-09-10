@@ -4,6 +4,7 @@
     name: apt-cacher-ng
     state: present
     update_cache: true
+    cache_valid_time: 3600
   tags: [apt-cache, packages]
 
 - name: Deploy homelab acng config (remaps + CONNECT safety net)

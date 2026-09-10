@@ -16,6 +16,7 @@
       - uidmap
     state: present
     update_cache: true
+    cache_valid_time: 3600
   when: not uos_installed.stat.exists
 
 - name: Fail if installer URL not provided for fresh install
