@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Flux pre-flight (ADR 0048): every `${VAR}` a tree's build emits must have a binding, because Flux
 substitutes an undefined variable with an empty string and fails open (`host: ""` is a catch-all router).
+Every pod-template container must carry a cpu+memory request (#31, the scheduler spreads on requests).
 A resource carrying `kustomize.toolkit.fluxcd.io/substitute: disabled` is exempt — that is how a
 ConfigMap whose payload has its own `${…}` syntax (syslog-ng macros, JS template literals) is shipped.
 
@@ -27,13 +28,18 @@ for app in sorted(__import__("glob").glob(f"{root}/kubernetes/flux/apps/*.yaml")
         if not pb.get("substituteFrom"):
             known = set(pb.get("substitute", {}))
         path = f"{root}/{ks['spec']['path']}"
-        docs = yaml.safe_load_all(subprocess.check_output(["kubectl", "kustomize", path]))
+        docs = [d for d in yaml.safe_load_all(subprocess.check_output(["kubectl", "kustomize", path])) if d]
+        for d in docs:
+            spec = d.get("spec") or {}
+            pod = ((spec.get("jobTemplate") or {}).get("spec") or spec).get("template", {}).get("spec") or {}
+            for c in pod.get("containers", []) + pod.get("initContainers", []):
+                if not ((c.get("resources") or {}).get("requests") or {}).keys() >= {"cpu", "memory"}:
+                    bad += 1
+                    print(f"{ks['metadata']['name']}: {d.get('kind')}/{d['metadata'].get('name')} container {c.get('name')} has no cpu+memory request (#31)")
         if build_only:
-            print(f"{ks['metadata']['name']}: {sum(1 for d in docs if d)} resources")
+            print(f"{ks['metadata']['name']}: {len(docs)} resources")
             continue
         for d in docs:
-            if not d:
-                continue
             ann = (d.get("metadata") or {}).get("annotations") or {}
             lab = (d.get("metadata") or {}).get("labels") or {}
             if ann.get("kustomize.toolkit.fluxcd.io/substitute") == "disabled" or lab.get("kustomize.toolkit.fluxcd.io/substitute") == "disabled":
@@ -42,5 +48,5 @@ for app in sorted(__import__("glob").glob(f"{root}/kubernetes/flux/apps/*.yaml")
             if missing:
                 bad += 1
                 print(f"{ks['metadata']['name']}: {d.get('kind')}/{(d.get('metadata') or {}).get('name')} has no binding for: {' '.join(missing)}")
-print("flux_check: OK" if not bad else f"flux_check: {bad} resource(s) would be blanked", file=sys.stderr)
+print("flux_check: OK" if not bad else f"flux_check: {bad} finding(s)", file=sys.stderr)
 sys.exit(1 if bad else 0)

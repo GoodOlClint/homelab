@@ -27,14 +27,11 @@
 - ansible.builtin.debug:
     msg: "{{ _latest | map(attribute='ns') | zip(_latest | map(attribute='name')) | map('join', '/') | list or 'nothing on :latest' }}"
 
-- name: Delete their pods
-  ansible.builtin.command: "{{ k8s_apps_kubectl }} -n {{ item.ns }} delete pod -l {{ item.selector }} --wait=false"
+# One workload at a time: every re-pull is an anonymous upstream tag check from the house's one WAN address (#31).
+- name: Recreate their pods, one workload at a time
+  ansible.builtin.shell: >-
+    {{ k8s_apps_kubectl }} -n {{ item.ns }} delete pod -l {{ item.selector }} --wait=false
+    && {{ k8s_apps_kubectl }} -n {{ item.ns }} rollout status {{ item.kind }}/{{ item.name }} --timeout=600s
   changed_when: true
   loop: "{{ _latest }}"
   loop_control: {label: "{{ item.ns }}/{{ item.name }}"}
-
-- name: Wait for each to settle
-  ansible.builtin.command: "{{ k8s_apps_kubectl }} -n {{ item.ns }} rollout status {{ item.kind }}/{{ item.name }} --timeout=600s"
-  loop: "{{ _latest }}"
-  loop_control: {label: "{{ item.ns }}/{{ item.name }}"}
-  changed_when: false

@@ -9,5 +9,6 @@ spec:
   serviceAccountName: flux-authentik-ext
   postBuild:
     substituteFrom: [{kind: ConfigMap, name: cluster-bindings}]
+    substitute: {NS: authentik-ext, PG_USER: authentik, PG_SECRET: authentik-secrets, BACKUP_ID: authentik-ext-postgres, SCHEDULE: "20 2 * * *"}
   healthChecks:
     - {apiVersion: helm.toolkit.fluxcd.io/v2, kind: HelmRelease, name: authentik, namespace: authentik-ext}

@@ -9,3 +9,4 @@ spec:
   serviceAccountName: flux-plex-services
   postBuild:
     substituteFrom: [{kind: ConfigMap, name: cluster-bindings}]
+    substitute: {NS: plex-services, PG_USER: qstick, PG_SECRET: plex-services-secrets, BACKUP_ID: plex-services-postgres, SCHEDULE: "0 2 * * *"}

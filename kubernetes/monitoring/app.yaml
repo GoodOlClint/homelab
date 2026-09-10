@@ -479,6 +479,7 @@ spec:
             - name: heartbeat
               image: ${REGISTRY}/public.ecr.aws/docker/library/busybox:latest
               imagePullPolicy: IfNotPresent   # a per-minute :latest re-check burns Docker Hub's anonymous pull quota
+              resources: {requests: {cpu: 10m, memory: 16Mi}}
               command: [sh, -c, 'wget -qO- --timeout=10 "$UPTIMEROBOT_HEARTBEAT_URL" >/dev/null']
               env:
                 - {name: UPTIMEROBOT_HEARTBEAT_URL, valueFrom: {secretKeyRef: {name: monitoring-secrets, key: UPTIMEROBOT_HEARTBEAT_URL}}}
