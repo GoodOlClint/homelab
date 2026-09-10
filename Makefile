@@ -184,7 +184,7 @@ plex-pbs-image:
 
 # P4d (ADR 0038): Valheim + PlayFab sidecar on a MetalLB UDP LB (offset 67), Kiwix over NFS; player-gated migration from 204
 talos-games:
-	@kubernetes/games/deploy.sh
+	@flux reconcile kustomization games --with-source
 
 # P5d (ADR 0040): Jellyfin on jellyfin.<media domain> — LDAP auth against the authentik external realm, media read-only over NFS
 talos-jellyfin:
