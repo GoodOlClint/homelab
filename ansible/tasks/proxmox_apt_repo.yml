@@ -1,0 +1,43 @@
+---
+# One Proxmox apt repo on a Debian/Ubuntu guest (#38). Callers pass
+#   proxmox_apt_repo_name        the .sources name (and the one-line .list it supersedes)
+#   proxmox_apt_repo_uris        e.g. http://download.proxmox.com/debian/pbs
+#   proxmox_apt_repo_suite       derived per guest by the caller (bookworm/trixie) — never a fleet-wide value
+#   proxmox_apt_repo_components  e.g. pbs-no-subscription
+#   proxmox_apt_repo_key_url     optional; default is the release key for the suite
+# Key: get_url + a size guard, no checksum (vendor keys rotate; steady state does no network;
+# `size == 0` heals a zero-byte file). Repo: deb822 (Debian 13 has no apt-key/gpg on the
+# cloud image). The cache refresh rides here so a changed source is validated in the same role.
+- name: "{{ proxmox_apt_repo_name }}: check the Proxmox release key"
+  ansible.builtin.stat:
+    path: "/etc/apt/keyrings/proxmox-release-{{ proxmox_apt_repo_suite }}.gpg"
+  register: _proxmox_apt_key
+
+- name: "{{ proxmox_apt_repo_name }}: fetch the Proxmox release key"
+  ansible.builtin.get_url:
+    url: "{{ proxmox_apt_repo_key_url | default('https://enterprise.proxmox.com/debian/proxmox-release-' ~ proxmox_apt_repo_suite ~ '.gpg') }}"
+    dest: "/etc/apt/keyrings/proxmox-release-{{ proxmox_apt_repo_suite }}.gpg"
+    mode: "0644"
+  when: not _proxmox_apt_key.stat.exists or _proxmox_apt_key.stat.size == 0
+
+- name: "{{ proxmox_apt_repo_name }}: drop the superseded one-line source"
+  ansible.builtin.file:
+    path: "/etc/apt/sources.list.d/{{ proxmox_apt_repo_name }}.list"
+    state: absent
+  register: _proxmox_apt_old
+
+- name: "{{ proxmox_apt_repo_name }}: deb822 source"
+  ansible.builtin.deb822_repository:
+    name: "{{ proxmox_apt_repo_name }}"
+    types: [deb]
+    uris: "{{ proxmox_apt_repo_uris }}"
+    suites: "{{ proxmox_apt_repo_suite }}"
+    components: "{{ proxmox_apt_repo_components }}"
+    signed_by: "/etc/apt/keyrings/proxmox-release-{{ proxmox_apt_repo_suite }}.gpg"
+    install_python_debian: true
+  register: _proxmox_apt_repo
+
+- name: "{{ proxmox_apt_repo_name }}: refresh apt after a source change"
+  ansible.builtin.apt:
+    update_cache: true
+  when: _proxmox_apt_repo is changed or _proxmox_apt_old is changed

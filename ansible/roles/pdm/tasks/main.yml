@@ -17,37 +17,22 @@
   no_log: true
   tags: [pdm, users]
 
-- name: Check Proxmox archive keyring
-  ansible.builtin.stat:
-    path: /usr/share/keyrings/proxmox-archive-keyring.gpg
-  register: _pdm_key_stat
-  tags: [pdm, packages]
-
-- name: Fetch Proxmox archive keyring
-  ansible.builtin.get_url:
-    url: "{{ pdm_proxmox_key_url }}"
-    dest: /usr/share/keyrings/proxmox-archive-keyring.gpg
-    mode: "0644"
-  when: not _pdm_key_stat.stat.exists or _pdm_key_stat.stat.size == 0
-  tags: [pdm, packages]
-
-- name: Proxmox Datacenter Manager repo (deb822)
-  ansible.builtin.deb822_repository:
-    name: pdm
-    types: deb
-    uris: "http://download.proxmox.com/debian/pdm"
-    suites: "{{ pdm_repo_suite }}"
-    components: "{{ pdm_repo_component }}"
-    signed_by: /usr/share/keyrings/proxmox-archive-keyring.gpg
-    install_python_debian: true
-  register: _pdm_repo
+- name: Proxmox Datacenter Manager repository
+  ansible.builtin.include_tasks:
+    file: "{{ playbook_dir }}/../tasks/proxmox_apt_repo.yml"
+    apply: {tags: [pdm, packages]}
+  vars:
+    proxmox_apt_repo_name: pdm
+    proxmox_apt_repo_uris: "http://download.proxmox.com/debian/pdm"
+    proxmox_apt_repo_suite: "{{ pdm_repo_suite }}"
+    proxmox_apt_repo_components: "{{ pdm_repo_component }}"
+    proxmox_apt_repo_key_url: "{{ pdm_proxmox_key_url }}"
   tags: [pdm, packages]
 
 - name: Install Proxmox Datacenter Manager
   ansible.builtin.apt:
     name: "{{ pdm_packages }}"
     state: present
-    update_cache: "{{ _pdm_repo is changed }}"
     install_recommends: false
   tags: [pdm, packages]
 

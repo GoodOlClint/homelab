@@ -19,6 +19,7 @@ exclude_paths:
   - roles/*/tasks/configure_docker_logging.yml
   - roles/*/tasks/api_certificate.yml
   - roles/*/tasks/configure_pbs_backup.yml
+  - roles/*/tasks/proxmox_apt_repo.yml
 kinds:
   - playbook: playbooks/*.yml
   - tasks: tasks/*.yml
