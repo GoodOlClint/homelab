@@ -1,5 +1,5 @@
-# Flux applies the {{ tree }} tree as this account: admin in its own namespace{% if tree in k8s_seed_pv_trees %} plus
-# PersistentVolumes cluster-wide (the tree binds NAS exports){% endif %}. Never cluster-admin (ADR 0048).
+# Flux applies the {{ tree }} tree as this account: admin in its own namespace, plus the cluster-scoped
+# kinds listed for it in the role defaults. Never cluster-admin (ADR 0048).
 apiVersion: v1
 kind: ServiceAccount
 metadata: {name: flux-{{ tree }}, namespace: {{ k8s_seed_flux_namespace }}}
@@ -15,6 +15,14 @@ kind: RoleBinding
 metadata: {name: flux-{{ tree }}-crds, namespace: {{ tree }}}
 roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: flux-tree-crds}
 subjects: [{kind: ServiceAccount, name: flux-{{ tree }}, namespace: {{ k8s_seed_flux_namespace }}}]
+{% if tree in k8s_seed_cluster_cr_trees %}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: {name: flux-{{ tree }}-cluster-crs}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: flux-tree-cluster-crs}
+subjects: [{kind: ServiceAccount, name: flux-{{ tree }}, namespace: {{ k8s_seed_flux_namespace }}}]
+{% endif %}
 {% if tree in k8s_seed_pv_trees %}
 ---
 apiVersion: rbac.authorization.k8s.io/v1

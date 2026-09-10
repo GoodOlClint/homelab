@@ -76,6 +76,16 @@
         - {apiGroups: [helm.toolkit.fluxcd.io], resources: [helmreleases], verbs: ["*"]}
         - {apiGroups: [source.toolkit.fluxcd.io], resources: [helmrepositories, ocirepositories], verbs: ["*"]}
 
+- name: ClusterRole for cluster-scoped custom resources a tree declares
+  kubernetes.core.k8s:
+    kubeconfig: "{{ k8s_seed_kubeconfig }}"
+    definition:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRole
+      metadata: {name: flux-tree-cluster-crs}
+      rules:
+        - {apiGroups: [cert-manager.io], resources: [clusterissuers], verbs: ["*"]}
+
 - name: Flux service account + RBAC per tree
   kubernetes.core.k8s:
     kubeconfig: "{{ k8s_seed_kubeconfig }}"

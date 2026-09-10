@@ -9,6 +9,7 @@ resources:
   - apps/jellyfin.yaml
   - apps/plex-services.yaml
   - apps/monitoring.yaml
+  - apps/cert-manager.yaml
 patches:
   # A Kustomization may only reference sources and secrets in its own namespace (ADR 0048).
   - target: {kind: Deployment, name: kustomize-controller}
