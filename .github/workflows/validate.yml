@@ -42,4 +42,6 @@ jobs:
           case "$BASE" in ''|0000000000000000000000000000000000000000) BASE=HEAD~1 ;; esac
           bash scripts/security_guardrails.sh --range "$BASE..${{ github.sha }}"
       - name: Renovate config
+        env:
+          npm_config_loglevel: error
         run: npx --yes --package renovate@44 -- renovate-config-validator --strict renovate.json
