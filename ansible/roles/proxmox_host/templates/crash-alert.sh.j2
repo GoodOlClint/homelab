@@ -6,7 +6,7 @@
 # fails exactly when the host is sick. Only dependency: WAN.
 # 60 s sleep per send throttles a crash cascade to ~1 msg/min (pipe buffers).
 journalctl -kf -n 0 --no-pager \
-  | grep --line-buffered -iE "segfault|general protection|kernel BUG|machine check|invalid opcode|mce:" \
+  | grep --line-buffered -iE "segfault|general protection|kernel BUG|BUG: unable|Oops|recursive fault|machine check|invalid opcode|mce:" \
   | while IFS= read -r line; do
       curl -sf -m 10 \
         -H "Title: {{ inventory_hostname }} crash signature" \

@@ -17,6 +17,17 @@
     dest: /usr/local/bin/check_dns.sh
     mode: "0755"
 
+- name: Disable the dig AppArmor profile
+  ansible.builtin.file:
+    src: /etc/apparmor.d/dig
+    dest: /etc/apparmor.d/disable/dig
+    state: link
+  register: _dig_profile
+
+- name: Unload the dig AppArmor profile
+  ansible.builtin.command: apparmor_parser -R /etc/apparmor.d/dig
+  when: _dig_profile is changed
+
 - name: Deploy keepalived.conf
   ansible.builtin.template:
     src: "{{ playbook_dir }}/../templates/keepalived.conf.j2"
