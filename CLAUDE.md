@@ -349,6 +349,9 @@ make ansible-services TAGS=plex,homepage  # plex + homepage plays
 - If the change warrants explanation, add a blank line then a body
 - Reference the affected role/component: "ansible/roles/homepage: add agent env_file support"
 
+### Deploy gate
+- Under ADR 0048 a merge to `main` is a cluster deploy. The `main` ruleset today has no pull-request or review rule; the required protection (PR + code-owner review, narrow CODEOWNERS on `kubernetes/**` + `k8s_seed` + governance paths, `validate` as a required check, no App bypass, Apps never merge or push `main`) is specified in [docs/repo-deploy-gate.md](docs/repo-deploy-gate.md) and is a prerequisite before any agent identity authors PRs here (ADR 0052).
+
 ### What never to commit
 - Any file matching `*.sops.yml` that hasn't been encrypted with `sops --encrypt` first
 - `vlans.yaml`, `private_bindings.yaml`, `infisical-backup.yml` (gitignored — if git
