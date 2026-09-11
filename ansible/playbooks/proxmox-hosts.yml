@@ -73,6 +73,13 @@
   roles:
     - ca_trust
   tasks:
+    - name: Host log shipping (rsyslog + netconsole to the cluster syslog LB)
+      ansible.builtin.include_role:
+        name: proxmox_host
+        tasks_from: logging
+        apply:
+          tags: [logging]
+      tags: [logging]
     - name: Node certificate
       ansible.builtin.include_role:
         name: proxmox_host
