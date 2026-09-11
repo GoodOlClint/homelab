@@ -1,0 +1,139 @@
+---
+# Patch the cluster nodes one at a time. When apt has work, the node is emptied
+# FIRST (Talos guest drained, HA node-maintenance so shutdown_policy=migrate moves
+# the resources, ceph noout) so a wedged upgrade never strands guests on it;
+# then dist-upgrade, a reboot only if the newest installed kernel is not the
+# running one, and the recovery tail — which always runs, so a re-run heals a
+# half-finished node. The next node starts only once Ceph is HEALTH_OK and the
+# Talos node is Ready again.
+- name: Update cluster nodes serially
+  hosts: proxmox
+  serial: 1
+  vars:
+    kubeconfig: "{{ playbook_dir }}/../../kubernetes/talos/.secrets/kubeconfig"
+  tasks:
+    - name: Refuse to start on an unhealthy cluster (a noout-only warning is ours)
+      ansible.builtin.command: ceph health
+      register: _health
+      changed_when: false
+      check_mode: false
+      failed_when: not (_health.stdout is match('HEALTH_OK') or _health.stdout is match('HEALTH_WARN noout flag'))
+
+    - name: Find this node's Talos guest
+      ansible.builtin.shell: |
+        set -o pipefail
+        qm list | awk '/talos-cp-/{print $2}'
+      args:
+        executable: /bin/bash
+      register: _talos
+      changed_when: false
+      check_mode: false
+
+    - name: Check whether apt has work
+      ansible.builtin.apt:
+        update_cache: true
+        upgrade: dist
+      check_mode: true
+      register: _apt_plan
+
+    - name: Empty the node and upgrade
+      when: _apt_plan is changed and not ansible_check_mode
+      block:
+        - name: Drain the Talos guest
+          ansible.builtin.command: >-
+            kubectl --kubeconfig {{ kubeconfig }} drain {{ _talos.stdout }}
+            --ignore-daemonsets --delete-emptydir-data --timeout=300s
+          delegate_to: localhost
+          when: _talos.stdout | length > 0
+          changed_when: true
+
+        - name: Enter HA node maintenance
+          ansible.builtin.command: ha-manager crm-command node-maintenance enable {{ inventory_hostname }}
+          changed_when: true
+
+        - name: Wait for HA resources to leave this node
+          ansible.builtin.shell: |
+            set -o pipefail
+            ha-manager status | grep -c "({{ inventory_hostname }}, " || true
+          args:
+            executable: /bin/bash
+          register: _ha_here
+          until: _ha_here.stdout == "0"
+          retries: 60
+          delay: 10
+          changed_when: false
+
+        - name: Set Ceph noout
+          ansible.builtin.command: ceph osd set noout
+          changed_when: true
+
+        - name: Upgrade packages
+          ansible.builtin.apt:
+            upgrade: dist
+            autoremove: true
+            autoclean: true
+
+        - name: Compare the running kernel with the newest installed one
+          ansible.builtin.shell: |
+            set -o pipefail
+            newest=$(ls /boot/vmlinuz-* | sed 's#.*/vmlinuz-##' | sort -V | tail -n 1)
+            [ "$newest" != "$(uname -r)" ] && echo reboot || true
+          args:
+            executable: /bin/bash
+          register: _kernel
+          changed_when: false
+
+        - name: Reboot into the new kernel
+          ansible.builtin.reboot:
+            reboot_timeout: 600
+          when: _kernel.stdout == 'reboot'
+
+    - name: Wait for the node to rejoin the cluster
+      ansible.builtin.shell: |
+        set -o pipefail
+        pvecm status | grep -q "Quorate: *Yes" && ha-manager status | grep "^lrm {{ inventory_hostname }} "
+      args:
+        executable: /bin/bash
+      register: _rejoined
+      until: _rejoined.rc == 0
+      retries: 30
+      delay: 10
+      changed_when: false
+      check_mode: false
+
+    - name: Unset Ceph noout
+      ansible.builtin.command: ceph osd unset noout
+      changed_when: true
+      when: "'noout' in _health.stdout or _apt_plan is changed"
+
+    - name: Leave HA node maintenance
+      ansible.builtin.command: ha-manager crm-command node-maintenance disable {{ inventory_hostname }}
+      changed_when: true
+      when: "'(maintenance mode' in _rejoined.stdout"
+
+    - name: Uncordon the Talos guest
+      ansible.builtin.command: kubectl --kubeconfig {{ kubeconfig }} uncordon {{ _talos.stdout }}
+      delegate_to: localhost
+      when: _talos.stdout | length > 0
+      register: _uncordon
+      changed_when: "'already uncordoned' not in _uncordon.stdout"
+
+    - name: Wait for the Talos node to be Ready
+      ansible.builtin.shell: >-
+        kubectl --kubeconfig {{ kubeconfig }} get node {{ _talos.stdout }}
+        -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+      delegate_to: localhost
+      register: _ready
+      until: _ready.stdout == "True"
+      retries: 60
+      delay: 10
+      changed_when: false
+      when: _talos.stdout | length > 0
+
+    - name: Wait for Ceph HEALTH_OK
+      ansible.builtin.command: ceph health
+      register: _health_after
+      until: "'HEALTH_OK' in _health_after.stdout"
+      retries: 90
+      delay: 10
+      changed_when: false

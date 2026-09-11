@@ -288,6 +288,11 @@ adguard-pause:
 dns-records:
 	@$(ANSIBLE_PLAYBOOK) -i ansible/inventory/proxmox.yaml ansible/playbooks/dns-records.yml
 
+# Patch the cluster nodes one at a time; a node reboots only for a new kernel, after
+# draining its Talos guest, HA node-maintenance and ceph noout (LIMIT= for one node).
+update-nodes:
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/proxmox.yaml ansible/playbooks/update-nodes.yml $(if $(LIMIT),--limit $(LIMIT),)
+
 update-dns:
 	@$(ANSIBLE_PLAYBOOK) -i ansible/inventory/proxmox.yaml ansible/playbooks/update-dns.yml
 

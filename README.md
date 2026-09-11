@@ -386,6 +386,7 @@ Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-m
 | vps.yml | VPS | WireGuard, nftables, hardening, monitoring agents |
 | unifi.yml | UniFi VM | UniFi Controller deployment |
 | update-all.yml | All + VPS | OS patching (apt/apk) |
+| update-nodes.yml | proxmox | Serial node patching: kernel reboot only after Talos drain, HA maintenance, ceph noout (`make update-nodes`) |
 | update-dns.yml | DNS VMs | DNS configuration updates |
 | adguard-pause.yml | adguard group | Disable filtering on both AdGuard instances for n minutes (`make adguard-pause`) |
 | dns-records.yml | localhost (both inventories) | Push every inventory-derived name into the flat service zone over RFC 2136 (`make dns-records`, ADR 0040) |
