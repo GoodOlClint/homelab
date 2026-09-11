@@ -1,7 +1,9 @@
 ---
 
-- name: Update all VMs and Proxmox server
-  hosts: all
+# Guests, worklab and the VPS. The cluster nodes are update-nodes.yml (serial,
+# Talos drain + HA maintenance + ceph noout) and never belong in this play.
+- name: Update all guests
+  hosts: all:!proxmox
   become: true
   tasks:
     - name: Update apt cache and upgrade all packages (Debian/Ubuntu)
@@ -43,8 +45,11 @@
       ansible.builtin.command: docker image prune -af
       changed_when: false
 
+# One host at a time so a redundancy pair (dns1/dns2, adguard1/adguard2) never
+# has both members down at once.
 - name: Final Reboot
-  hosts: all
+  hosts: all:!proxmox
+  serial: 1
   become: true
   gather_facts: false
   tasks:

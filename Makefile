@@ -266,18 +266,18 @@ ansible-services:
 ansible-pfsense:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/pfsense.yaml ansible/playbooks/pfsense.yml
 
-# update-all.yml is hosts:all with parallel reboot-if-required and no serial
-# batching — against the cluster it can reboot every PVE node and both DNS
-# replicas in one play (audit 2026-08-10 B4). Gated until the serialized,
-# quorum/Ceph/DNS-aware rewrite lands post-cutover. UNSAFE_UPDATE=true is the
-# emergency bypass; prefer VM=<host> which limits the play to one guest.
+# Fleet patch: cluster nodes serially (update-nodes), then guests + worklab + VPS with
+# one-at-a-time reboots (update-all.yml, hosts all:!proxmox), then the cluster's
+# :latest re-pull (k8s-update). VM=<host> limits the guest play to one host and
+# skips the node and cluster halves.
 update:
-ifneq ($(UNSAFE_UPDATE),true)
-ifndef VM
-	$(error make update is gated until the serialized update play lands (gap-remediation plan B4). Use 'make update <vm>' for a single host, or UNSAFE_UPDATE=true to bypass)
+ifdef VM
+	@$(ANSIBLE_PLAYBOOK) -i ansible/inventory/proxmox.yaml -i ansible/inventory/vps.yaml ansible/playbooks/update-all.yml --limit $(VM)
+else
+	@$(MAKE) update-nodes
+	@$(ANSIBLE_PLAYBOOK) -i ansible/inventory/proxmox.yaml -i ansible/inventory/vps.yaml ansible/playbooks/update-all.yml
+	@$(MAKE) k8s-update
 endif
-endif
-	@$(ANSIBLE_PLAYBOOK) -i ansible/inventory/proxmox.yaml -i ansible/inventory/vps.yaml ansible/playbooks/update-all.yml $(if $(VM),--limit $(VM),)
 
 # Pause AdGuard filtering on BOTH resolver instances (no config sync — IaC deploys them identically)
 adguard-pause:

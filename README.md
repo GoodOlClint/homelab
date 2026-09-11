@@ -385,7 +385,7 @@ Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-m
 | pfsense.yml | pfSense | DHCP scopes + RFC 2136 DNS registration |
 | vps.yml | VPS | WireGuard, nftables, hardening, monitoring agents |
 | unifi.yml | UniFi VM | UniFi Controller deployment |
-| update-all.yml | All + VPS | OS patching (apt/apk) |
+| update-all.yml | Guests + worklab + VPS (never the cluster nodes) | OS patching (apt/apk), reboots one host at a time |
 | update-nodes.yml | proxmox | Serial node patching: kernel reboot only after Talos drain, HA maintenance, ceph noout (`make update-nodes`) |
 | update-dns.yml | DNS VMs | DNS configuration updates |
 | adguard-pause.yml | adguard group | Disable filtering on both AdGuard instances for n minutes (`make adguard-pause`) |
@@ -572,7 +572,7 @@ All `ansible-*` targets support `TAGS=<tag>` to filter by play-level tags (e.g.,
 | `ansible-infra` | Run infrastructure playbook only |
 | `ansible-services` | Run services playbook only |
 | `ansible-pfsense` | Run pfSense playbook (DHCP + DNS registration) |
-| `update` | OS patching. Gated: bare `make update` errors until the serialized cluster-safe play lands — use `make update <vm>` for one host, `UNSAFE_UPDATE=true` for emergencies |
+| `update` | Fleet patch: `update-nodes` (cluster nodes, serial), then guests + worklab + VPS with one-at-a-time reboots, then `k8s-update`. `make update VM=<host>` patches one guest |
 | `update-dns` | Update DNS configuration |
 | `backup-finalize` | Register the PBS datastore as PVE storage (once, after PBS provisioning; prerequisite for `backup_jobs` terraform applies) |
 | `expand-disk` | Expand root filesystem on service VMs |
