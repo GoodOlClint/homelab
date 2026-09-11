@@ -62,16 +62,24 @@
   when: _llm_smi.rc != 0
   tags: [llm, packages]
 
-- name: Service users
+- name: Service user for llama-server
   ansible.builtin.user:
-    name: "{{ item }}"
+    name: "{{ llm_user }}"
     system: true
     shell: /usr/sbin/nologin
-    home: "/var/lib/{{ item }}"
+    home: "/var/lib/{{ llm_user }}"
     create_home: true
     groups: [video, render]
     append: true
-  loop: ["{{ llm_user }}", ollama]
+  tags: [llm]
+
+- name: Ollama service user (home untouched — usermod refuses while the daemon runs)
+  ansible.builtin.user:
+    name: ollama
+    system: true
+    shell: /usr/sbin/nologin
+    groups: [video, render]
+    append: true
   tags: [llm]
 
 - name: Weights disk is attached
@@ -160,6 +168,7 @@
   ansible.builtin.get_url:
     url: "{{ llm_model_url }}"
     dest: "{{ llm_models_dir }}/{{ llm_model_file }}"
+    tmp_dest: "{{ llm_models_dir }}"
     checksum: "sha256:{{ llm_model_sha256 }}"
     owner: "{{ llm_user }}"
     mode: "0644"
@@ -239,7 +248,7 @@
     content: |
       [Service]
       EnvironmentFile={{ llm_env_file }}
-      ExecStartPre=/usr/bin/grep -qE '^LLM_API_KEY_[A-Z]+=.+' {{ llm_env_file }}
+      ExecStartPre=+/usr/bin/grep -qE '^LLM_API_KEY_[A-Z]+=.+' {{ llm_env_file }}
     mode: "0644"
   notify: Restart caddy
   tags: [llm, config]
