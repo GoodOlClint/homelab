@@ -51,6 +51,7 @@
       - {name: Alertmanager, monitor_type: http, url: "http://alertmanager.monitoring.svc.cluster.local:9093/-/healthy"}
       - {name: "AxoSyslog — syslog TCP 5514", monitor_type: port, hostname: "{{ openobserve_listen_host }}", port: 5514, max_retries: 1}
       - {name: Infisical, monitor_type: http, url: "https://infisical.{{ service_domain }}", accepted_statuscodes: "{{ _redirects }}", expiry_notification: true}
+      - {name: "LLM — llama-server", monitor_type: http, url: "https://llm.{{ service_domain }}/health", expiry_notification: true}
       - {name: "Proxmox Backup Server", monitor_type: port, hostname: "{{ hostvars['proxmox-backup'].service_ip }}", port: 8007}
       - {name: "UniFi controller", monitor_type: port, hostname: "{{ hostvars['unifi'].ansible_host }}", port: 11443}
       - {name: "apt-cacher-ng — proxy TCP 3142", monitor_type: port, hostname: "{{ hostvars['apt-cache'].service_ip }}", port: 3142}

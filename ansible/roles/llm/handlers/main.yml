@@ -1,0 +1,23 @@
+---
+- name: Restart caddy
+  ansible.builtin.systemd:
+    name: caddy
+    state: restarted
+
+- name: Restart llama-server
+  ansible.builtin.systemd:
+    name: llama-server
+    state: restarted
+    daemon_reload: true
+
+- name: Restart ollama
+  ansible.builtin.systemd:
+    name: ollama
+    state: restarted
+    daemon_reload: true
+
+- name: Reset GPU power and clocks
+  ansible.builtin.shell: "set -o pipefail; nvidia-smi -rgc && nvidia-smi -pl $(nvidia-smi --query-gpu=power.default_limit --format=csv,noheader,nounits | tr -d ' ')"
+  args:
+    executable: /bin/bash
+  changed_when: true

@@ -1,0 +1,55 @@
+---
+# ADR 0051 (tranche 1b): llama-server owns the GPU; Ollama is PAIR's CPU-only backend.
+llm_fqdn: "llm.{{ service_domain }}"
+llm_user: llm
+
+# Ubuntu's signed driver (the guest kernel is SB-signed; unsigned DKMS is why this is a VM, not an LXC).
+llm_nvidia_driver_package: nvidia-driver-580-server
+llm_nvidia_driver_version: "580.178.04-0ubuntu0.26.04.1"
+
+# Weights: a node-local disk, re-downloaded on rebuild — not ADR 0015 state (plan §7.3).
+llm_models_device: /dev/vdc
+llm_models_label: llm-models
+llm_models_dir: /var/lib/llm/models
+# Holder slot 6 (PAIR identity + Ollama's small models).
+llm_data_label: vm-900-disk-5
+llm_data_dir: /data
+
+# Tags move; the build pins the commit the tag pointed at when it was reviewed.
+llm_llama_cpp_repo: https://github.com/ggml-org/llama.cpp.git
+llm_llama_cpp_version: v0.4.0
+llm_llama_cpp_commit: 5266f24da75dc449bd56cbed7addb9c8e4a6a73e
+llm_llama_cpp_dir: /opt/llama.cpp
+llm_cuda_arch: "75" # Turing (Quadro RTX 5000)
+
+# One model per llama-server process; a swap is a unit restart plus a cold load.
+# URL pins the HF revision; the sha256 is the LFS oid — both are mandatory (plan §7.9 provenance).
+llm_model_file: Qwen3-30B-A3B-Q4_K_M.gguf
+llm_model_url: "https://huggingface.co/unsloth/Qwen3-30B-A3B-GGUF/resolve/d5b1d57bd0b504ac62ae6c725904e96ef228dc74/{{ llm_model_file }}"
+llm_model_sha256: 9f1a24700a339b09c06009b729b5c809e0b64c213b8af5b711b3dbdfd0c5ba48
+llm_n_cpu_moe: 20 # expert layers on the CPU; 16 fits the bench but the 32k q8 KV needs headroom (sweep in docs/llm-bench-results.md)
+llm_ctx: 32768
+llm_threads: 6 # = pinned P-cores (vm-configs.tf cpu_affinity)
+llm_llama_port: 8081
+llm_llama_extra_args: "-fa on -ctk q8_0 -ctv q8_0 --jinja --metrics"
+
+# Ollama stays as PAIR's supported backend, CPU-only so it can never take the card from llama-server.
+llm_ollama_version: 0.32.15
+llm_ollama_url: "https://github.com/ollama/ollama/releases/download/v{{ llm_ollama_version }}/ollama-linux-amd64.tar.zst"
+llm_ollama_sha256: 50539c5fe9bf85887733355098dcdb266b433cb8c73fa180713417e9ed6e42bb
+llm_ollama_port: 11435
+llm_ollama_env:
+  OLLAMA_HOST: "127.0.0.1:{{ llm_ollama_port }}"
+  OLLAMA_MODELS: "{{ llm_data_dir }}/ollama/models"
+  CUDA_VISIBLE_DEVICES: "-1"
+
+# NVIDIA PAIR: installed only when the operator pins a package (the .deb is behind NVIDIA's download page).
+llm_pair_deb_url: ""
+llm_pair_deb_sha256: ""
+llm_pair_port: 11434 # PAIR's Ollama/OpenAI-compatible proxy; must bind loopback (asserted after start)
+llm_pair_state_dir: "{{ llm_data_dir }}/pair"
+
+# Per-client API keys, one Infisical /llm secret each (llm_api_key_<client>), rendered into Caddy's env by the agent.
+llm_api_clients: [agents, operator]
+llm_env_file: /etc/infisical/secrets/llm.env
+llm_caddy_tls_dir: /etc/caddy/tls

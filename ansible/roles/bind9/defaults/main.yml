@@ -38,7 +38,7 @@ bind9_ci_zone_ttl: 30
 # `_acme-challenge.<host>.<service domain>` — nothing gets a wildcard. Guests with a client in
 # this inventory, the cluster nodes (host-bindings.yaml `nodes`, which also carry the `pve`
 # SAN), and the hosts enrolled by hand (worklab's play, docs/{pfsense,synology,homeassistant}-acme.md).
-bind9_acme_guest_hosts: [proxmox-backup, pdm, unifi]
+bind9_acme_guest_hosts: [proxmox-backup, pdm, unifi, llm]
 bind9_acme_extra_hosts: [worklab, pfsense, ds1821plus, homeassistant]
 bind9_acme_node_hosts: "{{ host_bindings.nodes | list }}"
 bind9_acme_hosts: "{{ bind9_acme_guest_hosts + bind9_acme_node_hosts + bind9_acme_extra_hosts }}"

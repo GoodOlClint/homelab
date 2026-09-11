@@ -48,25 +48,28 @@ variable "ipv6_config" {
 variable "vm_configurations" {
   description = "Guest configuration mapping - list of VMs/LXCs to create with their specifications"
   type = list(object({
-    name           = string                        # Unique guest name (used for hostname if hostname not specified)
-    type           = optional(string, "vm")        # Guest type: "vm" or "lxc"
-    image          = optional(string, null)        # Key in var.cloud_images (null = fleet default var.cloud_image). VM only — ADR 0025.
-    node_name      = optional(string, null)        # Cluster node placement (null = module default node)
-    ha             = optional(bool, false)         # Register as an HA resource (requires vm_id and Ceph-backed disk)
-    vm_id          = optional(number, null)        # Explicit Proxmox VMID (also sets static management IP). null = auto-assign + DHCP on management VLAN.
-    mgmt_ip_offset = optional(number, null)        # Override management IP offset (default: use vm_id). Decouples management IP from VMID.
-    vlans          = list(string)                  # List of VLAN names to connect guest to (must exist in vlans variable)
-    ip_offset      = optional(number, null)        # Static IP offset within VLAN subnet (null = DHCP; LXCs must be static — ADR 0003)
-    ipv6_offset    = optional(number, null)        # Static IPv6 offset within VLAN subnet (null = SLAAC/auto)
-    ipv6_mode      = optional(string, "auto")      # IPv6 mode: "static", "slaac", "disabled", or "auto"
-    cpu_cores      = optional(number, 4)           # Number of CPU cores to assign
-    cpu_type       = optional(string, "x86-64-v3") # CPU type/architecture (VM only)
-    memory_mb      = optional(number, 4096)        # Memory in MB
-    disk_size_gb   = optional(number, 10)          # Primary/rootfs disk size in GB
-    disk_storage   = optional(string, null)        # Storage pool for disk (uses primary_disk_storage if null)
-    hostname       = optional(string, null)        # Custom hostname (uses name if null)
-    fqdn           = optional(string, null)        # Custom FQDN (uses name.service_domain if null)
-    protected      = optional(bool, false)         # Proxmox guest protection — prevents accidental deletion
+    name               = string                        # Unique guest name (used for hostname if hostname not specified)
+    type               = optional(string, "vm")        # Guest type: "vm" or "lxc"
+    image              = optional(string, null)        # Key in var.cloud_images (null = fleet default var.cloud_image). VM only — ADR 0025.
+    node_name          = optional(string, null)        # Cluster node placement (null = module default node)
+    ha                 = optional(bool, false)         # Register as an HA resource (requires vm_id and Ceph-backed disk)
+    vm_id              = optional(number, null)        # Explicit Proxmox VMID (also sets static management IP). null = auto-assign + DHCP on management VLAN.
+    mgmt_ip_offset     = optional(number, null)        # Override management IP offset (default: use vm_id). Decouples management IP from VMID.
+    vlans              = list(string)                  # List of VLAN names to connect guest to (must exist in vlans variable)
+    ip_offset          = optional(number, null)        # Static IP offset within VLAN subnet (null = DHCP; LXCs must be static — ADR 0003)
+    ipv6_offset        = optional(number, null)        # Static IPv6 offset within VLAN subnet (null = SLAAC/auto)
+    ipv6_mode          = optional(string, "auto")      # IPv6 mode: "static", "slaac", "disabled", or "auto"
+    cpu_cores          = optional(number, 4)           # Number of CPU cores to assign
+    cpu_type           = optional(string, "x86-64-v3") # CPU type/architecture (VM only)
+    cpu_affinity       = optional(string, null)        # Host CPU list the vCPUs are pinned to, e.g. "0,2,4" (VM only; null = unpinned)
+    memory_mb          = optional(number, 4096)        # Memory in MB
+    memory_floating_mb = optional(number, null)        # Balloon floor in MB (VM only; null = provider default, 0 = ballooning off)
+    on_boot            = optional(bool, true)          # Start with the node (VM only; LXCs always start on boot)
+    disk_size_gb       = optional(number, 10)          # Primary/rootfs disk size in GB
+    disk_storage       = optional(string, null)        # Storage pool for disk (uses primary_disk_storage if null)
+    hostname           = optional(string, null)        # Custom hostname (uses name if null)
+    fqdn               = optional(string, null)        # Custom FQDN (uses name.service_domain if null)
+    protected          = optional(bool, false)         # Proxmox guest protection — prevents accidental deletion
     # LXC-only options
     unprivileged = optional(bool, true)  # Unprivileged container (LXC only)
     nesting      = optional(bool, true)  # systemd >= 256 templates (Ubuntu 26.04) need it for networkd to bring up eth0; docker-on-LXC needs it too
@@ -104,6 +107,7 @@ variable "vm_configurations" {
     extra_disks = optional(list(object({
       size_gb = number                 # Disk size in GB
       storage = optional(string, null) # Storage pool (uses primary_disk_storage if null)
+      backup  = optional(bool, true)   # Include in vzdump/PBS jobs (false for re-downloadable caches)
     })), [])
     # PCI passthrough (VM only, q35). `id` is the host BDF; a bare "0000:01:00"
     # passes every function of the device. Raw ids need the provider's root@pam

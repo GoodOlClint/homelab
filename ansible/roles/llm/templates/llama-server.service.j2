@@ -1,0 +1,28 @@
+[Unit]
+Description=llama.cpp server ({{ llm_model_file }})
+After=network-online.target nvidia-persistenced.service {{ llm_models_dir | replace('/', '-') | regex_replace('^-', '') }}.mount
+Requires={{ llm_models_dir | replace('/', '-') | regex_replace('^-', '') }}.mount
+StartLimitIntervalSec=600
+StartLimitBurst=3
+
+[Service]
+User={{ llm_user }}
+Group={{ llm_user }}
+SupplementaryGroups=video render
+ExecStart={{ llm_llama_cpp_dir }}/bin/llama-server \
+  --host 127.0.0.1 --port {{ llm_llama_port }} \
+  -m {{ llm_models_dir }}/{{ llm_model_file }} \
+  -ngl 99 --n-cpu-moe {{ llm_n_cpu_moe }} -c {{ llm_ctx }} -t {{ llm_threads }} \
+  {{ llm_llama_extra_args }}
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=900
+OOMScoreAdjust=500
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadOnlyPaths={{ llm_models_dir }}
+
+[Install]
+WantedBy=multi-user.target

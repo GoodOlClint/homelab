@@ -19,7 +19,7 @@ locals {
     openobserve   = { index = 3, size_gb = 100 } # no consumer (ADR 0036); disk still holds state — never drop or renumber
     docker        = { index = 4, size_gb = 20 }  # no consumer (ADR 0038); disk still holds state — never drop or renumber
     control       = { index = 5, size_gb = 10 }  # MeshCentral data/files + Portainer state (ADR 0030)
-    llm           = { index = 6, size_gb = 100 } # Ollama model cache (rebuild matrix: re-download is the fallback, not the routine)
+    llm           = { index = 6, size_gb = 100 } # PAIR identity + Ollama small models; weights ride the VM's local-zfs disk
     authentik     = { index = 7, size_gb = 10 }  # internal realm: Postgres + media + blueprints (ADR 0049)
   }
 
@@ -218,9 +218,13 @@ locals {
       vm_id        = 240
       vlans        = ["vlan40"]
       ip_offset    = 40
-      cpu_cores    = 8
-      memory_mb    = 16384
+      cpu_cores    = 6
+      cpu_type     = "host"
+      cpu_affinity = "0,2,4,6,8,10" # one thread of P-cores 0-5 on msi (lscpu -e 2026-09-11); re-derive if the firmware re-enumerates
+      memory_mb    = 73728          # 72 GB keeps msi MemAvailable >= 24 GiB (plan §7 gate); vfio pins it all at start
+      on_boot      = false
       disk_size_gb = 32
+      extra_disks  = [{ size_gb = 300, storage = "local-zfs", backup = false }] # weights are re-downloadable, never ADR 0015 state
       pci_devices  = [{ id = "0000:01:00" }]
       data_volume  = { name = "llm" }
     },

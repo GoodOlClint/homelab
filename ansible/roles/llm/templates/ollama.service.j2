@@ -1,0 +1,22 @@
+[Unit]
+Description=Ollama (CPU-only, PAIR backend)
+After=network-online.target {{ llm_data_dir | replace('/', '-') | regex_replace('^-', '') }}.mount
+Requires={{ llm_data_dir | replace('/', '-') | regex_replace('^-', '') }}.mount
+
+[Service]
+User=ollama
+Group=ollama
+ExecStart=/usr/local/bin/ollama serve
+{% for k, v in llm_ollama_env.items() %}
+Environment={{ k }}={{ v }}
+{% endfor %}
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths={{ llm_data_dir }}/ollama
+
+[Install]
+WantedBy=multi-user.target
