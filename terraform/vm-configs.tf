@@ -218,9 +218,13 @@ locals {
       vm_id        = 240
       vlans        = ["vlan40"]
       ip_offset    = 40
-      cpu_cores    = 8
-      memory_mb    = 16384
+      cpu_cores    = 6
+      cpu_type     = "host"
+      cpu_affinity = "0,2,4,6,8,10" # one hardware thread per P-core; CPUs 12-15 stay with the OSDs + corosync (plan §7.2)
+      memory_mb    = 81920
+      on_boot      = false # until the 1b restart/pressure gates pass (plan §7.2)
       disk_size_gb = 32
+      extra_disks  = [{ size_gb = 300, storage = "local-zfs", backup = false }] # model weights: re-downloadable, node-local, not ADR 0015 state
       pci_devices  = [{ id = "0000:01:00" }]
       data_volume  = { name = "llm" }
     },

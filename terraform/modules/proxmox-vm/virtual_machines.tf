@@ -220,6 +220,7 @@ resource "proxmox_virtual_environment_vm" "vms" {
   vm_id      = each.value.vm_id # null = auto-assign by Proxmox
   node_name  = coalesce(each.value.node_name, var.virtual_environment_node)
   protection = var.unprotect ? false : each.value.protected
+  on_boot    = each.value.on_boot
 
   agent {
     enabled = true
@@ -228,12 +229,14 @@ resource "proxmox_virtual_environment_vm" "vms" {
   machine = "q35"
 
   cpu {
-    cores = each.value.cpu_cores
-    type  = each.value.cpu_type
+    cores    = each.value.cpu_cores
+    type     = each.value.cpu_type
+    affinity = each.value.cpu_affinity
   }
 
   memory {
     dedicated = each.value.memory_mb
+    floating  = each.value.memory_floating_mb
   }
 
   disk {
@@ -245,19 +248,6 @@ resource "proxmox_virtual_environment_vm" "vms" {
     size         = each.value.disk_size_gb
   }
 
-  dynamic "disk" {
-    for_each = each.value.extra_disks
-    content {
-      datastore_id = coalesce(disk.value.storage, var.primary_disk_storage)
-      interface    = "virtio${disk.key + 1}"
-      iothread     = true
-      discard      = "on"
-      cache        = "none"
-      size         = disk.value.size_gb
-      file_format  = "raw"
-    }
-  }
-
   # Detached data volume attach (ADR 0015/0020): existing holder-VM volume by
   # in-datastore path — this VM never owns it, so rebuilds leave the data intact.
   # Formatted+chowned once out-of-band (ADR 0020); the role mounts it directly.
@@ -266,9 +256,27 @@ resource "proxmox_virtual_environment_vm" "vms" {
     content {
       datastore_id      = local.data_volume_refs[disk.value.name].datastore_id
       path_in_datastore = local.data_volume_refs[disk.value.name].path_in_datastore
-      interface         = "virtio${1 + length(each.value.extra_disks)}"
+      interface         = "virtio1" # fixed: the holder attachment never renumbers when extra disks are added
       size              = var.data_volumes[disk.value.name].size_gb
       backup            = false # The holder's PBS job owns volume backup
+    }
+  }
+
+  # Extra disks come AFTER the holder attachment: disk blocks are an ordered
+  # list in the provider, so a new extra disk must append (virtio2+), never
+  # shift the holder off virtio1 — a shifted element plans as a mutation of
+  # the shared volume.
+  dynamic "disk" {
+    for_each = each.value.extra_disks
+    content {
+      datastore_id = coalesce(disk.value.storage, var.primary_disk_storage)
+      interface    = "virtio${disk.key + 2}"
+      iothread     = true
+      discard      = "on"
+      cache        = "none"
+      size         = disk.value.size_gb
+      file_format  = "raw"
+      backup       = disk.value.backup
     }
   }
 
