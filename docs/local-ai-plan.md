@@ -1,0 +1,66 @@
+# Local AI workstream — change plan
+
+Status: **PROPOSED 2026-09-10, awaiting operator review.** Decisions: [ADR 0051](decisions/0051-local-inference-on-vm-240-is-ollama-plus-nvidia-pair-behind-caddy-with-per-client-keys-pair-is-opt-in-and-the-macs-join-only-after-a-cross-vlan-enrollment-gate.md) (inference), [ADR 0052](decisions/0052-the-agent-plane-is-an-agent-runner-vm-on-a-dedicated-automation-vlan-and-a-homelab-mcp-gateway-vm-on-the-services-vlan-both-on-msi-outside-the-talos-cluster.md) (agent plane). Nothing is built. This doc is the approval gate; the brownfield gate's interview and two council rounds (Claude + Codex, 2026-09-10) are summarised in §5.
+
+## 1. Scope
+
+Three code-defined guests on msi, in this order:
+
+| Guest | Shape | VLAN | Role(s) | Gate to build |
+|---|---|---|---|---|
+| `llm` 240 (exists) | VM, RTX 5000 passthrough, holder slot 6 | services | `ollama` (driver, Ollama, `nvpair`, Caddy) | none — tranche 1 |
+| `mcp` (new, VMID 242) | VM 2 vCPU / 4 GB / 32 GB, audit-spool holder slot | services (+ named rules to VLAN 30 PVE API and VLAN 10 UniFi/pfSense APIs) | `mcp` | `~/Source/homelab-mcp` has a remote + tag, a deploy contract, upstream TLS verify on |
+| `agents` (new, VMID 241) | VM 4 vCPU / 8 GB / 60 GB, `/var/lib/agent-runner` holder slot | new `automation` VLAN, default deny | `agent_runner` | `~/Source/agents` has a remote + `v0.1.0`; per-agent MCP `headers`; authenticated endpoint + signed webhooks |
+
+Out of scope: vLLM, a second Kubernetes, PAIR on the agents host, persisting `/home/agent-runner`, the AdGuard allowlist miner's implementation (its contract is a tranche-2 prerequisite).
+
+## 2. Tranche 1 — inference (approved scope once this doc is approved)
+
+Work items, small commits, each with its check:
+
+1. **Module: per-VM `on_boot`** in `modules/proxmox-vm` (default = today's behaviour so no guest shows a change), 240 set explicitly in `vm-configs.tf`. Check: `make plan llm` shows one in-place change and nothing else `must be replaced`.
+2. **`ansible/roles/ollama`** (scaffolded from `apt_proxy`'s shape): pinned `nvidia-driver-580-server` (apt pin so `make update` cannot roll it), Ollama with `OLLAMA_HOST=127.0.0.1:11434` and `OLLAMA_MODELS=/data/ollama/models`, model list + quant as variables, `nvpair` from a pinned `.deb` with checksum and its config/identity directory on `/data/pair`, Caddy with a `cert_client` `fleet-hosts` cert on `llm.<service domain>` exposing `/pair/*` → PAIR loopback proxy and `/ollama/*` → 11434, per-client API keys from Infisical `/llm` (agent-rendered), Kuma-friendly health paths that distinguish PAIR-up / PAIR-down-Ollama-up / both-down. (The dead `nvidia`/`nvidia_licensing` roles and play were already removed on main by the retired-guest sweep, 2026-09-10.) New `llm` play + tag in `services.yml`. Check: `make ansible llm` twice, second run 0 changed.
+3. **`update-all.yml` excludes `llm`** (and later `agents`). Check: `make update` recap shows 240 skipped and its uptime unchanged.
+4. **Infisical `/llm` folder**: add to `infisical_login.yml` nested-path loop and the CLAUDE.md ownership table; keys generated via `generate_secret.yml`.
+5. **Kuma rows + homepage tile** (`ansible/playbooks/uptime-kuma.yml`, `CHECK=1` = 0).
+6. **PAIR proof on the VM** (no Mac yet): from a client on the services VLAN, a keyed request to `/pair/` returns a completion routed by PAIR to Ollama; without a key → 401; with PAIR stopped, `/ollama/` still answers; raw 11434 and PAIR's plaintext port unreachable from the network; `tcpdump` on 240 records PAIR's discovery/metadata ports into the plan.
+7. **Rebuild proof**: `make rebuild llm` twice; the model cache and PAIR identity survive on `/data`; no PIN prompt on the second cycle. If PAIR needs a PIN again, record "not rebuild-proven" and keep the Macs out.
+8. **Docs**: CLAUDE.md LLM paragraph rewritten (drop the power-cap/stopped text), ADR 0051 → Accepted, memory updated.
+
+Definition of done (tranche 1): every check above passes and is pasted into this doc's §4; a written Mac-enrollment gate exists (§3); `git grep -i powercap` = 0 outside docs; `security_guardrails.sh` clean.
+
+## 3. Mac-enrollment gate (before the first Mac pairs)
+
+All of: the captured PAIR ports are written as named pfSense rules between the client VLAN and 240 only; PIN bootstrap then member mutual TLS observed; LM Studio or Ollama beside Athena on the Mac appears as an engine with its models; a request routes to the expected engine; pairing survives PAIR restart, VM restart and `make rebuild llm` without a PIN; blocking discovery afterwards does not break the established cluster. Failure on any item = the Macs wait; never dual-home, flatten VLANs or relay discovery.
+
+## 4. Tranche 2 — the agent plane (not approved yet; gated)
+
+Entry criteria per guest are in §1. Work items when unblocked: `automation` VLAN binding + `make sdn-apply` + pfSense rule set (documented in `docs/pfsense-automation-vlan.md`); `data_volumes` slots + `make data-volumes`; `mcp` role (Caddy + `uv tool install git+…@tag`, `/mcp` folder, audit spool, `VERIFY_TLS` on against the root, named rules); `agent_runner` role (`/agents` folder, `EnvironmentFile`, holder bind, `make update` exclusion, nightly-fleet membership); ADR 0003/0030/0031 amendment notes flipped from "proposed" to "landed". DoD per guest: `make rebuild` twice + 0 changed; `gateway.whoami` and one UniFi T0 read with a bearer, an invalid bearer 401, an audit row in OpenObserve and in the spool; from `agents`, `curl` to Infisical's API, the PVE API and VLAN 10 refused while `llm`, `mcp`, GitHub and the model providers succeed; a webhook-triggered agent completes a read-only MCP call and a keyed `/pair/` completion.
+
+Owed before any credential-bearing agent runs against real infra (ADR 0051 Consequences): egress allowlist + OpenRouter spend cap, kill switch, reaping/quotas, ticket approver, compromised-host runbook, webhook ingress mode (ADR 0044), the allowlist-miner contract.
+
+## 5. Decision record (interview + councils)
+
+- Operator answers: models decide-later (generic role); PAIR = NVIDIA Personal AI Router, in scope, VM first then Macs; msi never bare metal, no power cap; inference is multi-provider (RTX 5000, Mac Studio, MacBook Pro, Claude, Codex, OpenRouter); agents/MCP not on Talos; `mcp` = VM (amend ADR 0003); `agents` on a dedicated automation VLAN; narrow ADR 0030 exception for `mcp`; all three guests on msi.
+- Council round 1 (wrong premises: "only inference node", "RAM thin") agreed on plain Docker guests by trust, no second k8s; its "skip PAIR" was overruled.
+- Council round 2 converged: two VMs, Caddy on 240 fronting PAIR + Ollama with keys (B3(b)), agents host never a PAIR member, tranche 1 = inference only, `/home/agent-runner` disposable, tickets ephemeral, audit spool. Blind spots adopted: ADR 0030 amendment is real, module gaps (`on_boot`, firewall), authorized egress is the exfil channel, `VERIFY_TLS=false`, per-agent `headers` gap, no approver, no recovery runbook, first consumer undefined.
+- Full verdicts: session scratchpad `claude-council-r2-verdict.md`, `codex-council-r2-verdict.md` (not tracked).
+
+## 6. Round 3 — re-review against the Flux layer (2026-09-10, after rebase onto main)
+
+**What landed on main (ADR 0048, WP8 closed 2026-09-10):** the Kubernetes services plane is reconciled by **Flux from this public repo with no credential** (`kubernetes/flux/`: operator-pushed install, `GitRepository` on `main`, root `Kustomization` with `prune: true`, one `kubernetes/flux/apps/<tree>.yaml` per app with its own ServiceAccount and RBAC, `--no-cross-namespace-refs`, `--no-remote-bases`). Every `${VAR}` comes from the `cluster-bindings` ConfigMap via `postBuild.substituteFrom`, substitution is **strict** (an unbound variable fails the Kustomization), and two ConfigMaps opt out with `substitute: disabled`. **Ansible seeds the allowlisted objects** (`k8s_seed` role, `make k8s-seed`: namespaces with pod-security levels, per-tree RBAC, `cluster-bindings`, generated monitoring ConfigMaps, root-CA ConfigMaps, the bootstrap Secrets `infisical-universal-auth`/`csi-rbd-secret`/`github-app`/`pve-ci-token`/`zot-secret`, the cert-manager intermediate) and runs the in-app tails (`make k8s-apps`). Runtime secrets reach pods only through `InfisicalSecret`s. Every `make talos-<app>` deploy alias is gone; a push to `main` is the deploy, `make flux-reconcile TREE=` only skips the interval, `make flux-check` gates unbound variables and missing requests. A new workload = `kubernetes/<tree>/{kustomization,app|helm,secrets,pvc}.yaml` + `kubernetes/flux/apps/<tree>.yaml` + a namespace entry in `k8s_seed` + `make k8s-seed`; images `${REGISTRY}/<upstream>`, Ingress via Traefik + external-dns, ceph-rbd with `Retain`, requests on every container. **Nothing is parameterised for a second cluster**: kubeconfig, `nodes.json`, root-CA path, Flux namespace, `cluster-bindings` and the universal-auth identity are single-valued. ADR 0048 also rules the `goodolclint-claude` GitHub App must never be Flux's credential (its PEM would sit one privileged-dind hop from every workload). The retired-guest sweep already deleted the `nvidia`/`nvidia_licensing` roles; main's ADR 0050 is per-host ACME TSIG keys, so this stream's ADRs are **0051** (inference) and **0052** (agent plane).
+
+**The round-3 question:** given that this is now *the* way any Kubernetes system in this homelab is configured, does it change ADR 0052? Options:
+
+- **K1 — keep ADR 0052 as written:** agents + MCP are Docker VMs on Proxmox; Kubernetes is not involved. Cost: a second configuration model (Ansible roles + compose) for the agent plane beside the Flux model for services.
+- **K2 — agents + MCP as Flux-reconciled workloads on the existing Talos cluster:** `kubernetes/agents/` and `kubernetes/mcp/` trees, their own namespaces/RBAC, `InfisicalSecret`s, the automation isolation expressed as NetworkPolicy + pod-security instead of a VLAN. Contradicts the operator's round-1 instinct ("not mixed into the Talos services cluster") and ADR 0052; the agents pod would run Claude Code/Codex CLIs with a shell and subscription creds inside the services plane; agent-runner's own plan chose a VM.
+- **K3 — a second, small Flux-reconciled Talos cluster for the agent plane** (`agents` cluster on msi: one or three CP VMs, its own `automation` VLAN, its own `cluster-bindings`/kubeconfig/universal-auth identity, a second Flux sync path or the same repo with a different root Kustomization). Reuses the exact configuration model; costs the parameterisation work (`k8s_seed`, Makefile, talos.sh are single-cluster today) plus the cluster's own Ceph/CSI or local storage, and RAM on msi (128 GB available).
+- **K4 — Docker VMs (ADR 0052) but configured GitOps-style:** compose files reconciled from the repo by a pull agent on the guest (no Flux), keeping "push to main is the deploy" without Kubernetes.
+
+**Questions for the council (round 3):**
+1. K1–K4: which, and why, given a solo operator who now has exactly one blessed way to configure Kubernetes and does not want a third?
+2. If K3: what is the minimum parameterisation of `k8s_seed`/Makefile/`kubernetes/flux` for two clusters, and does the second cluster share the GitRepository with a second root Kustomization, or get its own sync? Where does its `cluster-bindings` come from?
+3. If K2: can NetworkPolicy + pod-security + a dedicated node (taint/toleration on a fourth Talos worker VM on msi) give the isolation ADR 0052 wanted from a VLAN, and what does agent-runner's "runs Claude Code/Codex with a shell" mean in a pod (dind? privileged?)?
+4. Does the answer differ between `agents` (untrusted execution) and `mcp` (credential relay, no untrusted execution)? A split (mcp on the Talos cluster as a Flux tree, agents as a VM) is on the table.
+5. What in ADR 0051 (inference on VM 240) is affected? Nothing runs on Kubernetes there, but Kuma rows, homepage tiles and the Caddy keys have Flux-side or seed-side homes now.
+6. What did the brief miss?

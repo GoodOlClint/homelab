@@ -1,6 +1,6 @@
 # ADR 0003 — Decompose services to static-IP LXCs, VMs only where isolation demands
 
-- **Status:** Proposed
+- **Status:** Proposed — Amended by [ADR 0051](0052-the-agent-plane-is-an-agent-runner-vm-on-a-dedicated-automation-vlan-and-a-homelab-mcp-gateway-vm-on-the-services-vlan-both-on-msi-outside-the-talos-cluster.md) (`mcp` moves from the LXC list to the VM list under the crown-jewel test; the LLM VM is on msi, not pve)
 - **Date:** 2026-07-10
 - **Deciders:** operator + agent
 - **Context source:** ~/okf/brainstorm/workload-placement-vm-lxc-docker.md · docs/ms01-cluster-iac-plan.md

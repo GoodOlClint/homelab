@@ -1,6 +1,6 @@
 # ADR 0030 — Three management planes: vlan10 out-of-band, vlan30 hypervisor (PDM, PBS, apt-cache, pxe), vlan40 services
 
-- **Status:** Accepted
+- **Status:** Accepted — Amended by [ADR 0051](0052-the-agent-plane-is-an-agent-runner-vm-on-a-dedicated-automation-vlan-and-a-homelab-mcp-gateway-vm-on-the-services-vlan-both-on-msi-outside-the-talos-cluster.md) (one named exception: the `mcp` guest initiates to the UniFi and pfSense APIs on VLAN 10)
 - **Date:** 2026-08-22
 - **Deciders:** operator + agent
 - **Context source:** migration-remaining review session 2026-08-22 ([docs/migration-remaining-2026-08-22.md](../migration-remaining-2026-08-22.md))
