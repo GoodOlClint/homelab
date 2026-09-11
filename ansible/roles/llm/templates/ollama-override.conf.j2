@@ -1,0 +1,4 @@
+[Service]
+{% for k, v in llm_ollama_env.items() %}
+Environment={{ k }}={{ v }}
+{% endfor %}

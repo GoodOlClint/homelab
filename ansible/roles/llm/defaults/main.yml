@@ -1,0 +1,48 @@
+---
+# ADR 0051 (tranche 1b): llama-server owns the GPU; Ollama is PAIR's CPU-only backend.
+llm_fqdn: "llm.{{ service_domain }}"
+
+# Ubuntu's signed driver (the guest kernel is SB-signed; unsigned DKMS is why this is a VM, not an LXC).
+llm_nvidia_driver_package: nvidia-driver-580-server
+llm_nvidia_driver_version: "580.178.04-0ubuntu0.26.04.1"
+
+# Weights: a node-local disk, re-downloaded on rebuild — not ADR 0015 state (plan §7.3).
+llm_models_device: /dev/vdc
+llm_models_label: llm-models
+llm_models_dir: /var/lib/llm/models
+# Holder slot 6 (PAIR identity + Ollama's small models).
+llm_data_label: vm-900-disk-5
+llm_data_dir: /data
+
+llm_llama_cpp_repo: https://github.com/ggml-org/llama.cpp.git
+llm_llama_cpp_version: v0.4.0
+llm_llama_cpp_dir: /opt/llama.cpp
+llm_cuda_arch: "75" # Turing (Quadro RTX 5000)
+
+# One model per llama-server process; a swap is a unit restart plus a cold load.
+llm_model_file: Qwen3-30B-A3B-Q4_K_M.gguf
+llm_model_url: "https://huggingface.co/unsloth/Qwen3-30B-A3B-GGUF/resolve/main/{{ llm_model_file }}"
+llm_model_sha256: "" # empty = size-guarded download only; set to pin (plan §7.9 provenance)
+llm_n_cpu_moe: 8 # expert layers kept on the CPU; lower until VRAM ≈ 14 GB (handoff step 3)
+llm_ctx: 32768
+llm_threads: 6 # = pinned P-cores (vm-configs.tf cpu_affinity)
+llm_llama_port: 8081
+llm_llama_extra_args: "-fa on --jinja --metrics"
+
+# Ollama stays as PAIR's supported backend, CPU-only so it can never take the card from llama-server.
+llm_ollama_port: 11435
+llm_ollama_env:
+  OLLAMA_HOST: "127.0.0.1:{{ llm_ollama_port }}"
+  OLLAMA_MODELS: "{{ llm_data_dir }}/ollama/models"
+  CUDA_VISIBLE_DEVICES: "-1"
+
+# NVIDIA PAIR: installed only when the operator pins a package (the .deb is behind NVIDIA's download page).
+llm_pair_deb_url: ""
+llm_pair_deb_sha256: ""
+llm_pair_port: 11434 # PAIR's Ollama/OpenAI-compatible proxy (loopback plaintext; Caddy fronts it)
+llm_pair_state_dir: "{{ llm_data_dir }}/pair"
+
+# Per-client API keys, one Infisical /llm secret each (llm_api_key_<client>), rendered into Caddy's env by the agent.
+llm_api_clients: [agents, operator]
+llm_env_file: /etc/infisical/secrets/llm.env
+llm_caddy_tls_dir: /etc/caddy/tls

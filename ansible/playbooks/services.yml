@@ -28,3 +28,33 @@
     - telegraf
   tags:
     - plex
+
+- name: Configure llm VM
+  hosts: llm
+  become: true
+
+  vars_files:
+    - ../group_vars/all.yml
+  pre_tasks:
+    - name: Load all configuration and secrets
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/full_pre_tasks.yml"
+      tags: [always]
+  vars:
+    infisical_secret_paths: ["/shared", "/llm"]
+    infisical_agent_templates:
+      - name: pbs
+        dest_path: /etc/infisical/secrets/pbs.env
+        template_src: secrets/pbs.env.tpl.j2
+      - name: llm
+        dest_path: /etc/infisical/secrets/llm.env
+        template_src: secrets/llm.env.tpl.j2
+        post_command: "systemctl restart caddy"
+  roles:
+    - infisical_client
+    - dns_config
+    - pbs_client
+    - llm
+    - rsyslog_client
+    - telegraf
+  tags:
+    - llm

@@ -1,0 +1,33 @@
+{
+    auto_https off
+}
+:80 {
+    redir https://{{ llm_fqdn }}{uri} permanent
+}
+:443 {
+    tls {{ llm_caddy_tls_dir }}/fullchain.pem {{ llm_caddy_tls_dir }}/privkey.pem
+    @authed header Authorization {% for c in llm_api_clients %}"Bearer {env.LLM_API_KEY_{{ c | upper }}}" {% endfor %}
+
+    handle /health {
+        reverse_proxy 127.0.0.1:{{ llm_llama_port }}
+    }
+    handle_path /llama/* {
+        reverse_proxy @authed 127.0.0.1:{{ llm_llama_port }} {
+            flush_interval -1
+        }
+        respond 401
+    }
+    handle_path /pair/* {
+{% if llm_pair_deb_url | length > 0 %}
+        reverse_proxy @authed 127.0.0.1:{{ llm_pair_port }} {
+            flush_interval -1
+        }
+        respond 401
+{% else %}
+        respond 503
+{% endif %}
+    }
+    handle {
+        respond 404
+    }
+}

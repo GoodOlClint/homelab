@@ -222,7 +222,7 @@ locals {
       cpu_type     = "host"
       cpu_affinity = "0,2,4,6,8,10" # one hardware thread per P-core; CPUs 12-15 stay with the OSDs + corosync (plan §7.2)
       memory_mb    = 81920
-      on_boot      = false # until the 1b restart/pressure gates pass (plan §7.2)
+      on_boot      = false
       disk_size_gb = 32
       extra_disks  = [{ size_gb = 300, storage = "local-zfs", backup = false }] # model weights: re-downloadable, node-local, not ADR 0015 state
       pci_devices  = [{ id = "0000:01:00" }]
