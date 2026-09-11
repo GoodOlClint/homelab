@@ -42,3 +42,33 @@ ggml_cuda_init: found 1 CUDA devices (Total VRAM: 15927 MiB):
 | qwen3moe 30B.A3B Q4_K - Medium |  17.28 GiB |    30.53 B | CUDA       |  99 |         40 |   1 |           tg128 |         37.02 ± 0.26 |
 
 build: 5266f24da (10809)
+
+## sweep — n-cpu-moe 24, JEDEC 4000, 230 W — 2026-09-11T21:55:28Z
+- build: 5266f24da75dc449bd56cbed7addb9c8e4a6a73e · driver: 580.178.04 · model: Qwen3-30B-A3B-Q4_K_M.gguf sha256:9f1a24700a339b09c06009b729b5c809e0b64c213b8af5b711b3dbdfd0c5ba48 · threads: 6 · n-cpu-moe: 40 · extra args: --n-cpu-moe 24 · ram: host-measured (guest dmidecode shows QEMU DIMMs)
+ggml_cuda_init: found 1 CUDA devices (Total VRAM: 15927 MiB):
+  Device 0: Quadro RTX 5000, compute capability 7.5, VMM: yes, VRAM: 15927 MiB
+| model                          |       size |     params | backend    | ngl |  n_cpu_moe |  fa |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | --: | ---------: | --: | --------------: | -------------------: |
+| qwen3moe 30B.A3B Q4_K - Medium |  17.28 GiB |    30.53 B | CUDA       |  99 |         40 |   1 |           pp512 |        264.88 ± 4.02 |
+| qwen3moe 30B.A3B Q4_K - Medium |  17.28 GiB |    30.53 B | CUDA       |  99 |         40 |   1 |          pp8192 |        271.27 ± 2.03 |
+| qwen3moe 30B.A3B Q4_K - Medium |  17.28 GiB |    30.53 B | CUDA       |  99 |         40 |   1 |           tg128 |         36.97 ± 0.95 |
+| qwen3moe 30B.A3B Q4_K - Medium |  17.28 GiB |    30.53 B | CUDA       |  99 |         24 |   1 |           pp512 |        373.11 ± 4.06 |
+| qwen3moe 30B.A3B Q4_K - Medium |  17.28 GiB |    30.53 B | CUDA       |  99 |         24 |   1 |          pp8192 |        378.37 ± 1.53 |
+| qwen3moe 30B.A3B Q4_K - Medium |  17.28 GiB |    30.53 B | CUDA       |  99 |         24 |   1 |           tg128 |         50.86 ± 0.29 |
+
+build: 5266f24da (10809)
+
+## sweep — n-cpu-moe 16, JEDEC 4000, 230 W — 2026-09-11T21:59:54Z
+- build: 5266f24da75dc449bd56cbed7addb9c8e4a6a73e · driver: 580.178.04 · model: Qwen3-30B-A3B-Q4_K_M.gguf sha256:9f1a24700a339b09c06009b729b5c809e0b64c213b8af5b711b3dbdfd0c5ba48 · threads: 6 · n-cpu-moe: 40 · extra args: --n-cpu-moe 16 · ram: host-measured (guest dmidecode shows QEMU DIMMs)
+ggml_cuda_init: found 1 CUDA devices (Total VRAM: 15927 MiB):
+  Device 0: Quadro RTX 5000, compute capability 7.5, VMM: yes, VRAM: 15927 MiB
+| model                          |       size |     params | backend    | ngl |  n_cpu_moe |  fa |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | --: | ---------: | --: | --------------: | -------------------: |
+| qwen3moe 30B.A3B Q4_K - Medium |  17.28 GiB |    30.53 B | CUDA       |  99 |         40 |   1 |           pp512 |        264.08 ± 4.24 |
+| qwen3moe 30B.A3B Q4_K - Medium |  17.28 GiB |    30.53 B | CUDA       |  99 |         40 |   1 |          pp8192 |        271.50 ± 1.97 |
+| qwen3moe 30B.A3B Q4_K - Medium |  17.28 GiB |    30.53 B | CUDA       |  99 |         40 |   1 |           tg128 |         37.45 ± 0.14 |
+| qwen3moe 30B.A3B Q4_K - Medium |  17.28 GiB |    30.53 B | CUDA       |  99 |         16 |   1 |           pp512 |        487.27 ± 5.31 |
+| qwen3moe 30B.A3B Q4_K - Medium |  17.28 GiB |    30.53 B | CUDA       |  99 |         16 |   1 |          pp8192 |        485.84 ± 1.90 |
+| qwen3moe 30B.A3B Q4_K - Medium |  17.28 GiB |    30.53 B | CUDA       |  99 |         16 |   1 |           tg128 |         62.90 ± 0.94 |
+
+build: 5266f24da (10809)

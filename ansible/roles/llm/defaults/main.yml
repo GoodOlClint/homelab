@@ -27,7 +27,7 @@ llm_cuda_arch: "75" # Turing (Quadro RTX 5000)
 llm_model_file: Qwen3-30B-A3B-Q4_K_M.gguf
 llm_model_url: "https://huggingface.co/unsloth/Qwen3-30B-A3B-GGUF/resolve/d5b1d57bd0b504ac62ae6c725904e96ef228dc74/{{ llm_model_file }}"
 llm_model_sha256: 9f1a24700a339b09c06009b729b5c809e0b64c213b8af5b711b3dbdfd0c5ba48
-llm_n_cpu_moe: 40 # expert layers kept on the CPU (Qwen3-30B-A3B has 48); lower until VRAM ≈ 14 GB
+llm_n_cpu_moe: 20 # expert layers on the CPU; 16 fits the bench but the 32k q8 KV needs headroom (sweep in docs/llm-bench-results.md)
 llm_ctx: 32768
 llm_threads: 6 # = pinned P-cores (vm-configs.tf cpu_affinity)
 llm_llama_port: 8081
