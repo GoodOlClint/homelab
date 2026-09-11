@@ -32,6 +32,8 @@ The Turing card (sm_75, 16 GB) rules out FP8 and FlashAttention-2, so the model 
 
 ## Consequences
 
+- **Amended 2026-09-11 (tranche 1b, [plan §7](../local-ai-plan.md)):** the engine is **llama-server** (MoE with CPU expert offload: attention/KV on the 16 GB card, routed experts in system RAM), reached through the same Caddy front door as a keyed `/llama/` route; Ollama remains solely as PAIR's supported backend until PAIR grows a llama.cpp adapter, then retires. The guest stays a **VM**: msi runs Secure Boot and the Debian/Proxmox NVIDIA module is an unsigned DKMS build, so an LXC with the host driver would need a MOK enrollment on every kernel roll; the guest's Ubuntu driver is signed. VM 240 is respecced (`cpu: host`, P-core affinity, ~96 GB, no balloon; module inputs added like `on_boot`), the holder slot grows for the bench set, and XMP on msi is a gated hand step (noout, drain, memtest). Consequence for ADR 0052: with 240 at ~96 GB, `agents`/`mcp` cannot also sit on msi until it leaves Ceph.
+
 - New: `ansible/roles/ollama`, an `llm` play + tag, Infisical folder `/llm` (added to `infisical_login.yml` and the ownership table), Kuma rows that distinguish "PAIR healthy", "PAIR down, direct Ollama healthy" and "local inference down", a homepage tile, `make dns-records` unchanged (the name exists).
 - Module work before the role lands: per-VM `on_boot` (and later guest-firewall rules) in `modules/proxmox-vm`, applied against the ADR 0016 replace foot-gun with a plan that shows in-place changes only.
 - PAIR lifecycle is recorded in the plan: package version + checksum, config/identity paths on `/data`, upgrade and rollback, re-pair behaviour.
