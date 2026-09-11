@@ -15,3 +15,9 @@
     name: ollama
     state: restarted
     daemon_reload: true
+
+- name: Reset GPU power and clocks
+  ansible.builtin.shell: "set -o pipefail; nvidia-smi -rgc && nvidia-smi -pl $(nvidia-smi --query-gpu=power.default_limit --format=csv,noheader,nounits | tr -d ' ')"
+  args:
+    executable: /bin/bash
+  changed_when: true

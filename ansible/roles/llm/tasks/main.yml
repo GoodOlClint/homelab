@@ -62,6 +62,37 @@
   when: _llm_smi.rc != 0
   tags: [llm, packages]
 
+- name: The hand-installed power cap is gone (the 2026-09-09 resets were the PSU, ADR 0051)
+  ansible.builtin.systemd:
+    name: nvidia-powercap.service
+    enabled: false
+    state: stopped
+  failed_when: false
+  tags: [llm, packages]
+
+- name: Power cap unit file absent
+  ansible.builtin.file:
+    path: /etc/systemd/system/nvidia-powercap.service
+    state: absent
+  notify: Reset GPU power and clocks
+  tags: [llm, packages]
+
+- name: Current GPU power limit
+  ansible.builtin.shell: "set -o pipefail; nvidia-smi --query-gpu=power.limit,power.default_limit --format=csv,noheader,nounits | tr -d ' '"
+  args:
+    executable: /bin/bash
+  register: _llm_pl
+  changed_when: false
+  failed_when: false
+  tags: [llm, packages]
+
+- name: Reset the GPU power limit when it drifted from the board default
+  ansible.builtin.command: "nvidia-smi -rgc"
+  when: _llm_pl.rc == 0 and (_llm_pl.stdout.split(',')[0] | float) < (_llm_pl.stdout.split(',')[1] | float)
+  notify: Reset GPU power and clocks
+  changed_when: true
+  tags: [llm, packages]
+
 - name: Service user for llama-server
   ansible.builtin.user:
     name: "{{ llm_user }}"
