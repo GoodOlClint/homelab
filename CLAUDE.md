@@ -144,6 +144,7 @@ Each Infisical folder is owned by the role that generates/provisions its secrets
 | `/control` | control, pdm | — (no agent) | portainer_admin_password, pdm_root_password | — |
 | `/github-runner` | `k8s_seed` role (`make k8s-seed` writes the `arc-runners/github-app` Secret; no generator) | — (no agent) | — | github_app_id, github_app_private_key, github_app_installation_id |
 | `/github/mcp` | — (operator hand step, [docs/github-agent-identity.md](docs/github-agent-identity.md)) | — (no agent; the PEMs are pulled onto the operator workstation with the CLI from the repo root) | — | claude_app_id, claude_app_installation_id, claude_mcp_app_private_key, codex_app_id, codex_app_installation_id, codex_mcp_app_private_key (the agent GitHub Apps) |
+| `/llm` | `llm` role (`generate_secret.yml`, one `llm_api_key_<client>` per entry in `llm_api_clients`) | the `llm` VM (Infisical agent, `llm.env` → Caddy `EnvironmentFile`) | llm_api_key_agents, llm_api_key_operator | — |
 | `/talos` | `kubernetes/talos/talos.sh` (`make talos-secrets`, no Ansible role) | — (no agent) | talos_secrets_yaml, talosconfig (base64) | — |
 
 **Key rules:**

@@ -10,6 +10,17 @@
   loop: "{{ llm_api_clients }}"
   tags: [llm, secrets]
 
+- name: Pins are complete
+  ansible.builtin.assert:
+    that:
+      - llm_api_clients | reject('match', '^[a-z0-9_]+$') | list | length == 0
+      - llm_model_sha256 | length == 64
+      - llm_llama_cpp_commit | length == 40
+      - llm_ollama_sha256 | length == 64
+      - llm_pair_deb_url | length == 0 or llm_pair_deb_sha256 | length == 64
+    fail_msg: "every download is pinned by sha256 and llama.cpp by commit (plan §7.9)"
+  tags: [llm]
+
 - name: Pin the signed NVIDIA driver so a dist-upgrade cannot roll it
   ansible.builtin.copy:
     dest: /etc/apt/preferences.d/nvidia-driver
@@ -31,24 +42,61 @@
       - ccache
       - libcurl4-openssl-dev
       - git
+      - zstd
       - caddy
     state: present
     cache_valid_time: 3600
-  register: _llm_packages
   tags: [llm, packages]
 
-- name: Reboot once when the driver install changed the kernel modules
+- name: Driver answers
+  ansible.builtin.command: nvidia-smi -L
+  register: _llm_smi
+  changed_when: false
+  failed_when: false
+  tags: [llm, packages]
+
+- name: Reboot when the loaded kernel module does not match the installed driver
   ansible.builtin.reboot:
     reboot_timeout: 600
-    test_command: nvidia-smi
-  when: _llm_packages is changed and (_llm_packages.stdout | default('')) is search('nvidia-driver')
+    test_command: nvidia-smi -L
+  when: _llm_smi.rc != 0
   tags: [llm, packages]
+
+- name: Service users
+  ansible.builtin.user:
+    name: "{{ item }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: "/var/lib/{{ item }}"
+    create_home: true
+    groups: [video, render]
+    append: true
+  loop: ["{{ llm_user }}", ollama]
+  tags: [llm]
+
+- name: Weights disk is attached
+  ansible.builtin.assert:
+    that: ansible_devices[llm_models_device | basename] is defined
+    fail_msg: "{{ llm_models_device }} missing — the extra_disks entry in vm-configs.tf is what puts it at virtio2"
+  tags: [llm, storage]
 
 - name: Weights filesystem on the node-local disk
   community.general.filesystem:
     fstype: ext4
     dev: "{{ llm_models_device }}"
     opts: "-L {{ llm_models_label }}"
+  tags: [llm, storage]
+
+- name: Weights filesystem label
+  ansible.builtin.command: "blkid -s LABEL -o value {{ llm_models_device }}"
+  register: _llm_label
+  changed_when: false
+  tags: [llm, storage]
+
+- name: Relabel when the label drifted
+  ansible.builtin.command: "e2label {{ llm_models_device }} {{ llm_models_label }}"
+  when: _llm_label.stdout != llm_models_label
+  changed_when: true
   tags: [llm, storage]
 
 - name: Mount points
@@ -63,13 +111,34 @@
     - { path: "{{ llm_data_dir }}", label: "{{ llm_data_label }}" }
   tags: [llm, storage]
 
-- name: Checkout llama.cpp at the pinned tag
+- name: Directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.owner }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ llm_models_dir }}", owner: "{{ llm_user }}", mode: "0755" }
+    - { path: "{{ llm_data_dir }}/ollama", owner: ollama, mode: "0750" }
+    - { path: "{{ llm_caddy_tls_dir }}", owner: root, mode: "0755" }
+    - { path: /etc/systemd/system/caddy.service.d, owner: root, mode: "0755" }
+  tags: [llm]
+
+- name: Installed llama.cpp commit
+  ansible.builtin.command: "cat {{ llm_llama_cpp_dir }}/bin/.commit"
+  register: _llm_built
+  changed_when: false
+  failed_when: false
+  tags: [llm, build]
+
+- name: Checkout llama.cpp at the pinned commit
   ansible.builtin.git:
     repo: "{{ llm_llama_cpp_repo }}"
     dest: "{{ llm_llama_cpp_dir }}/src"
-    version: "{{ llm_llama_cpp_version }}"
+    version: "{{ llm_llama_cpp_commit }}"
     depth: 1
-  register: _llm_src
+  when: _llm_built.stdout | default('') != llm_llama_cpp_commit
   tags: [llm, build]
 
 - name: Build llama.cpp with CUDA
@@ -81,43 +150,52 @@
     cmake --build {{ llm_llama_cpp_dir }}/build --config Release -j {{ ansible_processor_vcpus }} --target llama-server llama-bench llama-cli
     install -d {{ llm_llama_cpp_dir }}/bin
     for b in llama-server llama-bench llama-cli; do install -m 0755 {{ llm_llama_cpp_dir }}/build/bin/$b {{ llm_llama_cpp_dir }}/bin/; done
-    printf '%s' "{{ llm_llama_cpp_version }}" > {{ llm_llama_cpp_dir }}/bin/.version
-  args:
-    creates: "{{ llm_llama_cpp_dir }}/bin/.version"
-  when: _llm_src is changed or not (llm_llama_cpp_dir + '/bin/.version') is file
+    printf '%s' "{{ llm_llama_cpp_commit }}" > {{ llm_llama_cpp_dir }}/bin/.commit
+  when: _llm_built.stdout | default('') != llm_llama_cpp_commit
+  changed_when: true
   notify: Restart llama-server
   tags: [llm, build]
-
-- name: Model file present
-  ansible.builtin.stat:
-    path: "{{ llm_models_dir }}/{{ llm_model_file }}"
-  register: _llm_model
-  tags: [llm, model]
 
 - name: Download the model
   ansible.builtin.get_url:
     url: "{{ llm_model_url }}"
     dest: "{{ llm_models_dir }}/{{ llm_model_file }}"
-    checksum: "{{ ('sha256:' + llm_model_sha256) if llm_model_sha256 | length > 0 else omit }}"
+    checksum: "sha256:{{ llm_model_sha256 }}"
+    owner: "{{ llm_user }}"
     mode: "0644"
     timeout: 120
-  when: not _llm_model.stat.exists or _llm_model.stat.size == 0
   notify: Restart llama-server
   tags: [llm, model]
 
-- name: Unit for llama-server
-  ansible.builtin.template:
-    src: llama-server.service.j2
-    dest: /etc/systemd/system/llama-server.service
+- name: Ollama tarball
+  ansible.builtin.get_url:
+    url: "{{ llm_ollama_url }}"
+    dest: "/var/cache/ollama-{{ llm_ollama_version }}.tar.zst"
+    checksum: "sha256:{{ llm_ollama_sha256 }}"
     mode: "0644"
-  notify: Restart llama-server
+    timeout: 120
+  tags: [llm, ollama]
+
+- name: Ollama installed # noqa: command-instead-of-module (tar.zst; unarchive cannot)
+  ansible.builtin.shell:
+    cmd: "tar --zstd -xf /var/cache/ollama-{{ llm_ollama_version }}.tar.zst -C /usr/local && touch /usr/local/lib/ollama/.installed-{{ llm_ollama_version }}"
+    creates: "/usr/local/lib/ollama/.installed-{{ llm_ollama_version }}"
+  notify: Restart ollama
+  tags: [llm, ollama]
+
+- name: Units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    mode: "0644"
+  loop: [llama-server.service, ollama.service]
+  notify: "Restart {{ item | regex_replace('\\.service$', '') }}"
   tags: [llm, config]
 
-- name: Ollama unit override (loopback, CPU-only)
-  ansible.builtin.template:
-    src: ollama-override.conf.j2
-    dest: /etc/systemd/system/ollama.service.d/override.conf
-    mode: "0644"
+- name: Ollama's installer drop-ins are not ours
+  ansible.builtin.file:
+    path: /etc/systemd/system/ollama.service.d
+    state: absent
   notify: Restart ollama
   tags: [llm, config]
 
@@ -129,6 +207,8 @@
 - name: Fleet-hosts certificate (certbot, DNS-01 via BIND)
   ansible.builtin.include_role:
     name: cert_client
+    apply:
+      tags: [llm, tls]
   vars:
     cert_client_fqdn: "{{ llm_fqdn }}"
     cert_client_deploy_hook: >-
@@ -149,15 +229,17 @@
   loop:
     - { src: fullchain.pem, mode: "0644" }
     - { src: privkey.pem, mode: "0600" }
+  when: secrets.infrastructure.acme_directory_url is defined
   notify: Restart caddy
   tags: [llm, tls]
 
-- name: Caddy reads the API keys from the agent-rendered env file
+- name: Caddy reads the API keys from the agent-rendered env file and refuses to start without one
   ansible.builtin.copy:
     dest: /etc/systemd/system/caddy.service.d/override.conf
     content: |
       [Service]
       EnvironmentFile={{ llm_env_file }}
+      ExecStartPre=/usr/bin/grep -qE '^LLM_API_KEY_[A-Z]+=.+' {{ llm_env_file }}
     mode: "0644"
   notify: Restart caddy
   tags: [llm, config]
@@ -178,4 +260,29 @@
     state: started
     daemon_reload: true
   loop: [ollama, llama-server, caddy]
+  tags: [llm, config]
+
+- name: Flush handlers before the listen check
+  ansible.builtin.meta: flush_handlers
+  tags: [llm, config]
+
+- name: Every client key reached the agent-rendered env file
+  ansible.builtin.command: "grep -qE '^LLM_API_KEY_{{ item | upper }}=.+' {{ llm_env_file }}"
+  loop: "{{ llm_api_clients }}"
+  changed_when: false
+  retries: 6
+  delay: 15
+  register: _llm_key_present
+  until: _llm_key_present.rc == 0
+  tags: [llm, config]
+
+- name: Raw engine ports bind loopback only
+  ansible.builtin.shell: |
+    set -o pipefail
+    ss -Hltn | awk '{print $4}' | grep -E ':({{ llm_llama_port }}|{{ llm_ollama_port }}|{{ llm_pair_port }})$' | grep -vE '^(127\.0\.0\.1|\[::1\]):' || true
+  args:
+    executable: /bin/bash
+  register: _llm_exposed
+  changed_when: false
+  failed_when: _llm_exposed.stdout | length > 0
   tags: [llm, config]
