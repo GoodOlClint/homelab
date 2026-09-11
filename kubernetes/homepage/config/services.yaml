@@ -105,6 +105,10 @@
         icon: infisical.svg
         href: https://infisical.${DOMAIN}
         description: Secrets Management
+    - LLM:
+        icon: mdi-brain
+        href: https://llm.${DOMAIN}/health
+        description: llama-server (keyed /llama/, PAIR /pair/)
     - pfSense:
         icon: pfsense.svg
         href: https://${GATEWAY}
