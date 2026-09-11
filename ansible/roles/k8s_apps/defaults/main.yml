@@ -13,6 +13,8 @@ k8s_apps_jellyfin_ldap_base: dc=ldap,dc=goauthentik,dc=io
 k8s_apps_jellyfin_libraries: {Movies: movies, TV: tvshows, Music: music}
 # app → [port, api version]; the key is the pod's own config.xml ApiKey
 k8s_apps_arr: {sonarr: [8989, v3], radarr: [7878, v3], lidarr: [8686, v1], prowlarr: [9696, v1]}
+# SAB pauses the queue below this much free scratch; percentage or absolute (e.g. 8G)
+k8s_apps_sab_download_free: "10%"
 # every Host header the ingress and the in-cluster probes send SAB
 k8s_apps_sab_hosts: ["sabnzbd.{{ service_domain }}", sabnzbd.plex-services.svc, sabnzbd.plex-services.svc.cluster.local]
 k8s_apps_update_ns: ""

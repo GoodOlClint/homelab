@@ -52,3 +52,26 @@
   when: _missing | length > 0
   changed_when: true
   no_log: true
+
+# SAB has no default minimum-free guard, so a job larger than the scratch PVC fills it to 0 bytes
+# and every later add fails at mkdir with ENOSPC (the arr clients surface that as an empty error).
+- name: SAB download_free
+  ansible.builtin.shell:
+    cmd: >-
+      {{ k8s_apps_kubectl }} -n plex-services exec deploy/sabnzbd -- sh -c
+      'K=$(sed -n "s/^api_key = //p" /config/sabnzbd.ini);
+      curl -sf "localhost:8080/api?mode=get_config&section=misc&keyword=download_free&output=json&apikey=$K"'
+  register: _sab_free
+  changed_when: false
+  no_log: true
+
+- name: SAB download_free → {{ k8s_apps_sab_download_free }}
+  ansible.builtin.shell:
+    cmd: >-
+      {{ k8s_apps_kubectl }} -n plex-services exec deploy/sabnzbd -- sh -c
+      'K=$(sed -n "s/^api_key = //p" /config/sabnzbd.ini);
+      curl -sf "localhost:8080/api?mode=set_config&section=misc&keyword=download_free&output=json&apikey=$K"
+      --data-urlencode "value={{ k8s_apps_sab_download_free }}"'
+  when: (_sab_free.stdout | from_json).config.misc.download_free != k8s_apps_sab_download_free
+  changed_when: true
+  no_log: true
