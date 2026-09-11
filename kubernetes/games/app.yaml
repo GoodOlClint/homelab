@@ -49,7 +49,7 @@ spec:
             - {name: BACKUPS_ENABLED, value: "true"}
             - {name: BACKUPS_CRON, value: "0 */6 * * *"}
             - {name: BACKUPS_MAX_COUNT, value: "10"}
-            - {name: UPDATE_CRON, value: "0 4 * * *"}
+            - {name: UPDATE_CRON, value: "*/15 * * * *"}
           volumeMounts:
             - {name: state, mountPath: /config, subPath: config}
             - {name: state, mountPath: /opt/valheim, subPath: data}
