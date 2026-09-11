@@ -256,16 +256,13 @@ resource "proxmox_virtual_environment_vm" "vms" {
     content {
       datastore_id      = local.data_volume_refs[disk.value.name].datastore_id
       path_in_datastore = local.data_volume_refs[disk.value.name].path_in_datastore
-      interface         = "virtio1" # fixed: the holder attachment never renumbers when extra disks are added
+      interface         = "virtio1" # the holder is pinned here; extras append from virtio2
       size              = var.data_volumes[disk.value.name].size_gb
       backup            = false # The holder's PBS job owns volume backup
     }
   }
 
-  # Extra disks come AFTER the holder attachment: disk blocks are an ordered
-  # list in the provider, so a new extra disk must append (virtio2+), never
-  # shift the holder off virtio1 — a shifted element plans as a mutation of
-  # the shared volume.
+  # Ordered list in the provider: extras must append after the holder block.
   dynamic "disk" {
     for_each = each.value.extra_disks
     content {
