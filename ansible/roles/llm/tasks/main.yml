@@ -15,6 +15,7 @@
     that:
       - llm_api_clients | reject('match', '^[a-z0-9_]+$') | list | length == 0
       - llm_model_sha256 | length == 64
+      - llm_embed_model_sha256 | length == 64
       - llm_bench_models | map(attribute='sha256') | reject('match', '^[0-9a-f]{64}$') | list | length == 0
       - llm_llama_cpp_commit | length == 40
       - llm_ollama_sha256 | length == 64
@@ -237,6 +238,18 @@
   notify: Restart llama-server
   tags: [llm, model]
 
+- name: Download the embeddings model
+  ansible.builtin.get_url:
+    url: "{{ llm_embed_model_url }}"
+    dest: "{{ llm_models_dir }}/{{ llm_embed_model_file }}"
+    tmp_dest: "{{ llm_models_dir }}"
+    checksum: "sha256:{{ llm_embed_model_sha256 }}"
+    owner: "{{ llm_user }}"
+    mode: "0644"
+    timeout: 120
+  notify: Restart llama-embed
+  tags: [llm, model]
+
 - name: Ollama tarball
   ansible.builtin.get_url:
     url: "{{ llm_ollama_url }}"
@@ -253,12 +266,27 @@
   notify: Restart ollama
   tags: [llm, ollama]
 
+- name: Router model presets directory
+  ansible.builtin.file:
+    path: /etc/llama-server
+    state: directory
+    mode: "0755"
+  tags: [llm, config]
+
+- name: Router model presets
+  ansible.builtin.template:
+    src: models.ini.j2
+    dest: /etc/llama-server/models.ini
+    mode: "0644"
+  notify: Restart llama-server
+  tags: [llm, config]
+
 - name: Units
   ansible.builtin.template:
     src: "{{ item }}.j2"
     dest: "/etc/systemd/system/{{ item }}"
     mode: "0644"
-  loop: [llama-server.service, ollama.service]
+  loop: [llama-server.service, llama-embed.service, ollama.service]
   notify: "Restart {{ item | regex_replace('\\.service$', '') }}"
   tags: [llm, config]
 
@@ -329,7 +357,7 @@
     enabled: true
     state: started
     daemon_reload: true
-  loop: [ollama, llama-server, caddy]
+  loop: [ollama, llama-server, llama-embed, caddy]
   tags: [llm, config]
 
 - name: Flush handlers before the listen check
@@ -349,7 +377,7 @@
 - name: Raw engine ports bind loopback only
   ansible.builtin.shell: |
     set -o pipefail
-    ss -Hltn | awk '{print $4}' | grep -E ':({{ llm_llama_port }}|{{ llm_ollama_port }}|{{ llm_pair_port }})$' | grep -vE '^(127\.0\.0\.1|\[::1\]):' || true
+    ss -Hltn | awk '{print $4}' | grep -E ':({{ llm_llama_port }}|{{ llm_embed_port }}|{{ llm_ollama_port }}|{{ llm_pair_port }})$' | grep -vE '^(127\.0\.0\.1|\[::1\]):' || true
   args:
     executable: /bin/bash
   register: _llm_exposed

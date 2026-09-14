@@ -30,8 +30,7 @@ llm_llama_cpp_version: master # no tag contains the benched commit; v0.4.0 preda
 llm_llama_cpp_commit: 41abbfd599fbdd3470fcae0a1fb6530ad8403cd7
 llm_llama_cpp_dir: /opt/llama.cpp
 
-# One model per llama-server process, all experts in VRAM on the 32 GB card; a swap is a unit restart plus a cold load.
-# URL pins the HF revision; the sha256 is the LFS oid — both are mandatory (plan §7.9 provenance).
+# All experts in VRAM on the 32 GB card. URL pins the HF revision; the sha256 is the LFS oid — both are mandatory (plan §7.9 provenance).
 llm_model_file: Qwen3.8-27B-UD-Q4_K_M.gguf
 llm_model_url: "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/4ca720788d1e01f1bff70c033e0d0028fd02e502/{{ llm_model_file }}"
 llm_model_sha256: 322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482
@@ -41,6 +40,8 @@ llm_bench_models:
   - file: Qwen3-30B-A3B-Q4_K_M.gguf
     url: https://huggingface.co/unsloth/Qwen3-30B-A3B-GGUF/resolve/d5b1d57bd0b504ac62ae6c725904e96ef228dc74/Qwen3-30B-A3B-Q4_K_M.gguf
     sha256: 9f1a24700a339b09c06009b729b5c809e0b64c213b8af5b711b3dbdfd0c5ba48
+    args:
+      ctx-size: 40960 # trained length; full attention on all 48 layers would need 9.7 GiB KV at 200k
   - file: Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
     url: https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF/resolve/a483e9e6cbd595906af30beda3187c2663a1118c/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
     sha256: ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61
@@ -48,12 +49,37 @@ llm_bench_models:
   - file: Qwen3.6-35B-A3B-MTP-UD-Q4_K_M.gguf
     url: https://huggingface.co/unsloth/Qwen3.6-35B-A3B-MTP-GGUF/resolve/5bc3e238d916f48a861bac2f8a1990a0e9b7e98d/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
     sha256: 0b21525e972670ed59e1812e170b27c26355381f0656ecc4e25617ece7dac58b
-llm_ctx: 32768
-llm_threads: 6 # = pinned P-cores (vm-configs.tf cpu_affinity)
 llm_llama_port: 8081
+# Chat runs llama-server in router mode: every model above is a preset named by its file stem, a request's "model" field
+# picks one, and --models-max 1 swaps them (a 27B and a 35B cannot share the 32 GB card). The served model loads at start.
+llm_llama_models_max: 1
+# [*] of the preset file; option names are llama-server's long flags without the dashes.
+llm_llama_args:
+  n-gpu-layers: 99
+  ctx-size: 200000 # KV at q8_0: 27B 6.9 GiB, 35B-A3B ~2 GiB; 262k leaves the 27B too little headroom beside the embedder
+  threads: 6 # = pinned P-cores (vm-configs.tf cpu_affinity)
+  flash-attn: "on"
+  cache-type-k: q8_0
+  cache-type-v: q8_0
+  jinja: true
+  metrics: true
+  parallel: 1
 # MTP self-drafting rides the head Qwen trained into the 27B (blk.64.nextn.*): 22 -> 36 t/s single-stream (docs/llm-bench-results.md);
-# draft-n-max 3 measured slower, and the gain is gone by --parallel 4, so this stays a single-stream server.
-llm_llama_extra_args: "-fa on -ctk q8_0 -ctv q8_0 --jinja --metrics --spec-type draft-mtp --spec-draft-n-max 2 --parallel 1"
+# draft-n-max 3 measured slower, and the gain is gone by --parallel 4, so the server stays single-stream.
+llm_model_args:
+  spec-type: draft-mtp
+  spec-draft-n-max: 2
+
+# Embeddings: their own always-loaded llama-server on the card, so a chat swap can never evict them. Caddy sends
+# /llama/v1/embeddings here. Qwen3-Embedding-4B (2560 dims) is what every code-intelligence index was built with, and
+# the alias is the model string it compares across units. Q8_0, never Q4: quantization noise lands in the vectors.
+# Pooling must be `last`; the default mean pooling returns plausible, wrong vectors.
+llm_embed_model_file: Qwen3-Embedding-4B-Q8_0.gguf
+llm_embed_model_url: "https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF/resolve/f4602530db1d980e16da9d7d3a70294cf5c190be/{{ llm_embed_model_file }}"
+llm_embed_model_sha256: b60ae5ce2dd6a0b77f82cadf21def1f310a3e10cde380ad0081b07a9d416949d
+llm_embed_alias: Qwen3-Embedding-4B
+llm_embed_port: 8082
+llm_embed_extra_args: "--embedding --pooling last -ngl 99 -c 8192 -b 8192 -ub 8192 -t 2"
 
 # Ollama stays as PAIR's supported backend, CPU-only so it can never take the card from llama-server.
 llm_ollama_version: 0.32.15
@@ -71,6 +97,6 @@ llm_pair_port: 11434 # PAIR's Ollama/OpenAI-compatible proxy; must bind loopback
 llm_pair_state_dir: "{{ llm_data_dir }}/pair"
 
 # Per-client API keys, one Infisical /llm secret each (llm_api_key_<client>), rendered into Caddy's env by the agent.
-llm_api_clients: [agents, operator]
+llm_api_clients: [agents, operator, code_intel]
 llm_env_file: /etc/infisical/secrets/llm.env
 llm_caddy_tls_dir: /etc/caddy/tls

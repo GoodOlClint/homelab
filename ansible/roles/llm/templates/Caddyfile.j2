@@ -27,11 +27,27 @@
         reverse_proxy 127.0.0.1:{{ llm_llama_port }}
     }
     handle_path /llama/* {
-        route {
-            reverse_proxy @authed 127.0.0.1:{{ llm_llama_port }} {
-                flush_interval -1
+        @embeddings path /v1/embeddings /embeddings /embedding
+        @model_sources {
+            method POST DELETE
+            path /models
+        }
+        handle @model_sources {
+            respond 403
+        }
+        handle @embeddings {
+            route {
+                reverse_proxy @authed 127.0.0.1:{{ llm_embed_port }}
+                respond 401
             }
-            respond 401
+        }
+        handle {
+            route {
+                reverse_proxy @authed 127.0.0.1:{{ llm_llama_port }} {
+                    flush_interval -1
+                }
+                respond 401
+            }
         }
     }
     handle_path /pair/* {

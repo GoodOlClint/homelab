@@ -1,0 +1,46 @@
+name: LLM model request
+description: Ask for a chat or embedding model to be served from the llm VM.
+title: "LLM model for <project>: <model>"
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Chat models are loaded on request by name and swapped one at a time, so a model that fits the 32 GB card (with room left for the embeddings server) is a small change. Embedding models are always loaded and share the card with the chat model.
+  - type: input
+    id: project
+    attributes:
+      label: Requesting project
+      placeholder: goodolclint/code-intelligence
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      options:
+        - Chat
+        - Embeddings
+    validations:
+      required: true
+  - type: input
+    id: gguf
+    attributes:
+      label: GGUF file
+      description: Hugging Face repo and exact file, including the quantization.
+      placeholder: Qwen/Qwen3-Embedding-4B-GGUF, Qwen3-Embedding-4B-Q8_0.gguf
+    validations:
+      required: true
+  - type: textarea
+    id: settings
+    attributes:
+      label: Settings that matter
+      description: llama-server flags the model needs to be correct (pooling, context size, chat template), and the model name your client sends.
+      placeholder: "--pooling last -c 8192, name Qwen3-Embedding-4B"
+  - type: textarea
+    id: purpose
+    attributes:
+      label: What it is for
+      description: One or two sentences. Say if it must match vectors or outputs another host already produces.
+    validations:
+      required: true
