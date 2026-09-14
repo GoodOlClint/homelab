@@ -13,6 +13,7 @@ k8s_seed_namespaces:
   arc-runners: privileged
   authentik-ext: baseline
   ceph-csi: privileged
+  codeintel: baseline
   cert-manager: baseline
   external-dns: baseline
   games: privileged

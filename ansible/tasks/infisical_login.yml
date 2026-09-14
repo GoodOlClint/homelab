@@ -62,6 +62,7 @@
     - control
     - authentik
     - authentik-ext
+    - codeintel
     - jellyfin
     - llm
     - github-runner

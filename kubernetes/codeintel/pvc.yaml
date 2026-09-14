@@ -1,0 +1,10 @@
+# One ceph-rbd volume per stateful service (ADR 0036 shape); the pod mounts subPath `data` so ext4's lost+found stays outside PGDATA.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: postgres, namespace: codeintel}
+spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 20Gi}}}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: backups, namespace: codeintel}
+spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 10Gi}}}

@@ -1,0 +1,14 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata: {name: codeintel, namespace: flux-system}
+spec:
+  interval: 10m
+  path: ./kubernetes/codeintel
+  prune: false
+  sourceRef: {kind: GitRepository, name: homelab}
+  serviceAccountName: flux-codeintel
+  postBuild:
+    substituteFrom: [{kind: ConfigMap, name: cluster-bindings}]
+    substitute: {NS: codeintel, PG_USER: postgres, PG_SECRET: codeintel-secrets, BACKUP_ID: codeintel-postgres, SCHEDULE: "40 2 * * *", KEEP_DAYS: "1"}
+  healthChecks:
+    - {apiVersion: apps/v1, kind: Deployment, name: postgres, namespace: codeintel}

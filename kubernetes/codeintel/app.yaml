@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: codeintel
+  annotations: {secrets.infisical.com/auto-reload: "true"}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: postgres}}
+  template:
+    metadata: {labels: {app: postgres}}
+    spec:
+      enableServiceLinks: false
+      # The TLS key must be readable by uid 999 and not world-readable; OnRootMismatch keeps kubelet off PGDATA's 0700.
+      securityContext: {fsGroup: 999, fsGroupChangePolicy: OnRootMismatch}
+      containers:
+        - name: postgres
+          # Pinned (ADR 0016/0055): a pgvector bump can change the on-disk format — roll with a dump/restore check.
+          image: ${REGISTRY}/docker.io/pgvector/pgvector:0.8.6-pg17-trixie
+          args: [-c, ssl=on, -c, ssl_cert_file=/tls/tls.crt, -c, ssl_key_file=/tls/tls.key, -c, hba_file=/etc/postgresql/pg_hba.conf]
+          resources: {requests: {cpu: 250m, memory: 1Gi}}
+          ports: [{containerPort: 5432}]
+          env:
+            - {name: TZ, value: "${TZ}"}
+            - {name: POSTGRES_PASSWORD, valueFrom: {secretKeyRef: {name: codeintel-secrets, key: POSTGRES_PASSWORD}}}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql/data, subPath: data}
+            - {name: tls, mountPath: /tls, readOnly: true}
+            - {name: hba, mountPath: /etc/postgresql, readOnly: true}
+            - {name: run, mountPath: /var/run/postgresql}
+          readinessProbe: {exec: {command: [pg_isready, -U, postgres]}, initialDelaySeconds: 10, periodSeconds: 10}
+        # Postgres re-reads its cert, key and pg_hba only on SIGHUP; cert-manager renewals and binding changes land in the mounts in place.
+        - name: reload
+          image: ${REGISTRY}/docker.io/pgvector/pgvector:0.8.6-pg17-trixie
+          command: [sh, -c, 'while sleep 3600; do psql -h /var/run/postgresql -U postgres -Atqc "select pg_reload_conf()" || true; done']
+          resources: {requests: {cpu: 5m, memory: 16Mi}}
+          volumeMounts:
+            - {name: run, mountPath: /var/run/postgresql}
+      volumes:
+        - {name: data, persistentVolumeClaim: {claimName: postgres}}
+        - {name: tls, secret: {secretName: postgres-tls, defaultMode: 0640}}
+        - {name: hba, configMap: {name: postgres-hba}}
+        - {name: run, emptyDir: {}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: codeintel
+  annotations: {metallb.io/loadBalancerIPs: "${CODEINTEL_IP}"}
+spec:
+  type: LoadBalancer
+  # Local keeps the client's source address, which pg_hba matches on.
+  externalTrafficPolicy: Local
+  selector: {app: postgres}
+  ports: [{port: 5432}]

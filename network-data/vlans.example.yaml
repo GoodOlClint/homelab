@@ -52,6 +52,7 @@ metallb:
     ingress: 65
     syslog: 66
     valheim: 67
+    codeintel: 68
 
 # --- Proxmox SDN Zones ---
 sdn_zones:

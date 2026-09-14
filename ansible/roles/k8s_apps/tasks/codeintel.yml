@@ -1,0 +1,52 @@
+---
+# ADR 0055: the roles, database and extension a code-intelligence publish needs; the writer owns the schema.
+- name: codeintel secrets (hex only, so nothing downstream quotes them)
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/generate_secret.yml"
+  vars:
+    secret_key: "{{ sk.key }}"
+    secret_gen_cmd: openssl rand -hex 24
+    secret_comment: "codeintel pgvector: {{ sk.comment }}"
+    secret_infisical_path: /codeintel
+    secret_dict_path: codeintel
+  loop:
+    - {key: postgres_password, comment: superuser password (the pg-backup CronJob)}
+    - {key: writer_password, comment: ci_writer password (the code-intelligence generator)}
+    - {key: reader_password, comment: ci_reader password (the homelab-mcp code-intel package)}
+  loop_control: {loop_var: sk, label: "{{ sk.key }}"}
+
+- name: codeintel rolled out
+  ansible.builtin.command: "{{ k8s_apps_kubectl }} -n codeintel rollout status deploy/postgres --timeout=600s"
+  changed_when: false
+
+# Passwords travel on stdin (printf is a shell builtin), never in a process argv.
+- name: codeintel roles, database and extension
+  ansible.builtin.command:
+    cmd: "{{ k8s_apps_kubectl }} -n codeintel exec -i deploy/postgres -c postgres -- sh -s"
+    stdin: |
+      set -e
+      q() { psql -U postgres -v ON_ERROR_STOP=1 -Atq "$@"; }
+      role() {
+        if [ -z "$(q -c "select 1 from pg_roles where rolname = '$1'")" ]; then
+          printf "create role %s login password '%s'" "$1" "$2" | q
+          echo "changed: create role $1"
+        elif ! PGPASSWORD="$2" psql -h 127.0.0.1 -U "$1" -d postgres -Atqc 'select 1' >/dev/null 2>&1; then
+          printf "alter role %s password '%s'" "$1" "$2" | q
+          echo "changed: password $1"
+        fi
+      }
+      role ci_writer '{{ secrets.codeintel.writer_password }}'
+      role ci_reader '{{ secrets.codeintel.reader_password }}'
+      if [ -z "$(q -c "select 1 from pg_database where datname = 'codeintel'")" ]; then
+        q -c 'create database codeintel owner ci_writer'
+        echo "changed: create database codeintel"
+      fi
+      if [ -z "$(q -d codeintel -c "select 1 from pg_extension where extname = 'vector'")" ]; then
+        q -d codeintel -c 'create extension vector'
+        echo "changed: create extension vector"
+      fi
+      q -d codeintel -c 'grant connect on database codeintel to ci_reader' \
+        -c 'grant usage on schema public to ci_reader' \
+        -c 'alter default privileges for role ci_writer in schema public grant select on tables to ci_reader'
+  register: _codeintel_sql
+  changed_when: "'changed:' in _codeintel_sql.stdout"
+  no_log: true

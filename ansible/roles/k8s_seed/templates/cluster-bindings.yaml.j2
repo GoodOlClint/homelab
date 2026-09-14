@@ -39,6 +39,7 @@ data:
 {% for n, o in network_data.metallb.offsets.items() %}
   {{ n | upper }}_IP: "{{ services_vlan_prefix }}{{ o }}"
 {% endfor %}
+  POD_CIDR: "{{ _pod_cidr }}"
   POOL_START: "{{ services_vlan_prefix }}{{ network_data.metallb.pool[0] }}"
   POOL_END: "{{ services_vlan_prefix }}{{ network_data.metallb.pool[1] }}"
   SMOKEPING_ARGS: {{ smokeping_targets | map(attribute='ip') | list | to_json | to_json }}
