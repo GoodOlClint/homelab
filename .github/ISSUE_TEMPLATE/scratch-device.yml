@@ -1,0 +1,60 @@
+name: Scratch device request
+description: Another project needs a throwaway VM or LXC to prove something out.
+title: "Scratch device for <project>: <purpose>"
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This repo is public. Name hosts and services (`llm`, `infisical`, "the B70 VM") instead of writing IP addresses, subnets or internal domains. Homelab picks the VLAN, address, hostname and VMID.
+  - type: input
+    id: project
+    attributes:
+      label: Requesting project
+      placeholder: goodolclint/code-intelligence
+    validations:
+      required: true
+  - type: textarea
+    id: purpose
+    attributes:
+      label: What it is for
+      description: One or two sentences, plus a link to the design doc if there is one.
+    validations:
+      required: true
+  - type: dropdown
+    id: type
+    attributes:
+      label: Guest type
+      options:
+        - No preference
+        - LXC
+        - VM
+    validations:
+      required: true
+  - type: textarea
+    id: resources
+    attributes:
+      label: Resources
+      description: CPU, RAM, disk, and anything special (GPU, a separately resizable data mount).
+      placeholder: 4 vCPU / 8 GB / 60 GB, no GPU
+    validations:
+      required: true
+  - type: textarea
+    id: network
+    attributes:
+      label: Network access
+      description: What it must reach (egress) and what must reach it (ingress, with ports). Leave out anything not needed for the scratch phase.
+    validations:
+      required: true
+  - type: textarea
+    id: secrets
+    attributes:
+      label: Secrets
+      description: Credentials it needs from Infisical, if any. Describe them; never paste a value.
+  - type: textarea
+    id: done
+    attributes:
+      label: Done when
+      description: What homelab hands over. Software install beyond the base OS is normally the requesting project's job.
+    validations:
+      required: true
