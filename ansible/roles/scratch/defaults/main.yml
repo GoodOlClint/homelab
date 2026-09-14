@@ -21,5 +21,6 @@ scratch_guests:
       github_app_private_key: ci-writer
       athena_embedding_token: ci-writer
       llm.llm_api_key_code_intel: ci-writer
+      codeintel.writer_password: ci-writer
 
 scratch_secrets_dir: /etc/scratch-secrets
