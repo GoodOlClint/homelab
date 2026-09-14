@@ -18,7 +18,7 @@ spec:
               image: ${REGISTRY}/docker.io/library/postgres:17
               imagePullPolicy: IfNotPresent
               resources: {requests: {cpu: 50m, memory: 128Mi}}
-              command: [sh, -ec, 'f=/backups/pg_dumpall-$(date +%F).sql.gz; pg_dumpall -h postgres -U ${PG_USER} | gzip > "$f.tmp" && mv "$f.tmp" "$f"; find /backups -name "pg_dumpall-*.sql.gz" -mtime +30 -delete']
+              command: [sh, -ec, 'f=/backups/pg_dumpall-$(date +%F).sql.gz; pg_dumpall -h postgres -U ${PG_USER} | gzip > "$f.tmp" && mv "$f.tmp" "$f"; find /backups -name "pg_dumpall-*.sql.gz" -mtime +${KEEP_DAYS:=30} -delete']
               env:
                 - {name: PGPASSWORD, valueFrom: {secretKeyRef: {name: "${PG_SECRET}", key: POSTGRES_PASSWORD}}}
               volumeMounts:
