@@ -21,22 +21,75 @@
     fail_msg: "every download is pinned by sha256 and llama.cpp by commit (plan §7.9)"
   tags: [llm]
 
-- name: Pin the signed NVIDIA driver so a dist-upgrade cannot roll it
-  ansible.builtin.copy:
-    dest: /etc/apt/preferences.d/nvidia-driver
-    content: |
-      Package: {{ llm_nvidia_driver_package }} nvidia-utils-580-server libnvidia-*-580-server nvidia-kernel-*-580-server
-      Pin: version {{ llm_nvidia_driver_version }}
-      Pin-Priority: 1001
-    mode: "0644"
+- name: PPA signing keys
+  ansible.builtin.stat:
+    path: "/etc/apt/keyrings/{{ item.name }}.asc"
+  loop:
+    - { name: kisak-mesa, fpr: "{{ llm_mesa_ppa_fingerprint }}" }
+    - { name: intel-graphics, fpr: "{{ llm_intel_ppa_fingerprint }}" }
+  register: _llm_keys
   tags: [llm, packages]
 
-- name: Driver, toolchain, Caddy
+- name: Fetch PPA signing keys by fingerprint
+  ansible.builtin.get_url:
+    url: "https://keyserver.ubuntu.com/pks/lookup?op=get&options=mr&search=0x{{ item.item.fpr }}"
+    dest: "/etc/apt/keyrings/{{ item.item.name }}.asc"
+    mode: "0644"
+  loop: "{{ _llm_keys.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  when: not item.stat.exists or item.stat.size == 0
+  tags: [llm, packages]
+
+- name: PPAs (kisak Mesa, Intel graphics)
+  ansible.builtin.deb822_repository:
+    name: "{{ item.name }}"
+    uris: "https://ppa.launchpadcontent.net/{{ item.ppa }}/ubuntu"
+    suites: "{{ ansible_distribution_release }}"
+    components: main
+    signed_by: "/etc/apt/keyrings/{{ item.name }}.asc"
+    install_python_debian: true
+  loop:
+    - { name: kisak-mesa, ppa: "{{ llm_mesa_ppa }}" }
+    - { name: intel-graphics, ppa: "{{ llm_intel_ppa }}" }
+  register: _llm_ppas
+  tags: [llm, packages]
+
+- name: Pin Mesa so a dist-upgrade cannot roll the version that decides decode speed
+  ansible.builtin.copy:
+    dest: /etc/apt/preferences.d/mesa
+    content: |
+      Package: mesa-* lib*mesa* libgbm* libgallium* libxatracker* libd3dadapter*
+      Pin: version {{ llm_mesa_version }}
+      Pin-Priority: 1001
+    mode: "0644"
+  register: _llm_mesa_pin
+  tags: [llm, packages]
+
+- name: Refresh the apt cache after a source or pin change
+  ansible.builtin.apt:
+    update_cache: true
+  when: _llm_ppas is changed or _llm_mesa_pin is changed
+  tags: [llm, packages]
+
+- name: xpu-smi package
+  ansible.builtin.get_url:
+    url: "{{ llm_xpu_smi_url }}"
+    dest: /var/cache/xpu-smi.deb
+    checksum: "sha256:{{ llm_xpu_smi_sha256 }}"
+    mode: "0644"
+    timeout: 120
+  tags: [llm, packages]
+
+- name: GPU firmware, pinned Mesa Vulkan, toolchain, Caddy
   ansible.builtin.apt:
     name:
-      - "{{ llm_nvidia_driver_package }}={{ llm_nvidia_driver_version }}"
-      - nvidia-cuda-toolkit
-      - nvidia-cuda-toolkit-gcc
+      - linux-firmware
+      - "mesa-vulkan-drivers={{ llm_mesa_version }}"
+      - libvulkan-dev
+      - glslc
+      - spirv-headers
+      - lm-sensors
       - build-essential
       - cmake
       - ccache
@@ -48,49 +101,22 @@
     cache_valid_time: 3600
   tags: [llm, packages]
 
-- name: Driver answers
-  ansible.builtin.command: nvidia-smi -L
-  register: _llm_smi
-  changed_when: false
-  failed_when: false
+- name: xpu-smi installed (its libigsc1 dependency resolves from the Intel PPA)
+  ansible.builtin.apt:
+    deb: /var/cache/xpu-smi.deb
   tags: [llm, packages]
 
-- name: Reboot when the loaded kernel module does not match the installed driver
+- name: Render node present
+  ansible.builtin.stat:
+    path: /dev/dri/renderD128
+  register: _llm_render
+  tags: [llm, packages]
+
+- name: Reboot when the xe driver has not claimed the card (firmware installed after boot)
   ansible.builtin.reboot:
     reboot_timeout: 600
-    test_command: nvidia-smi -L
-  when: _llm_smi.rc != 0
-  tags: [llm, packages]
-
-- name: The hand-installed power cap is gone (the 2026-09-09 resets were the PSU, ADR 0051)
-  ansible.builtin.systemd:
-    name: nvidia-powercap.service
-    enabled: false
-    state: stopped
-  failed_when: false
-  tags: [llm, packages]
-
-- name: Power cap unit file absent
-  ansible.builtin.file:
-    path: /etc/systemd/system/nvidia-powercap.service
-    state: absent
-  notify: Reset GPU power and clocks
-  tags: [llm, packages]
-
-- name: Current GPU power limit
-  ansible.builtin.shell: "set -o pipefail; nvidia-smi --query-gpu=power.limit,power.default_limit --format=csv,noheader,nounits | tr -d ' '"
-  args:
-    executable: /bin/bash
-  register: _llm_pl
-  changed_when: false
-  failed_when: false
-  tags: [llm, packages]
-
-- name: Reset the GPU power limit when it drifted from the board default
-  ansible.builtin.command: "nvidia-smi -rgc"
-  when: _llm_pl.rc == 0 and (_llm_pl.stdout.split(',')[0] | float) < (_llm_pl.stdout.split(',')[1] | float)
-  notify: Reset GPU power and clocks
-  changed_when: true
+    test_command: test -c /dev/dri/renderD128
+  when: not _llm_render.stat.exists
   tags: [llm, packages]
 
 - name: Service user for llama-server
@@ -180,11 +206,11 @@
   when: _llm_built.stdout | default('') != llm_llama_cpp_commit
   tags: [llm, build]
 
-- name: Build llama.cpp with CUDA
+- name: Build llama.cpp with Vulkan
   ansible.builtin.shell: |
     set -e
     cmake -S {{ llm_llama_cpp_dir }}/src -B {{ llm_llama_cpp_dir }}/build \
-      -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES={{ llm_cuda_arch }} \
+      -DGGML_VULKAN=ON -DGGML_CUDA=OFF \
       -DCMAKE_BUILD_TYPE=Release -DLLAMA_CURL=ON -DGGML_CCACHE=ON
     cmake --build {{ llm_llama_cpp_dir }}/build --config Release -j {{ ansible_processor_vcpus }} --target llama-server llama-bench llama-cli
     install -d {{ llm_llama_cpp_dir }}/bin

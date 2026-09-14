@@ -3,9 +3,18 @@
 llm_fqdn: "llm.{{ service_domain }}"
 llm_user: llm
 
-# Ubuntu's signed driver (the guest kernel is SB-signed; unsigned DKMS is why this is a VM, not an LXC).
-llm_nvidia_driver_package: nvidia-driver-580-server
-llm_nvidia_driver_version: "580.178.04-0ubuntu0.26.04.1"
+# Arc Pro B70 (ADR 0051, 2026-09-14): the in-tree `xe` driver needs linux-firmware's Battlemage GuC/HuC/DMC blobs,
+# which the cloud image omits. Mesa comes from kisak's PPA and is pinned — the version decides decode speed
+# (26.0.8 distro: 40 t/s, 26.2.2: 88 t/s on Qwen3.6-35B-A3B), so it moves only after a bench run.
+# ponytail: PPAs delete superseded builds, so a fresh VM cannot install an old pin; bump the pin, or cache the debs if that bites.
+llm_mesa_ppa: kisak/kisak-mesa
+llm_mesa_ppa_fingerprint: EB8B81E14DA65431D7504EA8F63F0F2B90935439
+llm_mesa_version: "26.2.2~kisak1~r"
+llm_intel_ppa: kobuk-team/intel-graphics
+llm_intel_ppa_fingerprint: 0C0E6AF955CE463C03FC51574D098D70AFBE5E1F
+# xpu-smi is the card's nvidia-smi; its dependency libigsc1 exists only in the Intel PPA above.
+llm_xpu_smi_url: "https://github.com/intel/xpumanager/releases/download/v2.1.0/xpu-smi_2.1.0%2B26.33.6468cec-1.26.04_amd64.deb"
+llm_xpu_smi_sha256: ca20368a893c7cde1cd25218ed3def4b2b39ab0a1e2cd6169694fc5bdd0e3ee7
 
 # Weights: a node-local disk, re-downloaded on rebuild — not ADR 0015 state (plan §7.3).
 llm_models_device: /dev/vdc
@@ -17,17 +26,15 @@ llm_data_dir: /data
 
 # Tags move; the build pins the commit the tag pointed at when it was reviewed.
 llm_llama_cpp_repo: https://github.com/ggml-org/llama.cpp.git
-llm_llama_cpp_version: v0.4.0
-llm_llama_cpp_commit: 5266f24da75dc449bd56cbed7addb9c8e4a6a73e
+llm_llama_cpp_version: master # no tag contains the benched commit; v0.4.0 predates it
+llm_llama_cpp_commit: 41abbfd599fbdd3470fcae0a1fb6530ad8403cd7
 llm_llama_cpp_dir: /opt/llama.cpp
-llm_cuda_arch: "75" # Turing (Quadro RTX 5000)
 
-# One model per llama-server process; a swap is a unit restart plus a cold load.
+# One model per llama-server process, all experts in VRAM on the 32 GB card; a swap is a unit restart plus a cold load.
 # URL pins the HF revision; the sha256 is the LFS oid — both are mandatory (plan §7.9 provenance).
 llm_model_file: Qwen3-30B-A3B-Q4_K_M.gguf
 llm_model_url: "https://huggingface.co/unsloth/Qwen3-30B-A3B-GGUF/resolve/d5b1d57bd0b504ac62ae6c725904e96ef228dc74/{{ llm_model_file }}"
 llm_model_sha256: 9f1a24700a339b09c06009b729b5c809e0b64c213b8af5b711b3dbdfd0c5ba48
-llm_n_cpu_moe: 20 # expert layers on the CPU; 16 fits the bench but the 32k q8 KV needs headroom (sweep in docs/llm-bench-results.md)
 llm_ctx: 32768
 llm_threads: 6 # = pinned P-cores (vm-configs.tf cpu_affinity)
 llm_llama_port: 8081
@@ -41,7 +48,6 @@ llm_ollama_port: 11435
 llm_ollama_env:
   OLLAMA_HOST: "127.0.0.1:{{ llm_ollama_port }}"
   OLLAMA_MODELS: "{{ llm_data_dir }}/ollama/models"
-  CUDA_VISIBLE_DEVICES: "-1"
 
 # NVIDIA PAIR: installed only when the operator pins a package (the .deb is behind NVIDIA's download page).
 llm_pair_deb_url: ""

@@ -98,3 +98,8 @@ proxmox_host_ci_max_age_hours: 8
 # ADR 0041: the cluster VIP name, a SAN on every node cert
 proxmox_host_vip_name: pve
 proxmox_host_cert_extra_domains: ["{{ proxmox_host_vip_name }}.{{ network_data.service_domain }}"]
+
+# Per-node PCI passthrough binding, keyed by node name. The on-card PCIe switch bridges must never be listed:
+# vfio-pci on a bridge strands every endpoint behind it.
+proxmox_host_vfio_pci_ids:
+  msi: ["8086:e223", "8086:e2f7"] # Arc Pro B70: GPU + HDMI/DP audio -> VM 240 (ADR 0051)
