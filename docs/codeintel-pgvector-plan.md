@@ -1,6 +1,6 @@
 # codeintel pgvector store — change plan (#46)
 
-Status: **APPROVED 2026-09-14, building.** Decision: [ADR 0055](decisions/0055-code-intelligence-s-pgvector-store-is-a-dedicated-postgres-in-its-own-flux-tree-reached-over-verify-full-tls-on-a-pinned-metallb-address-and-a-shared-clustered-postgres-is-rejected.md). Consumer side: #47 (homelab-mcp posts the split).
+Status: **LANDED 2026-09-14** (PR #48; done-when evidence on #46). Decision: [ADR 0055](decisions/0055-code-intelligence-s-pgvector-store-is-a-dedicated-postgres-in-its-own-flux-tree-reached-over-verify-full-tls-on-a-pinned-metallb-address-and-a-shared-clustered-postgres-is-rejected.md). Consumer side: #47 (homelab-mcp posts the split).
 
 ## Scope
 
@@ -28,8 +28,8 @@ Push → Flux reconciles → `make k8s-seed` (bindings) before the tree can subs
 From LXC 280 with `sslmode=verify-full host=codeintel.<service domain>`:
 
 - writer: `create extension if not exists vector` succeeds; creates a `halfvec(2560)` table partitioned by `gen_id` with an HNSW index on a partition.
-- reader: `select` succeeds on it; `create table` fails with permission denied; after the writer adds a new partition, reader `select` on it still succeeds (default privileges).
-- `sslmode=disable` from 280 is rejected; the reader from 280 is rejected by `pg_hba`; a login from any other services-VLAN host is rejected.
+- reader (privileges, over the pod's local socket — its network rule admits only the mcp host): `select` succeeds; `create table` and `insert` fail with permission denied; after the writer adds a new partition, reader `select` on it still succeeds (default privileges).
+- `sslmode=disable` from 280 is rejected; the reader and the superuser from 280 are rejected by `pg_hba`.
 - The `pg-backup` CronJob run by hand leaves a fresh `codeintel-postgres` snapshot in PBS ns `databases` (judged by snapshot recency).
 - Restore proof: that dump restored into a throwaway `pgvector` pod with the same tag, and the partition's row count and a nearest-neighbour query match the source.
 
