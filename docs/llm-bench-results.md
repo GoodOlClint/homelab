@@ -358,3 +358,58 @@ model is now bandwidth-bound as expected and no longer kernel-bound.
 
 **Against the RTX 5000 best rows:** Qwen3-30B-A3B tg +74 %, Qwen3.6-35B-A3B +42 %, Qwen3.8-27B +34 %; prefill
 3.4-4.2x at pp512. A published run of the same 35B Q4_K_M on this card reported 76 t/s on Mesa 26.1.
+
+## B70 suite — llama.cpp 41abbfd, Mesa 26.2.2, all-resident (first harness-recorded B70 run) — 2026-09-14T16:03:10Z
+- build: 41abbfd599fbdd3470fcae0a1fb6530ad8403cd7 · mesa: 26.2.2~kisak1~r · model: Qwen3-30B-A3B-Q4_K_M.gguf sha256:9f1a24700a339b09c06009b729b5c809e0b64c213b8af5b711b3dbdfd0c5ba48 · threads: 6 · ngl: 99 · n-cpu-moe: n/a (dense) · extra args: none · ram: host-measured (guest dmidecode shows QEMU DIMMs)
+- build: 41abbfd599fbdd3470fcae0a1fb6530ad8403cd7 · mesa: 26.2.2~kisak1~r · model: Qwen3.8-27B-UD-Q4_K_M.gguf sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482 · threads: 6 · ngl: 99 · n-cpu-moe: n/a (dense) · extra args: none · ram: host-measured (guest dmidecode shows QEMU DIMMs)
+- build: 41abbfd599fbdd3470fcae0a1fb6530ad8403cd7 · mesa: 26.2.2~kisak1~r · model: Qwen3.6-35B-A3B-UD-Q4_K_M.gguf sha256:ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61 · threads: 6 · ngl: 99 · n-cpu-moe: n/a (dense) · extra args: none · ram: host-measured (guest dmidecode shows QEMU DIMMs)
+ggml_vulkan: Found 1 Vulkan devices:
+ggml_vulkan: 0 = Intel(R) Graphics (BMG G31) (Intel open-source Mesa driver) | uma: 0 | fp16: 1 | bf16: 1 | fp4: 0 | warp size: 32 | shared memory: 49152 | int dot: 1 | matrix cores: KHR_coopmat
+| model                          |       size |     params | backend    | ngl |  fa |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | --: | --: | --------------: | -------------------: |
+| qwen3moe 30B.A3B Q4_K - Medium |  17.28 GiB |    30.53 B | Vulkan     |  99 |   1 |           pp512 |       1848.43 ± 6.27 |
+| qwen3moe 30B.A3B Q4_K - Medium |  17.28 GiB |    30.53 B | Vulkan     |  99 |   1 |          pp8192 |        620.34 ± 0.52 |
+| qwen3moe 30B.A3B Q4_K - Medium |  17.28 GiB |    30.53 B | Vulkan     |  99 |   1 |           tg128 |        109.92 ± 0.11 |
+
+build: 41abbfd59 (10968)
+ggml_vulkan: Found 1 Vulkan devices:
+ggml_vulkan: 0 = Intel(R) Graphics (BMG G31) (Intel open-source Mesa driver) | uma: 0 | fp16: 1 | bf16: 1 | fp4: 0 | warp size: 32 | shared memory: 49152 | int dot: 1 | matrix cores: KHR_coopmat
+| model                          |       size |     params | backend    | ngl |  fa |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | --: | --: | --------------: | -------------------: |
+| qwen35 27B Q4_K - Medium       |  15.32 GiB |    27.32 B | Vulkan     |  99 |   1 |           pp512 |        739.15 ± 9.95 |
+| qwen35 27B Q4_K - Medium       |  15.32 GiB |    27.32 B | Vulkan     |  99 |   1 |          pp8192 |        516.98 ± 0.05 |
+| qwen35 27B Q4_K - Medium       |  15.32 GiB |    27.32 B | Vulkan     |  99 |   1 |           tg128 |         22.99 ± 0.01 |
+
+build: 41abbfd59 (10968)
+ggml_vulkan: Found 1 Vulkan devices:
+ggml_vulkan: 0 = Intel(R) Graphics (BMG G31) (Intel open-source Mesa driver) | uma: 0 | fp16: 1 | bf16: 1 | fp4: 0 | warp size: 32 | shared memory: 49152 | int dot: 1 | matrix cores: KHR_coopmat
+| model                          |       size |     params | backend    | ngl |  fa |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | --: | --: | --------------: | -------------------: |
+| qwen35moe 35B.A3B Q4_K - Medium |  20.60 GiB |    34.66 B | Vulkan     |  99 |   1 |           pp512 |      1741.31 ± 12.45 |
+| qwen35moe 35B.A3B Q4_K - Medium |  20.60 GiB |    34.66 B | Vulkan     |  99 |   1 |          pp8192 |       1186.19 ± 1.02 |
+| qwen35moe 35B.A3B Q4_K - Medium |  20.60 GiB |    34.66 B | Vulkan     |  99 |   1 |           tg128 |         88.31 ± 0.06 |
+
+build: 41abbfd59 (10968)
+
+## Qwen3.6-35B-A3B MTP — server-side A/B, plain vs `--spec-type draft-mtp` (2026-09-14, hand-recorded from `scripts/llm-spec-ab-remote.sh`)
+
+`llama-bench` cannot drive speculative decoding, so this is `llama-server` at the unit's real settings (`-c 32768 -t 6 -fa on -ctk q8_0 -ctv q8_0`), one fixed prompt, `n_predict 256`, `temperature 0`, 3 runs each. Build 41abbfd, Mesa 26.2.2, GGUF `unsloth/Qwen3.6-35B-A3B-MTP-GGUF` @ 5bc3e238 (sha256 0b21525e…). **The 2026-09-11 "MTP is inert" verdict was build 5266f24da; 41abbfd loads the nextn head (`qwen35moe.cpp` `load_block_mtp`) and it pays.**
+
+| mode | tg (t/s, runs 1/2/3) | pp (t/s) | draft / accepted per 256 tok |
+| --- | ---: | ---: | ---: |
+| plain | 84 / 84 / 84 | 210–221 | 0 |
+| `--spec-type draft-mtp` | 109 / 118 / 118 | 66 (first, cold) then 192–194 | 270 / 164 (61 %) |
+
+**+40 % decode** (84 → 118) with the same weights resident; prompt processing is slightly lower (~12 %) because MTP wants logits at every prompt position. Run 1 of the MTP arm includes the draft context warm-up. Adopting it for serving = the MTP GGUF as `llm_model_file` plus `--spec-type draft-mtp` in `llm_llama_extra_args`; not done yet.
+
+## Qwen3.8-27B MTP — server-side A/B, plain vs `--spec-type draft-mtp --spec-draft-n-max 2 --parallel 1` (2026-09-14, hand-recorded from `scripts/llm-spec-ab-remote.sh`)
+
+Qwen trained the MTP head into the 27B itself and the unsloth GGUF keeps it (`blk.64.nextn.*`; see https://github.com/sudoingX/qwen38-mtp), so the same file serves both arms. Same method as the 35B block above (unit settings, fixed prompt, 256 tokens, temperature 0, 3 runs).
+
+| mode | tg (t/s, runs 1/2/3) | draft / accepted per 256 tok |
+| --- | ---: | ---: |
+| plain | 22 / 22 / 22 | 0 |
+| `--spec-type draft-mtp --spec-draft-n-max 2` | 29 / 36 / 36 | 218 / 146 (67 %) |
+| `--spec-type draft-mtp --spec-draft-n-max 3` | 34 / 34 / 34 | 282 / 161 (57 %) |
+
+**+64 % decode** (22 → 36) — the dense, bandwidth-bound model gains the most, as the repo's per-card table predicts (33–145 %). The pp column of this harness is not comparable to llama-bench (a ~40-token prompt, so it is dominated by fixed cost; the suite block above has the real 739 t/s pp512). Single-stream only: the gain vanishes by `--parallel 4`. `--spec-draft-n-max 3` (the repo hints 2 is a 24 GB-card number) drafts more and accepts less: 34 t/s, so **2 stays**.

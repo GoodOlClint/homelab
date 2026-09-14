@@ -32,13 +32,28 @@ llm_llama_cpp_dir: /opt/llama.cpp
 
 # One model per llama-server process, all experts in VRAM on the 32 GB card; a swap is a unit restart plus a cold load.
 # URL pins the HF revision; the sha256 is the LFS oid — both are mandatory (plan §7.9 provenance).
-llm_model_file: Qwen3-30B-A3B-Q4_K_M.gguf
-llm_model_url: "https://huggingface.co/unsloth/Qwen3-30B-A3B-GGUF/resolve/d5b1d57bd0b504ac62ae6c725904e96ef228dc74/{{ llm_model_file }}"
-llm_model_sha256: 9f1a24700a339b09c06009b729b5c809e0b64c213b8af5b711b3dbdfd0c5ba48
+llm_model_file: Qwen3.8-27B-UD-Q4_K_M.gguf
+llm_model_url: "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/4ca720788d1e01f1bff70c033e0d0028fd02e502/{{ llm_model_file }}"
+llm_model_sha256: 322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482
+# Bench suite: candidates kept on disk beside the served model so `scripts/llm-bench.sh suite` compares them on every
+# engine/Mesa roll (docs/llm-bench-results.md). Same pins as above; promote one by moving it into llm_model_*.
+llm_bench_models:
+  - file: Qwen3-30B-A3B-Q4_K_M.gguf
+    url: https://huggingface.co/unsloth/Qwen3-30B-A3B-GGUF/resolve/d5b1d57bd0b504ac62ae6c725904e96ef228dc74/Qwen3-30B-A3B-Q4_K_M.gguf
+    sha256: 9f1a24700a339b09c06009b729b5c809e0b64c213b8af5b711b3dbdfd0c5ba48
+  - file: Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
+    url: https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF/resolve/a483e9e6cbd595906af30beda3187c2663a1118c/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
+    sha256: ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61
+  # Same trunk plus the nextn head; upstream names it identically to the plain file, so the local name carries -MTP.
+  - file: Qwen3.6-35B-A3B-MTP-UD-Q4_K_M.gguf
+    url: https://huggingface.co/unsloth/Qwen3.6-35B-A3B-MTP-GGUF/resolve/5bc3e238d916f48a861bac2f8a1990a0e9b7e98d/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
+    sha256: 0b21525e972670ed59e1812e170b27c26355381f0656ecc4e25617ece7dac58b
 llm_ctx: 32768
 llm_threads: 6 # = pinned P-cores (vm-configs.tf cpu_affinity)
 llm_llama_port: 8081
-llm_llama_extra_args: "-fa on -ctk q8_0 -ctv q8_0 --jinja --metrics"
+# MTP self-drafting rides the head Qwen trained into the 27B (blk.64.nextn.*): 22 -> 36 t/s single-stream (docs/llm-bench-results.md);
+# draft-n-max 3 measured slower, and the gain is gone by --parallel 4, so this stays a single-stream server.
+llm_llama_extra_args: "-fa on -ctk q8_0 -ctv q8_0 --jinja --metrics --spec-type draft-mtp --spec-draft-n-max 2 --parallel 1"
 
 # Ollama stays as PAIR's supported backend, CPU-only so it can never take the card from llama-server.
 llm_ollama_version: 0.32.15
