@@ -1,0 +1,92 @@
+---
+- name: Look up this guest's scratch spec
+  ansible.builtin.set_fact:
+    scratch_spec: "{{ scratch_guests[inventory_hostname] }}"
+
+- name: Install requested packages
+  ansible.builtin.apt:
+    name: "{{ scratch_spec.packages }}"
+    update_cache: true
+    cache_valid_time: 3600
+  when: scratch_spec.packages | default([]) | length > 0
+
+- name: Create the shared group
+  ansible.builtin.group:
+    name: "{{ scratch_spec.group }}"
+    system: true
+
+- name: Create the service users
+  ansible.builtin.user:
+    name: "{{ item }}"
+    group: "{{ scratch_spec.group }}"
+    system: true
+    create_home: true
+    shell: /usr/sbin/nologin
+  loop: "{{ scratch_spec.users }}"
+
+- name: Create the storage layout
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ scratch_spec.group }}"
+    mode: "2750"
+  loop: "{{ scratch_spec.dirs }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+# No Infisical agent on a scratch guest: every machine identity in this project is an org member
+# that can read every folder, and a scratch guest is run by another project. Values are pushed
+# from the workstation instead; a rotation needs a re-run.
+- name: Read this guest's secrets from Infisical
+  infisical.vault.read_secrets:
+    url: "{{ bootstrap_config.infisical_url }}"
+    auth_method: token_auth
+    token: "{{ infisical_login.login_data.access_token }}"
+    project_id: "{{ bootstrap_config.infisical_project_id }}"
+    env_slug: "prod"
+    path: "/scratch/{{ inventory_hostname }}"
+    as_dict: true
+  register: scratch_secret_values
+  delegate_to: localhost
+  become: false
+  check_mode: false
+  no_log: true
+  failed_when: "scratch_secret_values.secrets is not defined and 'Status: 404' not in (scratch_secret_values.msg | default(''))"
+  when: scratch_spec.secrets | default({}) | length > 0
+
+- name: Create the secrets directory
+  ansible.builtin.file:
+    path: "{{ scratch_secrets_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0711"
+  when: scratch_spec.secrets | default({}) | length > 0
+
+- name: Write each secret, readable only by its user
+  ansible.builtin.copy:
+    content: "{{ scratch_source[scratch_name] }}"
+    dest: "{{ scratch_secrets_dir }}/{{ scratch_name }}"
+    owner: "{{ item.value }}"
+    group: root
+    mode: "0400"
+  loop: "{{ scratch_spec.secrets | default({}) | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  no_log: true
+  when: scratch_name in scratch_source
+  vars: &scratch_secret_source
+    scratch_name: "{{ item.key.split('.')[-1] }}"
+    scratch_source: >-
+      {{ (secrets[item.key.split('.')[0]] | default({})) if '.' in item.key
+         else (scratch_secret_values.secrets | default({})) }}
+
+- name: Report secrets not seeded yet
+  ansible.builtin.debug:
+    msg: "{{ item.key if '.' in item.key else '/scratch/' ~ inventory_hostname ~ '/' ~ item.key }} is absent; seed it and re-run"
+  loop: "{{ scratch_spec.secrets | default({}) | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when: scratch_name not in scratch_source
+  vars: *scratch_secret_source

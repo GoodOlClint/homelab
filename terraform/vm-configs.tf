@@ -8,6 +8,7 @@ locals {
   vm_configurations = concat(
     local.infrastructure_vms,
     local.services_vms,
+    local.scratch_vms,
   )
 
   # Detached data volumes (ADR 0015): the WP4 fleet rebuild populates this map.
@@ -228,6 +229,25 @@ locals {
       extra_disks  = [{ size_gb = 300, storage = "local-zfs", backup = false }] # weights are re-downloadable, never ADR 0015 state
       pci_devices  = [{ id = "0000:03:00" }]
       data_volume  = { name = "llm" }
+    },
+  ]
+
+  # --- Scratch guests (ADR 0054) ---
+  # Throwaway proofs requested by other projects through the scratch-device issue form. Services
+  # VLAN, offsets 80–99, VMID = 200 + ip_offset, no HA, no backup job, no data volume. Each entry
+  # names its issue; retire with `terraform state rm` + `pct destroy`, never a targeted destroy.
+  scratch_vms = [
+    # GoodOlClint/homelab#45 — code-intelligence index host, single-unit proof
+    {
+      name         = "code-intel"
+      type         = "lxc"
+      node_name    = "ms-01a"
+      vm_id        = 280
+      vlans        = ["vlan40"]
+      ip_offset    = 80
+      cpu_cores    = 4
+      memory_mb    = 8192
+      disk_size_gb = 60
     },
   ]
 }

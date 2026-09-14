@@ -230,6 +230,8 @@ All VMs are defined in `terraform/vm-configs.tf` and provisioned with cloud-init
 - Management VLAN is always the first NIC
 - PCI passthrough: a VM entry's `pci_devices = [{ id = "0000:01:00" }]` hands the host device (every function) to the guest with the driver in the guest; the `llm` VM takes the Quadro RTX 5000 on `msi` this way. Plex uses the node iGPU through an LXC `/dev/dri` device instead
 
+**Scratch guests** (ADR 0054): other projects request a throwaway VM/LXC through the *Scratch device request* issue form. Each is an entry in `local.scratch_vms` (services VLAN, offsets 80–99, VMID = 200 + offset, no HA, no backups) plus a spec in `scratch_guests` (`ansible/roles/scratch/defaults/main.yml`: group, apt packages, users, dirs, secrets). Secrets are seeded by hand in Infisical `/scratch/<name>` and pushed at deploy time; no vault credential lands on the guest. `make build <name>` then `make dns-records`.
+
 ## Services
 
 ### Monitoring stack (Talos cluster, `kubernetes/monitoring/`)

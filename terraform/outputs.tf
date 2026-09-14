@@ -46,7 +46,12 @@ output "ansible_inventory_yaml" {
           ) if local.inventory_ansible_host[vm_name] != null
         }
       },
-      length(local.inventory_groups) > 0 ? { children = local.inventory_groups } : {}
+      length(local.inventory_groups) + length(local.scratch_vms) > 0 ? {
+        children = merge(
+          local.inventory_groups,
+          length(local.scratch_vms) > 0 ? { scratch = { hosts = { for v in local.scratch_vms : v.name => {} } } } : {},
+        )
+      } : {}
     )
   })
 }

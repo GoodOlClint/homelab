@@ -58,3 +58,19 @@
     - telegraf
   tags:
     - llm
+
+- name: Configure scratch guests (ADR 0054)
+  hosts: scratch
+  become: true
+
+  vars_files:
+    - ../group_vars/all.yml
+  pre_tasks:
+    - name: Load all configuration and secrets
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/full_pre_tasks.yml"
+      tags: [always]
+  roles:
+    - apt_proxy
+    - scratch
+  tags:
+    - scratch

@@ -1,0 +1,25 @@
+---
+# Per-guest spec for scratch guests (ADR 0054), keyed by inventory hostname.
+#   group:   shared group every listed user joins and every dir belongs to
+#   packages: apt packages (optional; anything outside apt is the requester's job)
+#   users:   system users the requesting project's units run as
+#   dirs:    created owner:group, mode 2750 (setgid so new files keep the group)
+#   secrets: key → user that owns the file (written to scratch_secrets_dir/<key>, 0400). A bare key
+#            is read from Infisical /scratch/<hostname>; `folder.key` takes a fleet secret from the
+#            loaded `secrets` fact instead (the folder must be in infisical_login.yml's loop)
+scratch_guests:
+  code-intel:
+    group: code-intel
+    packages: [git]
+    users: [ci-writer, ci-server]
+    dirs:
+      - { path: /srv/code-intel, owner: ci-writer }
+      - { path: /srv/code-intel/clones, owner: ci-writer }
+      - { path: /srv/code-intel/generations, owner: ci-writer }
+      - { path: /srv/code-intel/current, owner: ci-writer }
+    secrets:
+      github_app_private_key: ci-writer
+      athena_embedding_token: ci-writer
+      llm.llm_api_key_code_intel: ci-writer
+
+scratch_secrets_dir: /etc/scratch-secrets
