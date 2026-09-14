@@ -15,6 +15,7 @@
     that:
       - llm_api_clients | reject('match', '^[a-z0-9_]+$') | list | length == 0
       - llm_model_sha256 | length == 64
+      - llm_bench_models | map(attribute='sha256') | reject('match', '^[0-9a-f]{64}$') | list | length == 0
       - llm_llama_cpp_commit | length == 40
       - llm_ollama_sha256 | length == 64
       - llm_pair_deb_url | length == 0 or llm_pair_deb_sha256 | length == 64
@@ -221,15 +222,18 @@
   notify: Restart llama-server
   tags: [llm, build]
 
-- name: Download the model
+- name: Download the served model and the bench suite
   ansible.builtin.get_url:
-    url: "{{ llm_model_url }}"
-    dest: "{{ llm_models_dir }}/{{ llm_model_file }}"
+    url: "{{ item.url }}"
+    dest: "{{ llm_models_dir }}/{{ item.file }}"
     tmp_dest: "{{ llm_models_dir }}"
-    checksum: "sha256:{{ llm_model_sha256 }}"
+    checksum: "sha256:{{ item.sha256 }}"
     owner: "{{ llm_user }}"
     mode: "0644"
     timeout: 120
+  loop: "{{ [{'file': llm_model_file, 'url': llm_model_url, 'sha256': llm_model_sha256}] + llm_bench_models }}"
+  loop_control:
+    label: "{{ item.file }}"
   notify: Restart llama-server
   tags: [llm, model]
 
