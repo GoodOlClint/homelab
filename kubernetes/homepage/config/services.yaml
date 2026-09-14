@@ -76,11 +76,6 @@
         icon: authentik.svg
         href: https://auth.${DOMAIN}
         description: SSO (internal realm)
-    - Portainer:
-        icon: portainer.svg
-        href: https://${CONTROL}:9443
-        description: Container Management
-        widget: {type: portainer, url: "https://${CONTROL}:9443", env: 1, key: "{{HOMEPAGE_VAR_PORTAINER_KEY}}"}
     - AdGuard Home:
         icon: adguard-home.svg
         href: http://${ADGUARD}:3000

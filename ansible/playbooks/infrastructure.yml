@@ -138,7 +138,7 @@
     - phase1
     - apt-cache
 
-- name: "Phase 1: Configure control LXC (MeshCentral + Portainer server, ADR 0030)"
+- name: "Phase 1: Configure control LXC (MeshCentral, ADR 0030)"
   hosts: control
   become: true
   vars_files:

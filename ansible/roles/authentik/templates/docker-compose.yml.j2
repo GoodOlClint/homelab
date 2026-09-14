@@ -40,7 +40,9 @@ services:
       - AUTHENTIK_POSTGRESQL__NAME=authentik
       - AUTHENTIK_POSTGRESQL__USER=authentik
       - AUTHENTIK_WEB__BASE_URL=https://{{ authentik_host }}
-      - AUTHENTIK_BOOTSTRAP_EMAIL={{ acme_email }}
+      # akadmin is break-glass, not the operator: it must not hold the operator's address, or a second
+      # authentik account for the same human collides on email in every consumer that keys users by it.
+      - AUTHENTIK_BOOTSTRAP_EMAIL=akadmin@{{ service_domain }}
     env_file:
       - {{ authentik_env_file }}
     volumes:
@@ -61,7 +63,9 @@ services:
       - AUTHENTIK_POSTGRESQL__NAME=authentik
       - AUTHENTIK_POSTGRESQL__USER=authentik
       - AUTHENTIK_WEB__BASE_URL=https://{{ authentik_host }}
-      - AUTHENTIK_BOOTSTRAP_EMAIL={{ acme_email }}
+      # akadmin is break-glass, not the operator: it must not hold the operator's address, or a second
+      # authentik account for the same human collides on email in every consumer that keys users by it.
+      - AUTHENTIK_BOOTSTRAP_EMAIL=akadmin@{{ service_domain }}
     env_file:
       - {{ authentik_env_file }}
     volumes:

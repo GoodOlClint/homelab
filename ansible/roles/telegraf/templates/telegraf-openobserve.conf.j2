@@ -71,7 +71,6 @@
     "http://127.0.0.1:32400/web/index.html",
 {% endif %}
 {% if inventory_hostname == 'homepage' %}
-    "http://127.0.0.1:{{ portainer_port | default(9000) }}",    # Portainer
 {% endif %}
   ]
   response_timeout = "5s"

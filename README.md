@@ -365,7 +365,6 @@ Three control-plane VMs (ADR 0031/0033) run the cluster add-ons: MetalLB, cert-m
 | rsyslog_client | Rsyslog forwarding to AxoSyslog/OpenObserve |
 | telegraf | Telegraf metrics agent (Prometheus output) |
 | expand_disk | Root filesystem expansion after disk resize |
-| portainer_agent | Portainer agent for remote container management |
 
 ### External (Ansible Galaxy)
 

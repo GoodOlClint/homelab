@@ -7,7 +7,7 @@
 | Namespace / Infisical folder | `authentik` / `/authentik` | `authentik-ext` / `/authentik-ext` |
 | URL | `https://auth.<service domain>` (Ingress, LAN/VPN only) | `https://auth.<media domain>` (Cloudflare tunnel, no Ingress) |
 | Users | operator | family + operator |
-| Consumers | Traefik forward-auth (arr stack, Homepage, Kiwix, Tautulli), OIDC: Grafana, Portainer, MeshCentral, PDM, PVE, PBS | LDAP outpost → Jellyfin (P5d), Seerr via Jellyfin accounts |
+| Consumers | Traefik forward-auth (arr stack, Homepage, Kiwix, Tautulli), OIDC: Grafana, MeshCentral, PDM, PVE, PBS | LDAP outpost → Jellyfin (P5d), Seerr via Jellyfin accounts |
 | Admin login | `akadmin` / Infisical `/authentik/bootstrap_password` | `akadmin` / Infisical `/authentik-ext/bootstrap_password` |
 | API token | `/authentik/bootstrap_token` | `/authentik-ext/bootstrap_token` |
 | Postgres dump | nightly 02:20 → PBS ns `databases`, backup-id `authentik-postgres` | same, `authentik-ext-postgres` |
@@ -36,7 +36,7 @@ Jellyfin binds as `cn=ldapsvc,ou=users,dc=ldap,dc=goauthentik,dc=io` with `/auth
 
 Client IDs equal the app name; each secret is Infisical `/authentik/<app>_oidc_client_secret`; issuer `https://auth.<service domain>/application/o/<app>/`, discovery at `…/.well-known/openid-configuration`.
 
-- **Grafana, Portainer, MeshCentral**: wired by the repo (`kubernetes/monitoring/app.yaml` env; the `control` role's Portainer settings task and MeshCentral `config.json`). Portainer keeps `/#!/internal-auth` as the local-admin door; Grafana's login form is disabled (basic auth stays on for the homepage widget); MeshCentral shows an OIDC button beside its local login.
+- **Grafana, MeshCentral**: wired by the repo (`kubernetes/monitoring/app.yaml` env; the `control` role's MeshCentral `config.json`). Grafana's login form is disabled (basic auth stays on for the homepage widget); MeshCentral shows an OIDC button beside its local login, maps `authentik Admins` to site admin, and needs the account's userid in `meshcentral_manage_all_device_groups` before it sees device groups it does not own.
 - **PVE** (hand step, bpg has no realm resource): Datacenter → Permissions → Realms → Add → OpenID Connect: issuer URL as above (`pve`), client ID `pve`, client key from Infisical, autocreate users on, username claim `username`. Then grant the autocreated `<user>@authentik` a role. The provider accepts any `https://<node>.<service domain>:8006` redirect.
 - **PBS** (hand step): Configuration → Access Control → Realms → Add → OpenID; same fields with `pbs`; redirect `https://proxmox-backup.<service domain>:8007`.
 - **PDM** (hand step, done 2026-08-25): Access Control → Realms → OpenID Connect; same fields with `pdm`. PDM's realm dialog has no redirect field (unlike PVE/PBS) — none needed, the provider's `https://pdm.<service domain>:8443` redirect URI covers it.

@@ -33,7 +33,6 @@
 | `plex_services/opensubtitlescom_username` / `_password` | opensubtitles.com account |
 | `pfsense/cloudflare_dns_api_token` | Cloudflare → scoped DNS token |
 | `vps/maxmind_license_key` | MaxMind account → license keys |
-| `homepage/portainer_api_key` | regenerate in Portainer UI post-rebuild |
 
 ## ⚠️ Gaps — external keys documented in CLAUDE.md but NOT in `bootstrap.sops.yml`
 

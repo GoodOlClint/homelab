@@ -5,6 +5,7 @@
     "redirPort": 80,
     "allowLoginToken": true,
     "allowedOrigin": ["{{ control_fqdn }}"],
+    "managealldevicegroups": {{ meshcentral_manage_all_device_groups | to_json }},
     "plugins": { "enabled": false }
   },
   "domains": {
@@ -17,7 +18,13 @@
           "issuer": "https://auth.{{ service_domain }}/application/o/meshcentral/",
           "clientid": "meshcentral",
           "clientsecret": "{{ secrets.authentik.meshcentral_oidc_client_secret }}",
-          "newAccounts": true
+          "newAccounts": true,
+          "groups": {
+            "claim": "groups",
+            "scope": "profile",
+            "siteadmin": {{ meshcentral_oidc_admin_groups | to_json }},
+            "revokeAdmin": true
+          }
         }
       }
     }

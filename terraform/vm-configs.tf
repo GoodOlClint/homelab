@@ -18,7 +18,7 @@ locals {
     plex_services = { index = 2, size_gb = 40 }  # no consumer (ADR 0037); disk still holds state — never drop or renumber
     openobserve   = { index = 3, size_gb = 100 } # no consumer (ADR 0036); disk still holds state — never drop or renumber
     docker        = { index = 4, size_gb = 20 }  # no consumer (ADR 0038); disk still holds state — never drop or renumber
-    control       = { index = 5, size_gb = 10 }  # MeshCentral data/files + Portainer state (ADR 0030)
+    control       = { index = 5, size_gb = 10 }  # MeshCentral data/files (ADR 0030)
     llm           = { index = 6, size_gb = 100 } # PAIR identity + Ollama small models; weights ride the VM's local-zfs disk
     authentik     = { index = 7, size_gb = 10 }  # internal realm: Postgres + media + blueprints (ADR 0049)
   }
@@ -94,7 +94,7 @@ locals {
       image        = "debian13" # PBS 4 is Debian-13-only (ADR 0025)
       ha           = true
     },
-    # Out-of-band control plane (ADR 0030): MeshCentral + Portainer server on the
+    # Out-of-band control plane (ADR 0030): MeshCentral on the
     # management VLAN; mgmt_ip_offset keeps it out of the DHCP pool.
     {
       name           = "control"
