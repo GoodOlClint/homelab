@@ -189,6 +189,9 @@ terraform/worklab-campaign/
 
 # Galaxy-installed role trees (dotted names) land in ansible/roles/ via make init
 ansible/roles/*.*/
+
+# ansible-lint / ansible-core cache, created in whichever directory the tool runs from
+.ansible/
 kubernetes/talos/.secrets/
 kubernetes/.secrets/
 # also as bare names: a worktree may carry these (and .venv) as SYMLINKS into the main

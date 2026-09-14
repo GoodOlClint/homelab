@@ -1,0 +1,15 @@
+---
+- name: GPU passthrough binding (vfio-pci claims the card before xe/i915)
+  ansible.builtin.copy:
+    dest: /etc/modprobe.d/vfio-gpu.conf
+    content: |
+      options vfio-pci ids={{ proxmox_host_vfio_pci_ids[inventory_hostname] | join(',') }}
+      softdep xe pre: vfio-pci
+      softdep i915 pre: vfio-pci
+      softdep snd_hda_intel pre: vfio-pci
+    mode: "0644"
+  when: inventory_hostname in proxmox_host_vfio_pci_ids
+  notify:
+    - rebuild initramfs and sync ESPs
+    - vfio binding needs a host reboot
+  tags: [proxmox_host, vfio]
