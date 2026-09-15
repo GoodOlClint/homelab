@@ -29,6 +29,18 @@ llm_llama_cpp_repo: https://github.com/ggml-org/llama.cpp.git
 llm_llama_cpp_version: master # no tag contains the benched commit; v0.4.0 predates it
 llm_llama_cpp_commit: 41abbfd599fbdd3470fcae0a1fb6530ad8403cd7
 llm_llama_cpp_dir: /opt/llama.cpp
+# sycl | vulkan. SYCL keeps decode ~2x and prefill ~3x faster than Vulkan by 64k context (b70-bench, llama.cpp #28721);
+# vulkan stays buildable as the rollback. Both keep Mesa: the units' GPU pre-check reads vulkaninfo.
+llm_llama_cpp_backend: sycl
+llm_llama_cpp_build_id: "{{ llm_llama_cpp_commit }}-{{ llm_llama_cpp_backend }}"
+# oneAPI (compiler + oneMKL) and the Level Zero compute runtime decide SYCL speed the way Mesa decides Vulkan's,
+# so they are apt-pinned and moved only after a bench run.
+llm_oneapi_key_url: https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
+llm_oneapi_pins:
+  - { package: "intel-oneapi-compiler-dpcpp-cpp*", version: "2026.1.1-325" }
+  - { package: "intel-oneapi-mkl-devel*", version: "2026.1.0-236" }
+  - { package: "libze1 libze-dev", version: "1.32.0-1~26.04~ppa1" }
+  - { package: "libze-intel-gpu1", version: "26.31.39395.13-1~26.04~ppa1" }
 
 # All experts in VRAM on the 32 GB card. URL pins the HF revision; the sha256 is the LFS oid — both are mandatory (plan §7.9 provenance).
 llm_model_file: Qwen3.8-27B-UD-Q4_K_M.gguf
