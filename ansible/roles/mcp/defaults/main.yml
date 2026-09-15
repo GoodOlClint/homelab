@@ -6,7 +6,7 @@ mcp_home: /var/lib/mcp
 
 # Private repo over a read-only deploy key (public half added on GitHub by hand, docs/operator-hand-steps.md).
 mcp_repo: git@github.com:GoodOlClint/homelab-mcp.git
-mcp_version: v0.2.0
+mcp_version: v0.3.0
 mcp_install_dir: /opt/homelab-mcp
 # github.com's published ed25519 host key (docs.github.com, "GitHub's SSH key fingerprints").
 mcp_github_known_host: "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl"
