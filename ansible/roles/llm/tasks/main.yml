@@ -89,6 +89,7 @@
       - linux-firmware
       - "mesa-vulkan-drivers={{ llm_mesa_version }}"
       - libvulkan-dev
+      - vulkan-tools
       - glslc
       - spirv-headers
       - lm-sensors
