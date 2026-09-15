@@ -68,10 +68,66 @@
   register: _llm_mesa_pin
   tags: [llm, packages]
 
+- name: The oneAPI signing key
+  ansible.builtin.stat:
+    path: /etc/apt/keyrings/oneapi.asc
+  register: _llm_oneapi_key
+  when: llm_llama_cpp_backend == 'sycl'
+  tags: [llm, packages]
+
+- name: Fetch the oneAPI signing key
+  ansible.builtin.get_url:
+    url: "{{ llm_oneapi_key_url }}"
+    dest: /etc/apt/keyrings/oneapi.asc
+    mode: "0644"
+  when: llm_llama_cpp_backend == 'sycl' and (not _llm_oneapi_key.stat.exists or _llm_oneapi_key.stat.size == 0)
+  tags: [llm, packages]
+
+- name: The oneAPI apt repository
+  ansible.builtin.deb822_repository:
+    name: oneapi
+    uris: https://apt.repos.intel.com/oneapi
+    suites: all
+    components: main
+    signed_by: /etc/apt/keyrings/oneapi.asc
+    install_python_debian: true
+  register: _llm_oneapi_repo
+  when: llm_llama_cpp_backend == 'sycl'
+  tags: [llm, packages]
+
+- name: Pin oneAPI and the Level Zero runtime so a dist-upgrade cannot roll the SYCL stack
+  ansible.builtin.copy:
+    dest: /etc/apt/preferences.d/oneapi
+    content: |
+      {% for p in llm_oneapi_pins %}
+      Package: {{ p.package }}
+      Pin: version {{ p.version }}
+      Pin-Priority: 1001
+
+      {% endfor %}
+    mode: "0644"
+  register: _llm_oneapi_pin
+  when: llm_llama_cpp_backend == 'sycl'
+  tags: [llm, packages]
+
 - name: Refresh the apt cache after a source or pin change
   ansible.builtin.apt:
     update_cache: true
-  when: _llm_ppas is changed or _llm_mesa_pin is changed
+  when: _llm_ppas is changed or _llm_mesa_pin is changed or _llm_oneapi_repo is changed or _llm_oneapi_pin is changed
+  tags: [llm, packages]
+
+- name: The oneAPI compiler, oneMKL and the Level Zero headers
+  ansible.builtin.apt:
+    name: [intel-oneapi-compiler-dpcpp-cpp, intel-oneapi-mkl-devel, libze-dev]
+    state: present
+  when: llm_llama_cpp_backend == 'sycl'
+  tags: [llm, packages]
+
+- name: SYCL reserves host address space as large as a model's GPU buffer, so a model bigger than guest RAM needs overcommit
+  ansible.posix.sysctl:
+    name: vm.overcommit_memory
+    value: "{{ '1' if llm_llama_cpp_backend == 'sycl' else '0' }}"
+    sysctl_file: /etc/sysctl.d/90-llm.conf
   tags: [llm, packages]
 
 - name: xpu-smi package
@@ -206,22 +262,41 @@
     dest: "{{ llm_llama_cpp_dir }}/src"
     version: "{{ llm_llama_cpp_commit }}"
     depth: 1
-  when: _llm_built.stdout | default('') != llm_llama_cpp_commit
+  when: _llm_built.stdout | default('') != llm_llama_cpp_build_id
   tags: [llm, build]
 
-- name: Build llama.cpp with Vulkan
-  ansible.builtin.shell: |
-    set -e
-    cmake -S {{ llm_llama_cpp_dir }}/src -B {{ llm_llama_cpp_dir }}/build \
-      -DGGML_VULKAN=ON -DGGML_CUDA=OFF \
-      -DCMAKE_BUILD_TYPE=Release -DLLAMA_CURL=ON -DGGML_CCACHE=ON
-    cmake --build {{ llm_llama_cpp_dir }}/build --config Release -j {{ ansible_processor_vcpus }} --target llama-server llama-bench llama-cli
-    install -d {{ llm_llama_cpp_dir }}/bin
-    for b in llama-server llama-bench llama-cli; do install -m 0755 {{ llm_llama_cpp_dir }}/build/bin/$b {{ llm_llama_cpp_dir }}/bin/; done
-    printf '%s' "{{ llm_llama_cpp_commit }}" > {{ llm_llama_cpp_dir }}/bin/.commit
-  when: _llm_built.stdout | default('') != llm_llama_cpp_commit
+# bin/<tool> is a wrapper around bin/<tool>.real: sudo and systemd drop the oneAPI environment the SYCL build needs.
+- name: Build llama.cpp
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      {% if llm_llama_cpp_backend == 'sycl' %}
+      set +u; source /opt/intel/oneapi/setvars.sh --force >/dev/null; set -u
+      FLAGS="-DGGML_SYCL=ON -DGGML_SYCL_F16=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_CURL=OFF"
+      {% else %}
+      FLAGS="-DGGML_VULKAN=ON -DGGML_CUDA=OFF -DLLAMA_CURL=ON -DGGML_CCACHE=ON"
+      {% endif %}
+      rm -rf {{ llm_llama_cpp_dir }}/build
+      cmake -S {{ llm_llama_cpp_dir }}/src -B {{ llm_llama_cpp_dir }}/build $FLAGS -DCMAKE_BUILD_TYPE=Release
+      cmake --build {{ llm_llama_cpp_dir }}/build --config Release -j {{ ansible_processor_vcpus }} --target llama-server llama-bench llama-cli
+      install -d {{ llm_llama_cpp_dir }}/bin
+      for b in llama-server llama-bench llama-cli; do
+        install -m 0755 {{ llm_llama_cpp_dir }}/build/bin/$b {{ llm_llama_cpp_dir }}/bin/$b.real.new
+        mv -f {{ llm_llama_cpp_dir }}/bin/$b.real.new {{ llm_llama_cpp_dir }}/bin/$b.real
+        {% if llm_llama_cpp_backend == 'sycl' %}
+        printf '#!/bin/bash\nset +u; source /opt/intel/oneapi/setvars.sh --force >/dev/null\nexec %s "$@"\n' \
+          "{{ llm_llama_cpp_dir }}/bin/$b.real" > {{ llm_llama_cpp_dir }}/bin/$b.new
+        {% else %}
+        printf '#!/bin/bash\nexec %s "$@"\n' "{{ llm_llama_cpp_dir }}/bin/$b.real" > {{ llm_llama_cpp_dir }}/bin/$b.new
+        {% endif %}
+        chmod 0755 {{ llm_llama_cpp_dir }}/bin/$b.new
+        mv -f {{ llm_llama_cpp_dir }}/bin/$b.new {{ llm_llama_cpp_dir }}/bin/$b
+      done
+      printf '%s' "{{ llm_llama_cpp_build_id }}" > {{ llm_llama_cpp_dir }}/bin/.commit
+    executable: /bin/bash
+  when: _llm_built.stdout | default('') != llm_llama_cpp_build_id
   changed_when: true
-  notify: Restart llama-server
+  notify: [Restart llama-server, Restart llama-embed]
   tags: [llm, build]
 
 - name: Download the served model and the bench suite
