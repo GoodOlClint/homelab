@@ -6,9 +6,10 @@
 # candidate model can be benched without touching the unit. LLM_BENCH_MODEL may list several
 # paths (colon-separated, like PATH), one llama-bench run each. LLM_BENCH_NCPU= (empty) drops the
 # flag entirely, which is what a dense model needs — it has no MoE tensors to place.
+# LLM_BENCH_BASE replaces the default test matrix (llama-bench appends repeated list flags instead of overriding).
 set -euo pipefail
 LABEL="${1:?label}"; shift || true
-BIN=/opt/llama.cpp/bin
+BIN=${LLM_BENCH_BIN:-/opt/llama.cpp/bin}
 PRESET=/etc/llama-server/models.ini
 SERVED=$(awk -F' = ' '/^model = /{m=$2} /^load-on-startup = true/{print m; exit}' "$PRESET")
 IFS=: read -ra MODELS <<<"${LLM_BENCH_MODEL:-$SERVED}"
@@ -24,11 +25,11 @@ MESA=$(dpkg-query -W -f='${Version}' mesa-vulkan-drivers)
     echo "- build: $(cat $BIN/.commit) · mesa: $MESA · model: $(basename "$MODEL") sha256:$(sha256sum "$MODEL" | cut -c1-64) · threads: $(nproc) · ngl: $NGL · n-cpu-moe: ${NCPU:-n/a (dense)} · extra args: ${*:-none} · ram: host-measured (guest dmidecode shows QEMU DIMMs)"
   done
 } > "$OUT"
-trap 'systemctl reset-failed llama-server llama-embed 2>/dev/null || true; systemctl start llama-server llama-embed' EXIT
+trap 'cat "$OUT"; systemctl reset-failed llama-server llama-embed 2>/dev/null || true; systemctl start llama-server llama-embed' EXIT
 systemctl stop llama-server llama-embed
 for MODEL in "${MODELS[@]}"; do
-  ARGS=(-m "$MODEL" -ngl "$NGL" -fa 1 -p 512,8192 -n 128 -r 3 -o md)
+  read -ra BASE <<<"${LLM_BENCH_BASE:--fa 1 -p 512,8192 -n 128 -r 3 -o md}"
+  ARGS=(-m "$MODEL" -ngl "$NGL" "${BASE[@]}")
   if [[ -n "$NCPU" ]]; then ARGS+=(--n-cpu-moe "$NCPU"); fi
-  cd /var/lib/llm && sudo -u llm "$BIN/llama-bench" "${ARGS[@]}" "$@" >> "$OUT" 2>&1
+  cd /var/lib/llm && sudo -u llm "$BIN/llama-bench" "${ARGS[@]}" "$@" >> "$OUT" 2>&1 || echo "- **FAILED** ($?): $(basename "$MODEL")" >> "$OUT"
 done
-cat "$OUT"
