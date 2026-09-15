@@ -9,13 +9,13 @@ BIN=/opt/llama.cpp/bin
 GLOBAL=$(awk '/^\[\*\]/{on=1; next} /^\[/{on=0} on && / = /' /etc/llama-server/models.ini)
 CTX=$(sed -n 's/^ctx-size = //p' <<<"$GLOBAL")
 THREADS=$(sed -n 's/^threads = //p' <<<"$GLOBAL")
-EXTRA=$(grep -vE '^(ctx-size|threads|n-gpu-layers|metrics) = ' <<<"$GLOBAL" | awk -F' = ' '{printf "--%s", $1; if ($2 != "true") printf " %s", $2; printf " "}')
+EXTRA=$(grep -vE '^(ctx-size|threads|n-gpu-layers|metrics|parallel|kv-unified) = ' <<<"$GLOBAL" | awk -F' = ' '{printf "--%s", $1; if ($2 != "true") printf " %s", $2; printf " "}')
 PORT=8083
 PROMPT="Write a detailed, step-by-step explanation of how a TCP three-way handshake works, then describe what happens when a segment is lost, including retransmission timers and congestion window behaviour."
 trap 'kill $PID 2>/dev/null || true; systemctl reset-failed llama-server llama-embed 2>/dev/null || true; systemctl start llama-server llama-embed' EXIT
 systemctl stop llama-server llama-embed
 serve() {
-  sudo -u llm "$BIN/llama-server" --host 127.0.0.1 --port $PORT -m "$MODEL" -ngl 99 -c "$CTX" -t "$THREADS" $EXTRA "$@" >/tmp/spec-ab.log 2>&1 &
+  sudo -u llm "$BIN/llama-server" --host 127.0.0.1 --port $PORT -m "$MODEL" -ngl 99 -c "$CTX" -t "$THREADS" --parallel 1 $EXTRA "$@" >/tmp/spec-ab.log 2>&1 &
   PID=$!
   for _ in $(seq 120); do curl -sf localhost:$PORT/health >/dev/null 2>&1 && return; sleep 2; done
   echo "server did not come up:"; tail -20 /tmp/spec-ab.log; exit 1
