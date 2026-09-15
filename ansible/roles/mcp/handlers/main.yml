@@ -5,6 +5,12 @@
     state: restarted
     daemon_reload: true
 
+- name: Restart homelab-gateway-reload.path
+  ansible.builtin.systemd:
+    name: homelab-gateway-reload.path
+    state: restarted
+    daemon_reload: true
+
 - name: Restart caddy
   ansible.builtin.systemd:
     name: caddy

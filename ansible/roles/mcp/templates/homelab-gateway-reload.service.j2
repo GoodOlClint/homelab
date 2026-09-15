@@ -1,0 +1,7 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Restart homelab-gateway after a secret re-render
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl try-restart homelab-gateway.service

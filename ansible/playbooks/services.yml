@@ -80,15 +80,12 @@
       - name: mcp
         dest_path: /etc/infisical/secrets/mcp.env
         template_src: secrets/mcp.env.tpl.j2
-        post_command: "systemctl try-restart homelab-gateway"
       - name: mcp-tokens
         dest_path: /etc/infisical/secrets/mcp-tokens.json
         template_src: secrets/mcp-tokens.json.tpl.j2
-        post_command: "systemctl try-restart homelab-gateway"
       - name: mcp-users
         dest_path: /etc/infisical/secrets/mcp-users.json
         template_src: secrets/mcp-users.json.tpl.j2
-        post_command: "systemctl try-restart homelab-gateway"
   roles:
     - infisical_client
     - dns_config
