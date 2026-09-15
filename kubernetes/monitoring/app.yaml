@@ -398,12 +398,15 @@ spec:
           image: ${REGISTRY}/docker.io/louislam/uptime-kuma:2
           resources: {requests: {cpu: 50m, memory: 128Mi}}
           ports: [{containerPort: 3001}]
-          env: [{name: TZ, value: "${TZ}"}]
+          # Node ignores the system trust store; without the root every Homelab-CA row reads SELF_SIGNED_CERT_IN_CHAIN.
+          env: [{name: TZ, value: "${TZ}"}, {name: NODE_EXTRA_CA_CERTS, value: /etc/ssl/certs/homelab-root-ca.crt}]
           volumeMounts:
             - {name: data, mountPath: /app/data, subPath: data}
+            - {name: homelab-root-ca, mountPath: /etc/ssl/certs/homelab-root-ca.crt, subPath: homelab-ca.crt, readOnly: true}
           readinessProbe: {httpGet: {path: /, port: 3001}, initialDelaySeconds: 15}
       volumes:
         - {name: data, persistentVolumeClaim: {claimName: uptime-kuma}}
+        - {name: homelab-root-ca, configMap: {name: homelab-root-ca}}
 ---
 apiVersion: v1
 kind: Service
