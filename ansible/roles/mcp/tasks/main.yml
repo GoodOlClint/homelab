@@ -162,6 +162,15 @@
   notify: Restart homelab-gateway
   tags: [mcp, config]
 
+- name: Restart-on-render units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    mode: "0644"
+  loop: [homelab-gateway-reload.service, homelab-gateway-reload.path]
+  notify: Restart homelab-gateway-reload.path
+  tags: [mcp, config]
+
 - name: Wait for the Infisical agent to render the gateway's secret files
   ansible.builtin.wait_for:
     path: "{{ item }}"
@@ -218,5 +227,5 @@
     enabled: true
     state: started
     daemon_reload: true
-  loop: [homelab-gateway, caddy, rsyslog]
+  loop: [homelab-gateway, homelab-gateway-reload.path, caddy, rsyslog]
   tags: [mcp]

@@ -1,0 +1,14 @@
+# {{ ansible_managed }}
+# The Infisical agent skips its exec hook on the first render after its own restart, which is exactly when the
+# play changes a template; watching the files restarts the gateway on every render, rotation or play.
+[Unit]
+Description=Restart homelab-gateway when its rendered secret files change
+
+[Path]
+PathChanged={{ mcp_env_file }}
+PathChanged={{ mcp_tokens_file }}
+PathChanged={{ mcp_users_file }}
+Unit=homelab-gateway-reload.service
+
+[Install]
+WantedBy=multi-user.target
