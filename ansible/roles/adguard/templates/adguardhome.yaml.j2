@@ -83,12 +83,12 @@ dns:
     enabled: false
     use_custom: false
 
-  max_goroutines: 300
+  max_goroutines: {{ adguard_max_goroutines }}
   handle_ddr: true
   ipset: []
   ipset_file: ""
   bootstrap_prefer_ipv6: false
-  upstream_timeout: 10s
+  upstream_timeout: {{ adguard_upstream_timeout_s }}s
   private_networks: []
   use_private_ptr_resolvers: true
   local_ptr_upstreams:

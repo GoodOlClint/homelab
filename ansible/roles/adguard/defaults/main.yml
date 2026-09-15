@@ -49,3 +49,11 @@ adguard_vrrp_base_priority: 150
 # `stopped` stages keepalived installed+configured without claiming the VIP —
 # for the swap beside a restored copy that still holds the address.
 adguard_vip_state: started
+
+# One worker pool serves every query, internal zones included: a dead WAN held each public
+# lookup for the full timeout (dnsproxy retries once, so 2x) and 300 waiters starved BIND-bound
+# names (2026-09-15). Public p99.9 here is ~0.7 s; 3 s bounds an outage query to ~6 s and 3000
+# waiters need ~500 failing queries/s to fill. upstream_timeout converges through the API;
+# max_goroutines is read at start only, so a change is a one-instance-at-a-time restart.
+adguard_upstream_timeout_s: 3
+adguard_max_goroutines: 3000

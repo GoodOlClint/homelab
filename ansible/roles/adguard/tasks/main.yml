@@ -286,6 +286,42 @@
   changed_when: true
   tags: [adguard, dns, config]
 
+- name: Converge the live upstream timeout
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:3000/control/dns_config"
+    method: POST
+    url_username: "{{ secrets.homepage.adguard_username }}"
+    url_password: "{{ secrets.homepage.adguard_password }}"
+    force_basic_auth: true
+    body_format: json
+    body:
+      upstream_timeout: "{{ adguard_upstream_timeout_s | int }}"
+  when: _adguard_dns_info.json.upstream_timeout | int != adguard_upstream_timeout_s | int
+  changed_when: true
+  tags: [adguard, dns, config]
+
+- name: Read the live worker-pool size
+  ansible.builtin.command: grep -E '^\s*max_goroutines:' /etc/adguardhome/AdGuardHome.yaml
+  register: _adguard_goroutines
+  changed_when: false
+  check_mode: false
+  tags: [adguard, dns, config]
+
+- name: Resize the worker pool (read at start only; one task per host so throttle serializes stop→start)
+  ansible.builtin.shell: |
+    set -eo pipefail
+    systemctl stop adguardhome
+    sed -i -E 's/^(\s*)max_goroutines:.*$/\1max_goroutines: {{ adguard_max_goroutines | int }}/' /etc/adguardhome/AdGuardHome.yaml
+    systemctl start adguardhome
+    for i in $(seq 1 60); do ss -Huln | grep -q ':53 ' && exit 0; sleep 1; done
+    echo "adguardhome did not come back on :53" >&2; exit 1
+  args:
+    executable: /bin/bash
+  changed_when: true
+  when: (_adguard_goroutines.stdout | regex_search('[0-9]+') | int) != (adguard_max_goroutines | int)
+  throttle: 1
+  tags: [adguard, dns, config]
+
 - name: Read the live rewrites
   ansible.builtin.uri:
     url: "http://127.0.0.1:3000/control/rewrite/list"
