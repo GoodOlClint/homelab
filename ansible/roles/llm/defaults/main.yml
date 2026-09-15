@@ -63,12 +63,11 @@ llm_llama_args:
   cache-type-v: q8_0
   jinja: true
   metrics: true
-  parallel: 1
-# MTP self-drafting rides the head Qwen trained into the 27B (blk.64.nextn.*): 22 -> 36 t/s single-stream (docs/llm-bench-results.md);
-# draft-n-max 3 measured slower, and the gain is gone by --parallel 4, so the server stays single-stream.
-llm_model_args:
-  spec-type: draft-mtp
-  spec-draft-n-max: 2
+  parallel: 4
+  kv-unified: true # the 4 slots share the 200k KV pool; without it each slot gets 50k
+# No MTP: it lifts the 27B from 22 to 36 t/s single-stream but the gain is gone by --parallel 4 (docs/llm-bench-results.md),
+# and agents issue concurrent requests.
+llm_model_args: {}
 
 # Embeddings: their own always-loaded llama-server on the card, so a chat swap can never evict them. Caddy sends
 # /llama/v1/embeddings here. Qwen3-Embedding-4B (2560 dims) is what every code-intelligence index was built with, and

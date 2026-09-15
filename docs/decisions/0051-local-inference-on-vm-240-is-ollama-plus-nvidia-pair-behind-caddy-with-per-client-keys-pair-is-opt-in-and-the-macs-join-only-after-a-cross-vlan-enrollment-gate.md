@@ -43,4 +43,5 @@ The Turing card (sm_75, 16 GB) rules out FP8 and FlashAttention-2, so the model 
 - When msi leaves Ceph (the 2026-09-09 re-plan), 240's rootfs and holder slot 6 move to local storage; that is a scheduled rebuild, not a surprise.
 - Renewal proof and the enrollment gate are the two acceptance tests that gate any Mac joining; they are written into [docs/local-ai-plan.md](../local-ai-plan.md).
 
+- **2026-09-15 (concurrency over single-stream speed):** the served 27B drops MTP (`--spec-type draft-mtp`) and runs `--parallel 4`. MTP took single-stream decode from 22 to 36 t/s, but the gain is gone by 4 concurrent requests and speculative drafting is single-stream only, while the agent plane issues parallel requests. The MTP result stays in `docs/llm-bench-results.md`, and the 35B-A3B MTP build stays in the bench suite.
 - **2026-09-14 (VM 240 memory):** 72 GB was sized for experts in system RAM on the 16 GB card; with the B70 holding every model in VRAM the guest uses ~3.4 GB, so `memory_mb` drops to 16 GB (plan §4.1 step 1) and the freed RAM hosts the tranche-2 guests on msi (ADR 0052).
