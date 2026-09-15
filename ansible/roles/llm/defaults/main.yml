@@ -34,7 +34,7 @@ llm_llama_cpp_dir: /opt/llama.cpp
 llm_model_file: Qwen3.8-27B-UD-Q4_K_M.gguf
 llm_model_url: "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/4ca720788d1e01f1bff70c033e0d0028fd02e502/{{ llm_model_file }}"
 llm_model_sha256: 322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482
-# Bench suite: candidates kept on disk beside the served model so the llm-bench repo's `scripts/llm-bench.sh suite`
+# Bench suite: candidates kept on disk beside the served model so the b70-bench repo's `scripts/llm-bench.sh suite`
 # (LLM_BENCH_SUITE lists these paths) compares them on every engine/Mesa roll. Same pins as above; promote one by moving it into llm_model_*.
 llm_bench_models:
   - file: Qwen3-30B-A3B-Q4_K_M.gguf
@@ -66,7 +66,7 @@ llm_llama_args:
   parallel: 4
   kv-unified: true # the 4 slots share the 200k KV pool; without it each slot gets 50k
 # No MTP: speculative drafting serves one stream, and agents issue concurrent requests (--parallel 4). Single-stream it
-# lifts the 27B from 22 to 36 t/s (llm-bench results); whether it can share slots is measured before it returns.
+# lifts the 27B from 22 to 36 t/s (b70-bench results); whether it can share slots is measured before it returns.
 llm_model_args: {}
 
 # Embeddings: their own always-loaded llama-server on the card, so a chat swap can never evict them. Caddy sends
