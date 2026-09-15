@@ -28,7 +28,7 @@ mcp_data_dir: /data
 # Agent principals (bearer tokens in /mcp/gateway_token_<name>) and their tool grants. Grants are reviewed config.
 mcp_agents:
   operator: ["*"]
-  agents: [gateway.whoami, "unifi.*", "proxmox.*", "openobserve.*", "plex.*", "arr.*", "pfsense.*", "code_intel.*"]
+  agents: [gateway.whoami, "unifi.*", "proxmox.*", "openobserve.*", "plex.*", "arr.*", "pfsense.*", "network.*", "code_intel.*"]
 # User principals (X-Gateway-User, /mcp/gateway_user_token_<name>); intersected with the agent's grants.
 mcp_users:
   clint: {tools: ["*"], can_approve_t3: true}
@@ -38,6 +38,9 @@ mcp_code_intel_units:
   operator: [mcp-pwsh-checks, PSHcl, mlx]
   agents: [mcp-pwsh-checks, PSHcl, mlx]
 mcp_code_intel_embed_model: Qwen3-Embedding-4B
+
+# UniFi OS console port and the pfSense REST API v2 (pfrest) keys live in /mcp as unifi_api_key / pfsense_api_key (operator-created).
+mcp_unifi_port: 11443
 
 # Proxmox: a read-only API user the role creates on the cluster.
 mcp_proxmox_user: mcp@pve
