@@ -121,13 +121,13 @@ groups:
           description: "{{ $value }} T4 timeouts in the last 15 minutes — possible service disruption"
 
       - alert: HighPacketLoss
-        expr: ping_percent_packet_loss{url=~"8.8.8.8|1.1.1.1"} > 5
+        expr: count by (url) (ping_percent_packet_loss{url=~"8.8.8.8|1.1.1.1"} > 5) >= 3
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "High packet loss to {{ $labels.url }}"
-          description: "{{ $value }}% packet loss over 5 minutes"
+          summary: "WAN packet loss to {{ $labels.url }}"
+          description: "{{ $value }} hosts see >5% packet loss to {{ $labels.url }} over 5 minutes"
 
       - alert: HighLatency
         expr: probe_icmp_duration_seconds{job="blackbox-ping",instance=~"8.8.8.8|1.1.1.1",phase="rtt"} > 0.1
