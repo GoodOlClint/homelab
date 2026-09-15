@@ -15,5 +15,5 @@ HOST="$("$ROOT/.venv/bin/ansible-inventory" -i "$ROOT/ansible/inventory/vms.yaml
 USER="$(grep -o 'virtual_machine_username *= *"[^"]*"' "$ROOT/terraform/vars.auto.tfvars" | cut -d'"' -f2)"
 SSH=(ssh -o BatchMode=yes "$USER@$HOST")
 scp -q -o BatchMode=yes "$ROOT/scripts/llm-bench-remote.sh" "$USER@$HOST:/tmp/llm-bench-remote.sh"
-ENVS="$(env | grep '^LLM_BENCH_' | tr '\n' ' ' || true)"
+ENVS="$(env | grep '^LLM_BENCH_' | while IFS= read -r kv; do printf '%q ' "$kv"; done || true)"
 "${SSH[@]}" sudo env $ENVS bash /tmp/llm-bench-remote.sh "$(printf '%q ' "$@")" | tee -a "$ROOT/docs/llm-bench-results.md"

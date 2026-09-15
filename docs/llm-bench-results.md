@@ -413,3 +413,119 @@ Qwen trained the MTP head into the 27B itself and the unsloth GGUF keeps it (`bl
 | `--spec-type draft-mtp --spec-draft-n-max 3` | 34 / 34 / 34 | 282 / 161 (57 %) |
 
 **+64 % decode** (22 → 36) — the dense, bandwidth-bound model gains the most, as the repo's per-card table predicts (33–145 %). The pp column of this harness is not comparable to llama-bench (a ~40-token prompt, so it is dominated by fixed cost; the suite block above has the real 739 t/s pp512). Single-stream only: the gain vanishes by `--parallel 4`. `--spec-draft-n-max 3` (the repo hints 2 is a 24 GB-card number) drafts more and accepts less: 34 t/s, so **2 stays**.
+
+## Vulkan depth scan (llama.cpp #28721 check) — 2026-09-15T14:06:19Z
+- build: 41abbfd599fbdd3470fcae0a1fb6530ad8403cd7 · mesa: 26.2.2~kisak1~r · model: Qwen3.8-27B-UD-Q4_K_M.gguf sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482 · threads: 6 · ngl: 99 · n-cpu-moe: n/a (dense) · extra args: none · ram: host-measured (guest dmidecode shows QEMU DIMMs)
+- build: 41abbfd599fbdd3470fcae0a1fb6530ad8403cd7 · mesa: 26.2.2~kisak1~r · model: Qwen3.6-35B-A3B-UD-Q4_K_M.gguf sha256:ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61 · threads: 6 · ngl: 99 · n-cpu-moe: n/a (dense) · extra args: none · ram: host-measured (guest dmidecode shows QEMU DIMMs)
+ggml_vulkan: Found 1 Vulkan devices:
+ggml_vulkan: 0 = Intel(R) Graphics (BMG G31) (Intel open-source Mesa driver) | uma: 0 | fp16: 1 | bf16: 1 | fp4: 0 | warp size: 32 | shared memory: 49152 | int dot: 1 | matrix cores: KHR_coopmat
+| model                          |       size |     params | backend    | ngl | type_k | type_v |  fa |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | --: | -----: | -----: | --: | --------------: | -------------------: |
+| qwen35 27B Q4_K - Medium       |  15.32 GiB |    27.32 B | Vulkan     |  99 |   q8_0 |   q8_0 |   1 |           pp512 |        738.65 ± 0.00 |
+| qwen35 27B Q4_K - Medium       |  15.32 GiB |    27.32 B | Vulkan     |  99 |   q8_0 |   q8_0 |   1 |           tg128 |         22.76 ± 0.00 |
+| qwen35 27B Q4_K - Medium       |  15.32 GiB |    27.32 B | Vulkan     |  99 |   q8_0 |   q8_0 |   1 |  pp512 @ d16384 |        253.90 ± 0.00 |
+| qwen35 27B Q4_K - Medium       |  15.32 GiB |    27.32 B | Vulkan     |  99 |   q8_0 |   q8_0 |   1 |  tg128 @ d16384 |         13.74 ± 0.00 |
+| qwen35 27B Q4_K - Medium       |  15.32 GiB |    27.32 B | Vulkan     |  99 |   q8_0 |   q8_0 |   1 |  pp512 @ d32768 |        150.48 ± 0.00 |
+| qwen35 27B Q4_K - Medium       |  15.32 GiB |    27.32 B | Vulkan     |  99 |   q8_0 |   q8_0 |   1 |  tg128 @ d32768 |          9.85 ± 0.00 |
+| qwen35 27B Q4_K - Medium       |  15.32 GiB |    27.32 B | Vulkan     |  99 |   q8_0 |   q8_0 |   1 |  pp512 @ d65536 |         83.39 ± 0.00 |
+| qwen35 27B Q4_K - Medium       |  15.32 GiB |    27.32 B | Vulkan     |  99 |   q8_0 |   q8_0 |   1 |  tg128 @ d65536 |          6.29 ± 0.00 |
+
+build: 41abbfd59 (10968)
+ggml_vulkan: Found 1 Vulkan devices:
+ggml_vulkan: 0 = Intel(R) Graphics (BMG G31) (Intel open-source Mesa driver) | uma: 0 | fp16: 1 | bf16: 1 | fp4: 0 | warp size: 32 | shared memory: 49152 | int dot: 1 | matrix cores: KHR_coopmat
+| model                          |       size |     params | backend    | ngl | type_k | type_v |  fa |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | --: | -----: | -----: | --: | --------------: | -------------------: |
+| qwen35moe 35B.A3B Q4_K - Medium |  20.60 GiB |    34.66 B | Vulkan     |  99 |   q8_0 |   q8_0 |   1 |           pp512 |       1737.49 ± 0.00 |
+| qwen35moe 35B.A3B Q4_K - Medium |  20.60 GiB |    34.66 B | Vulkan     |  99 |   q8_0 |   q8_0 |   1 |           tg128 |         86.57 ± 0.00 |
+| qwen35moe 35B.A3B Q4_K - Medium |  20.60 GiB |    34.66 B | Vulkan     |  99 |   q8_0 |   q8_0 |   1 |  pp512 @ d16384 |        567.81 ± 0.00 |
+| qwen35moe 35B.A3B Q4_K - Medium |  20.60 GiB |    34.66 B | Vulkan     |  99 |   q8_0 |   q8_0 |   1 |  tg128 @ d16384 |         48.15 ± 0.00 |
+| qwen35moe 35B.A3B Q4_K - Medium |  20.60 GiB |    34.66 B | Vulkan     |  99 |   q8_0 |   q8_0 |   1 |  pp512 @ d32768 |        331.43 ± 0.00 |
+| qwen35moe 35B.A3B Q4_K - Medium |  20.60 GiB |    34.66 B | Vulkan     |  99 |   q8_0 |   q8_0 |   1 |  tg128 @ d32768 |         33.55 ± 0.00 |
+| qwen35moe 35B.A3B Q4_K - Medium |  20.60 GiB |    34.66 B | Vulkan     |  99 |   q8_0 |   q8_0 |   1 |  pp512 @ d65536 |        183.18 ± 0.00 |
+| qwen35moe 35B.A3B Q4_K - Medium |  20.60 GiB |    34.66 B | Vulkan     |  99 |   q8_0 |   q8_0 |   1 |  tg128 @ d65536 |         20.93 ± 0.00 |
+
+build: 41abbfd59 (10968)
+
+## SYCL depth scan, 27B (llama.cpp #28721 check; oneAPI build, same commit; the 35B-A3B row failed here — see the next block) — 2026-09-15T14:32:42Z
+- build: 41abbfd599fbdd3470fcae0a1fb6530ad8403cd7 · mesa: 26.2.2~kisak1~r · model: Qwen3.8-27B-UD-Q4_K_M.gguf sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482 · threads: 6 · ngl: 99 · n-cpu-moe: n/a (dense) · extra args: none · ram: host-measured (guest dmidecode shows QEMU DIMMs)
+| model                          |       size |     params | backend    | ngl | type_k | type_v |  fa |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | --: | -----: | -----: | --: | --------------: | -------------------: |
+| qwen35 27B Q4_K - Medium       |  15.32 GiB |    27.32 B | SYCL       |  99 |   q8_0 |   q8_0 |   1 |           pp512 |        757.60 ± 0.00 |
+| qwen35 27B Q4_K - Medium       |  15.32 GiB |    27.32 B | SYCL       |  99 |   q8_0 |   q8_0 |   1 |           tg128 |         21.39 ± 0.00 |
+| qwen35 27B Q4_K - Medium       |  15.32 GiB |    27.32 B | SYCL       |  99 |   q8_0 |   q8_0 |   1 |  pp512 @ d16384 |        443.15 ± 0.00 |
+| qwen35 27B Q4_K - Medium       |  15.32 GiB |    27.32 B | SYCL       |  99 |   q8_0 |   q8_0 |   1 |  tg128 @ d16384 |         17.71 ± 0.00 |
+| qwen35 27B Q4_K - Medium       |  15.32 GiB |    27.32 B | SYCL       |  99 |   q8_0 |   q8_0 |   1 |  pp512 @ d32768 |        379.07 ± 0.00 |
+| qwen35 27B Q4_K - Medium       |  15.32 GiB |    27.32 B | SYCL       |  99 |   q8_0 |   q8_0 |   1 |  tg128 @ d32768 |         15.11 ± 0.00 |
+| qwen35 27B Q4_K - Medium       |  15.32 GiB |    27.32 B | SYCL       |  99 |   q8_0 |   q8_0 |   1 |  pp512 @ d65536 |        254.41 ± 0.00 |
+| qwen35 27B Q4_K - Medium       |  15.32 GiB |    27.32 B | SYCL       |  99 |   q8_0 |   q8_0 |   1 |  tg128 @ d65536 |         11.69 ± 0.00 |
+build: 41abbfd59 (10968)
+
+## SYCL depth scan, 35B-A3B (vm.overcommit_memory=1 for the run) — 2026-09-15T14:41:52Z
+- build: 41abbfd599fbdd3470fcae0a1fb6530ad8403cd7 · mesa: 26.2.2~kisak1~r · model: Qwen3.6-35B-A3B-UD-Q4_K_M.gguf sha256:ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61 · threads: 6 · ngl: 99 · n-cpu-moe: n/a (dense) · extra args: none · ram: host-measured (guest dmidecode shows QEMU DIMMs)
+Build with Macros:
+  GGML_SYCL_DNNL: yes
+  GGML_SYCL_F16: yes
+  GGML_SYCL_FORCE_MMQ: no
+  GGML_SYCL_GRAPH: yes
+  GGML_SYCL_SUPPORT_LEVEL_ZERO_API: yes
+  GGML_SYCL_SUPPORT_VMM: yes
+Running with Environment Variables:
+  GGML_SYCL_DEBUG: 0
+  GGML_SYCL_DEV_DEBUG: 0
+  GGML_SYCL_DEV2DEV_MEMCPY: 0 (SYCL API)
+  GGML_SYCL_GET_MEM_API: 0 (Level Zero API)
+  GGML_SYCL_ENABLE_DNN: 1
+  GGML_SYCL_FA_ONEDNN: 1
+  GGML_SYCL_FA_ONEDNN_MAX_KV: 0
+  GGML_SYCL_ENABLE_MKL_FA: 1
+  GGML_SYCL_MEMTRACE: 0
+  GGML_SYCL_MEMTRACE_STEP: 64
+  GGML_SYCL_ENABLE_FLASH_ATTN: 1
+  GGML_SYCL_ENABLE_GRAPH: 0
+  GGML_SYCL_ENABLE_OPT: 1
+  GGML_SYCL_ENABLE_VMM: 1
+  GGML_SYCL_ENABLE_FUSION: 1
+  GGML_SYCL_ENABLE_ESIMD: 1
+  GGML_SYCL_PRIORITIZE_DMMV: 0
+  GGML_SYCL_USE_ASYNC_MEM_OP: 1
+  GGML_SYCL_USE_LEVEL_ZERO_API: 1
+  GGML_SYCL_USM_SYSTEM: 0
+  GGML_SYCL_ENABLE_HOST_PINNED_MEM: 1
+  GGML_SYCL_HOST_PINNED_MEM_2G: 0
+Found 1 SYCL devices:
+|  |                   |                                       |       |Max    |        |Max  |Global |                     |
+|  |                   |                                       |       |compute|Max work|sub  |mem    |                     |
+|ID|        Device Type|                                   Name|Version|units  |group   |group|size   |       Driver version|
+|--|-------------------|---------------------------------------|-------|-------|--------|-----|-------|---------------------|
+| 0| [level_zero:gpu:0]|             Intel Arc Pro B70 Graphics|   20.2|    256|    1024|   32| 34242M|        1.17.39395+13|
+SYCL Optimization Feature:
+|ID|        Device Type|Reorder|
+|--|-------------------|-------|
+| 0| [level_zero:gpu:0]|      Y|
+| model                          |       size |     params | backend    | ngl | type_k | type_v |  fa |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | --: | -----: | -----: | --: | --------------: | -------------------: |
+| qwen35moe 35B.A3B Q4_K - Medium |  20.60 GiB |    34.66 B | SYCL       |  99 |   q8_0 |   q8_0 |   1 |           pp512 |       1551.61 ± 0.00 |
+| qwen35moe 35B.A3B Q4_K - Medium |  20.60 GiB |    34.66 B | SYCL       |  99 |   q8_0 |   q8_0 |   1 |           tg128 |         86.85 ± 0.00 |
+| qwen35moe 35B.A3B Q4_K - Medium |  20.60 GiB |    34.66 B | SYCL       |  99 |   q8_0 |   q8_0 |   1 |  pp512 @ d16384 |        979.46 ± 0.00 |
+| qwen35moe 35B.A3B Q4_K - Medium |  20.60 GiB |    34.66 B | SYCL       |  99 |   q8_0 |   q8_0 |   1 |  tg128 @ d16384 |         70.35 ± 0.00 |
+| qwen35moe 35B.A3B Q4_K - Medium |  20.60 GiB |    34.66 B | SYCL       |  99 |   q8_0 |   q8_0 |   1 |  pp512 @ d32768 |        847.88 ± 0.00 |
+| qwen35moe 35B.A3B Q4_K - Medium |  20.60 GiB |    34.66 B | SYCL       |  99 |   q8_0 |   q8_0 |   1 |  tg128 @ d32768 |         59.72 ± 0.00 |
+| qwen35moe 35B.A3B Q4_K - Medium |  20.60 GiB |    34.66 B | SYCL       |  99 |   q8_0 |   q8_0 |   1 |  pp512 @ d65536 |        618.26 ± 0.00 |
+| qwen35moe 35B.A3B Q4_K - Medium |  20.60 GiB |    34.66 B | SYCL       |  99 |   q8_0 |   q8_0 |   1 |  tg128 @ d65536 |         45.91 ± 0.00 |
+
+build: 41abbfd59 (10968)
+
+## Vulkan vs SYCL at depth — summary (2026-09-15)
+
+Same llama.cpp commit (41abbfd), q8_0 KV, flash attention, one run per cell; Vulkan on Mesa 26.2.2 (kisak), SYCL on oneAPI + Level Zero 26.31. Reproduces [llama.cpp #28721](https://github.com/ggml-org/llama.cpp/issues/28721): Vulkan's flash-attention path on Battlemage does not scale with KV length.
+
+| model | test | depth 0 | 16k | 32k | 64k |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Qwen3.8-27B | tg128 Vulkan / SYCL | 22.8 / 21.4 | 13.7 / 17.7 | 9.9 / 15.1 | 6.3 / **11.7** |
+| Qwen3.8-27B | pp512 Vulkan / SYCL | 739 / 758 | 254 / 443 | 150 / 379 | 83 / **254** |
+| Qwen3.6-35B-A3B | tg128 Vulkan / SYCL | 86.6 / 86.9 | 48.2 / 70.4 | 33.6 / 59.7 | 20.9 / **45.9** |
+| Qwen3.6-35B-A3B | pp512 Vulkan / SYCL | 1737 / 1552 | 568 / 979 | 331 / 848 | 183 / **618** |
+
+At depth 0 the backends tie (SYCL prefill on the MoE is 11 % slower); by 64k SYCL decodes 1.9–2.2x and prefills 3.1–3.4x faster. The short-context-only suite had hidden this, so depth rows are now part of any engine comparison.
+
+SYCL gotcha: Level Zero reserves host address space equal to the model's device buffer, so under the default heuristic overcommit (`vm.overcommit_memory=0`) a model larger than guest RAM fails to load (`__vm_enough_memory ... not enough memory`, `unable to allocate SYCL0 buffer`). The 20.6 GiB 35B-A3B loaded on the 16 GB guest with `vm.overcommit_memory=1` and no OOM — the reservation is not backed by RAM. Per-process `xpu-smi ps` memory also counts ~300 MB of GTT + system buffers that the device "GPU Memory Used" figure excludes.
