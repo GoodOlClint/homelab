@@ -1,6 +1,6 @@
 [Unit]
 Description=llama.cpp router (chat models, one loaded at a time)
-After=network-online.target {{ llm_models_dir | replace('/', '-') | regex_replace('^-', '') }}.mount
+After=network-online.target llama-embed.service {{ llm_models_dir | replace('/', '-') | regex_replace('^-', '') }}.mount
 Requires={{ llm_models_dir | replace('/', '-') | regex_replace('^-', '') }}.mount
 StartLimitIntervalSec=600
 StartLimitBurst=3

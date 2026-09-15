@@ -4,15 +4,15 @@
     name: caddy
     state: restarted
 
-- name: Restart llama-server
-  ansible.builtin.systemd:
-    name: llama-server
-    state: restarted
-    daemon_reload: true
-
 - name: Restart llama-embed
   ansible.builtin.systemd:
     name: llama-embed
+    state: restarted
+    daemon_reload: true
+
+- name: Restart llama-server
+  ansible.builtin.systemd:
+    name: llama-server
     state: restarted
     daemon_reload: true
 

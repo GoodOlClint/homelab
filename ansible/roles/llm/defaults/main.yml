@@ -90,7 +90,7 @@ llm_embed_model_url: "https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF/resolv
 llm_embed_model_sha256: b60ae5ce2dd6a0b77f82cadf21def1f310a3e10cde380ad0081b07a9d416949d
 llm_embed_alias: Qwen3-Embedding-4B
 llm_embed_port: 8082
-llm_embed_extra_args: "--embedding --pooling last -ngl 99 -c 8192 -b 8192 -ub 8192 -t 2"
+llm_embed_extra_args: "--embedding --pooling last -ngl 99 -c 8192 -b 2048 -ub 2048 -fa on --cache-ram 0 -t 2"
 
 # Ollama stays as PAIR's supported backend, CPU-only so it can never take the card from llama-server.
 llm_ollama_version: 0.32.15
