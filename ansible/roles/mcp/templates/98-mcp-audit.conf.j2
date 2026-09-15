@@ -1,0 +1,10 @@
+# {{ ansible_managed }}
+# Gateway output (its audit JSONL) rides a pure disk queue: a LinkedList (memory-first) queue lost its backlog when
+# rsyslog restarted during a collector outage (shutdown timeout, nothing saved; 2026-09-14). Volume is low.
+if $programname == 'homelab-gateway' then {
+    action(type="omfwd" target="{{ openobserve_listen_host | replace(mgmt_vlan_prefix, services_vlan_prefix) }}" port="5514" protocol="tcp"
+           template="RSYSLOG_SyslogProtocol23Format"
+           queue.type="Disk" queue.filename="mcp-audit" queue.maxDiskSpace="4g" queue.checkpointInterval="1"
+           queue.syncqueuefiles="on" action.resumeRetryCount="-1")
+    stop
+}

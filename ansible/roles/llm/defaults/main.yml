@@ -97,6 +97,6 @@ llm_pair_port: 11434 # PAIR's Ollama/OpenAI-compatible proxy; must bind loopback
 llm_pair_state_dir: "{{ llm_data_dir }}/pair"
 
 # Per-client API keys, one Infisical /llm secret each (llm_api_key_<client>), rendered into Caddy's env by the agent.
-llm_api_clients: [agents, operator, code_intel]
+llm_api_clients: [agents, operator, code_intel, mcp]
 llm_env_file: /etc/infisical/secrets/llm.env
 llm_caddy_tls_dir: /etc/caddy/tls

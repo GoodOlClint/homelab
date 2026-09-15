@@ -3,7 +3,7 @@
 # Guests, worklab and the VPS. The cluster nodes are update-nodes.yml (serial,
 # Talos drain + HA maintenance + ceph noout) and never belong in this play.
 - name: Update all guests
-  hosts: all:!proxmox
+  hosts: all:!proxmox:!mcp
   become: true
   tasks:
     - name: Update apt cache and upgrade all packages (Debian/Ubuntu)
