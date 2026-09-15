@@ -224,7 +224,7 @@ locals {
       cpu_cores    = 6
       cpu_type     = "host"
       cpu_affinity = "0,2,4,6,8,10" # one thread of P-cores 0-5 on msi (lscpu -e 2026-09-11); re-derive if the firmware re-enumerates
-      memory_mb    = 73728          # 72 GB keeps msi MemAvailable >= 24 GiB (plan §7 gate); vfio pins it all at start
+      memory_mb    = 16384          # every model is resident in the B70's VRAM (ADR 0051); vfio pins it all at start
       on_boot      = true
       disk_size_gb = 32
       extra_disks  = [{ size_gb = 300, storage = "local-zfs", backup = false }] # weights are re-downloadable, never ADR 0015 state
