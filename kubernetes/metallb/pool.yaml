@@ -9,3 +9,4 @@ kind: L2Advertisement
 metadata: {name: vlan40, namespace: metallb-system}
 spec:
   ipAddressPools: [vlan40]
+  interfaces: [eth0]
