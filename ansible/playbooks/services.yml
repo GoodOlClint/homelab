@@ -73,7 +73,7 @@
     - name: Gateway secrets, the Proxmox token and the OpenObserve account
       ansible.builtin.import_role:
         name: mcp
-        tasks_from: secrets
+        tasks_from: accounts
   vars:
     infisical_secret_paths: ["/mcp", "/plex", "/llm", "/codeintel"]
     infisical_agent_templates:
