@@ -15,7 +15,7 @@ On the same day, ms-01a showed segfaults concentrated on one CPU core (core 8, f
 
 ## Decision
 
-msi leaves Ceph and stays a Proxmox cluster member with no OSDs, no mon and no Ceph cluster-network leg. It is the GPU host for `llm`, `mcp` and future AI-plane VMs, and it remains a **Ceph client**: its guests' disks stay on `ceph-rbd`, so it keeps its VLAN 20 (Ceph public) leg on the 10G bond. It needs no VLAN 21 leg and no port on the CRS510 (ADR 0057). Running OSDs again later is a new decision, not a re-enable.
+msi leaves Ceph and stays a Proxmox cluster member with no OSDs, no mon and no Ceph cluster-network leg. It is the GPU host for `llm`, `mcp` and future AI-plane VMs, and it remains a **Ceph client**: its guests' disks stay on `ceph-rbd`, so it keeps its VLAN 20 (Ceph public) leg: on the 10G bond until the 25G card lands, then on the 2×25G bond. It needs no VLAN 21 leg and no port on the CRS510 (ADR 0057). Running OSDs again later is a new decision, not a re-enable.
 
 Its network becomes one **2×25G LACP bond behind `vmbr0`**, carrying every VLAN the 10G bond carries today (Ceph public, services, guest VLANs) into **two Pro-Aggregation SFP28 ports** freed by ADR 0057. The 82599ES and its two 10G Pro-Agg ports are removed.
 
