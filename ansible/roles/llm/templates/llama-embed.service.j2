@@ -9,12 +9,14 @@ StartLimitBurst=3
 User={{ llm_user }}
 Group={{ llm_user }}
 SupplementaryGroups=video render
+ExecStartPre=/bin/sh -c 'vulkaninfo --summary 2>/dev/null | grep -q PHYSICAL_DEVICE_TYPE_DISCRETE_GPU'
 ExecStart={{ llm_llama_cpp_dir }}/bin/llama-server \
   --host 127.0.0.1 --port {{ llm_embed_port }} \
   -m {{ llm_models_dir }}/{{ llm_embed_model_file }} --alias {{ llm_embed_alias }} \
   {{ llm_embed_extra_args }}
 Restart=on-failure
 RestartSec=10
+LimitCORE=0
 OOMScoreAdjust=500
 NoNewPrivileges=true
 ProtectSystem=strict
