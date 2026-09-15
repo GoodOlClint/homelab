@@ -1,0 +1,27 @@
+# {{ ansible_managed }}
+[Unit]
+Description=homelab-mcp gateway (ADR 0052)
+After=network-online.target infisical-agent.service
+Wants=network-online.target
+
+[Service]
+User={{ mcp_user }}
+WorkingDirectory={{ mcp_home }}
+EnvironmentFile={{ mcp_config_dir }}/gateway.env
+EnvironmentFile={{ mcp_env_file }}
+# The agent writes its files root 0600; systemd hands the service a private copy.
+LoadCredential=tokens.json:{{ mcp_tokens_file }}
+LoadCredential=users.json:{{ mcp_users_file }}
+Environment=GATEWAY_TOKENS_FILE=%d/tokens.json GATEWAY_USERS_FILE=%d/users.json
+ExecStart={{ mcp_install_dir }}/src/.venv/bin/homelab-gateway
+SyslogIdentifier=homelab-gateway
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths={{ mcp_home }}
+
+[Install]
+WantedBy=multi-user.target

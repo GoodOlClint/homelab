@@ -1,0 +1,16 @@
+---
+- name: Restart homelab-gateway
+  ansible.builtin.systemd:
+    name: homelab-gateway
+    state: restarted
+    daemon_reload: true
+
+- name: Restart caddy
+  ansible.builtin.systemd:
+    name: caddy
+    state: restarted
+
+- name: Restart rsyslog
+  ansible.builtin.systemd:
+    name: rsyslog
+    state: restarted

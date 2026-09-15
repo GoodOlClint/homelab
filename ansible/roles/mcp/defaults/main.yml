@@ -1,0 +1,50 @@
+---
+# ADR 0052: the homelab-mcp gateway on its own VM, Caddy in front with a fleet-hosts cert.
+mcp_fqdn: "mcp.{{ service_domain }}"
+mcp_user: mcp
+mcp_home: /var/lib/mcp
+
+# Private repo over a read-only deploy key (public half added on GitHub by hand, docs/operator-hand-steps.md).
+mcp_repo: git@github.com:GoodOlClint/homelab-mcp.git
+mcp_version: v0.2.0
+mcp_install_dir: /opt/homelab-mcp
+# github.com's published ed25519 host key (docs.github.com, "GitHub's SSH key fingerprints").
+mcp_github_known_host: "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl"
+
+mcp_uv_version: "0.12.13"
+mcp_uv_sha256: 745765a3b6e360ad76743599ae5c42e9278c7edf8bbff9fc76d05bf2623a04dd
+
+mcp_port: 8000
+mcp_env_file: /etc/infisical/secrets/mcp.env
+mcp_tokens_file: /etc/infisical/secrets/mcp-tokens.json
+mcp_users_file: /etc/infisical/secrets/mcp-users.json
+mcp_config_dir: /etc/mcp
+mcp_caddy_tls_dir: /etc/caddy/tls
+
+# Holder slot index 8 (vm-configs.tf data_volumes.mcp); only the rsyslog queue lives there.
+mcp_data_label: vm-900-disk-7
+mcp_data_dir: /data
+
+# Agent principals (bearer tokens in /mcp/gateway_token_<name>) and their tool grants. Grants are reviewed config.
+mcp_agents:
+  operator: ["*"]
+  agents: [gateway.whoami, "unifi.*", "proxmox.*", "openobserve.*", "plex.*", "arr.*", "pfsense.*", "code_intel.*"]
+# User principals (X-Gateway-User, /mcp/gateway_user_token_<name>); intersected with the agent's grants.
+mcp_users:
+  clint: {tools: ["*"], can_approve_t3: true}
+
+# code-intel units per agent principal (code-intelligence tranche 1, all public).
+mcp_code_intel_units:
+  operator: [mcp-pwsh-checks, PSHcl, mlx]
+  agents: [mcp-pwsh-checks, PSHcl, mlx]
+mcp_code_intel_embed_model: Qwen3-Embedding-4B
+
+# Proxmox: a read-only API user the role creates on the cluster.
+mcp_proxmox_user: mcp@pve
+mcp_proxmox_role: PVEAuditor
+mcp_proxmox_token_id: mcp
+
+# OpenObserve: a dedicated account (reads + the mcp_audit stream), created through the API with the root login.
+mcp_openobserve_email: "mcp@{{ service_domain }}"
+# ponytail: OSS rejects every role but admin ("Custom roles not allowed"); the separate account buys attribution and revocation, not least privilege.
+mcp_openobserve_role: admin

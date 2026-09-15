@@ -59,6 +59,45 @@
   tags:
     - llm
 
+- name: Configure mcp VM (ADR 0052)
+  hosts: mcp
+  become: true
+
+  vars_files:
+    - ../group_vars/all.yml
+  pre_tasks:
+    - name: Load all configuration and secrets
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/full_pre_tasks.yml"
+      tags: [always]
+    # Before infisical_client, so the agent's first render finds every key.
+    - name: Gateway secrets, the Proxmox token and the OpenObserve account
+      ansible.builtin.import_role:
+        name: mcp
+        tasks_from: accounts
+  vars:
+    infisical_secret_paths: ["/mcp", "/plex", "/llm", "/codeintel"]
+    infisical_agent_templates:
+      - name: mcp
+        dest_path: /etc/infisical/secrets/mcp.env
+        template_src: secrets/mcp.env.tpl.j2
+        post_command: "systemctl try-restart homelab-gateway"
+      - name: mcp-tokens
+        dest_path: /etc/infisical/secrets/mcp-tokens.json
+        template_src: secrets/mcp-tokens.json.tpl.j2
+        post_command: "systemctl try-restart homelab-gateway"
+      - name: mcp-users
+        dest_path: /etc/infisical/secrets/mcp-users.json
+        template_src: secrets/mcp-users.json.tpl.j2
+        post_command: "systemctl try-restart homelab-gateway"
+  roles:
+    - infisical_client
+    - dns_config
+    - mcp
+    - rsyslog_client
+    - telegraf
+  tags:
+    - mcp
+
 - name: Configure scratch guests (ADR 0054)
   hosts: scratch
   become: true

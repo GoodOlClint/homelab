@@ -65,6 +65,7 @@
     - codeintel
     - jellyfin
     - llm
+    - mcp
     - github-runner
   register: _infisical_nested
   delegate_to: localhost

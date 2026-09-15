@@ -32,7 +32,7 @@ The fleet runs four Postgres instances, each a plain `postgres:17` beside its ap
 ## Consequences
 
 - New objects: tree `codeintel` + `kubernetes/flux/apps/codeintel.yaml`, `k8s_seed_namespaces.codeintel: baseline`, `metallb.offsets.codeintel` (next free offset, 68) in the gitignored `vlans.yaml` and its example, a `POD_CIDR` binding the seed reads from flannel's `kube-flannel-cfg` (a literal pod CIDR is an RFC 1918 address the guardrail blocks), Infisical folder `/codeintel` owned by `k8s_apps`, the Folder Ownership table row, `codeintel.writer_password` in the `code-intel` scratch spec, and an optional `KEEP_DAYS` on the shared `pg-backup` (codeintel keeps 1 day of local dumps; a generation dumps to GBs and PBS holds the history).
-- The mcp reader's `pg_hba` line depends on VM 242 existing (a `MCP` binding); until then the reader role exists and can log in from nowhere.
+- The mcp reader's `pg_hba` line depends on VM 242 existing (a `MCP` binding). **Landed 2026-09-14** with the mcp VM.
 - A pgvector bump is a deliberate roll: dump → bump the tag → restore check of a `halfvec` partition. Rebuild from the generator (`ci-pg-load.py --republish`) is the fallback, never the plan.
 - The generator and the gateway take a hard dependency on the services plane. The homelab-mcp package must fail soft when the store is unreachable so the gateway's other servers stay usable during a cluster outage — tracked on #47.
 - Postgres on the cluster stays per-app; this ADR is the record that a shared instance was weighed and declined.

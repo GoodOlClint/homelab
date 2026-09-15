@@ -1,0 +1,222 @@
+---
+- name: Packages
+  ansible.builtin.apt:
+    name: [acl, git, caddy, rsyslog]
+    state: present
+    cache_valid_time: 3600
+  tags: [mcp, packages]
+
+- name: uv release tarball
+  ansible.builtin.get_url:
+    url: "https://github.com/astral-sh/uv/releases/download/{{ mcp_uv_version }}/uv-x86_64-unknown-linux-gnu.tar.gz"
+    dest: "/var/cache/uv-{{ mcp_uv_version }}.tar.gz"
+    checksum: "sha256:{{ mcp_uv_sha256 }}"
+    mode: "0644"
+  tags: [mcp, packages]
+
+- name: uv installed
+  ansible.builtin.unarchive:
+    src: "/var/cache/uv-{{ mcp_uv_version }}.tar.gz"
+    dest: /usr/local/bin
+    remote_src: true
+    extra_opts: [--strip-components=1]
+  tags: [mcp, packages]
+
+- name: Service user
+  ansible.builtin.user:
+    name: "{{ mcp_user }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: "{{ mcp_home }}"
+    create_home: true
+  tags: [mcp]
+
+- name: Holder slot mounted
+  ansible.posix.mount:
+    path: "{{ mcp_data_dir }}"
+    src: "LABEL={{ mcp_data_label }}"
+    fstype: ext4
+    opts: defaults,nofail
+    state: mounted
+  tags: [mcp, storage]
+
+- name: rsyslog queue directory on the holder slot
+  ansible.builtin.file:
+    path: "{{ mcp_data_dir }}/rsyslog-spool"
+    state: directory
+    owner: syslog
+    group: adm
+    mode: "0750"
+  tags: [mcp, audit]
+
+# rsyslogd's AppArmor profile only grants /var/spool/rsyslog, so the holder directory is bound there.
+- name: rsyslog spool bound from the holder slot
+  ansible.posix.mount:
+    path: /var/spool/rsyslog
+    src: "{{ mcp_data_dir }}/rsyslog-spool"
+    fstype: none
+    opts: bind,nofail,x-systemd.requires-mounts-for={{ mcp_data_dir }}
+    state: mounted
+  notify: Restart rsyslog
+  tags: [mcp, audit]
+
+- name: Audit lines queue to disk while the syslog collector is unreachable
+  ansible.builtin.template:
+    src: 98-mcp-audit.conf.j2
+    dest: /etc/rsyslog.d/98-mcp-audit.conf
+    mode: "0644"
+  notify: Restart rsyslog
+  tags: [mcp, audit]
+
+# In place: rsyslogd's AppArmor profile cannot read Ansible's temp file, so `validate:` is not usable.
+- name: rsyslog configuration is valid
+  ansible.builtin.command: rsyslogd -N1
+  changed_when: false
+  tags: [mcp, audit]
+
+- name: Install directory
+  ansible.builtin.file:
+    path: "{{ mcp_install_dir }}"
+    state: directory
+    owner: "{{ mcp_user }}"
+    mode: "0755"
+  tags: [mcp, install]
+
+- name: Deploy key directory
+  ansible.builtin.file:
+    path: "{{ mcp_home }}/.ssh"
+    state: directory
+    owner: "{{ mcp_user }}"
+    mode: "0700"
+  tags: [mcp, install]
+
+- name: Deploy key and GitHub host key
+  ansible.builtin.copy:
+    dest: "{{ mcp_home }}/.ssh/{{ item.name }}"
+    content: "{{ item.content }}"
+    owner: "{{ mcp_user }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - {name: id_ed25519, content: "{{ secrets.mcp.github_deploy_key | trim }}\n", mode: "0600"}
+    - {name: known_hosts, content: "{{ mcp_github_known_host }}\n", mode: "0644"}
+  loop_control:
+    label: "{{ item.name }}"
+  no_log: true
+  tags: [mcp, install]
+
+- name: homelab-mcp at the pinned tag
+  ansible.builtin.git:
+    repo: "{{ mcp_repo }}"
+    dest: "{{ mcp_install_dir }}/src"
+    version: "{{ mcp_version }}"
+    key_file: "{{ mcp_home }}/.ssh/id_ed25519"
+    ssh_opts: "-o UserKnownHostsFile={{ mcp_home }}/.ssh/known_hosts -o StrictHostKeyChecking=yes"
+    depth: 1
+  become: true
+  become_user: "{{ mcp_user }}"
+  register: _mcp_src
+  notify: Restart homelab-gateway
+  tags: [mcp, install]
+
+- name: Gateway virtualenv present
+  ansible.builtin.stat:
+    path: "{{ mcp_install_dir }}/src/.venv/bin/homelab-gateway"
+  register: _mcp_venv
+  tags: [mcp, install]
+
+# The lockfile, not a fresh resolve: `uv tool install` ignores uv.lock and pulled an incompatible mcp 2.x (2026-09-14).
+- name: Gateway dependencies from the lockfile
+  ansible.builtin.command:
+    cmd: uv sync --frozen --no-dev --package homelab-gateway --python-preference only-system
+    chdir: "{{ mcp_install_dir }}/src"
+  environment:
+    UV_CACHE_DIR: "{{ mcp_home }}/.cache/uv"
+  become: true
+  become_user: "{{ mcp_user }}"
+  when: _mcp_src is changed or not _mcp_venv.stat.exists
+  changed_when: true
+  notify: Restart homelab-gateway
+  tags: [mcp, install]
+
+- name: Config directory
+  ansible.builtin.file:
+    path: "{{ mcp_config_dir }}"
+    state: directory
+    mode: "0755"
+  tags: [mcp, config]
+
+- name: Non-secret gateway settings and the code-intel unit map
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "{{ mcp_config_dir }}/{{ item }}"
+    mode: "0644"
+  loop: [gateway.env, units.json]
+  notify: Restart homelab-gateway
+  tags: [mcp, config]
+
+- name: Gateway unit
+  ansible.builtin.template:
+    src: homelab-gateway.service.j2
+    dest: /etc/systemd/system/homelab-gateway.service
+    mode: "0644"
+  notify: Restart homelab-gateway
+  tags: [mcp, config]
+
+- name: Wait for the Infisical agent to render the gateway's secret files
+  ansible.builtin.wait_for:
+    path: "{{ item }}"
+    timeout: 180
+  loop: ["{{ mcp_env_file }}", "{{ mcp_tokens_file }}", "{{ mcp_users_file }}"]
+  tags: [mcp, config]
+
+- name: Caddy TLS directory
+  ansible.builtin.file:
+    path: "{{ mcp_caddy_tls_dir }}"
+    state: directory
+    mode: "0755"
+  tags: [mcp, tls]
+
+- name: Fleet-hosts certificate (certbot, DNS-01 via BIND)
+  ansible.builtin.include_role:
+    name: cert_client
+    apply:
+      tags: [mcp, tls]
+  vars:
+    cert_client_fqdn: "{{ mcp_fqdn }}"
+    cert_client_deploy_hook: >-
+      install -m 0644 "$RENEWED_LINEAGE/fullchain.pem" {{ mcp_caddy_tls_dir }}/fullchain.pem &&
+      install -o caddy -g caddy -m 0600 "$RENEWED_LINEAGE/privkey.pem" {{ mcp_caddy_tls_dir }}/privkey.pem &&
+      systemctl reload caddy
+  tags: [mcp, tls]
+
+- name: Certificate files for Caddy
+  ansible.builtin.copy:
+    src: "/etc/letsencrypt/live/{{ mcp_fqdn }}/{{ item.src }}"
+    dest: "{{ mcp_caddy_tls_dir }}/{{ item.src }}"
+    remote_src: true
+    owner: caddy
+    group: caddy
+    mode: "{{ item.mode }}"
+  loop:
+    - {src: fullchain.pem, mode: "0644"}
+    - {src: privkey.pem, mode: "0600"}
+  notify: Restart caddy
+  tags: [mcp, tls]
+
+- name: Caddyfile
+  ansible.builtin.template:
+    src: Caddyfile.j2
+    dest: /etc/caddy/Caddyfile
+    mode: "0644"
+    validate: caddy validate --config %s --adapter caddyfile
+  notify: Restart caddy
+  tags: [mcp, config]
+
+- name: Services enabled and running
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  loop: [homelab-gateway, caddy, rsyslog]
+  tags: [mcp]

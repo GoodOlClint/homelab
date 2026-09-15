@@ -22,6 +22,7 @@ locals {
     control       = { index = 5, size_gb = 10 }  # MeshCentral data/files (ADR 0030)
     llm           = { index = 6, size_gb = 100 } # PAIR identity + Ollama small models; weights ride the VM's local-zfs disk
     authentik     = { index = 7, size_gb = 10 }  # internal realm: Postgres + media + blueprints (ADR 0049)
+    mcp           = { index = 8, size_gb = 5 }   # rsyslog disk queue for the gateway audit stream (ADR 0052)
   }
 
   # --- Infrastructure VMs ---
@@ -229,6 +230,18 @@ locals {
       extra_disks  = [{ size_gb = 300, storage = "local-zfs", backup = false }] # weights are re-downloadable, never ADR 0015 state
       pci_devices  = [{ id = "0000:03:00" }]
       data_volume  = { name = "llm" }
+    },
+    # homelab-mcp gateway (ADR 0052): a VM for its fleet token bundle, outside the Talos cluster.
+    {
+      name         = "mcp"
+      node_name    = "msi"
+      vm_id        = 242
+      vlans        = ["vlan40"]
+      ip_offset    = 42
+      cpu_cores    = 2
+      memory_mb    = 4096
+      disk_size_gb = 32
+      data_volume  = { name = "mcp" }
     },
   ]
 

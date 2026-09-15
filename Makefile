@@ -267,7 +267,7 @@ ansible-pfsense:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/pfsense.yaml ansible/playbooks/pfsense.yml
 
 # Fleet patch: cluster nodes serially (update-nodes), then guests + worklab + VPS with
-# one-at-a-time reboots (update-all.yml, hosts all:!proxmox), then the cluster's
+# one-at-a-time reboots (update-all.yml, hosts all:!proxmox:!mcp), then the cluster's
 # :latest re-pull (k8s-update). VM=<host> limits the guest play to one host and
 # skips the node and cluster halves.
 update:

@@ -1,0 +1,31 @@
+{
+    auto_https off
+    admin off
+}
+:80 {
+    redir https://{{ mcp_fqdn }}{uri} permanent
+}
+:443 {
+    tls {{ mcp_caddy_tls_dir }}/fullchain.pem {{ mcp_caddy_tls_dir }}/privkey.pem
+    log {
+        output stderr
+        format filter {
+            wrap console
+            fields {
+                request>headers>Authorization delete
+                request>headers>X-Gateway-User delete
+            }
+        }
+    }
+    handle /healthz {
+        reverse_proxy 127.0.0.1:{{ mcp_port }}
+    }
+    handle /mcp* {
+        reverse_proxy 127.0.0.1:{{ mcp_port }} {
+            flush_interval -1
+        }
+    }
+    handle {
+        respond 404
+    }
+}
