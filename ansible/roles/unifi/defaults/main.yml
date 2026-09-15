@@ -15,3 +15,9 @@ unifi_firewall_allowed_ips:
 
 # nginx inside the uosserver container reads its cert pair from this podman volume path
 unifi_core_config_dir: /home/uosserver/.local/share/containers/storage/volumes/uosserver_data/_data/unifi-core/config
+unifi_tls_dir: /var/lib/uosserver/tls
+unifi_cert_install: |-
+  set -e
+  install -o uosserver -g uosserver -m 0644 {{ unifi_tls_dir }}/cert.pem {{ unifi_core_config_dir }}/unifi-core.crt
+  install -o uosserver -g uosserver -m 0600 {{ unifi_tls_dir }}/key.pem {{ unifi_core_config_dir }}/unifi-core.key
+  cd /tmp && sudo -u uosserver podman exec uosserver nginx -s reload

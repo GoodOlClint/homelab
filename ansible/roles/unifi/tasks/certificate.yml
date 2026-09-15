@@ -1,28 +1,26 @@
 ---
 # ADR 0041: UniFi OS Server serves /data/unifi-core/config/unifi-core.{crt,key} from nginx
-# inside the uosserver container; the podman volume holds them on the host. The certbot
-# deploy hook installs the fleet-hosts cert there and reloads nginx. The cmp re-runs it when
-# UniFi OS regenerates its self-signed pair (an update), since certbot only fires on renewal.
-- name: Fleet-hosts certificate (certbot, DNS-01 via BIND)
-  ansible.builtin.include_role:
-    name: cert_client
+# inside the uosserver container; the podman volume holds them on the host. The same file is
+# the trust anchor of the host-side update supervisor, which dials wss://127.0.0.1 and
+# validates that name — so the cert must carry IP:127.0.0.1, which ACME cannot issue: the
+# pair is API-issued like the vault's. The cmp re-installs it when UniFi OS regenerates its
+# self-signed pair (an update).
+- name: Fleet-hosts certificate (API-issued, DNS + loopback SANs)
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/api_certificate.yml"
   vars:
-    cert_client_deploy_hook: |-
-      install -o uosserver -g uosserver -m 0644 "$RENEWED_LINEAGE/fullchain.pem" {{ unifi_core_config_dir }}/unifi-core.crt
-      install -o uosserver -g uosserver -m 0600 "$RENEWED_LINEAGE/privkey.pem" {{ unifi_core_config_dir }}/unifi-core.key
-      cd /tmp && sudo -u uosserver podman exec uosserver nginx -s reload
+    api_cert_dir: "{{ unifi_tls_dir }}"
+    api_cert_fqdn: "{{ inventory_hostname }}.{{ service_domain }}"
+    api_cert_ip: 127.0.0.1
+    api_cert_handler: Install UniFi certificate
 
 - name: Compare the served certificate with the issued one
   ansible.builtin.command:
-    cmd: cmp -s {{ unifi_core_config_dir }}/unifi-core.crt /etc/letsencrypt/live/{{ inventory_hostname }}.{{ service_domain }}/fullchain.pem
+    cmd: cmp -s {{ unifi_core_config_dir }}/unifi-core.crt {{ unifi_tls_dir }}/cert.pem
   register: _unifi_cert_cmp
   changed_when: _unifi_cert_cmp.rc == 1
   failed_when: _unifi_cert_cmp.rc > 1
 
-- name: Install the issued certificate # noqa: no-handler
-  ansible.builtin.command:
-    cmd: /etc/letsencrypt/renewal-hooks/deploy/{{ inventory_hostname }}.sh
-  environment:
-    RENEWED_LINEAGE: /etc/letsencrypt/live/{{ inventory_hostname }}.{{ service_domain }}
+- name: Install the issued certificate # noqa: no-handler command-instead-of-shell
+  ansible.builtin.shell: "{{ unifi_cert_install }}"
   changed_when: true
   when: _unifi_cert_cmp is changed

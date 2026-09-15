@@ -8,3 +8,7 @@
 - name: Reload UFW
   community.general.ufw:
     state: reloaded
+
+- name: Install UniFi certificate # noqa: command-instead-of-shell
+  ansible.builtin.shell: "{{ unifi_cert_install }}"
+  changed_when: true
