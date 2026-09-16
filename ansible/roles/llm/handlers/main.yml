@@ -16,10 +16,14 @@
     state: restarted
     daemon_reload: true
 
-- name: Restart docker
+# containerd, not just docker: its content store is what the symlink moves, and it holds the old store open
+# with metadata still referencing blobs at the vacated path — a docker-only restart then fails every pull with
+# "failed to lease content: blob not found". docker.service is After=containerd.service, so systemd orders these.
+- name: Restart the container runtime
   ansible.builtin.systemd:
-    name: docker
+    name: "{{ item }}"
     state: restarted
+  loop: [containerd, docker]
 
 - name: Restart ollama
   ansible.builtin.systemd:

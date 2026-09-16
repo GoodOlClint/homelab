@@ -154,6 +154,7 @@
       - cmake
       - ccache
       - libcurl4-openssl-dev
+      - curl # vllm.service's readiness gate and vllm-warmup shell it
       - git
       - zstd
       - caddy
@@ -263,7 +264,7 @@
     src: "{{ llm_containerd_dir }}"
     state: link
     force: true
-  notify: Restart docker
+  notify: Restart the container runtime
   tags: [llm, docker]
 
 - name: Docker's data-root lives on the weights disk
@@ -271,7 +272,7 @@
     dest: /etc/docker/daemon.json
     content: "{{ {'data-root': llm_docker_dir} | to_nice_json }}\n"
     mode: "0644"
-  notify: Restart docker
+  notify: Restart the container runtime
   tags: [llm, docker]
 
 - name: Docker
@@ -281,7 +282,7 @@
     cache_valid_time: 3600
   tags: [llm, docker]
 
-- name: Flush handlers so docker is on the weights disk before a 32 GB image is pulled
+- name: Flush handlers so the runtime is on the weights disk before a 32 GB image is pulled
   ansible.builtin.meta: flush_handlers
   tags: [llm, docker]
 
