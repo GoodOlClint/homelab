@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Chat models are loaded on request by name and swapped one at a time, so a model that fits the 32 GB card (with room left for the embeddings server) is a small change. Embedding models are always loaded and share the card with the chat model.
+        The chat engine serves one model, so a chat request is a change of what the card holds, not an addition: say what it should replace and why. Embedding models are always loaded and share the card with it. Either way the model has to fit the 32 GB card beside the other one, and a swap is benched before it ships.
   - type: input
     id: project
     attributes:
@@ -24,19 +24,23 @@ body:
     validations:
       required: true
   - type: input
-    id: gguf
+    id: checkpoint
     attributes:
-      label: GGUF file
-      description: Hugging Face repo and exact file, including the quantization.
-      placeholder: Qwen/Qwen3-Embedding-4B-GGUF, Qwen3-Embedding-4B-Q8_0.gguf
+      label: Checkpoint and revision
+      description: >-
+        Hugging Face repo and the exact commit. Chat runs on vLLM XPU, so a chat model is a quantized
+        safetensors checkpoint (GPTQ-Int4 today); embeddings run on llama.cpp, so those are a GGUF file.
+      placeholder: SergiioB/Qwen3.8-27B-GPTQ-Int4-sym-G128-MTP-BF16 @ e28c5f9
     validations:
       required: true
   - type: textarea
     id: settings
     attributes:
       label: Settings that matter
-      description: llama-server flags the model needs to be correct (pooling, context size, chat template), and the model name your client sends.
-      placeholder: "--pooling last -c 8192, name Qwen3-Embedding-4B"
+      description: >-
+        Engine flags the model needs to be correct (quantization, dtype, context length; pooling for an
+        embedding model), and the model name your client sends.
+      placeholder: "--quantization gptq --dtype float16, name Qwen3.8-27B"
   - type: textarea
     id: purpose
     attributes:
