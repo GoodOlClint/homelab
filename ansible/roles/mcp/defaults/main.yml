@@ -37,7 +37,7 @@ mcp_users:
 mcp_code_intel_units:
   operator: [mcp-pwsh-checks, PSHcl, mlx]
   agents: [mcp-pwsh-checks, PSHcl, mlx]
-mcp_code_intel_embed_model: Qwen3-Embedding-4B
+mcp_code_intel_embed_model: baai/bge-m3
 
 # UniFi OS console port and the pfSense REST API v2 (pfrest) keys live in /mcp as unifi_api_key / pfsense_api_key (operator-created).
 mcp_unifi_port: 11443
