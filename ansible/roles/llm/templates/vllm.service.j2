@@ -1,0 +1,34 @@
+[Unit]
+Description=vLLM XPU ({{ llm_vllm_served_name }})
+After=network-online.target docker.service llama-embed.service {{ llm_models_dir | replace('/', '-') | regex_replace('^-', '') }}.mount
+Requires=docker.service {{ llm_models_dir | replace('/', '-') | regex_replace('^-', '') }}.mount
+StartLimitIntervalSec=3600
+StartLimitBurst=3
+
+[Service]
+Type=exec
+# The embedder must already be answering: the triton/NEO compile cache is shared and two XPU processes
+# initialising at once reproduced a failed engine init, and GPU buffer placement is fixed at load.
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 150); do curl -sf http://127.0.0.1:{{ llm_embed_port }}/health >/dev/null && exit 0; sleep 2; done; exit 1'
+ExecStartPre=-/usr/bin/docker rm -f {{ llm_vllm_container }}
+ExecStart=/usr/bin/docker run --rm --name {{ llm_vllm_container }} \
+  --device /dev/dri -v /dev/dri/by-path:/dev/dri/by-path:ro \
+  --group-add {{ ansible_facts.getent_group.render[1] }} --shm-size 4g \
+  -p 127.0.0.1:{{ llm_chat_port }}:8000 \
+  -e TRITON_INTEL_DEVICE_ARCH=20.2.0 -e VLLM_XPU_ENABLE_XPU_GRAPH=1 \
+  -v {{ llm_vllm_model_dir }}:/model:ro -v {{ llm_vllm_cache_dir }}:/root/.cache \
+  {{ llm_vllm_image }} /model \
+{% for a in llm_vllm_args %}
+  {{ a }} \
+{% endfor %}
+  --served-model-name {{ llm_vllm_served_name }} --port 8000
+ExecStartPost=/usr/local/bin/vllm-warmup
+ExecStop=/usr/bin/docker stop -t 60 {{ llm_vllm_container }}
+Restart=on-failure
+RestartSec=30
+# Weights load in ~20 s, but the engine profiles a max batch and captures XPU graphs before it serves.
+TimeoutStartSec=2400
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target

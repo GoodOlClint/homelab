@@ -14,9 +14,10 @@
   ansible.builtin.assert:
     that:
       - llm_api_clients | reject('match', '^[a-z0-9_]+$') | list | length == 0
-      - llm_model_sha256 | length == 64
       - llm_embed_model_sha256 | length == 64
-      - llm_bench_models | map(attribute='sha256') | reject('match', '^[0-9a-f]{64}$') | list | length == 0
+      - llm_vllm_image is search('@sha256:[0-9a-f]{64}$')
+      - llm_vllm_revision | length == 40
+      - llm_vllm_model_files | map(attribute='sha256') | reject('match', '^[0-9a-f]{64}$') | list | length == 0
       - llm_llama_cpp_commit | length == 40
       - llm_ollama_sha256 | length == 64
       - llm_pair_deb_url | length == 0 or llm_pair_deb_sha256 | length == 64
@@ -178,7 +179,7 @@
   when: not _llm_render.stat.exists
   tags: [llm, packages]
 
-- name: Service user for llama-server
+- name: Service user for llama-embed
   ansible.builtin.user:
     name: "{{ llm_user }}"
     system: true
@@ -244,10 +245,66 @@
     mode: "{{ item.mode }}"
   loop:
     - { path: "{{ llm_models_dir }}", owner: "{{ llm_user }}", mode: "0755" }
+    - { path: "{{ llm_vllm_model_dir }}", owner: root, mode: "0755" }
+    - { path: "{{ llm_vllm_cache_dir }}", owner: root, mode: "0700" }
+    - { path: "{{ llm_docker_dir }}", owner: root, mode: "0710" }
+    - { path: "{{ llm_containerd_dir }}", owner: root, mode: "0711" }
     - { path: "{{ llm_data_dir }}/ollama", owner: ollama, mode: "0750" }
     - { path: "{{ llm_caddy_tls_dir }}", owner: root, mode: "0755" }
     - { path: /etc/systemd/system/caddy.service.d, owner: root, mode: "0755" }
   tags: [llm]
+
+# The containerd content store is a second store that docker's data-root does not cover, and both must leave the
+# 30 GB root disk before a 32 GB image lands. The link goes in first so the package postinst honours it.
+# ponytail: a symlink, not a containerd config.toml — docker.io ships no config file to edit and this is proven here.
+- name: containerd's store lives on the weights disk
+  ansible.builtin.file:
+    path: /var/lib/containerd
+    src: "{{ llm_containerd_dir }}"
+    state: link
+    force: true
+  notify: Restart docker
+  tags: [llm, docker]
+
+- name: Docker's data-root lives on the weights disk
+  ansible.builtin.copy:
+    dest: /etc/docker/daemon.json
+    content: "{{ {'data-root': llm_docker_dir} | to_nice_json }}\n"
+    mode: "0644"
+  notify: Restart docker
+  tags: [llm, docker]
+
+- name: Docker
+  ansible.builtin.apt:
+    name: docker.io
+    state: present
+    cache_valid_time: 3600
+  tags: [llm, docker]
+
+- name: Flush handlers so docker is on the weights disk before a 32 GB image is pulled
+  ansible.builtin.meta: flush_handlers
+  tags: [llm, docker]
+
+- name: Engine image present
+  ansible.builtin.command: "docker image inspect {{ llm_vllm_image }}"
+  register: _llm_image
+  changed_when: false
+  failed_when: false
+  tags: [llm, docker]
+
+- name: Pull the engine image by digest
+  ansible.builtin.command: "docker pull {{ llm_vllm_image }}"
+  when: _llm_image.rc != 0
+  changed_when: true
+  notify: Restart vllm
+  tags: [llm, docker]
+
+# The container needs the host's render gid to reach /dev/dri; it differs between guests, so never a literal.
+- name: The render group's gid
+  ansible.builtin.getent:
+    database: group
+    key: render
+  tags: [llm, docker]
 
 - name: Installed llama.cpp commit
   ansible.builtin.command: "cat {{ llm_llama_cpp_dir }}/bin/.commit"
@@ -296,22 +353,21 @@
     executable: /bin/bash
   when: _llm_built.stdout | default('') != llm_llama_cpp_build_id
   changed_when: true
-  notify: [Restart llama-server, Restart llama-embed]
+  notify: Restart llama-embed
   tags: [llm, build]
 
-- name: Download the served model and the bench suite
+- name: Download the chat checkpoint at the pinned revision
   ansible.builtin.get_url:
-    url: "{{ item.url }}"
-    dest: "{{ llm_models_dir }}/{{ item.file }}"
-    tmp_dest: "{{ llm_models_dir }}"
+    url: "https://huggingface.co/{{ llm_vllm_repo }}/resolve/{{ llm_vllm_revision }}/{{ item.name }}"
+    dest: "{{ llm_vllm_model_dir }}/{{ item.name }}"
+    tmp_dest: "{{ llm_vllm_model_dir }}"
     checksum: "sha256:{{ item.sha256 }}"
-    owner: "{{ llm_user }}"
     mode: "0644"
-    timeout: 120
-  loop: "{{ [{'file': llm_model_file, 'url': llm_model_url, 'sha256': llm_model_sha256}] + llm_bench_models }}"
+    timeout: 300
+  loop: "{{ llm_vllm_model_files }}"
   loop_control:
-    label: "{{ item.file }}"
-  notify: Restart llama-server
+    label: "{{ item.name }}"
+  notify: Restart vllm
   tags: [llm, model]
 
 - name: Download the embeddings model
@@ -342,19 +398,12 @@
   notify: Restart ollama
   tags: [llm, ollama]
 
-- name: Router model presets directory
-  ansible.builtin.file:
-    path: /etc/llama-server
-    state: directory
-    mode: "0755"
-  tags: [llm, config]
-
-- name: Router model presets
+- name: Warm the batch shapes clients use, so a first-request kernel compile never reaches one
   ansible.builtin.template:
-    src: models.ini.j2
-    dest: /etc/llama-server/models.ini
-    mode: "0644"
-  notify: Restart llama-server
+    src: vllm-warmup.j2
+    dest: /usr/local/bin/vllm-warmup
+    mode: "0755"
+  notify: Restart vllm
   tags: [llm, config]
 
 - name: Units
@@ -362,7 +411,7 @@
     src: "{{ item }}.j2"
     dest: "/etc/systemd/system/{{ item }}"
     mode: "0644"
-  loop: [llama-server.service, llama-embed.service, ollama.service]
+  loop: [vllm.service, llama-embed.service, ollama.service]
   notify: "Restart {{ item | regex_replace('\\.service$', '') }}"
   tags: [llm, config]
 
@@ -433,7 +482,7 @@
     enabled: true
     state: started
     daemon_reload: true
-  loop: [ollama, llama-server, llama-embed, caddy]
+  loop: [ollama, llama-embed, vllm, caddy]
   tags: [llm, config]
 
 - name: Flush handlers before the listen check
@@ -453,7 +502,7 @@
 - name: Raw engine ports bind loopback only
   ansible.builtin.shell: |
     set -o pipefail
-    ss -Hltn | awk '{print $4}' | grep -E ':({{ llm_llama_port }}|{{ llm_embed_port }}|{{ llm_ollama_port }}|{{ llm_pair_port }})$' | grep -vE '^(127\.0\.0\.1|\[::1\]):' || true
+    ss -Hltn | awk '{print $4}' | grep -E ':({{ llm_chat_port }}|{{ llm_embed_port }}|{{ llm_ollama_port }}|{{ llm_pair_port }})$' | grep -vE '^(127\.0\.0\.1|\[::1\]):' || true
   args:
     executable: /bin/bash
   register: _llm_exposed

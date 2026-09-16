@@ -42,55 +42,70 @@ llm_oneapi_pins:
   - { package: "libze1 libze-dev", version: "1.32.0-1~26.04~ppa1" }
   - { package: "libze-intel-gpu1", version: "26.31.39395.13-1~26.04~ppa1" }
 
-# All experts in VRAM on the 32 GB card. URL pins the HF revision; the sha256 is the LFS oid — both are mandatory (plan §7.9 provenance).
-llm_model_file: Qwen3.8-27B-UD-Q4_K_M.gguf
-llm_model_url: "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/4ca720788d1e01f1bff70c033e0d0028fd02e502/{{ llm_model_file }}"
-llm_model_sha256: 322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482
-# Bench suite: candidates kept on disk beside the served model so the b70-bench repo's `scripts/llm-bench.sh suite`
-# (LLM_BENCH_SUITE lists these paths) compares them on every engine/Mesa roll. Same pins as above; promote one by moving it into llm_model_*.
-llm_bench_models:
-  - file: Qwen3-30B-A3B-Q4_K_M.gguf
-    url: https://huggingface.co/unsloth/Qwen3-30B-A3B-GGUF/resolve/d5b1d57bd0b504ac62ae6c725904e96ef228dc74/Qwen3-30B-A3B-Q4_K_M.gguf
-    sha256: 9f1a24700a339b09c06009b729b5c809e0b64c213b8af5b711b3dbdfd0c5ba48
-    args:
-      ctx-size: 40960 # trained length; full attention on all 48 layers would need 9.7 GiB KV at 200k
-  - file: Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
-    url: https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF/resolve/a483e9e6cbd595906af30beda3187c2663a1118c/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
-    sha256: ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61
-  # Same trunk plus the nextn head; upstream names it identically to the plain file, so the local name carries -MTP.
-  - file: Qwen3.6-35B-A3B-MTP-UD-Q4_K_M.gguf
-    url: https://huggingface.co/unsloth/Qwen3.6-35B-A3B-MTP-GGUF/resolve/5bc3e238d916f48a861bac2f8a1990a0e9b7e98d/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
-    sha256: 0b21525e972670ed59e1812e170b27c26355381f0656ecc4e25617ece7dac58b
-llm_llama_port: 8081
-# Chat runs llama-server in router mode: every model above is a preset named by its file stem, a request's "model" field
-# picks one, and --models-max 1 swaps them (a 27B and a 35B cannot share the 32 GB card). The served model loads at start.
-llm_llama_models_max: 1
-# [*] of the preset file; option names are llama-server's long flags without the dashes.
-llm_llama_args:
-  n-gpu-layers: 99
-  ctx-size: 200000 # KV at q8_0: 27B 6.9 GiB, 35B-A3B ~2 GiB; 262k leaves the 27B too little headroom beside the embedder
-  threads: 6 # = pinned P-cores (vm-configs.tf cpu_affinity)
-  flash-attn: "on"
-  cache-type-k: q8_0
-  cache-type-v: q8_0
-  jinja: true
-  metrics: true
-  parallel: 4
-  kv-unified: true # the 4 slots share the 200k KV pool; without it each slot gets 50k
-# No MTP: speculative drafting serves one stream, and agents issue concurrent requests (--parallel 4). Single-stream it
-# lifts the 27B from 22 to 36 t/s (b70-bench results); whether it can share slots is measured before it returns.
-llm_model_args: {}
+# --- Chat: vLLM XPU in a container (ADR 0051, 2026-09-16) ---
+# The image carries its own oneAPI userspace and drives the host `xe` driver through /dev/dri, so the host
+# oneAPI/Level Zero/Mesa pins above are none of its business. Pinned by digest, not tag: it is 32 GB.
+llm_vllm_image: "intel/llm-scaler-vllm@sha256:52218ad85513ab6686d4c090c83c2bd8c5b02423c63aa4dabd41837fe641fe3b"
+llm_vllm_container: vllm
+llm_vllm_served_name: Qwen3.8-27B
+llm_chat_port: 8081
+llm_vllm_repo: SergiioB/Qwen3.8-27B-GPTQ-Int4-sym-G128-MTP-BF16
+llm_vllm_revision: e28c5f952bdd5d814297a07d85a064a87af26a3f
+llm_vllm_model_dir: "{{ llm_models_dir }}/vllm/Qwen3.8-27B-GPTQ-Int4-MTP"
+# Triton and NEO compile caches, kept across restarts so a batch shape is compiled once. Shared state, which is
+# why two XPU processes must never initialise at once.
+llm_vllm_cache_dir: "{{ llm_models_dir }}/vllm/cache"
+# Every file at the pinned revision. The shards' hashes are the LFS oids; the rest were read at the revision.
+llm_vllm_model_files:
+  - { name: chat_template.jinja, sha256: c3cf9e34abf4f9e36c2d72165aa9c132d3e2a725b6c2586aaa3a8af9d7a81041 }
+  - { name: config.json, sha256: 580f5caae29242b242d3bcab2ad5b8a942fc0a59df1d228bd2b3233cfc760372 }
+  - { name: generation_config.json, sha256: d0d0ed2e37cdfafef4a5067d5ea2407b05f4fb50526e47c008a5b235d50240fb }
+  - { name: model-00001-of-00005.safetensors, sha256: 30c8e2b1c82cdcc840848b5c98bafe2f74269b1e6472a053ce7d7b2d002f39a7 }
+  - { name: model-00002-of-00005.safetensors, sha256: ff66eaf6ecc6e4b214f281ac532dcfcb07c60d5a8c78cf145bc93c38c00c024e }
+  - { name: model-00003-of-00005.safetensors, sha256: 15284cb88d52ea1648b4fcc68901286d7c4795388e05ae1e143c8026fcb0be44 }
+  - { name: model-00004-of-00005.safetensors, sha256: 878ae6ebc9553de5340df0d6097aa319f58650382c89e474b39d0c0a98e76932 }
+  - { name: model-00005-of-00005.safetensors, sha256: 2a6ebd04c77c2d5ce5952ca81a4197f1c34f712a00c293a25242ec27ac413729 }
+  - { name: model.safetensors.index.json, sha256: d511a969b32a16f1890326dadd4d04039779cebce7458b8e5d2ce7f3ce2550ed }
+  - { name: preprocessor_config.json, sha256: 27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516 }
+  - { name: processor_config.json, sha256: d89ef49ce9cd37fbf510158e13c1ef063d9286411c1ec9049932dbe0487143b1 }
+  - { name: quantize_config.json, sha256: ecbdecd64057569d9ab8e74c68eb329776e682d44746ff7b82bba6fcb0e157db }
+  - { name: tokenizer.json, sha256: 06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523 }
+  - { name: tokenizer_config.json, sha256: c5528e605ca971b6afeb2cb0025fd21244650e6fc7739808c581c6d5cdb70aa3 }
+  - { name: video_preprocessor_config.json, sha256: 7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13 }
+# Measured budget with the embedder resident (b70-bench 2026-09-16): 17.47 GiB weights + 2.85 peak activation
+# + 0.74 non-torch + 2.13 graph capture + 7.63 KV = 201,769 tokens, decoding 61/57/40 t/s per stream at 1/2/4
+# streams on 4k prompts. NEVER raise to `0.88` with `--max-num-seqs 64`: the guest OOM-kills the engine during
+# init on host memory pinned by GPU-mapped buffers, which xpu-smi folds into its device figure and VRAM
+# headroom arithmetic cannot see. Measured values, not derived ones.
+llm_vllm_args:
+  - --quantization gptq
+  - --dtype float16
+  - --kv-cache-dtype fp8
+  - --gpu-memory-utilization 0.90
+  - --max-num-seqs 8
+  - --max-num-batched-tokens 4096
+  - --max-model-len 200000
+  - --language-model-only
+  - --speculative-config '{"method":"mtp","num_speculative_tokens":4}'
 
-# Embeddings: their own always-loaded llama-server on the card, so a chat swap can never evict them. Caddy sends
-# /llama/v1/embeddings here. Qwen3-Embedding-4B (2560 dims) is what every code-intelligence index was built with, and
-# the alias is the model string it compares across units. Q8_0, never Q4: quantization noise lands in the vectors.
-# Pooling must be `last`; the default mean pooling returns plausible, wrong vectors.
-llm_embed_model_file: Qwen3-Embedding-4B-Q8_0.gguf
-llm_embed_model_url: "https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF/resolve/f4602530db1d980e16da9d7d3a70294cf5c190be/{{ llm_embed_model_file }}"
-llm_embed_model_sha256: b60ae5ce2dd6a0b77f82cadf21def1f310a3e10cde380ad0081b07a9d416949d
-llm_embed_alias: Qwen3-Embedding-4B
+# Docker's data-root and the containerd content store are two stores, and both ride the node-local weights disk:
+# the image alone is 32 GB and the root disk is 30 GB. /data stays the ADR 0015 holder slot and carries neither.
+llm_docker_dir: "{{ llm_models_dir }}/docker"
+llm_containerd_dir: "{{ llm_models_dir }}/containerd"
+
+# Embeddings: their own always-loaded llama-server on the card, so the chat engine can never evict them. Caddy
+# sends /llama/v1/embeddings here. bge-m3 replaced Qwen3-Embedding-4B on 2026-09-16 (ADR 0051): it ties the 4B on
+# code-intelligence's retrieval set at 6,400 tok/s against 2,460, and both cannot sit beside vLLM at 0.90.
+# Pooling must be `cls` for this model; the default mean pooling returns plausible, wrong vectors. The alias is the
+# exact string code-intelligence's generator records as provider/model and compares between endpoints — a contract.
+llm_embed_model_file: bge-m3-FP16.gguf
+llm_embed_model_url: "https://huggingface.co/gpustack/bge-m3-GGUF/resolve/2d48f1737679ad900d5c26c5aad5410e9c70fdca/{{ llm_embed_model_file }}"
+llm_embed_model_sha256: daec91ffb5dd0c27411bd71f29932917c49cf529a641d0168496c3a501e3062c
+llm_embed_alias: baai/bge-m3
 llm_embed_port: 8082
-llm_embed_extra_args: "--embedding --pooling last -ngl 99 -c 8192 -b 2048 -ub 2048 -fa on --cache-ram 0 -t 2"
+# The measured line, plus --cache-ram 0: llama-server's default 8 GiB host prompt cache is host RAM an embedding
+# server never hits, and host RAM is what OOM-stormed this guest once already.
+llm_embed_extra_args: "--embedding --pooling cls -ngl 99 -c 8192 -b 8192 -ub 8192 -fa on --cache-ram 0 -t 2"
 
 # Ollama stays as PAIR's supported backend, CPU-only so it can never take the card from llama-server.
 llm_ollama_version: 0.32.15

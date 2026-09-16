@@ -24,7 +24,7 @@
 {% endfor %}
     }
     handle /health {
-        reverse_proxy 127.0.0.1:{{ llm_llama_port }}
+        reverse_proxy 127.0.0.1:{{ llm_chat_port }}
     }
     handle_path /llama/* {
         @embeddings path /v1/embeddings /embeddings /embedding
@@ -43,7 +43,7 @@
         }
         handle {
             route {
-                reverse_proxy @authed 127.0.0.1:{{ llm_llama_port }} {
+                reverse_proxy @authed 127.0.0.1:{{ llm_chat_port }} {
                     flush_interval -1
                 }
                 respond 401

@@ -10,11 +10,16 @@
     state: restarted
     daemon_reload: true
 
-- name: Restart llama-server
+- name: Restart vllm
   ansible.builtin.systemd:
-    name: llama-server
+    name: vllm
     state: restarted
     daemon_reload: true
+
+- name: Restart docker
+  ansible.builtin.systemd:
+    name: docker
+    state: restarted
 
 - name: Restart ollama
   ansible.builtin.systemd:

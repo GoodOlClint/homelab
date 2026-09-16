@@ -1,0 +1,29 @@
+#!/bin/sh
+# The first request of a new batch shape compiles kernels: 5-10 s typically, 86 s seen once. Run the shapes
+# clients use here, while systemd still calls the unit "starting", rather than letting a client meet them.
+# Prompt text is letters and spaces only, so it needs no JSON escaping.
+set -eu
+url="http://127.0.0.1:{{ llm_chat_port }}"
+
+i=0
+while [ "$i" -lt 240 ]; do
+    curl -sf -o /dev/null "$url/health" && break
+    i=$((i + 1))
+    sleep 5
+done
+curl -sf -o /dev/null "$url/health"
+
+ask() {
+    curl -sf -o /dev/null -m 900 -X POST "$url/v1/completions" \
+        -H 'Content-Type: application/json' \
+        -d "{\"model\":\"{{ llm_vllm_served_name }}\",\"prompt\":\"$1\",\"max_tokens\":8,\"temperature\":0}"
+}
+
+# ~4000 tokens, the long shape the bench measured.
+long=$(awk 'BEGIN { for (i = 0; i < 4000; i++) printf "word " }')
+
+ask "warm up"
+ask "$long"
+# The concurrent shape: --max-num-seqs is 8, four streams is what the acceptance test drives.
+for _ in 1 2 3 4; do ask "$long" & done
+wait
