@@ -493,9 +493,28 @@
   notify: Restart caddy
   tags: [llm, config]
 
-# Before the engine starts, not after: the engine reads free VRAM at init and refuses if an embedder still
-# holding the previous model leaves it short. Handlers run in handler-file order, so llama-embed precedes vllm.
-- name: Flush handlers so the embedder is serving the current model before the engine sizes the card
+# What the embedder is SERVING, not whether its files changed. A handler cannot cover this: once a previous run
+# has written the unit, the template task reports ok, nothing notifies, and an embedder left running the old
+# model stays running it — while the engine, which reads free VRAM at init, refuses to start beside it.
+- name: The model the embedder is actually serving
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ llm_embed_port }}/v1/models"
+  register: _llm_embed_live
+  failed_when: false
+  changed_when: false
+  tags: [llm, config]
+
+- name: Restart the embedder when it is not serving the declared model
+  ansible.builtin.systemd:
+    name: llama-embed
+    state: restarted
+    daemon_reload: true
+  when: >-
+    _llm_embed_live.status != 200 or
+    llm_embed_alias not in (_llm_embed_live.json.data | default([]) | map(attribute='id') | list)
+  tags: [llm, config]
+
+- name: Flush handlers before the engine sizes the card
   ansible.builtin.meta: flush_handlers
   tags: [llm, config]
 
