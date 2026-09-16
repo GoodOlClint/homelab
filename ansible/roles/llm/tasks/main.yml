@@ -423,6 +423,22 @@
   notify: Restart ollama
   tags: [llm, config]
 
+- name: The retired llama.cpp router unit is gone
+  ansible.builtin.systemd:
+    name: llama-server
+    state: stopped
+    enabled: false
+  register: _llm_old_router
+  failed_when: false
+  changed_when: _llm_old_router.status is defined and _llm_old_router.status.LoadState != 'not-found'
+  tags: [llm, config]
+
+- name: The retired llama.cpp router unit file is gone
+  ansible.builtin.file:
+    path: /etc/systemd/system/llama-server.service
+    state: absent
+  tags: [llm, config]
+
 - name: NVIDIA PAIR
   ansible.builtin.include_tasks: pair.yml
   when: llm_pair_deb_url | length > 0
@@ -477,6 +493,12 @@
   notify: Restart caddy
   tags: [llm, config]
 
+# Before the engine starts, not after: the engine reads free VRAM at init and refuses if an embedder still
+# holding the previous model leaves it short. Handlers run in handler-file order, so llama-embed precedes vllm.
+- name: Flush handlers so the embedder is serving the current model before the engine sizes the card
+  ansible.builtin.meta: flush_handlers
+  tags: [llm, config]
+
 - name: Services enabled
   ansible.builtin.systemd:
     name: "{{ item }}"
@@ -484,10 +506,6 @@
     state: started
     daemon_reload: true
   loop: [ollama, llama-embed, vllm, caddy]
-  tags: [llm, config]
-
-- name: Flush handlers before the listen check
-  ansible.builtin.meta: flush_handlers
   tags: [llm, config]
 
 - name: Every client key reached the agent-rendered env file

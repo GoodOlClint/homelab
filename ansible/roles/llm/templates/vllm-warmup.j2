@@ -5,9 +5,15 @@
 set -eu
 url="http://127.0.0.1:{{ llm_chat_port }}"
 
+# Give up the moment the engine is gone rather than polling a corpse: an init failure otherwise leaves the
+# unit in start-post for the full 20 minutes, which reads as "still starting".
 i=0
 while [ "$i" -lt 240 ]; do
     curl -sf -o /dev/null "$url/health" && break
+    [ "$(docker inspect -f '{{ '{{' }}.State.Running{{ '}}' }}' {{ llm_vllm_container }} 2>/dev/null)" = "true" ] || {
+        echo "engine container is not running; giving up" >&2
+        exit 1
+    }
     i=$((i + 1))
     sleep 5
 done
