@@ -30,3 +30,9 @@
     name: ollama
     state: restarted
     daemon_reload: true
+
+- name: Restart vllm-liveness
+  ansible.builtin.systemd:
+    name: vllm-liveness.timer
+    state: restarted
+    daemon_reload: true

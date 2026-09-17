@@ -1,0 +1,7 @@
+[Unit]
+Description=vLLM engine liveness probe (a generation, not /health)
+After=vllm.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/vllm-liveness

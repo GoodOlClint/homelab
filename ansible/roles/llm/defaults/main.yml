@@ -88,6 +88,11 @@ llm_vllm_args:
   - --language-model-only
   - --speculative-config '{"method":"mtp","num_speculative_tokens":4}'
 
+# The engine wedged once with /health still answering 200 (2026-09-16, cause open), which neither systemd nor
+# the Kuma row can see. The probe costs a generation, so it can; two consecutive failures restart the engine.
+llm_liveness_interval: 5min
+llm_liveness_timeout_s: 90
+
 # Docker's data-root and the containerd content store are two stores, and both ride the node-local weights disk:
 # the image alone is 32 GB and the root disk is 30 GB. /data stays the ADR 0015 holder slot and carries neither.
 llm_docker_dir: "{{ llm_models_dir }}/docker"

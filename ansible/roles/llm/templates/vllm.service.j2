@@ -2,6 +2,10 @@
 Description=vLLM XPU ({{ llm_vllm_served_name }})
 After=network-online.target docker.service llama-embed.service {{ llm_models_dir | replace('/', '-') | regex_replace('^-', '') }}.mount
 Requires=docker.service {{ llm_models_dir | replace('/', '-') | regex_replace('^-', '') }}.mount
+# The engine holds 0.90 of the card, so the embedder cannot re-allocate its pool while the engine is up: a
+# restart of the embedder alone aborts. PartOf makes an embedder restart take the engine down and bring it
+# back, and After= above orders it - engine stops, embedder restarts and warms, engine starts and sizes.
+PartOf=llama-embed.service
 # A crash loop of a 32 GB engine is expensive, so the limit stays — but 3600 s locked the unit out for an hour
 # after three init failures during the cutover, and a latched unit hides whether the next fix worked
 # (`systemctl reset-failed vllm` before judging one).

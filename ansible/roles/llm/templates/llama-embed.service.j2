@@ -15,6 +15,8 @@ ExecStart={{ llm_llama_cpp_dir }}/bin/llama-server \
   -m {{ llm_models_dir }}/{{ llm_embed_model_file }} --alias {{ llm_embed_alias }} \
   {{ llm_embed_extra_args }}
 ExecStartPost=/usr/local/bin/llama-embed-warmup
+# Model load plus the pool warm-up exceeds systemd's 90 s default, and the card may be busy when it runs.
+TimeoutStartSec=300
 Restart=on-failure
 RestartSec=10
 LimitCORE=0

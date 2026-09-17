@@ -399,15 +399,23 @@
   notify: Restart ollama
   tags: [llm, ollama]
 
-- name: Warm-up scripts (the engine's batch shapes; the embedder's SYCL pool)
+- name: The embedder's pool warm-up
+  ansible.builtin.template:
+    src: llama-embed-warmup.j2
+    dest: /usr/local/bin/llama-embed-warmup
+    mode: "0755"
+  notify: Restart llama-embed
+  tags: [llm, config]
+
+- name: The engine's warm-up and liveness probe
   ansible.builtin.template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
     mode: "0755"
   loop:
     - { src: vllm-warmup.j2, dest: /usr/local/bin/vllm-warmup }
-    - { src: llama-embed-warmup.j2, dest: /usr/local/bin/llama-embed-warmup }
-  notify: [Restart llama-embed, Restart vllm]
+    - { src: vllm-liveness.j2, dest: /usr/local/bin/vllm-liveness }
+  notify: Restart vllm
   tags: [llm, config]
 
 - name: Units
@@ -415,8 +423,8 @@
     src: "{{ item }}.j2"
     dest: "/etc/systemd/system/{{ item }}"
     mode: "0644"
-  loop: [vllm.service, llama-embed.service, ollama.service]
-  notify: "Restart {{ item | regex_replace('\\.service$', '') }}"
+  loop: [vllm.service, llama-embed.service, ollama.service, vllm-liveness.service, vllm-liveness.timer]
+  notify: "Restart {{ item | regex_replace('\\.(service|timer)$', '') }}"
   tags: [llm, config]
 
 - name: Ollama's installer drop-ins are not ours
@@ -527,7 +535,7 @@
     enabled: true
     state: started
     daemon_reload: true
-  loop: [ollama, llama-embed, vllm, caddy]
+  loop: [ollama, llama-embed, vllm, caddy, vllm-liveness.timer]
   tags: [llm, config]
 
 - name: Every client key reached the agent-rendered env file

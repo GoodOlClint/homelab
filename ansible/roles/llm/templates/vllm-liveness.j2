@@ -1,0 +1,28 @@
+#!/bin/sh
+# /health is the API server's liveness, not the engine core's. On 2026-09-16 the engine wedged with /health
+# answering 200 while no request completed, so the only check that can tell the difference is one that costs
+# the engine a token. Two consecutive failures restart it; one is not enough, because a request can legitimately
+# queue behind a long generation.
+set -eu
+url="http://127.0.0.1:{{ llm_chat_port }}"
+state=/run/vllm-liveness.fail
+
+systemctl is-active --quiet vllm || exit 0
+
+if curl -sf -o /dev/null -m {{ llm_liveness_timeout_s }} -X POST "$url/v1/completions" \
+    -H 'Content-Type: application/json' \
+    -d '{"model":"{{ llm_vllm_served_name }}","prompt":"ping","max_tokens":4,"temperature":0}'; then
+    rm -f "$state"
+    exit 0
+fi
+
+fails=$(cat "$state" 2>/dev/null || echo 0)
+fails=$((fails + 1))
+echo "$fails" > "$state"
+echo "engine did not answer a generation request ($fails consecutive)" >&2
+
+if [ "$fails" -ge 2 ]; then
+    echo "restarting the engine after $fails consecutive failures" >&2
+    rm -f "$state"
+    systemctl restart vllm
+fi

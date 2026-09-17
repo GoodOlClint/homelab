@@ -1,0 +1,10 @@
+[Unit]
+Description=vLLM engine liveness probe
+
+[Timer]
+OnBootSec={{ llm_liveness_interval }}
+OnUnitInactiveSec={{ llm_liveness_interval }}
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target
