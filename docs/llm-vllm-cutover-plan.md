@@ -107,3 +107,29 @@ The GPU is unavailable for the whole window. Announce to both code-intelligence 
 - **Two XPU processes.** Reproduced as a failed engine init. Mitigation: the unit ordering plus a readiness gate, and the rule stays written down.
 - **Rollback is not same-day.** With the GGUFs deleted, reverting to llama.cpp chat needs a 16 GB re-download. Accepted at the gate.
 - **The image is 32 GB and unmirrored.** ADR 0022's stays-upstream exemption already covers this guest's refs; Zot mirrors nothing here. A rebuild re-pulls from Docker Hub by digest.
+
+## As built (2026-09-16)
+
+Landed. All six acceptance checks pass; the numbers reproduce the b70-bench ledger through Caddy with a per-client key: **61.2 t/s single stream, 56.0 t/s per stream at two streams** on 4k prompts (ledger: 61.2 and 56.7), TTFT 2.0 s, and the full sweep gives 63.7 / 57.1 / 50.9 short and 60.4 / 52.5 / 40.3 long at 1 / 2 / 4 streams. A second `make ansible llm` is 0 changed and both units come back in the right order after a reboot with no hand start. `/data` fell from ~75 % to 18 % once Docker's stores came off it; the weights disk holds everything at 46 % of 295 GB.
+
+### Four defects the cutover exposed, each fixed in the role
+
+1. **containerd kept the old content store open.** `data-root` in `daemon.json` does not cover it, so the move needs a `/var/lib/containerd` symlink *and* a containerd restart. Restarting docker alone failed every pull with `failed to lease content: ... blob not found`, which reads like a bad digest and is not.
+2. **Handlers flushed after the engine started.** The engine reads free VRAM at init, so an embedder still holding the previous model left it short — `Free memory on device xpu:0 (24.57/31.89 GiB) ... less than desired (0.9, 28.7 GiB)`. Handlers now flush first.
+3. **A handler could not fix (2) anyway.** Once a failed run had written the new unit file, the template task reported `ok`, nothing notified, and the embedder kept serving the old model. The role now asks the embedder *which model it is serving* and restarts it when that is not the declared one — state, not file convergence.
+4. **The warm-up's abort check raced its own container.** `ExecStartPre` removes the old container on a restart, so "not running" means "not created yet" for the first seconds; treating it as fatal killed the unit the instant it was asked to restart. It is now fatal only after the container has been seen running. The start limit also moved from an hour to 15 minutes, because three init failures locked the unit out and a latched unit hides whether the next fix worked.
+
+### Answers the two client sessions needed, read from the running engine
+
+- `chat_template_kwargs {"enable_thinking": false}` **is** honoured (4 tokens and a bare answer, against 68 tokens of reasoning without it).
+- **No reasoning parser is configured** (`reasoning_parser=''`), so with thinking on the reasoning arrives inline in `content`, the `reasoning` field is null, and there is no `completion_tokens_details`.
+- **Prefix caching is off** (`enable_prefix_caching=False`): the same 12,001-token prompt sent twice reported 12,001 prompt tokens both times, hit rate 0.0 %, and `usage.prompt_tokens_details` is `null`, so `cached_tokens` is not reported.
+- **The two engines contend.** With the embedder saturated (16,766 requests during a sweep) chat decode fell from 52.5 to 36.2 t/s per stream at 2 streams and 40.3 to 25.8 at 4. A bulk re-embed roughly halves chat throughput while it runs.
+
+### Open: one unexplained wedge
+
+The engine wedged once, at 00:06:40Z: `/health` kept answering 200 and the API server kept logging, while no request completed and the GPU span at 22 % with zero requests running. No `xe` hang or reset in dmesg. It recovered fully on `systemctl restart vllm` and **could not be reproduced** in four deliberate attempts — single and repeated chat requests, the full 1/2/4-stream sweep, the sweep under saturated embedding load, and clients killed mid-request.
+
+Two things follow whatever the cause turns out to be. **`/health` cannot detect this**, so neither the Kuma row nor systemd would have noticed; a liveness check that costs the engine a token is the only kind that would. And the main consumer is an unattended timer, so a wedge would present as a hung job rather than a failed one. Deciding whether to add such a watchdog is deliberately left to the operator rather than folded in here, since it is outside the approved plan.
+
+The five llama.cpp GGUFs (84 GB) are **deliberately still on disk** despite the gate's decision to remove them: they are the rollback, and deleting them before the operator has used the new engine would trade a reversible change for an irreversible one. They come off on sign-off.

@@ -103,9 +103,13 @@ llm_embed_model_url: "https://huggingface.co/gpustack/bge-m3-GGUF/resolve/2d48f1
 llm_embed_model_sha256: daec91ffb5dd0c27411bd71f29932917c49cf529a641d0168496c3a501e3062c
 llm_embed_alias: baai/bge-m3
 llm_embed_port: 8082
-# The measured line, plus --cache-ram 0: llama-server's default 8 GiB host prompt cache is host RAM an embedding
-# server never hits, and host RAM is what OOM-stormed this guest once already.
-llm_embed_extra_args: "--embedding --pooling cls -ngl 99 -c 8192 -b 8192 -ub 8192 -fa on --cache-ram 0 -t 2"
+# -ub 2048, NOT the bench's 8192: beside an engine holding 0.90 of the card, the SYCL flash-attention path
+# cannot reserve its scratch from the VMM pool at 8192 and llama-server ABORTS (SIGABRT in
+# ggml_sycl_flash_attn_ext -> ggml_sycl_pool_vmm::alloc) rather than refusing the request. The bench measured
+# 8192 as safe, but with ~900-token chunks and without real client input; code-intelligence's first real
+# request (25 chunks up to 6,000 chars) core-dumped it twice within the hour. Consumers chunk under 2k tokens.
+# --cache-ram 0: llama-server's default 8 GiB host prompt cache is host RAM an embedding server never hits.
+llm_embed_extra_args: "--embedding --pooling cls -ngl 99 -c 8192 -b 2048 -ub 2048 -fa on --cache-ram 0 -t 2"
 
 # Ollama stays as PAIR's supported backend, CPU-only so it can never take the card from llama-server.
 llm_ollama_version: 0.32.15
