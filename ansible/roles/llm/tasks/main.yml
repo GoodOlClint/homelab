@@ -407,6 +407,40 @@
   notify: Restart llama-embed
   tags: [llm, config]
 
+- name: py-spy's wheel
+  ansible.builtin.get_url:
+    url: "{{ llm_pyspy_url }}"
+    dest: "/var/cache/py_spy-{{ llm_pyspy_version }}.whl"
+    checksum: "sha256:{{ llm_pyspy_sha256 }}"
+    mode: "0644"
+  register: llm_pyspy_wheel
+  tags: [llm, config]
+
+- name: py-spy's installed version
+  ansible.builtin.command: /usr/local/bin/py-spy --version
+  register: llm_pyspy_have
+  changed_when: false
+  failed_when: false
+  tags: [llm, config]
+
+- name: py-spy's binary
+  ansible.builtin.shell: |
+    set -eu
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' EXIT
+    python3 -m zipfile -e {{ llm_pyspy_wheel.dest | quote }} "$tmp"
+    install -m 0755 "$tmp"/py_spy-*.data/scripts/py-spy /usr/local/bin/py-spy
+  changed_when: true
+  when: llm_pyspy_version not in (llm_pyspy_have.stdout | default(''))
+  tags: [llm, config]
+
+- name: The wedge capture's output directory
+  ansible.builtin.file:
+    path: "{{ llm_wedge_capture_dir }}"
+    state: directory
+    mode: "0750"
+  tags: [llm, config]
+
 - name: The engine's warm-up and liveness probe
   ansible.builtin.template:
     src: "{{ item.src }}"
@@ -416,6 +450,13 @@
     - { src: vllm-warmup.j2, dest: /usr/local/bin/vllm-warmup }
     - { src: vllm-liveness.j2, dest: /usr/local/bin/vllm-liveness }
   notify: Restart vllm
+  tags: [llm, config]
+
+- name: The wedge capture
+  ansible.builtin.template:
+    src: vllm-wedge-capture.j2
+    dest: /usr/local/bin/vllm-wedge-capture
+    mode: "0755"
   tags: [llm, config]
 
 - name: Units

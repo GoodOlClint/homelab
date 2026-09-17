@@ -21,6 +21,11 @@ fails=$((fails + 1))
 echo "$fails" > "$state"
 echo "engine did not answer a generation request ($fails consecutive)" >&2
 
+# The first failure is the only moment the evidence exists: the second one restarts the engine.
+if [ "$fails" -eq 1 ]; then
+    /usr/local/bin/vllm-wedge-capture || true
+fi
+
 if [ "$fails" -ge 2 ]; then
     echo "restarting the engine after $fails consecutive failures" >&2
     rm -f "$state"

@@ -1,0 +1,44 @@
+#!/bin/sh
+# The wedge leaves nothing in any log: /health answers 200, EngineCore stays alive, and no counter moves. The
+# probe's FIRST failure therefore takes the evidence, because the second one restarts the engine and destroys
+# it. A request has to be outstanding while the stacks are taken — the whole question is where it is lost.
+#
+# Healthy-idle baseline to compare against (measured 2026-09-16): EngineCore's MainThread parked in
+# _process_input_queue with a live "process_input_sockets" ZMQ thread. Still there with a request outstanding
+# means the request never crossed the ZMQ hop and the loss is API-server side; MainThread inside execute_model
+# means it is engine side.
+set -u
+
+base={{ llm_wedge_capture_dir }}
+dir="$base/$(date -u +%Y%m%dT%H%M%SZ)"
+mkdir -p "$dir"
+exec >"$dir/capture.log" 2>&1
+
+curl -s -o /dev/null -m 180 -X POST "http://127.0.0.1:{{ llm_chat_port }}/v1/completions" \
+    -H 'Content-Type: application/json' \
+    -d '{"model":"{{ llm_vllm_served_name }}","prompt":"ping","max_tokens":4,"temperature":0}' &
+sleep 10
+
+api=$(pgrep -f "bin/vllm serve /model" | head -1)
+core=$(pgrep -f "VLLM::EngineCore" | head -1)
+echo "captured $(date -uIs)  api=${api:-none} core=${core:-none}"
+
+for p in $api $core; do
+    echo "=== py-spy dump $p ==="
+    py-spy dump --nonblocking --pid "$p"
+    echo "=== kernel thread states $p (tid state wchan) ==="
+    for t in /proc/"$p"/task/*; do
+        echo "${t##*/} $(awk '{print $3}' "$t/stat" 2>/dev/null) $(cat "$t/wchan" 2>/dev/null)"
+    done
+done
+
+echo "=== metrics ==="
+curl -sf -m 10 "http://127.0.0.1:{{ llm_chat_port }}/metrics" | grep -E '^vllm:(num_|iteration|request_success)'
+echo "=== xpu ==="
+xpu-smi ps
+xpu-smi stats -d 0
+echo "=== engine log ==="
+journalctl -u vllm.service -n 300 --no-pager -o short-iso
+
+wait
+ls -1dt "$base"/*/ 2>/dev/null | tail -n +11 | xargs -r rm -rf

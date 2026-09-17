@@ -105,6 +105,14 @@ llm_vllm_args:
 llm_liveness_interval: 5min
 llm_liveness_timeout_s: 90
 
+# The wedge is silent in every log, so the probe's first failure takes a Python stack while it is still wedged
+# (the second failure restarts the engine and destroys the evidence). py-spy attaches from the host across the
+# container boundary; the wheel carries a single static binary, so the install is a download and an unzip.
+llm_pyspy_version: "0.4.2"
+llm_pyspy_url: "https://files.pythonhosted.org/packages/f9/34/dd7d3c763a00b7b965e25a5eab0acd1a345dbaf0f45fffe595278873a1c0/py_spy-0.4.2-py2.py3-none-manylinux_2_5_x86_64.manylinux1_x86_64.whl"
+llm_pyspy_sha256: "aeb0323409199c785f730645e9f4bb7a7b9ca2c481f2c331a55642b5d13fa52f"
+llm_wedge_capture_dir: /var/log/vllm-wedge
+
 # Docker's data-root and the containerd content store are two stores, and both ride the node-local weights disk:
 # the image alone is 32 GB and the root disk is 30 GB. /data stays the ADR 0015 holder slot and carries neither.
 llm_docker_dir: "{{ llm_models_dir }}/docker"
