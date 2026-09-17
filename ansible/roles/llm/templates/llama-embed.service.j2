@@ -14,6 +14,7 @@ ExecStart={{ llm_llama_cpp_dir }}/bin/llama-server \
   --host 127.0.0.1 --port {{ llm_embed_port }} \
   -m {{ llm_models_dir }}/{{ llm_embed_model_file }} --alias {{ llm_embed_alias }} \
   {{ llm_embed_extra_args }}
+ExecStartPost=/usr/local/bin/llama-embed-warmup
 Restart=on-failure
 RestartSec=10
 LimitCORE=0

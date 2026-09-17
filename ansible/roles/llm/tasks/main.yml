@@ -399,12 +399,15 @@
   notify: Restart ollama
   tags: [llm, ollama]
 
-- name: Warm the batch shapes clients use, so a first-request kernel compile never reaches one
+- name: Warm-up scripts (the engine's batch shapes; the embedder's SYCL pool)
   ansible.builtin.template:
-    src: vllm-warmup.j2
-    dest: /usr/local/bin/vllm-warmup
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
     mode: "0755"
-  notify: Restart vllm
+  loop:
+    - { src: vllm-warmup.j2, dest: /usr/local/bin/vllm-warmup }
+    - { src: llama-embed-warmup.j2, dest: /usr/local/bin/llama-embed-warmup }
+  notify: [Restart llama-embed, Restart vllm]
   tags: [llm, config]
 
 - name: Units

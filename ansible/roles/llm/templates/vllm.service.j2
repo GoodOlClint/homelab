@@ -12,7 +12,9 @@ StartLimitBurst=3
 Type=exec
 # The embedder must already be answering: the triton/NEO compile cache is shared and two XPU processes
 # initialising at once reproduced a failed engine init, and GPU buffer placement is fixed at load.
-ExecStartPre=/bin/sh -c 'for i in $(seq 1 150); do curl -sf http://127.0.0.1:{{ llm_embed_port }}/health >/dev/null && exit 0; sleep 2; done; exit 1'
+# is-active, not just /health: the embedder only becomes active once its ExecStartPost warm-up has grown the
+# SYCL pool to its steady state, and the engine must measure free memory after that, not before.
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 150); do systemctl is-active --quiet llama-embed && curl -sf http://127.0.0.1:{{ llm_embed_port }}/health >/dev/null && exit 0; sleep 2; done; exit 1'
 ExecStartPre=-/usr/bin/docker rm -f {{ llm_vllm_container }}
 ExecStart=/usr/bin/docker run --rm --name {{ llm_vllm_container }} \
   --device /dev/dri -v /dev/dri/by-path:/dev/dri/by-path:ro \

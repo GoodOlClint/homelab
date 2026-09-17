@@ -1,0 +1,24 @@
+#!/bin/sh
+# Grow the embedder's SYCL pool to its steady state BEFORE the engine sizes the card.
+# The pool is allocated lazily: idle the embedder holds ~0.96 GB, after real batches ~2.66 GB. If the engine
+# measures free memory in between, it takes its share of a card that still looks empty and the embedder then
+# aborts (SIGABRT in ggml_sycl_pool_vmm::alloc) the first time a client sends a real batch. The scratch is
+# bounded by the micro-batch, not by request size, so one batch that fills -ub reaches the ceiling.
+set -eu
+url="http://127.0.0.1:{{ llm_embed_port }}"
+
+i=0
+while [ "$i" -lt 60 ]; do
+    curl -sf -o /dev/null "$url/health" && break
+    i=$((i + 1))
+    sleep 2
+done
+curl -sf -o /dev/null "$url/health"
+
+# Eight inputs of ~1,650 tokens: just under the 2048 physical batch (a single larger input is refused with a
+# clean error, not an abort), and eight of them together is the multi-sequence shape that exhausts the pool.
+chunk=$(awk 'BEGIN { for (i = 0; i < 150; i++) printf "token sequence for embedding warmup " }')
+payload=$(printf '{"model":"{{ llm_embed_alias }}","input":["%s","%s","%s","%s","%s","%s","%s","%s"]}' \
+    "$chunk" "$chunk" "$chunk" "$chunk" "$chunk" "$chunk" "$chunk" "$chunk")
+printf '%s' "$payload" | curl -sf -o /dev/null -m 300 -X POST "$url/v1/embeddings" \
+    -H 'Content-Type: application/json' --data-binary @-

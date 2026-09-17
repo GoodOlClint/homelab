@@ -119,6 +119,17 @@ Landed. All six acceptance checks pass; the numbers reproduce the b70-bench ledg
 3. **A handler could not fix (2) anyway.** Once a failed run had written the new unit file, the template task reported `ok`, nothing notified, and the embedder kept serving the old model. The role now asks the embedder *which model it is serving* and restarts it when that is not the declared one — state, not file convergence.
 4. **The warm-up's abort check raced its own container.** `ExecStartPre` removes the old container on a restart, so "not running" means "not created yet" for the first seconds; treating it as fatal killed the unit the instant it was asked to restart. It is now fatal only after the container has been seen running. The start limit also moved from an hour to 15 minutes, because three init failures locked the unit out and a latched unit hides whether the next fix worked.
 
+### A fifth defect, found by a client rather than by the acceptance tests
+
+code-intelligence's first real embedding request core-dumped `llama-embed` twice. Two compounding mistakes, both mine:
+
+- I had **widened** CLAUDE.md's hard-won `-ub 2048` rule to the bench's `-ub 8192` on the strength of a measurement taken with ~900-token chunks and no engine competing for the card. Beside an engine holding 0.90, the SYCL flash-attention path cannot reserve its scratch from the VMM pool and llama-server **aborts** rather than refusing the request, so a client's input size crashes the service. `-ub 2048` is restored, and the rule now says a bench number is not licence to raise it.
+- Even at 2048 the embedder aborted after a clean boot, because the scratch is allocated **lazily and retained**: 0.96 GB idle, 2.66 GB after a real batch. Starting the embedder first is not enough if the engine measures free memory before that growth happens — the engine takes 28.7 GiB of a card that still looks empty. `llama-embed` now has an `ExecStartPost` warm-up driving one full micro-batch, and the engine gates on `systemctl is-active llama-embed` rather than its `/health`, which is up before `ExecStartPost` finishes.
+
+Verified after a clean reboot at the client's own shapes: 5x200 tokens, 25 chunks, 5x1500 chars, and a 30-chunk 51,180-token maintenance batch all return 1024-dim vectors, with acceptance still 6/6.
+
+**The lesson worth keeping:** the acceptance tests passed throughout. A one-word embedding probe proves the alias and the dimension and nothing about the working set. A client sending real data found this in under an hour.
+
 ### Answers the two client sessions needed, read from the running engine
 
 - `chat_template_kwargs {"enable_thinking": false}` **is** honoured (4 tokens and a bare answer, against 68 tokens of reasoning without it).
