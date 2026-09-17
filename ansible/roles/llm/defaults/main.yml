@@ -87,6 +87,18 @@ llm_vllm_args:
   - --max-model-len 200000
   - --language-model-only
   - --speculative-config '{"method":"mtp","num_speculative_tokens":4}'
+  # Qwen3.8 is a thinking model: without a parser the reasoning arrives inline in `content`. `qwen3` is the name
+  # this build registers for the family (vllm.reasoning._REASONING_PARSERS_TO_REGISTER); it costs no VRAM.
+  - --reasoning-parser qwen3
+  # Opt-in because the model is hybrid (64 layers, 48 linear_attention + 16 full_attention), and vLLM keeps
+  # prefix caching off for hybrid models by default; it selects Mamba cache mode `align`, which the engine
+  # itself calls experimental. Measured on this guest 2026-09-16: the KV pool goes 261,946 -> 255,172 tokens
+  # (2.6%, still 1.28x concurrency at the full 200k context) and a repeated 22.5k-token prefix prefills in
+  # 1.8 s against 13.6 s cold. Bought on that measurement, not on the default.
+  - --enable-prefix-caching
+  # Without this the engine reports `usage.prompt_tokens_details: null` however well the cache is working, so a
+  # client cannot tell a hit from a miss. case-project-8a's tripwire reads `cached_tokens`. No VRAM, no latency.
+  - --enable-prompt-tokens-details
 
 # The engine wedged once with /health still answering 200 (2026-09-16, cause open), which neither systemd nor
 # the Kuma row can see. The probe costs a generation, so it can; two consecutive failures restart the engine.
