@@ -260,7 +260,7 @@ locals {
       ip_offset    = 80
       cpu_cores    = 4
       memory_mb    = 8192
-      disk_size_gb = 60
+      disk_size_gb = 120
     },
   ]
 }
