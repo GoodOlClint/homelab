@@ -5,15 +5,19 @@
 set -eu
 url="http://127.0.0.1:{{ llm_chat_port }}"
 
-# Give up the moment the engine is gone rather than polling a corpse: an init failure otherwise leaves the
-# unit in start-post for the full 20 minutes, which reads as "still starting".
+# Give up once the engine has gone away, but only after it has been seen up: on a restart ExecStartPre removes
+# the old container, so for the first seconds "not running" means "docker run has not created it yet", not
+# "dead". Treating that as fatal killed the unit the instant it was asked to restart.
+seen=0
 i=0
 while [ "$i" -lt 240 ]; do
     curl -sf -o /dev/null "$url/health" && break
-    [ "$(docker inspect -f '{{ '{{' }}.State.Running{{ '}}' }}' {{ llm_vllm_container }} 2>/dev/null)" = "true" ] || {
-        echo "engine container is not running; giving up" >&2
+    state=$(docker inspect -f '{{ '{{' }}.State.Running{{ '}}' }}' {{ llm_vllm_container }} 2>/dev/null || true)
+    [ "$state" = "true" ] && seen=1
+    if [ "$seen" = 1 ] && [ "$state" != "true" ]; then
+        echo "engine container stopped during startup; giving up" >&2
         exit 1
-    }
+    fi
     i=$((i + 1))
     sleep 5
 done

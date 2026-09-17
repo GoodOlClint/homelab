@@ -2,7 +2,10 @@
 Description=vLLM XPU ({{ llm_vllm_served_name }})
 After=network-online.target docker.service llama-embed.service {{ llm_models_dir | replace('/', '-') | regex_replace('^-', '') }}.mount
 Requires=docker.service {{ llm_models_dir | replace('/', '-') | regex_replace('^-', '') }}.mount
-StartLimitIntervalSec=3600
+# A crash loop of a 32 GB engine is expensive, so the limit stays — but 3600 s locked the unit out for an hour
+# after three init failures during the cutover, and a latched unit hides whether the next fix worked
+# (`systemctl reset-failed vllm` before judging one).
+StartLimitIntervalSec=900
 StartLimitBurst=3
 
 [Service]
