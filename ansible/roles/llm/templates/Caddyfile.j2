@@ -28,6 +28,9 @@
     }
     handle_path /llama/* {
         @embeddings path /v1/embeddings /embeddings /embedding
+        # llama-server never validates `model`: it echoes the requested name back and answers from bge-m3
+        # regardless, so Caddy is the only enforcement point. An absent `model` is unambiguous and allowed.
+        @wrong_embed_model expression `{http.request.body}.matches("\"model\"\\s*:\\s*\"") && !{http.request.body}.matches("\"model\"\\s*:\\s*\"{{ llm_embed_alias }}\"")`
         @model_sources {
             method POST DELETE
             path /models
@@ -37,6 +40,9 @@
         }
         handle @embeddings {
             route {
+                respond @wrong_embed_model `{"error":{"message":"this endpoint serves only {{ llm_embed_alias }}","type":"invalid_request_error","param":"model","code":"model_not_found"}}` 400 {
+                    close
+                }
                 reverse_proxy @authed 127.0.0.1:{{ llm_embed_port }}
                 respond 401
             }
