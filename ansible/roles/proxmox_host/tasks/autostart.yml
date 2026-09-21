@@ -18,7 +18,8 @@
       ExecStartPre=-/bin/sh -c 'for i in $(seq 1 150); do mountpoint -q /mnt/pve/{{ proxmox_host_cephfs_name }} && exit 0; sleep 2; done; echo "cephfs not mounted after 300 s, starting guests anyway" >&2'
   register: _pve_guests_dropin
 
-- name: Reload systemd for the pve-guests drop-in
+- name: Keep pve-guests enabled and reload systemd for the drop-in
   ansible.builtin.systemd:
-    daemon_reload: true
-  when: _pve_guests_dropin is changed
+    name: pve-guests
+    enabled: true
+    daemon_reload: "{{ _pve_guests_dropin is changed }}"
