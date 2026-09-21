@@ -1,0 +1,24 @@
+---
+# pve-guests runs startall a few seconds after boot; pvestatd mounts cephfs on
+# its own 10 s cycle and the MDS is not up yet, so any non-HA guest whose
+# cloud-init snippet lives on cephfs fails to start and is never retried.
+# Bounded so a cluster that never mounts still boots the rest.
+- name: Create the pve-guests drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/pve-guests.service.d
+    state: directory
+    mode: "0755"
+
+- name: Make pve-guests wait for the cephfs mount
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/pve-guests.service.d/wait-cephfs.conf
+    mode: "0644"
+    content: |
+      [Service]
+      ExecStartPre=-/bin/sh -c 'for i in $(seq 1 150); do mountpoint -q /mnt/pve/{{ proxmox_host_cephfs_name }} && exit 0; sleep 2; done; echo "cephfs not mounted after 300 s, starting guests anyway" >&2'
+  register: _pve_guests_dropin
+
+- name: Reload systemd for the pve-guests drop-in
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: _pve_guests_dropin is changed
