@@ -14,6 +14,12 @@ nft_forward_rules:
   - { proto: udp, port: "2456-2458", comment: "Valheim" }
   - { proto: udp, port: 51820, comment: "Mobile WireGuard" }
 
+# Inbound services on the VPS itself (not forwarded). iface is the nft interface name.
+nft_input_rules:
+  - { iface: "{{ nft_public_interface }}", proto: tcp, port: "{{ vps_seedbox_peer_port | default(51413) }}", comment: "Transmission peers" }
+  - { iface: "{{ nft_public_interface }}", proto: udp, port: "{{ vps_seedbox_peer_port | default(51413) }}", comment: "Transmission peers" }
+  - { iface: "{{ nft_wg_interface }}", proto: tcp, port: "{{ vps_seedbox_rpc_port | default(9091) }}", comment: "Transmission RPC" }
+
 # Rate limiting on Plex (new connections per minute per source IP)
 nft_rate_limit_tcp_32400: "60/minute"
 

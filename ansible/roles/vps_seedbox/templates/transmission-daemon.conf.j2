@@ -1,0 +1,3 @@
+# Flags re-apply on every start; settings.json only carries what has no flag.
+TRANSMISSION_OPTIONS="--encryption-preferred --no-portmap --no-incomplete-dir --config-dir {{ vps_seedbox_home }}/config --download-dir {{ vps_seedbox_home }}/downloads --watch-dir {{ vps_seedbox_home }}/watch --peerport {{ vps_seedbox_peer_port }} --rpc-bind-address {{ vps_seedbox_rpc_bind }} --port {{ vps_seedbox_rpc_port }}"
+logfile=syslog

@@ -61,6 +61,7 @@
       - {name: "authentik — external realm", monitor_type: http, url: "http://authentik-server.authentik-ext.svc.cluster.local/-/health/ready/"}
       - {name: "VPS — public IP", monitor_type: ping, hostname: "vps.{{ media_domain }}"}
       - {name: "VPS — WireGuard tunnel peer", monitor_type: ping, hostname: "{{ vps_wg_tunnel.tunnel_address.split('/')[0] }}"}
+      - {name: "VPS — Transmission RPC", monitor_type: port, hostname: "{{ vps_wg_tunnel.tunnel_address.split('/')[0] }}", port: 9091}
       - {name: "Cloudflare Tunnel — Tautulli", monitor_type: http, url: "https://tautulli.{{ media_domain }}", interval: 120, accepted_statuscodes: "{{ _redirects }}", expiry_notification: true}
       - {name: Sonarr, monitor_type: http, url: "http://sonarr.plex-services.svc.cluster.local:8989/ping", accepted_statuscodes: "{{ _redirects }}"}
       - {name: Radarr, monitor_type: http, url: "http://radarr.plex-services.svc.cluster.local:7878/ping", accepted_statuscodes: "{{ _redirects }}"}

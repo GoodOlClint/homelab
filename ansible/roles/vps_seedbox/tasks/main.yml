@@ -1,0 +1,86 @@
+---
+- name: Install transmission
+  community.general.apk:
+    name:
+      - transmission-daemon
+      - transmission-daemon-openrc
+      - transmission-remote
+    state: present
+
+- name: Create transmission directories
+  ansible.builtin.file:
+    path: "{{ vps_seedbox_home }}/{{ item }}"
+    state: directory
+    owner: transmission
+    group: transmission
+    mode: "0755"
+  loop: [config, downloads, watch, torrents]
+
+- name: Check for an existing settings.json
+  ansible.builtin.stat:
+    path: "{{ vps_seedbox_home }}/config/settings.json"
+  register: _seedbox_settings
+
+# The daemon rewrites settings.json on every stop, so it is seeded once; anything
+# that must converge later is a flag in conf.d.
+- name: Seed settings.json before the first start
+  ansible.builtin.template:
+    src: settings.json.j2
+    dest: "{{ vps_seedbox_home }}/config/settings.json"
+    owner: transmission
+    group: transmission
+    mode: "0600"
+  when: not _seedbox_settings.stat.exists
+
+- name: Configure the transmission daemon
+  ansible.builtin.template:
+    src: transmission-daemon.conf.j2
+    dest: /etc/conf.d/transmission-daemon
+    mode: "0644"
+  register: _seedbox_conf
+
+- name: Enable and start transmission with the current flags
+  ansible.builtin.service:
+    name: transmission-daemon
+    enabled: true
+    state: "{{ 'restarted' if _seedbox_conf is changed else 'started' }}"
+
+- name: Stage the declared torrent files
+  ansible.builtin.get_url:
+    url: "{{ item }}"
+    dest: "{{ vps_seedbox_home }}/torrents/{{ item | basename }}"
+    owner: transmission
+    group: transmission
+    mode: "0644"
+  loop: "{{ vps_seedbox_torrents }}"
+  register: _seedbox_staged
+
+# transmission renames a picked-up file to .added, so the watch copy only happens
+# when the staged file is new or changed.
+- name: Hand new torrent files to the watch directory
+  ansible.builtin.copy:
+    src: "{{ item.dest }}"
+    dest: "{{ vps_seedbox_home }}/watch/{{ item.dest | basename }}"
+    remote_src: true
+    owner: transmission
+    group: transmission
+    mode: "0644"
+  loop: "{{ _seedbox_staged.results | selectattr('changed') | list }}"
+  loop_control:
+    label: "{{ item.dest | basename }}"
+
+- name: Wait for the RPC port
+  ansible.builtin.wait_for:
+    host: "{{ vps_seedbox_rpc_bind }}"
+    port: "{{ vps_seedbox_rpc_port }}"
+    timeout: 30
+
+- name: List the seeded torrents
+  ansible.builtin.command:
+    cmd: transmission-remote {{ vps_seedbox_rpc_bind }}:{{ vps_seedbox_rpc_port }} --list
+  register: _seedbox_list
+  changed_when: false
+
+- name: Show the seed list
+  ansible.builtin.debug:
+    msg: "{{ _seedbox_list.stdout_lines }}"

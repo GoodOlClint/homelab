@@ -88,6 +88,7 @@
     - vps_hardening
     - rsyslog_client
     - telegraf
+    - vps_seedbox
 
   post_tasks:
     - name: Verify WireGuard interface is up

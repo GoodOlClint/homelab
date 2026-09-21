@@ -37,6 +37,11 @@ table inet filter {
         # Telegraf metrics (Prometheus scraping via tunnel)
         iifname {{ nft_wg_interface }} tcp dport 9273 accept
 
+{% for rule in nft_input_rules %}
+        # {{ rule.comment }}
+        iifname {{ rule.iface }} {{ rule.proto }} dport {{ rule.port }} accept
+{% endfor %}
+
         # Log and drop everything else
         log prefix "nft-input-drop: " flags all counter drop
     }

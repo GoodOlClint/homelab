@@ -44,7 +44,7 @@ Additional VLANs not shown: infrastructure, vpn, work, iot, sonos, vivint, guest
 - **Games**: Valheim (+ PlayFab status sidecar) on a MetalLB UDP LB and Kiwix over NFS, on the Talos cluster (`kubernetes/games/`, ADR 0038)
 - **Secrets**: Infisical (self-hosted vault) with per-VM machine identities; SOPS/age for bootstrap only (no runtime fallback)
 - **Backup**: Proxmox Backup Server with nightly cron jobs
-- **VPS Relay**: Encrypted WireGuard tunnel forwarding Plex, Valheim, mobile WireGuard
+- **VPS Relay**: Encrypted WireGuard tunnel forwarding Plex, Valheim, mobile WireGuard; also seeds public-domain archive.org torrents (transmission, `vps_seedbox` role)
 
 ## Policy vs Binding Architecture
 

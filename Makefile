@@ -30,7 +30,7 @@ _secret = $(if $(_sc_$(1)),,$(eval _sc_$(1) := $$(call _read_secret,$(1))))$(_sc
 TF_TARGETS := plan apply init terraform-apply terraform-bootstrap ansible-bootstrap inventory refresh build rebuild \
   rebuild-infisical data-volumes backup-jobs sdn-apply expand-disk update-dns clean clean-vps-ssh \
   hosts-plan hosts-apply unifi-plan unifi-apply talos-plan talos-build validate \
-  vps-deploy vps-rebuild vps-destroy vps-close-ssh vps-rotate-keys
+  vps-deploy vps-rebuild vps-destroy vps-close-ssh vps-rotate-keys tf
 $(TF_TARGETS): export TF_VAR_virtual_environment_password = $(call _secret,proxmox_password)
 $(TF_TARGETS): export TF_VAR_vultr_api_key = $(call _secret,vultr_api_key)
 $(TF_TARGETS): export TF_VAR_cloudflare_api_token = $(call _secret,cloudflare_api_token)
@@ -317,12 +317,16 @@ VPS_TF_TARGETS := \
 	-target=vultr_firewall_rule.plex \
 	-target=vultr_firewall_rule.valheim \
 	-target=vultr_firewall_rule.mobile_wg \
+	-target=vultr_firewall_rule.seedbox_tcp \
+	-target=vultr_firewall_rule.seedbox_udp \
 	-target=vultr_firewall_rule.icmp \
 	-target=vultr_firewall_rule.ssh_provisioning \
 	-target=vultr_firewall_rule.wg_tunnel_v6 \
 	-target=vultr_firewall_rule.plex_v6 \
 	-target=vultr_firewall_rule.valheim_v6 \
 	-target=vultr_firewall_rule.mobile_wg_v6 \
+	-target=vultr_firewall_rule.seedbox_tcp_v6 \
+	-target=vultr_firewall_rule.seedbox_udp_v6 \
 	-target=vultr_firewall_rule.icmpv6 \
 	-target=vultr_firewall_rule.ssh_provisioning_v6 \
 	-target=vultr_instance.vps \

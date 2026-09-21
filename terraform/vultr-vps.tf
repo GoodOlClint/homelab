@@ -109,6 +109,27 @@ resource "vultr_firewall_rule" "valheim" {
   notes             = "Valheim game server"
 }
 
+# Transmission peer port — the VPS seeds public-domain archive.org bundles itself (vps_seedbox role)
+resource "vultr_firewall_rule" "seedbox_tcp" {
+  firewall_group_id = vultr_firewall_group.vps.id
+  protocol          = "tcp"
+  ip_type           = "v4"
+  subnet            = "0.0.0.0"
+  subnet_size       = 0
+  port              = "51413"
+  notes             = "Transmission peers"
+}
+
+resource "vultr_firewall_rule" "seedbox_udp" {
+  firewall_group_id = vultr_firewall_group.vps.id
+  protocol          = "udp"
+  ip_type           = "v4"
+  subnet            = "0.0.0.0"
+  subnet_size       = 0
+  port              = "51413"
+  notes             = "Transmission peers"
+}
+
 # Mobile WireGuard relay (opaque UDP forwarded to pfSense)
 resource "vultr_firewall_rule" "mobile_wg" {
   firewall_group_id = vultr_firewall_group.vps.id
@@ -188,6 +209,26 @@ resource "vultr_firewall_rule" "valheim_v6" {
   subnet_size       = 0
   port              = "2456:2458"
   notes             = "Valheim game server — IPv6"
+}
+
+resource "vultr_firewall_rule" "seedbox_tcp_v6" {
+  firewall_group_id = vultr_firewall_group.vps.id
+  protocol          = "tcp"
+  ip_type           = "v6"
+  subnet            = "::"
+  subnet_size       = 0
+  port              = "51413"
+  notes             = "Transmission peers — IPv6"
+}
+
+resource "vultr_firewall_rule" "seedbox_udp_v6" {
+  firewall_group_id = vultr_firewall_group.vps.id
+  protocol          = "udp"
+  ip_type           = "v6"
+  subnet            = "::"
+  subnet_size       = 0
+  port              = "51413"
+  notes             = "Transmission peers — IPv6"
 }
 
 # Mobile WireGuard relay (IPv6)

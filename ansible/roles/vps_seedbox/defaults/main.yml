@@ -1,0 +1,13 @@
+---
+# Public-domain torrents the VPS seeds. The list is the record: add a .torrent
+# URL here and run `make vps-ansible`; transmission fetches the data over the
+# webseed and seeds from the VPS disk.
+vps_seedbox_torrents:
+  - https://archive.org/download/gov.ar.code/gov.ar.code_archive.torrent
+  - https://archive.org/download/gov.tn.tca/gov.tn.tca_archive.torrent
+
+vps_seedbox_peer_port: 51413
+vps_seedbox_rpc_port: 9091
+# RPC listens on the tunnel address only; the nftables input rule accepts it on wg0 only.
+vps_seedbox_rpc_bind: "{{ vps_wg_tunnel.tunnel_address.split('/')[0] }}"
+vps_seedbox_home: /var/lib/transmission
