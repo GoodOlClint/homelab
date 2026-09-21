@@ -1,6 +1,6 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-resources: [pvc.yaml, secrets.yaml, app.yaml]
+resources: [pvc.yaml, secrets.yaml, app.yaml, valheim2.yaml]
 # The sidecar script is JavaScript full of ${…} template literals: Flux must not substitute it, and
 # the name hash rolls the pod when it changes (what CONFIG_HASH did).
 configMapGenerator:

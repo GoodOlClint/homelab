@@ -11,3 +11,4 @@ spec:
     substituteFrom: [{kind: ConfigMap, name: cluster-bindings}]
   healthChecks:
     - {apiVersion: apps/v1, kind: Deployment, name: valheim, namespace: games}
+    - {apiVersion: apps/v1, kind: Deployment, name: valheim2, namespace: games}

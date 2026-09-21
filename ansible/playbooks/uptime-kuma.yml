@@ -67,5 +67,7 @@
       - {name: Sabnzbd, monitor_type: http, url: "http://sabnzbd.plex-services.svc.cluster.local:8080/api?mode=version", accepted_statuscodes: "{{ _redirects }}"}
       - {name: "Valheim — PlayFab lobby", monitor_type: json-query, url: "http://valheim-status.games.svc.cluster.local:8081/status.json",
          json_path: online, json_path_operator: "==", expected_value: "true"}
+      - {name: "Valheim Ironwood — PlayFab lobby", monitor_type: json-query, url: "http://valheim2-status.games.svc.cluster.local:8081/status.json",
+         json_path: online, json_path_operator: "==", expected_value: "true"}
   roles:
     - goodolclint.uptime_kuma.uptime_kuma

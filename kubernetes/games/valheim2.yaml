@@ -1,0 +1,105 @@
+# Second Valheim server: same image and shape as valheim, its own world, PVC and LB address.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: valheim2, namespace: games}
+spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 20Gi}}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: valheim2
+  namespace: games
+  annotations: {secrets.infisical.com/auto-reload: "true"}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: valheim2}}
+  template:
+    metadata:
+      labels: {app: valheim2}
+    spec:
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 120
+      containers:
+        - name: valheim
+          image: ${REGISTRY}/ghcr.io/community-valheim-tools/valheim-server:latest
+          resources: {requests: {cpu: 500m, memory: 2Gi}}
+          securityContext: {capabilities: {add: [SYS_NICE]}}
+          ports:
+            - {containerPort: 2456, protocol: UDP}
+            - {containerPort: 2457, protocol: UDP}
+            - {containerPort: 2458, protocol: UDP}
+            - {containerPort: 80}
+            - {containerPort: 9001}
+          env:
+            - {name: TZ, value: "${TZ}"}
+            - {name: SUPERVISOR_HTTP, value: "true"}
+            - {name: SUPERVISOR_HTTP_USER, value: admin}
+            - {name: SUPERVISOR_HTTP_PASS, valueFrom: {secretKeyRef: {name: valheim2-secrets, key: SUPERVISOR_HTTP_PASS}}}
+            - {name: STATUS_HTTP, value: "true"}
+            # The PlayFab status sidecar matches lobbies by this name, so keep it distinctive.
+            - {name: SERVER_NAME, value: "Homelab Valheim Ironwood"}
+            - {name: WORLD_NAME, value: Ironwood}
+            - {name: SERVER_PASS, valueFrom: {secretKeyRef: {name: valheim2-secrets, key: SERVER_PASS}}}
+            - {name: SERVER_PUBLIC, value: "false"}
+            - {name: CROSSPLAY, value: "true"}
+            - {name: SERVER_ARGS, value: "-preset normal"}
+            - {name: BACKUPS_ENABLED, value: "true"}
+            - {name: BACKUPS_CRON, value: "0 */6 * * *"}
+            - {name: BACKUPS_MAX_COUNT, value: "10"}
+            - {name: UPDATE_CRON, value: "*/15 * * * *"}
+          volumeMounts:
+            - {name: state, mountPath: /config, subPath: config}
+            - {name: state, mountPath: /opt/valheim, subPath: data}
+            - {name: status, mountPath: /status, readOnly: true}
+          livenessProbe:
+            exec: {command: [sh, -c, 'find /status/status.json -mmin -3 | grep -q . && grep -q "\"online\": true" /status/status.json']}
+            initialDelaySeconds: 900
+            periodSeconds: 60
+            failureThreshold: 10
+        - name: valheim-status
+          image: ${REGISTRY}/public.ecr.aws/docker/library/node:22-alpine
+          resources: {requests: {cpu: 25m, memory: 64Mi}}
+          env:
+            - {name: NAME, value: "Homelab Valheim Ironwood"}
+            - {name: INTERVAL, value: "60"}
+          command: [sh, -c, 'while true; do node /app/valheim-playfab-status.mjs --name "$NAME" > /srv/status.json.tmp 2>/dev/null; [ -s /srv/status.json.tmp ] && mv /srv/status.json.tmp /srv/status.json; sleep "$INTERVAL"; done']
+          volumeMounts:
+            - {name: script, mountPath: /app, readOnly: true}
+            - {name: status, mountPath: /srv}
+        - name: valheim-status-web
+          image: ${REGISTRY}/public.ecr.aws/docker/library/busybox:stable
+          resources: {requests: {cpu: 10m, memory: 32Mi}}
+          command: [httpd, -f, -p, "8081", -h, /srv]
+          ports: [{containerPort: 8081}]
+          volumeMounts:
+            - {name: status, mountPath: /srv, readOnly: true}
+      volumes:
+        - {name: state, persistentVolumeClaim: {claimName: valheim2}}
+        - {name: status, emptyDir: {}}
+        - {name: script, configMap: {name: valheim-status}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: valheim2
+  namespace: games
+  annotations: {metallb.io/loadBalancerIPs: "${VALHEIM2_IP}"}
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  selector: {app: valheim2}
+  ports:
+    - {name: game, port: 2456, protocol: UDP}
+    - {name: query, port: 2457, protocol: UDP}
+    - {name: aux, port: 2458, protocol: UDP}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: valheim2-status, namespace: games}
+spec: {selector: {app: valheim2}, ports: [{port: 8081}]}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: valheim2-supervisor, namespace: games}
+spec: {selector: {app: valheim2}, ports: [{port: 9001}]}

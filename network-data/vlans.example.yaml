@@ -53,6 +53,7 @@ metallb:
     syslog: 66
     valheim: 67
     codeintel: 68
+    valheim2: 69
 
 # --- Proxmox SDN Zones ---
 sdn_zones:
