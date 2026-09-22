@@ -26,9 +26,9 @@ spec:
           resources: {requests: {cpu: 500m, memory: 2Gi}}
           securityContext: {capabilities: {add: [SYS_NICE]}}
           ports:
-            - {containerPort: 2456, protocol: UDP}
-            - {containerPort: 2457, protocol: UDP}
-            - {containerPort: 2458, protocol: UDP}
+            - {containerPort: 2466, protocol: UDP}
+            - {containerPort: 2467, protocol: UDP}
+            - {containerPort: 2468, protocol: UDP}
             - {containerPort: 80}
             - {containerPort: 9001}
           env:
@@ -37,6 +37,9 @@ spec:
             - {name: SUPERVISOR_HTTP_USER, value: admin}
             - {name: SUPERVISOR_HTTP_PASS, valueFrom: {secretKeyRef: {name: valheim2-secrets, key: SUPERVISOR_HTTP_PASS}}}
             - {name: STATUS_HTTP, value: "true"}
+            # PlayFab keys a crossplay lobby by advertised IP:port; on 2456 this server is indistinguishable
+            # from valheim behind the same WAN address and favourites resolve to whichever registered last.
+            - {name: SERVER_PORT, value: "2466"}
             # The PlayFab status sidecar matches lobbies by this name, so keep it distinctive.
             - {name: SERVER_NAME, value: "Homelab Valheim Ironwood"}
             - {name: WORLD_NAME, value: Ironwood}
@@ -90,9 +93,9 @@ spec:
   externalTrafficPolicy: Local
   selector: {app: valheim2}
   ports:
-    - {name: game, port: 2456, protocol: UDP}
-    - {name: query, port: 2457, protocol: UDP}
-    - {name: aux, port: 2458, protocol: UDP}
+    - {name: game, port: 2466, protocol: UDP}
+    - {name: query, port: 2467, protocol: UDP}
+    - {name: aux, port: 2468, protocol: UDP}
 ---
 apiVersion: v1
 kind: Service
