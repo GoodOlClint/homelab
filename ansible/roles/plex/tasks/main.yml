@@ -431,3 +431,10 @@
   tags:
     - plex
     - poster-reset
+
+- name: Converge Plex server preferences
+  ansible.builtin.import_tasks: prefs.yml
+  when: plex_token | length > 0
+  tags:
+    - plex
+    - prefs

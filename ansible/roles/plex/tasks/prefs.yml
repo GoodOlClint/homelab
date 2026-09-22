@@ -1,0 +1,21 @@
+---
+- name: Read Plex server preferences
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:32400/:/prefs?X-Plex-Token={{ plex_token }}"
+    return_content: true
+  register: _plex_prefs_now
+  no_log: true
+  until: _plex_prefs_now.status == 200
+  retries: 12
+  delay: 5
+
+- name: Set Plex preferences that differ
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:32400/:/prefs?{{ item.key }}={{ item.value | urlencode }}&X-Plex-Token={{ plex_token }}"
+    method: PUT
+    status_code: [200]
+  loop: "{{ plex_prefs | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when: (_plex_prefs_now.content | regex_search('id=\"' ~ item.key ~ '\"[^>]*? value=\"([^\"]*)\"', '\\1') | default([''], true) | first) != (item.value | string)
+  changed_when: true

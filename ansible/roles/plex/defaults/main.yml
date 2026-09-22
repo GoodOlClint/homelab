@@ -18,3 +18,11 @@ plex_gid: 988
 #   secrets (secrets.plex.plex_smb_pass, secrets.plex.plex_token)
 #   bootstrap (bootstrap.plex_username, bootstrap.plex_password)
 #   mgmt_vlan_prefix, services_vlan_prefix
+
+# Networks Plex treats as LAN (no remote bitrate cap, client "home" quality). The fleet VLAN /24s only:
+# the VPS tunnel subnet must stay out, or every relayed viewer is "local" and streams original quality.
+plex_lan_networks: >-
+  {{ network_data.vlans.values() | map(attribute='id') | map('string')
+     | map('regex_replace', '^(.*)$', network_data.ipv4_prefix ~ '.\1.0/24') | join(',') }}
+plex_prefs:
+  LanNetworksBandwidth: "{{ plex_lan_networks }}"
