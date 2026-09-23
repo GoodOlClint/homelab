@@ -29,9 +29,16 @@
       changed_when: false
       check_mode: false
 
-    - name: Check whether apt has work
+    # The apt module skips cache.update() under check_mode, so the dry run below
+    # would otherwise plan against whatever apt-daily last fetched.
+    - name: Refresh the apt lists
       ansible.builtin.apt:
         update_cache: true
+      check_mode: false
+      changed_when: false
+
+    - name: Check whether apt has work
+      ansible.builtin.apt:
         upgrade: dist
       check_mode: true
       register: _apt_plan
