@@ -3,7 +3,7 @@
 - **Status:** Proposed
 - **Date:** 2026-09-15
 - **Deciders:** operator + agent
-- **Context source:** the 2026-09-09 fleet-wide HA fence (Pro-Aggregation auto-firmware reboot) · 2026-09-09 physical re-plan · session 2026-09-15 · amends [ADR 0019](0019-corosync-moves-onto-the-shared-48-port-access-switch-trading-physical-isolation-for-consolidation.md)
+- **Context source:** the 2026-09-09 fleet-wide HA fence (Pro-Aggregation auto-firmware reboot) · 2026-09-09 physical re-plan · session 2026-09-15 · msi NIC and as-built notes amended 2026-09-25 · amends [ADR 0019](0019-corosync-moves-onto-the-shared-48-port-access-switch-trading-physical-isolation-for-consolidation.md)
 
 ## Context
 
@@ -21,13 +21,13 @@ Ring1 moves onto the **USW-Flex-2.5G-8**. Each cluster member (ms-01a/b/c and ms
 - Ring0 stays on VLAN 31 on the Pro-Max-48. Ring numbering is unchanged.
 - The corosync token rises to **5000 ms**.
 
-msi has one onboard copper port (I225-V, which carries mgmt and ring0), so msi's ring1 moves off the bond sub-interface (`vmbr0.32`) onto an **Intel i226-class PCIe card in PCI_E3**, freed when the 25G card moves to the M.2 riser (ADR 0056), not onto a USB NIC. Until that card is fitted, msi keeps ring1 on `vmbr0.32`. That is acceptable only while msi's LRM holds no HA services (idle, verified 2026-09-15): a node with no active HA services has no armed watchdog and cannot fence.
+msi has one onboard copper port (I225-V, which carries mgmt and ring0), so msi's ring1 moves off the bond sub-interface (`vmbr0.32`) onto an **Intel I226-V M.2 card in M2_4** (ADR 0056), not onto a USB NIC. Until that card is fitted, msi keeps ring1 on `vmbr0.32`, and ring1 does not move to the Flex for any member: with VLAN 32 confined to the Flex, moving ms-01a/b first would cut msi's ring1 to them. The 2026-09-15 premise that this was safe because msi's LRM held no HA services no longer holds: on 2026-09-25 HA placed unifi, infisical and authentik on msi during an ms-01a maintenance, so msi's watchdog can be armed. The M2_4 card is therefore a prerequisite for the ring1 move, and the move is done for all members together, one node at a time.
 
 ## Rejected alternatives
 
 - **Keep both rings on the fabric (ADR 0019 as-is):** 2026-09-09 showed the rings share one STP failure domain. Rejected.
 - **A fully unmanaged ring1 switch:** no telemetry and no port state in the controller. Adoption with STP off keeps visibility without joining the STP domain. Rejected.
-- **Run ring1 over the CRS510 island (ADR 0057):** it would put cluster membership in the same failure domain as replication and break the island's "VLAN 21 only" rule. Rejected.
+- **Run ring1 over the CRS518 island (ADR 0057):** it would put cluster membership in the same failure domain as replication and break the island's "VLAN 21 only" rule. Rejected.
 - **Renumber the rings so that ring0 is the isolated one:** it rewrites `corosync.conf` for no functional gain. Rejected.
 - **Token 10000 ms:** it slows detection of a genuinely dead node for HA. 5000 ms covers switch reboots and is still well under the watchdog timeout. Rejected.
 
@@ -37,3 +37,4 @@ msi has one onboard copper port (I225-V, which carries mgmt and ring0), so msi's
 - `unifi-ports.yaml` / `terraform/unifi` gains the Flex device, its ring1 ports and its STP setting; the old ring1 overrides on the Pro-Agg trunk and Pro-Max come out.
 - The corosync link change is one node at a time (`pvecm` link update via the `proxmox_host` cluster tasks). Quorum is verified after each node, with HA parked for the change window.
 - The Flex has 8 ports: 4 cluster members plus a node 4, the vlan10 uplink, and 2 spare.
+- **As built (hand-configured, read from the controller 2026-09-25), not yet this ADR:** device STP is disabled and ports 1–8 carry VLAN 32 native, but their tagged setting is `auto` (all VLANs accepted), not the access-only `corosync_ring1` profile; the uplink (port 9 → Pro-Max-48 port 32) is a trunk that excludes Ceph, Corosync and Corosync Ring1 but carries every other VLAN, where this ADR says vlan10 only; and the Flex is not in `unifi-ports.yaml`. VLAN 32 already never leaves the Flex. Closing the gap is the `terraform/unifi` change above.

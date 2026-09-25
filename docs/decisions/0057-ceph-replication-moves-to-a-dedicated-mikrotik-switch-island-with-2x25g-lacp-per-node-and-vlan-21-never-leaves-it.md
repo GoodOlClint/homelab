@@ -3,7 +3,7 @@
 - **Status:** Proposed
 - **Date:** 2026-09-15
 - **Deciders:** operator + agent
-- **Context source:** 2026-09-09 physical re-plan (council-tested) and the 2026-09-09 fabric-firmware fence · session 2026-09-15 · amends [ADR 0014](0014-ceph-cluster-network-rides-switched-25g-sfp28-ports-not-a-switchless-mesh.md)
+- **Context source:** 2026-09-09 physical re-plan (council-tested) and the 2026-09-09 fabric-firmware fence · session 2026-09-15 · switch amended 2026-09-25 (operator bought the CRS518) · amends [ADR 0014](0014-ceph-cluster-network-rides-switched-25g-sfp28-ports-not-a-switchless-mesh.md)
 
 ## Context
 
@@ -15,7 +15,9 @@ Verified 2026-09-11: `public_network` (mons, clients, CSI, cephfs) is VLAN 20, a
 
 ## Decision
 
-The Ceph cluster network moves to a dedicated **MikroTik CRS510-8XS-2XQ-IN** (8× SFP28, 2× QSFP28, half-depth 1U, RouterOS).
+The Ceph cluster network moves to a dedicated **MikroTik CRS518-16XS-2XQ-RM** (16× SFP28, 2× QSFP28, 1U rackmount, dual hot-swap PSUs, RouterOS). It was originally specified as the CRS510-8XS-2XQ-IN; the operator bought the CRS518 on 2026-09-25 (amendment below).
+
+- Port use: the three OSD hosts (ms-01a/b/c) take 6 ports; msi takes none (ADR 0056). A fourth OSD host would take 2 more. The rest are spare and stay unconfigured.
 
 - Its data ports carry **VLAN 21 only**, `l2mtu` 9000, and **VLAN 21 never leaves the switch**. Its one link to the UniFi fabric is a **management uplink**: the MGMT RJ45 (or one port in its own bridge, isolated from the VLAN 21 bridge) on a vlan10 access port. VLAN 21 is never tagged on it and it is never bridged to the data ports.
 - Each OSD host connects with **both ConnectX ports as an LACP (802.3ad) bond**, layer3+4 hash, MTU 9000, with the static VLAN 21 address on the bond.
@@ -29,7 +31,7 @@ VLAN 20 (Ceph public) stays on the Pro-Agg, unchanged.
 - **Stay on the Pro-Agg SFP28 ports (ADR 0014 as-is):** port-starved at three MS-01s plus growth, and it keeps replication inside the fabric's firmware/STP failure domain. Superseded.
 - **A data uplink carrying VLAN 21 into the fabric:** it puts replication back inside the fabric's STP and firmware failure domain; the management uplink is the only allowed link. Rejected.
 - **A second UniFi 25G switch uplinked into the fabric:** adoption and controller-driven firmware bring the same shared failure domain back. Rejected.
-- **MikroTik CRS518:** over budget, 8 ports left unused, full-depth front-to-rear airflow in a cabinet with no rear access. Rejected.
+- **MikroTik CRS510-8XS-2XQ-IN (the original choice):** half-depth and cheaper, with exactly enough ports. Superseded 2026-09-25 when the operator bought the CRS518 instead. Of the reasons the CRS518 was first rejected, budget and unused ports no longer apply to a switch already owned, and the airflow reason is answered by the cabinet (Consequences).
 - **Moving `public_network` onto the island as well:** it would put every Ceph client (Talos CSI legs, worklab) on the island and require an uplink. The island protects replication only, by design.
 - **The switchless FRR mesh:** already rejected in ADR 0014; it does not extend to a fourth node.
 
@@ -39,5 +41,6 @@ VLAN 20 (Ceph public) stays on the Pro-Agg, unchanged.
 - The island is a single switch with no redundant partner. Its failure marks OSDs down and blocks replication until it is back. It does not fence anything and does not touch mons or clients (VLAN 20). Accepted, with no second switch planned.
 - `proxmox_host` renders a bond for the ceph link (`ceph_nic` becomes a list), and `host-bindings.yaml` gains the second port per node. The RouterOS config is hand-managed and recorded in a runbook doc, like pfSense (ADR 0005), until a RouterOS provider is chosen.
 - The UniFi `terraform/unifi` module drops VLAN 21 and the SFP28 access profile from the Pro-Agg, and those ports are freed: two for msi's 2×25G bond (ADR 0056), one for the mini-rack uplink, one for the future NAS. That leaves the Pro-Agg with no spare SFP28.
-- Cutover is one node at a time under `noout`: cable both ports to the CRS510, re-render the interfaces, confirm OSD heartbeats on the bond, then take down the Pro-Agg port.
+- Cutover is one node at a time under `noout`: cable both ports to the CRS518, re-render the interfaces, confirm OSD heartbeats on the bond, then take down the Pro-Agg port.
 - A 25G port for the future all-flash NAS stays on the Pro-Agg (VLAN 20). Putting it on the island's QSFP28 would break "VLAN 21 only" and needs its own decision.
+- **Airflow (amendment 2026-09-25):** the original rejection's airflow concern assumed a cabinet with no rear space. The cabinet is deeper than the rack, and its top and bottom fans exhaust upward, so the switch's front-to-rear exhaust has a path out. Depth fits (about 10", measured by the operator). One check after racking: read `/system health print` under replication load. The 10 unused data ports stay disabled.
