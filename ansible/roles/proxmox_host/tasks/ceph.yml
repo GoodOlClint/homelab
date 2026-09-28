@@ -53,6 +53,21 @@
     creates: "/var/lib/ceph/mgr/ceph-{{ inventory_hostname }}"
   when: groups['proxmox'].index(inventory_hostname) < proxmox_host_mgr_count | int
 
+# Type 8300, never BF01: pveceph treats a ZFS-typed partition as in use.
+- name: Carve partition OSDs from the boot disks' free space past hdsize
+  ansible.builtin.command:
+    cmd: "sgdisk -n {{ _part }}:0:0 -t {{ _part }}:8300 {{ item | regex_replace('-part[0-9]+$', '') }}"
+    creates: "{{ item }}"
+  vars:
+    _part: "{{ item | regex_search('[0-9]+$') }}"
+  loop: "{{ proxmox_host_node.osd_disks | default([]) | select('search', '-part[0-9]+$') | list }}"
+  register: _osd_parted
+
+- name: Settle the new OSD partition links # noqa: no-handler
+  ansible.builtin.shell: partprobe && udevadm settle
+  when: _osd_parted is changed
+  changed_when: false
+
 - name: Check existing OSD devices
   ansible.builtin.command:
     cmd: "ceph-volume lvm list {{ item }}"

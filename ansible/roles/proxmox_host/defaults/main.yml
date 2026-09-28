@@ -21,8 +21,8 @@ proxmox_host_ceph_mtu: "{{ network_data.vlans.ceph.mtu | default(9000) }}"
 proxmox_host_ceph_public_network: "{{ network_data.ipv4_prefix }}.{{ proxmox_host_storage_vlan }}.0/24"
 proxmox_host_ceph_cluster_network: "{{ network_data.ipv4_prefix }}.{{ proxmox_host_ceph_vlan }}.0/24"
 proxmox_host_mgr_count: 2
-# Ceph release whose repo the node tracks (PVE 9 ships squid).
-proxmox_host_ceph_release: squid
+# Ceph release whose repo the node tracks; must match what the cluster runs, or new nodes install ahead of it.
+proxmox_host_ceph_release: tentacle
 
 # Cluster-wide bindings
 proxmox_host_vip_cidr: "{{ host_bindings.cluster.vip_cidr }}"
@@ -76,7 +76,12 @@ proxmox_host_ci_iso_quota_gb: 100
 # Ceph health-gate waivers: check CODES (e.g. "OSDMAP_FLAGS") that are known,
 # understood, and deliberately accepted — each entry needs a reason comment.
 # Starts empty; HEALTH_WARN with any unwaived check fails the play.
-proxmox_host_ceph_health_waivers: []
+proxmox_host_ceph_health_waivers:
+  # client.csi-rbd stays on the 'aes' cipher until the Talos kernel reaches 7.0
+  # (aes256k kernel-client auth), so old key types must stay allowed (CVE-2025-30156).
+  - AUTH_INSECURE_CLIENT_KEY_TYPE
+  - AUTH_INSECURE_KEYS_ALLOWED
+  - AUTH_INSECURE_KEYS_CREATABLE
 
 # netconsole raw stream port on the collector (axosyslog `netconsole` source —
 # deliberately parser-free; ordinary syslog is 5514 and the two must never mix)

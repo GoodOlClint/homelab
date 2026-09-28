@@ -503,7 +503,7 @@ node-answers:
 # Arm deliberately right before an install; it auto-expires after ARM_MINUTES.
 ARM_MINUTES ?= 30
 node-arm:
-	@test -n "$(NODE)" || { echo "ERROR: set NODE=<ms-01a|ms-01b|msi>"; exit 1; }
+	@test -n "$(NODE)" || { echo "ERROR: set NODE=<ms-01a|ms-01b|ms-01c|msi>"; exit 1; }
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible pxe -i ansible/inventory/vms.yaml -b -o -m ansible.builtin.shell 		-a "mkdir -p /srv/pxe/answers/armed && date -d '+$(ARM_MINUTES) min' +%s > /srv/pxe/answers/armed/$(NODE)" >/dev/null
 	@echo "ARMED $(NODE) for install for $(ARM_MINUTES) min. It will be WIPED on its next PXE boot. 'make node-disarm NODE=$(NODE)' to cancel."
 

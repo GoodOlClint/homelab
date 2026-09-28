@@ -39,9 +39,9 @@ print("" if d is None else (json.dumps(d) if isinstance(d, (list, dict)) else d)
 
 # MS-01 nodes share one template; pve has its own.
 case "$NODE" in
-  ms-01a|ms-01b) TMPL="$HOSTS_DIR/templates/answer-ms01.toml.tmpl" ;;
+  ms-01a|ms-01b|ms-01c) TMPL="$HOSTS_DIR/templates/answer-ms01.toml.tmpl" ;;
   msi|pve)       TMPL="$HOSTS_DIR/templates/answer-pve.toml.tmpl" ;;
-  *) echo "ERROR: unknown node '$NODE' (expected ms-01a|ms-01b|msi)"; exit 1 ;;
+  *) echo "ERROR: unknown node '$NODE' (expected ms-01a|ms-01b|ms-01c|msi)"; exit 1 ;;
 esac
 [ -f "$TMPL" ] || { echo "ERROR: template $TMPL missing"; exit 1; }
 
