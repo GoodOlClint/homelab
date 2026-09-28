@@ -16,14 +16,15 @@ Run every node command from a node shell (`ssh root@<node mgmt address>`). **DNS
 
 ## Shutdown
 
-**1. Stop the HA guests through HA.** HA shuts them down itself; setting them to `stopped` is also what lets each LRM go idle and release its watchdog, so losing quorum later fences nothing.
+**1. Stop the HA guests and take them out of HA's hands.** Setting them to `stopped` shuts them down through HA; `ignored` then keeps HA from acting on them during the outage.
 
 ```sh
 for sid in vm:200 vm:201 vm:205 vm:220 ct:208 ct:212 ct:213; do ha-manager set $sid --state stopped; done
-watch -n5 'ha-manager status'
+watch -n5 'ha-manager status'      # wait until all seven show stopped
+for sid in vm:200 vm:201 vm:205 vm:220 ct:208 ct:212 ct:213; do ha-manager set $sid --state ignored; done
 ```
 
-Wait until every service shows `stopped`, then until **all three** LRMs show `idle` (that can take a few minutes after the last service stops). Do not continue while any LRM is `active`.
+Do **not** wait for the LRMs to go `idle` here: on 2026-09-28 they stayed `active` with the watchdog armed for 18 minutes after every resource was stopped and then ignored. The watchdog is released in step 4b instead.
 
 **2. Stop the Kubernetes nodes.** Talos handles ACPI shutdown. Run on each node for its own VM, or on any node with `pvesh`:
 
@@ -55,6 +56,16 @@ ceph osd set noout; ceph osd set norebalance; ceph osd set norecover; ceph osd s
 
 Do **not** set `pause`: the nodes' kernel cephfs mounts would block, and shutdown would hang unmounting `/mnt/pve/cephfs`.
 
+**4b. Stop the HA services on every node**, which closes the watchdog cleanly. Losing quorum is harmless after this, and the services start again at boot.
+
+```sh
+systemctl stop pve-ha-lrm      # on all three nodes first
+systemctl stop pve-ha-crm      # then on all three
+journalctl -u pve-ha-lrm -u pve-ha-crm --since -5min | grep "watchdog closed"   # every LRM/CRM that held one
+```
+
+`ha-manager status` keeps showing `watchdog active` afterwards: that is the last written state, not a live one. Trust the journal line.
+
 **5. Power off the nodes**: msi, then ms-01b, then ms-01a.
 
 ```sh
@@ -67,6 +78,7 @@ Watch each on its console. If a node sits after "unmounting" with no progress fo
 
 - [ ] Re-rack ms-01a and ms-01b in the Racknex mounts.
 - [ ] Recable exactly as labelled. Same switch, same port for every cable.
+- [ ] The 25G DAC goes in the ConnectX's **first** cage (`nic4`); the second (`nic5`) is the unconfigured spare. On 2026-09-28 ms-01b's went into the second cage and came up with no Ceph link: `ethtool -m nic4` / `nic5` shows which cage holds the module.
 
 ## Bring-up
 
@@ -99,7 +111,7 @@ pvesm status                             # on EVERY node: cephfs and ceph-rbd ac
 
 If `pvesm status` shows cephfs unreachable on a node, `umount -f /mnt/pve/cephfs` and let pvestatd remount it (CLAUDE.md, the blocklisted-client trap). The `[FAILED] Failed to mount mnt-pve-cephfs.mount` lines on the console during boot are the known race and resolve themselves.
 
-**5. Non-HA guests start themselves.** Every guest has `onboot: 1`, and `pve-guests` waits for the cephfs mountpoint (`proxmox_host/tasks/autostart.yml`). Confirm, and start anything missing by hand (`qm start` / `pct start`):
+**5. Guests start themselves.** With HA `ignored`, the HA guests' own `onboot: 1` applies too, so most of them come up at boot as well; the next step hands them back to HA. Every guest has `onboot: 1`, and `pve-guests` waits for the cephfs mountpoint (`proxmox_host/tasks/autostart.yml`). Confirm, and start anything missing by hand (`qm start` / `pct start`):
 
 ```sh
 pvesh get /cluster/resources --type vm --output-format json | python3 -c 'import json,sys; [print(r["node"],r["vmid"],r["name"],r["status"]) for r in json.load(sys.stdin) if r["vmid"]!=900 and r["status"]!="running" and not r.get("hastate")]'
@@ -112,7 +124,7 @@ for sid in vm:200 vm:201 vm:205 vm:220 ct:208 ct:212 ct:213; do ha-manager set $
 ha-manager status                        # all seven started, three LRMs active
 ```
 
-**7. Services plane**, from the workstation once DNS answers again:
+**7. Services plane**, from the workstation once DNS answers again. If you gave the workstation a public resolver for the outage, remove it and flush the cache first (`sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder`): a public resolver cannot see the internal zone, and every make target that logs in to Infisical fails with `nodename nor servname provided`.
 
 ```sh
 kubectl get nodes                        # talos-cp-a/b/c Ready
