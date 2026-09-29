@@ -59,8 +59,9 @@ locals {
 }
 
 # Never-started holder VM that owns all detached data volumes (ADR 0020).
-# Destroying THIS resource destroys all fleet data — hence protection unless
-# FORCE-unprotected. It must never gain an OS disk, network device, or
+# Destroying THIS resource destroys all fleet data — hence PVE protection plus
+# prevent_destroy, which even FORCE/unprotect cannot pass (retiring it takes a
+# hand edit here). It must never gain an OS disk, network device, or
 # started=true; it exists only as the volumes' lifecycle anchor.
 resource "proxmox_virtual_environment_vm" "data_volume_holder" {
   count = length(var.data_volumes) > 0 ? 1 : 0
@@ -84,5 +85,12 @@ resource "proxmox_virtual_environment_vm" "data_volume_holder" {
       size         = disk.value.size_gb
       backup       = true # the holder's PBS job owns volume backup (B3)
     }
+  }
+
+  # node_name is only where the config file lives (raw disks on shared Ceph), so
+  # a migration must never plan a replace; a replace deletes every data volume.
+  lifecycle {
+    prevent_destroy = true
+    ignore_changes  = [node_name]
   }
 }
