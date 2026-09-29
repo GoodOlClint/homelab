@@ -105,9 +105,9 @@ variable "cloud_images" {
     # schematic ce4c980550dd2ab1b17bbf2b08801c7eb59418eafe8f279833297925d67c7515.
     # First boot only — running nodes roll with `talosctl upgrade`.
     talos = {
-      url                = "https://factory.talos.dev/image/ce4c980550dd2ab1b17bbf2b08801c7eb59418eafe8f279833297925d67c7515/v1.13.9/nocloud-amd64.qcow2"
-      file_name          = "talos-v1.13.9-nocloud-amd64.img"
-      checksum           = "4fab39d69d466f89102c4ccb34ce8b4125570d889e0191e76e13efedd5226721d7ed9b252722d8f839a4707b9bcd4d486aa52fa17f69b75c14c4c919fe4176e7"
+      url                = "https://factory.talos.dev/image/ce4c980550dd2ab1b17bbf2b08801c7eb59418eafe8f279833297925d67c7515/v1.13.10/nocloud-amd64.qcow2"
+      file_name          = "talos-v1.13.10-nocloud-amd64.img"
+      checksum           = "79ffdcb10a1a053ea272b7a1e11114047506c321fcbb6f3370496ddb2bee2b99e6004ee61d637c82250343e9568c15e68cc721adc7fb6189e6c7bf4158b02999"
       checksum_algorithm = "sha512"
     }
   }

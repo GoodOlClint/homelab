@@ -144,6 +144,10 @@ resource "proxmox_virtual_environment_vm" "talos_cp" {
     mtu         = local.talos_ceph_vlan.mtu
     mac_address = each.value.ceph_mac
   }
+
+  lifecycle {
+    ignore_changes = [disk[0].file_id]
+  }
 }
 
 output "talos_nodes" {
