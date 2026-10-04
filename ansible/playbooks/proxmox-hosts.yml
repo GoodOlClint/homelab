@@ -89,3 +89,12 @@
       vars:
         proxmox_host_cert_extra_domains: []
       tags: [acme]
+    - name: node_exporter (worklab has no storage-VLAN leg, so it listens on its management address)
+      ansible.builtin.include_role:
+        name: proxmox_host
+        tasks_from: node_exporter
+        apply:
+          tags: [node-exporter]
+      vars:
+        proxmox_host_node_exporter_listen: "{{ ansible_host }}"
+      tags: [node-exporter]

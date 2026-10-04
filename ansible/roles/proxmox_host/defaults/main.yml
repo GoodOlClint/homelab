@@ -108,3 +108,11 @@ proxmox_host_cert_extra_domains: ["{{ proxmox_host_vip_name }}.{{ network_data.s
 # vfio-pci on a bridge strands every endpoint behind it.
 proxmox_host_vfio_pci_ids:
   msi: ["8086:e223", "8086:e2f7"] # Arc Pro B70: GPU + HDMI/DP audio -> VM 240 (ADR 0051)
+
+# node_exporter (hwmon temperatures, filesystems) listens on the storage VLAN, the leg Talos pods reach directly;
+# the VLAN 30 management plane stays firewalled from the services plane (ADR 0030). The storage address is
+# the inventory host's last octet on the storage VLAN, the fleet octet scheme (terraform/hosts storage_ip).
+proxmox_host_node_exporter_port: 9100
+proxmox_host_node_exporter_listen: "{{ network_data.ipv4_prefix }}.{{ proxmox_host_storage_vlan }}.{{ ansible_host.split('.')[-1] }}"
+proxmox_host_node_exporter_collectors: [cpu, filesystem, hwmon, loadavg, meminfo]
+proxmox_host_node_exporter_fs_types_exclude: "^(tmpfs|squashfs|overlay|devtmpfs|ramfs|proc|sysfs|cgroup2?|autofs|binfmt_misc|debugfs|tracefs|securityfs|pstore|configfs|mqueue|hugetlbfs|nsfs|rpc_pipefs|fusectl|bpf|efivarfs|fuse.*|nfs4?|cifs|ceph)$"

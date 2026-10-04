@@ -30,5 +30,7 @@
 - ansible.builtin.import_tasks: vfio.yml
 - ansible.builtin.import_tasks: ci_reaper.yml
   tags: [ci_reaper]
+- ansible.builtin.import_tasks: node_exporter.yml
+  tags: [node-exporter]
 - ansible.builtin.import_tasks: autostart.yml
   tags: [autostart]

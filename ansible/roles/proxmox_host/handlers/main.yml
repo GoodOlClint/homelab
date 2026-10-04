@@ -36,3 +36,9 @@
 - name: vfio binding needs a host reboot
   ansible.builtin.debug:
     msg: "vfio-gpu.conf changed on {{ inventory_hostname }}: drain and reboot the node before starting the GPU guest"
+
+- name: restart node-exporter
+  ansible.builtin.systemd:
+    name: prometheus-node-exporter
+    state: restarted
+    daemon_reload: true

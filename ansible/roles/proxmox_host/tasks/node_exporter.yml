@@ -1,0 +1,47 @@
+---
+- name: Install node_exporter
+  ansible.builtin.apt:
+    name: prometheus-node-exporter
+    state: present
+
+- name: Restrict node_exporter to the needed collectors on the storage VLAN
+  ansible.builtin.copy:
+    dest: /etc/default/prometheus-node-exporter
+    mode: "0644"
+    content: |
+      ARGS="{{ _args | join(' ') }}"
+  vars:
+    _args: >-
+      {{ ['--web.listen-address=' ~ proxmox_host_node_exporter_listen ~ ':' ~ proxmox_host_node_exporter_port,
+          '--collector.disable-defaults']
+         + (proxmox_host_node_exporter_collectors | map('regex_replace', '^(.*)$', '--collector.\1') | list)
+         + ['--collector.filesystem.fs-types-exclude=' ~ proxmox_host_node_exporter_fs_types_exclude] }}
+  notify: restart node-exporter
+
+- name: Create the node_exporter drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/prometheus-node-exporter.service.d
+    state: directory
+    mode: "0755"
+
+# The VLAN sub-interface can come up after the exporter starts; binding to a missing address exits.
+- name: Order node_exporter after the network and retry its bind
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/prometheus-node-exporter.service.d/override.conf
+    mode: "0644"
+    content: |
+      [Unit]
+      After=network-online.target
+      Wants=network-online.target
+      [Service]
+      Restart=always
+      RestartSec=10
+  notify: restart node-exporter
+  register: _ne_dropin
+
+- name: Keep node_exporter enabled and running
+  ansible.builtin.systemd:
+    name: prometheus-node-exporter
+    enabled: true
+    state: started
+    daemon_reload: "{{ _ne_dropin is changed }}"
