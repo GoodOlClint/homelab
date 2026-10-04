@@ -70,6 +70,12 @@ scrape_configs:
     file_sd_configs:
       - files: ['/etc/prometheus/targets/node-exporter.json']
 
+  # Only the active mgr serves metrics; standbys answer 500 (standby_behaviour=error), so their up=0 is expected and HostDown skips this job.
+  - job_name: 'ceph'
+    honor_labels: true
+    file_sd_configs:
+      - files: ['/etc/prometheus/targets/ceph.json']
+
   - job_name: 'blackbox-exporter'
     static_configs:
       - targets: ['blackbox:9115']
@@ -236,7 +242,7 @@ scrape_configs:
           - ${PBS}:8007
           - pdm.${DOMAIN}:8443
           - infisical.${DOMAIN}:443
-          - control.${DOMAIN}:9443
+          - control.${DOMAIN}:443
           - worklab.${DOMAIN}:8006
           - unifi.${DOMAIN}:11443
           # 1-year certs on a ~60-day renewal cycle; nothing else watches them (ADR 0043, docs/synology-acme.md)

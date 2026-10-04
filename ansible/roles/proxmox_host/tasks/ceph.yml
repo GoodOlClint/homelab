@@ -229,3 +229,36 @@
     _h: "{{ _ceph_health.stdout | from_json }}"
     _unwaived: "{{ _h.checks | default({}) | list | difference(proxmox_host_ceph_health_waivers) }}"
   run_once: true
+
+- name: List enabled mgr modules
+  ansible.builtin.command:
+    cmd: ceph mgr module ls --format json
+  register: _mgr_modules
+  changed_when: false
+  run_once: true
+  tags: [ceph-metrics]
+
+- name: Enable the mgr prometheus module
+  ansible.builtin.command:
+    cmd: ceph mgr module enable prometheus
+  run_once: true
+  changed_when: true
+  when: "'prometheus' not in (_mgr_modules.stdout | from_json).enabled_modules"
+  tags: [ceph-metrics]
+
+# The default standby answer is a landing page with a redirect to the active mgr, which a scrape would follow and duplicate series.
+- name: Read the prometheus standby behaviour
+  ansible.builtin.command:
+    cmd: ceph config get mgr mgr/prometheus/standby_behaviour
+  register: _mgr_standby
+  changed_when: false
+  run_once: true
+  tags: [ceph-metrics]
+
+- name: Make standby mgrs refuse metrics requests
+  ansible.builtin.command:
+    cmd: ceph config set mgr mgr/prometheus/standby_behaviour error
+  run_once: true
+  changed_when: true
+  when: _mgr_standby.stdout | trim != 'error'
+  tags: [ceph-metrics]

@@ -151,6 +151,12 @@
       {{- out.append({'targets': [hostvars[h].ansible_host ~ ':9100'], 'labels': {'instance': h}}) -}}
       {%- endfor -%}
       {{ out }}
+    _ceph_targets: >-
+      {%- set out = [] -%}
+      {%- for h in groups['proxmox'] -%}
+      {{- out.append({'targets': [network_data.ipv4_prefix ~ '.' ~ network_data.vlans.storage.id ~ '.' ~ hostvars[h].ansible_host.split('.')[-1] ~ ':9283'], 'labels': {'instance': h}}) -}}
+      {%- endfor -%}
+      {{ out }}
     _blackbox_dns: >-
       {%- set out = [] -%}
       {%- for z in network_data.internal_zones -%}

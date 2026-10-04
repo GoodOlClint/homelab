@@ -8,6 +8,8 @@ data:
     {{ _telegraf_targets | to_nice_json | indent(4) }}
   node-exporter.json: |
     {{ _node_exporter_targets | to_nice_json | indent(4) }}
+  ceph.json: |
+    {{ _ceph_targets | to_nice_json | indent(4) }}
   blackbox-dns.json: |
     {{ _blackbox_dns | to_nice_json | indent(4) }}
 ---
