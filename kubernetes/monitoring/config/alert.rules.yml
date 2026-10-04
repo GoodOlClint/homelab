@@ -2,20 +2,12 @@ groups:
   - name: infrastructure
     rules:
       - alert: HostDown
-        expr: up == 0
+        expr: up{job!="ceph"} == 0
         for: 2m
         labels:
           severity: critical
         annotations:
           summary: "Host {{ $labels.instance }} is down"
-
-      - alert: WireGuardPeerStale
-        expr: time() - wireguard_latest_handshake_seconds > 180
-        for: 1m
-        labels:
-          severity: critical
-        annotations:
-          summary: "WireGuard peer {{ $labels.public_key }} handshake older than 3 minutes"
 
       - alert: TLSCertExpiringSoon
         expr: probe_ssl_earliest_cert_expiry - time() < 86400 * 14
@@ -109,13 +101,42 @@ groups:
         annotations:
           summary: "Inode usage above 95% on {{ $labels.instance }}:{{ $labels.path }}"
 
+      # Snapshots of retired guests sit 40+ days old and never match; the 14d ceiling means a guest that
+      # stopped backing up fires for two weeks and then goes quiet. worklab's namespace is excluded because
+      # the host is powered off for days at a time.
       - alert: PBSBackupStale
-        expr: time() - pbs_snapshot_timestamp > 86400 * 2
+        expr: >-
+          (time() - pbs_snapshot_vm_last_timestamp{namespace!="worklab"}) > 36 * 3600
+          and (time() - pbs_snapshot_vm_last_timestamp{namespace!="worklab"}) < 14 * 86400
         for: 1h
         labels:
           severity: warning
         annotations:
-          summary: "PBS backup for {{ $labels.namespace }} is older than 2 days"
+          summary: "PBS backup of {{ $labels.vm_id }} ({{ $labels.vm_name }}) is over 36h old"
+
+      - alert: PBSDown
+        expr: pbs_up == 0 or absent(pbs_up)
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Proxmox Backup Server is down or its metrics are missing"
+
+      - alert: BlackboxProbeFailed
+        expr: probe_success{job!~"blackbox-plex|blackbox-dns"} == 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Probe of {{ $labels.instance }} ({{ $labels.job }}) has been failing for 15m"
+
+      - alert: ExporterMetricsAbsent
+        expr: absent(kube_node_info) or absent(node_hwmon_temp_celsius) or absent(probe_success)
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "kube-state-metrics, node-exporter or blackbox series have vanished; their rules cannot fire"
 
   - name: services
     rules:
@@ -131,7 +152,7 @@ groups:
           summary: "OpenObserve ingest memtable has not changed in 1h or its metrics are missing"
 
       - alert: PlexDown
-        expr: probe_success{job="blackbox-http", instance=~".*:32400.*"} == 0
+        expr: probe_success{job="blackbox-plex"} == 0 or absent(probe_success{job="blackbox-plex"})
         for: 5m
         labels:
           severity: critical
@@ -148,6 +169,7 @@ groups:
 
   - name: isp
     rules:
+      # Inert until the modem scrape returns (dropped in ADR 0036); kept as the spec.
       - alert: ModemT3Timeouts
         expr: increase(modem_t3_timeouts_total[15m]) > 5
         for: 5m
@@ -308,3 +330,77 @@ groups:
           severity: warning
         annotations:
           summary: "NVMe drive on {{ $labels.instance }} is at {{ $value | printf \"%.0f\" }} C"
+
+  - name: availability
+    rules:
+      - alert: KubeNodeNotReady
+        expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kubernetes node {{ $labels.node }} is not Ready"
+
+      # Every workload here is a single replica, so zero available means the service is down.
+      - alert: KubeWorkloadUnavailable
+        expr: >-
+          (kube_deployment_status_replicas_available == 0 and kube_deployment_spec_replicas > 0)
+          or label_replace(
+            kube_statefulset_status_replicas_ready == 0 and kube_statefulset_replicas > 0,
+            "deployment", "$1", "statefulset", "(.*)")
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.namespace }}/{{ $labels.deployment }} has no available replicas"
+
+      - alert: PVENodeDown
+        expr: pve_up{id=~"node/.*"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Proxmox node {{ $labels.id }} is down"
+
+      - alert: PVEHAError
+        expr: pve_ha_state{state=~"error|fence"} == 1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HA resource {{ $labels.id }} is in state {{ $labels.state }}"
+
+  - name: ceph
+    rules:
+      # AUTH_INSECURE_* are standing waivers until Talos reaches kernel 7.0, so overall health_status is always 1 today.
+      - alert: CephHealthWarn
+        expr: ceph_health_detail{name!~"AUTH_INSECURE_.*"} == 1
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Ceph health check {{ $labels.name }} is active"
+
+      - alert: CephHealthError
+        expr: ceph_health_status == 2
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Ceph is HEALTH_ERR"
+
+      - alert: CephMetricsAbsent
+        expr: absent(ceph_health_status)
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No Ceph metrics: the active mgr's prometheus endpoint is not being scraped"
+
+      - alert: CephOSDDown
+        expr: ceph_osd_up == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Ceph {{ $labels.ceph_daemon }} is down"
