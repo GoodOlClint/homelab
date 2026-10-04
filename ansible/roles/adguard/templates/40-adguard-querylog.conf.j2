@@ -1,0 +1,26 @@
+global(workDirectory="/var/spool/rsyslog")
+module(load="imfile")
+
+input(type="imfile"
+      File="{{ adguard_querylog_file }}"
+      Tag="adguard-querylog:"
+      freshStartTail="on"
+      addMetadata="off"
+      ruleset="adguard_querylog")
+
+template(name="adguard_querylog_fwd" type="string"
+         string="<%PRI%>1 %TIMESTAMP:::date-rfc3339% %HOSTNAME% adguard-querylog - - - %msg%\n")
+
+ruleset(name="adguard_querylog") {
+{% if mgmt_vlan_prefix is defined and services_vlan_prefix is defined %}
+    action(type="omfwd" target="{{ openobserve_listen_host | replace(mgmt_vlan_prefix, services_vlan_prefix) }}" port="5514" protocol="tcp"
+{% else %}
+    action(type="omfwd" target="{{ openobserve_listen_host }}" port="5514" protocol="tcp"
+{% endif %}
+           template="adguard_querylog_fwd"
+           action.resumeRetryCount="-1"
+           queue.type="LinkedList"
+           queue.filename="adguard_querylog_fwd"
+           queue.maxDiskSpace="{{ adguard_querylog_queue_max_disk }}"
+           queue.saveOnShutdown="on")
+}

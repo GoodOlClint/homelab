@@ -9,6 +9,11 @@
     name: systemd-resolved
     state: restarted
 
+- name: Restart rsyslog
+  ansible.builtin.service:
+    name: rsyslog
+    state: restarted
+
 - name: Restart adguardhome
   ansible.builtin.systemd:
     name: adguardhome

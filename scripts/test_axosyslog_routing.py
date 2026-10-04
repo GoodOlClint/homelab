@@ -39,6 +39,7 @@ DESTS = {
     "d_openobserve_firewall": "firewall",
     "d_openobserve_syslog": "syslog",
     "d_openobserve_netconsole": "netconsole",
+    "d_openobserve_adguard_querylog": "adguard_querylog",
 }
 
 PORTS = {15514: 5514, 15515: 5515}
@@ -58,6 +59,14 @@ CASES = [
     ("rfc5424-vm", 15514,
      b'<134>1 2026-07-30T12:00:00.000Z somehost someapp - - - ordinary vm log line',
      "syslog", "ordinary vm log line"),
+    # json-parser fields become top-level keys; sender host kept; Answer dropped.
+    ("adguard-querylog", 15514,
+     b'<134>1 2026-07-30T12:00:00.000Z adguard1 adguard-querylog - - - '
+     b'{"T":"2026-09-20T17:30:12.88Z","QH":"example.com","QT":"A","QC":"IN","CP":"",'
+     b'"Upstream":"192.0.2.53:53","Answer":"QUFBQUFBQUFBQUFB","IP":"198.51.100.7",'
+     b'"Result":{"IsFiltered":true,"Reason":3,"Rules":[{"FilterListID":1,"Text":"||example.com^"}]},'
+     b'"Elapsed":55553,"Cached":true}',
+     "adguard_querylog", '"QH":"example.com"'),
     # Leading token MUST survive on every netconsole case.
     ("netconsole-nvme", 15515,
      b'nvme nvme0: Removing after probe failure status: -19',
@@ -69,6 +78,16 @@ CASES = [
      b'6,845,1234567890,-;EXT4-fs (dm-1): I/O error while writing superblock',
      "netconsole", "6,845,1234567890,-;EXT4-fs (dm-1): I/O error while writing superblock"),
 ]
+
+
+# (stream, text that must be present, text that must be absent) for the adguard case.
+QUERYLOG_BODY = [
+    '"host":"adguard1"',
+    '"IP":"198.51.100.7"',
+    '"Cached":true',
+    '"Elapsed":55553',
+]
+QUERYLOG_ABSENT = ["Answer", "QUFBQUFBQUFBQUFB"]
 
 
 def render(dest: Path) -> None:
@@ -86,9 +105,15 @@ def render(dest: Path) -> None:
         )
 
         def repl(m, stream=stream):
+            if stream == "adguard_querylog":
+                # Exercise the real record() value-pairs, not just the routing.
+                record = re.search(r'record\("([^"]*)"\)', m.group(0)).group(1)
+                tmpl = "$(format-json " + record + ")\\n"
+            else:
+                tmpl = "${MESSAGE}\\n"
             body = (
                 '    file("/out/' + stream + '.log" '
-                'template("${MESSAGE}\\n") create-dirs(yes));'
+                'template("' + tmpl + '") create-dirs(yes));'
             )
             return m.group(1) + "\n" + body + "\n" + m.group(2)
 
@@ -171,6 +196,14 @@ def main() -> int:
                         f"      expected verbatim in [{expected}], "
                         f"found in {hits or ['NOWHERE']}"
                     )
+
+            ql = landed["adguard_querylog"]
+            for want in QUERYLOG_BODY:
+                if want not in ql:
+                    failures.append(f"  adguard-querylog: {want!r} missing from record body")
+            for bad in QUERYLOG_ABSENT:
+                if bad in ql:
+                    failures.append(f"  adguard-querylog: {bad!r} must not reach OpenObserve")
 
             if failures:
                 print("FAIL: axosyslog routing")

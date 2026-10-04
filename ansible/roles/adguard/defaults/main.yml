@@ -34,10 +34,13 @@ adguard_safebrowsing_enabled: true
 # carries addresses, so it lives in the gitignored group_vars/all.yml.
 adguard_clients: []
 
-# Query log retention. AdGuardHome's own default is 2160h (90 days), which on the
-# 19 GB root disk grew querylog.json{,.1} to 12 GB and drove the VM to 88% full.
-# 30 days is roughly 4 GB at this network's query rate — adjust if the disk changes.
-adguard_querylog_interval: "720h"
+# Local query log retention. AdGuard rotates querylog.json to querylog.json.1 every
+# interval and keeps only those two files, so the disk holds up to 2x this value; the
+# VIP holder writes ~150 MB/day against a 9.8 GB container disk. Long history lives in
+# OpenObserve (stream adguard_querylog, shipped by the rsyslog tail below).
+adguard_querylog_interval: "168h"
+adguard_querylog_file: /var/lib/adguardhome/data/querylog.json
+adguard_querylog_queue_max_disk: 256m
 
 # Resolver VIP (ADR 0003 pair): keepalived unicast VRRP between the instances in
 # the `adguard` group; the VIP is the client-facing address from vlans.yaml.

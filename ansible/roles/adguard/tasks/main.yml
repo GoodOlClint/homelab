@@ -322,6 +322,35 @@
   throttle: 1
   tags: [adguard, dns, config]
 
+- name: Read the live query log config
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:3000/control/querylog/config"
+    url_username: "{{ secrets.homepage.adguard_username }}"
+    url_password: "{{ secrets.homepage.adguard_password }}"
+    force_basic_auth: true
+  register: _adguard_querylog_config
+  check_mode: false
+  tags: [adguard, dns, config]
+
+- name: Converge query log retention
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:3000/control/querylog/config/update"
+    method: PUT
+    url_username: "{{ secrets.homepage.adguard_username }}"
+    url_password: "{{ secrets.homepage.adguard_password }}"
+    force_basic_auth: true
+    body_format: json
+    body:
+      enabled: "{{ _adguard_querylog_config.json.enabled }}"
+      interval: "{{ _querylog_interval_ms }}"
+      anonymize_client_ip: "{{ _adguard_querylog_config.json.anonymize_client_ip }}"
+      ignored: "{{ _adguard_querylog_config.json.ignored | default([]) }}"
+  vars:
+    _querylog_interval_ms: "{{ (adguard_querylog_interval | regex_replace('h$', '') | int) * 3600000 }}"
+  when: _adguard_querylog_config.json.interval | int != (adguard_querylog_interval | regex_replace('h$', '') | int) * 3600000
+  changed_when: true
+  tags: [adguard, dns, config]
+
 - name: Read the live rewrites
   ansible.builtin.uri:
     url: "http://127.0.0.1:3000/control/rewrite/list"
@@ -411,6 +440,24 @@
   when: _live | length > 0 and (_live | combine(item, recursive=true)) != _live
   changed_when: true
   tags: [adguard, dns, config]
+
+- name: Ensure rsyslog is installed
+  ansible.builtin.apt:
+    name: rsyslog
+    state: present
+    cache_valid_time: 3600
+  tags: [adguard, logging, packages]
+
+- name: Tail the query log into rsyslog
+  ansible.builtin.template:
+    src: 40-adguard-querylog.conf.j2
+    dest: /etc/rsyslog.d/40-adguard-querylog.conf
+    mode: '0644'
+    owner: root
+    group: root
+    validate: rsyslogd -N1 -f %s
+  notify: Restart rsyslog
+  tags: [adguard, logging, config]
 
 - name: Check AdGuard Home service status
   ansible.builtin.systemd:
