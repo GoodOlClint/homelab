@@ -13,12 +13,6 @@ alerting:
     - static_configs:
         - targets: ['alertmanager:9093']
 
-remote_write:
-  - url: http://openobserve:5080/api/default/prometheus/api/v1/write
-    basic_auth:
-      username: ${OO_EMAIL}
-      password_file: /etc/prometheus/secrets/openobserve_password
-
 scrape_configs:
   - job_name: 'prometheus'
     static_configs:
