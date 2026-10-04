@@ -142,9 +142,9 @@ groups:
     rules:
       # OpenObserve answers on 5080 while rejecting every write (2026-07 schema wedge, 2026-10 inode exhaustion),
       # so reachability checks pass. Its memtable size moves whenever logs arrive and sat flat for 8 h during the
-      # 2026-10 outage. No log-ingest request series exists on this version; absent() covers a vanished metric.
+      # 2026-10 outage. No log-ingest request series exists on this version; absent() covers a vanished metric. max(): a replaced pod leaves a flat series inside the window.
       - alert: SyslogIngestionStalled
-        expr: changes(zo_ingest_memtable_bytes[1h]) == 0 or absent(zo_ingest_memtable_bytes)
+        expr: max(changes(zo_ingest_memtable_bytes[1h])) == 0 or absent(zo_ingest_memtable_bytes)
         for: 15m
         labels:
           severity: critical
