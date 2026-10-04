@@ -37,6 +37,10 @@ When the proof ends, the issue closes either way. A discarded guest is removed f
 ## Consequences
 
 - A new scratch request is one entry in `scratch_vms`, one entry in `scratch_guests`, seeded secrets, and `make build <name>`. Firewall rules the request needs are pfSense hand steps (ADR 0005).
-- Scratch guests appear in DNS, `make update` and the Phase 0 CA play like any other guest. They carry no telegraf, rsyslog or Uptime Kuma row; nobody is paged for them.
+- Scratch guests appear in DNS, `make update` and the Phase 0 CA play like any other guest. They carry no rsyslog or Uptime Kuma row (telegraf since the 2026-10-04 amendment below).
 - `infisical_secret_paths` suggests a scoping that does not exist. That gap is fleet-wide and outside this ADR; it is recorded here because it is why scratch guests do not use the agent.
 - The first entry is `code-intel` (#45), VMID 280 on ms-01a, 4 vCPU / 8 GB / 60 GB. Its rootfs grows in place if the full rollout needs more; the separate mount #45 suggested is not created.
+
+## Amendment 2026-10-04: scratch guests run telegraf
+
+The "installs nothing beyond the spec" rule covers workload, not fleet plumbing. Monitoring is plumbing: a scratch guest filling its disk or inodes would go unnoticed because it had no telegraf, and the disk alerts (bytes and inodes, warning at 85%, critical at 95%) can only cover what reports. Every scratch guest now gets the `telegraf` role in the scratch play and is a Prometheus target like any other guest. It still gets no Infisical agent, rsyslog or Uptime Kuma row.

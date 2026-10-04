@@ -108,5 +108,6 @@
   roles:
     - apt_proxy
     - scratch
+    - telegraf
   tags:
     - scratch

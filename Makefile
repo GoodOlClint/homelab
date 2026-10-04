@@ -143,7 +143,7 @@ talos-bootstrap:
 # Flux owns every workload from kubernetes/<tree> (one Kustomization per tree in kubernetes/flux/apps/);
 # a push to main is the deploy. Ansible owns the seed (bindings, generated ConfigMaps, root-CA ConfigMaps,
 # the cert-manager intermediate, bootstrap Secrets) and the in-app tail. Needs vms.yaml and proxmox.yaml.
-K8S_PLAY = $(ANSIBLE_PLAYBOOK) -i ansible/inventory/proxmox.yaml ansible/playbooks/kubernetes.yml $(if $(CHECK),--check --diff,)
+K8S_PLAY = $(ANSIBLE_PLAYBOOK) -i ansible/inventory/proxmox.yaml -i ansible/inventory/vps.yaml ansible/playbooks/kubernetes.yml $(if $(CHECK),--check --diff,)
 # Refuse to adopt a tree whose ${VAR}s are not all bound — Flux blanks the rest and fails open.
 flux-check:
 	@.venv/bin/python3 scripts/flux_check.py $(CURDIR)

@@ -222,6 +222,7 @@
       tags: [always]
   roles:
     - pxe
+    - telegraf
   tags:
     - phase1
     - pxe
