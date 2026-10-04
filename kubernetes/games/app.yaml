@@ -33,7 +33,7 @@ spec:
             - {name: SUPERVISOR_HTTP_USER, value: admin}
             - {name: SUPERVISOR_HTTP_PASS, valueFrom: {secretKeyRef: {name: valheim-secrets, key: SUPERVISOR_HTTP_PASS}}}
             - {name: STATUS_HTTP, value: "true"}
-            - {name: SERVER_NAME, value: "Homelab Valheim"}
+            - {name: SERVER_NAME, value: "Homelab Valheim HomeWorld"}
             - {name: WORLD_NAME, value: HomeWorld2}
             - {name: SERVER_PASS, valueFrom: {secretKeyRef: {name: valheim-secrets, key: SERVER_PASS}}}
             - {name: SERVER_PUBLIC, value: "false"}
@@ -65,7 +65,7 @@ spec:
           image: ${REGISTRY}/public.ecr.aws/docker/library/node:22-alpine
           resources: {requests: {cpu: 25m, memory: 64Mi}}
           env:
-            - {name: NAME, value: "Homelab Valheim"}
+            - {name: NAME, value: "Homelab Valheim HomeWorld"}
             - {name: INTERVAL, value: "60"}
           # Exit 0 (online) and 1 (no lobby) both print JSON; only an API error (exit 2) leaves the file untouched.
           command: [sh, -c, 'while true; do node /app/valheim-playfab-status.mjs --name "$NAME" > /srv/status.json.tmp 2>/dev/null; [ -s /srv/status.json.tmp ] && mv /srv/status.json.tmp /srv/status.json; sleep "$INTERVAL"; done']
