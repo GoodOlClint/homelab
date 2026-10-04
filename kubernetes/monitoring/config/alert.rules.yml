@@ -44,8 +44,9 @@ groups:
         annotations:
           summary: "Memory usage above 90% on {{ $labels.instance }}"
 
+      # Warning and critical tiers are separate alerts, so a disk past 95% fires both; the critical route is the one to act on.
       - alert: HighDiskUsage
-        expr: (1 - node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"}) > 0.85
+        expr: (1 - node_filesystem_avail_bytes{fstype!~"tmpfs|squashfs|overlay|fuse.*|devtmpfs|ramfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|squashfs|overlay|fuse.*|devtmpfs|ramfs"}) * 100 > 85
         for: 5m
         labels:
           severity: warning
@@ -60,6 +61,54 @@ groups:
         annotations:
           summary: "Disk usage above 85% on {{ $labels.instance }}:{{ $labels.path }}"
 
+      - alert: HighInodeUsage
+        expr: (1 - node_filesystem_files_free{fstype!~"tmpfs|squashfs|overlay|fuse.*|devtmpfs|ramfs"} / node_filesystem_files{fstype!~"tmpfs|squashfs|overlay|fuse.*|devtmpfs|ramfs"}) * 100 > 85 and node_filesystem_files > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Inode usage above 85% on {{ $labels.instance }}:{{ $labels.mountpoint }}"
+
+      - alert: HighInodeUsageTelegraf
+        expr: disk_inodes_used_percent{fstype!~"tmpfs|squashfs|overlay"} > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Inode usage above 85% on {{ $labels.instance }}:{{ $labels.path }}"
+
+      - alert: HighDiskUsageCritical
+        expr: (1 - node_filesystem_avail_bytes{fstype!~"tmpfs|squashfs|overlay|fuse.*|devtmpfs|ramfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|squashfs|overlay|fuse.*|devtmpfs|ramfs"}) * 100 > 95
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk usage above 95% on {{ $labels.instance }}:{{ $labels.mountpoint }}"
+
+      - alert: HighDiskUsageTelegrafCritical
+        expr: disk_used_percent{fstype!~"tmpfs|squashfs|overlay"} > 95
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk usage above 95% on {{ $labels.instance }}:{{ $labels.path }}"
+
+      - alert: HighInodeUsageCritical
+        expr: (1 - node_filesystem_files_free{fstype!~"tmpfs|squashfs|overlay|fuse.*|devtmpfs|ramfs"} / node_filesystem_files{fstype!~"tmpfs|squashfs|overlay|fuse.*|devtmpfs|ramfs"}) * 100 > 95 and node_filesystem_files > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Inode usage above 95% on {{ $labels.instance }}:{{ $labels.mountpoint }}"
+
+      - alert: HighInodeUsageTelegrafCritical
+        expr: disk_inodes_used_percent{fstype!~"tmpfs|squashfs|overlay"} > 95
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Inode usage above 95% on {{ $labels.instance }}:{{ $labels.path }}"
+
       - alert: PBSBackupStale
         expr: time() - pbs_snapshot_timestamp > 86400 * 2
         for: 1h
@@ -70,19 +119,16 @@ groups:
 
   - name: services
     rules:
-      # The 2026-07 OpenObserve incident: the container ran and answered on 5080
-      # for 24 days while ingesting nothing, so no reachability check can catch
-      # this. The signal is ingestion volume — successful _json log-ingest
-      # requests counted by OpenObserve's own /metrics, which Prometheus already
-      # scrapes. Fires ~45 min after syslog delivery stops for any reason
-      # (axosyslog dead, connection-limit rejection, OpenObserve schema wedge).
+      # OpenObserve answers on 5080 while rejecting every write (2026-07 schema wedge, 2026-10 inode exhaustion),
+      # so reachability checks pass. Its memtable size moves whenever logs arrive and sat flat for 8 h during the
+      # 2026-10 outage. No log-ingest request series exists on this version; absent() covers a vanished metric.
       - alert: SyslogIngestionStalled
-        expr: sum(increase(zo_http_incoming_requests{endpoint="/api/org/ingest/logs/_json", status="200"}[30m])) == 0
+        expr: changes(zo_ingest_memtable_bytes[1h]) == 0 or absent(zo_ingest_memtable_bytes)
         for: 15m
         labels:
           severity: critical
         annotations:
-          summary: "OpenObserve has ingested zero syslog batches in 30+ minutes"
+          summary: "OpenObserve ingest memtable has not changed in 1h or its metrics are missing"
 
       - alert: PlexDown
         expr: probe_success{job="blackbox-http", instance=~".*:32400.*"} == 0
@@ -160,3 +206,105 @@ groups:
           severity: warning
         annotations:
           summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} has been Running but not Ready for 15m"
+
+      - alert: PersistentVolumeNearFull
+        expr: kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes * 100 > 85
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} is {{ $value | printf \"%.0f\" }}% full"
+
+      - alert: PersistentVolumeNearFullCritical
+        expr: kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes * 100 > 95
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} is {{ $value | printf \"%.0f\" }}% full"
+
+      # The 2026-10-04 OpenObserve outage was inode exhaustion on a PVC that was not full by bytes.
+      - alert: PersistentVolumeInodesNearFull
+        expr: kubelet_volume_stats_inodes_used / kubelet_volume_stats_inodes * 100 > 85
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} has used {{ $value | printf \"%.0f\" }}% of its inodes"
+
+      - alert: PersistentVolumeInodesNearFullCritical
+        expr: kubelet_volume_stats_inodes_used / kubelet_volume_stats_inodes * 100 > 95
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} has used {{ $value | printf \"%.0f\" }}% of its inodes"
+
+      - alert: PodHighCPU
+        expr: sum by (namespace, pod, container) (rate(container_cpu_usage_seconds_total{container!=""}[5m])) > 2
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.namespace }}/{{ $labels.pod }} ({{ $labels.container }}) is using {{ $value | printf \"%.1f\" }} cores"
+
+      - alert: PodMemoryAboveRequest
+        expr: >-
+          max by (namespace, pod, container) (container_memory_working_set_bytes{container!=""})
+          > 3 * max by (namespace, pod, container) (kube_pod_container_resource_requests{resource="memory"})
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.namespace }}/{{ $labels.pod }} ({{ $labels.container }}) uses over 3x its memory request"
+
+      - alert: NodePressure
+        expr: kube_node_status_condition{condition=~"MemoryPressure|DiskPressure|PIDPressure",status="true"} == 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Node {{ $labels.node }} reports {{ $labels.condition }}"
+
+  - name: hardware
+    rules:
+      # node_exporter hwmon: node_hwmon_temp_celsius{chip,sensor}; node_hwmon_chip_names{chip,chip_name} maps the sysfs chip id to the driver name.
+      - alert: NICOverTemperature
+        expr: >-
+          node_hwmon_temp_celsius * on (instance, chip) group_left (chip_name)
+          node_hwmon_chip_names{chip_name="mlx5"} > 105
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "NIC (mlx5) on {{ $labels.instance }} is at {{ $value | printf \"%.0f\" }} C"
+
+      - alert: NICOverTemperatureCritical
+        expr: >-
+          node_hwmon_temp_celsius * on (instance, chip) group_left (chip_name)
+          node_hwmon_chip_names{chip_name="mlx5"} > 112
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "NIC (mlx5) on {{ $labels.instance }} is at {{ $value | printf \"%.0f\" }} C, near where one fell off the PCIe bus"
+
+      - alert: CPUOverTemperature
+        expr: >-
+          node_hwmon_temp_celsius{sensor="temp1"} * on (instance, chip) group_left (chip_name)
+          node_hwmon_chip_names{chip_name="coretemp"} > 95
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CPU package on {{ $labels.instance }} is at {{ $value | printf \"%.0f\" }} C"
+
+      - alert: NVMeOverTemperature
+        expr: >-
+          node_hwmon_temp_celsius{sensor="temp1"} * on (instance, chip) group_left (chip_name)
+          node_hwmon_chip_names{chip_name="nvme"} > 75
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "NVMe drive on {{ $labels.instance }} is at {{ $value | printf \"%.0f\" }} C"

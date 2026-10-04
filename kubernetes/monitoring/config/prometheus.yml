@@ -27,6 +27,49 @@ scrape_configs:
     static_configs:
       - targets: ['kube-state-metrics.kube-system.svc.cluster.local:8080']
 
+  # Through the API server: the kubelets listen on node addresses the monitoring namespace cannot reach directly.
+  - job_name: 'kubelet'
+    scheme: https
+    tls_config: {ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt}
+    authorization: {credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token}
+    kubernetes_sd_configs: [{role: node}]
+    relabel_configs:
+      - target_label: __address__
+        replacement: kubernetes.default.svc:443
+      - source_labels: [__meta_kubernetes_node_name]
+        target_label: __metrics_path__
+        replacement: /api/v1/nodes/$1/proxy/metrics
+      - source_labels: [__meta_kubernetes_node_name]
+        target_label: node
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'kubelet_volume_stats_.*'
+        action: keep
+
+  # container_network_* exist only at pod level (empty container label); cpu/memory rules must filter container!="".
+  - job_name: 'cadvisor'
+    scheme: https
+    tls_config: {ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt}
+    authorization: {credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token}
+    kubernetes_sd_configs: [{role: node}]
+    relabel_configs:
+      - target_label: __address__
+        replacement: kubernetes.default.svc:443
+      - source_labels: [__meta_kubernetes_node_name]
+        target_label: __metrics_path__
+        replacement: /api/v1/nodes/$1/proxy/metrics/cadvisor
+      - source_labels: [__meta_kubernetes_node_name]
+        target_label: node
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'container_(cpu_usage_seconds_total|memory_working_set_bytes|network_(receive|transmit)_bytes_total|cpu_cfs_throttled_periods_total|cpu_cfs_periods_total)'
+        action: keep
+
+  # Debian prometheus-node-exporter on each cluster node's storage-VLAN address (hwmon temperatures); rendered by the seed.
+  - job_name: 'node-exporter'
+    file_sd_configs:
+      - files: ['/etc/prometheus/targets/node-exporter.json']
+
   - job_name: 'blackbox-exporter'
     static_configs:
       - targets: ['blackbox:9115']
