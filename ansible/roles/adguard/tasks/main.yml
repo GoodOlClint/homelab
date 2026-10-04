@@ -448,6 +448,29 @@
     cache_valid_time: 3600
   tags: [adguard, logging, packages]
 
+# AdGuard writes querylog.json 0600 in a 0700 dir; Ubuntu's rsyslog drops to the
+# syslog user and could not read it. These LXCs' rsyslog has no network inputs.
+- name: Keep rsyslog root so imfile can read the query log
+  ansible.builtin.lineinfile:
+    path: /etc/rsyslog.conf
+    regexp: '^\$PrivDropTo(User|Group) '
+    state: absent
+  notify: Restart rsyslog
+  tags: [adguard, logging, config]
+
+# rsyslogd runs under an enforcing AppArmor profile that reads drop-ins from rsyslog.d/.
+- name: Let rsyslogd's AppArmor profile read the query log
+  ansible.builtin.copy:
+    src: apparmor-rsyslog-adguard-querylog
+    dest: /etc/apparmor.d/rsyslog.d/adguard-querylog
+    mode: '0644'
+    owner: root
+    group: root
+  notify:
+    - Reload rsyslogd's AppArmor profile
+    - Restart rsyslog
+  tags: [adguard, logging, config]
+
 - name: Tail the query log into rsyslog
   ansible.builtin.template:
     src: 40-adguard-querylog.conf.j2
@@ -455,7 +478,6 @@
     mode: '0644'
     owner: root
     group: root
-    validate: rsyslogd -N1 -f %s
   notify: Restart rsyslog
   tags: [adguard, logging, config]
 

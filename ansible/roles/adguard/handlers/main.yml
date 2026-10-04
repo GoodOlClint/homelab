@@ -9,6 +9,17 @@
     name: systemd-resolved
     state: restarted
 
+- name: Reload rsyslogd's AppArmor profile
+  ansible.builtin.command: apparmor_parser -r -W /etc/apparmor.d/usr.sbin.rsyslogd
+  changed_when: true
+
+# rsyslogd's AppArmor profile denies Ansible's temp file, so template's validate:
+# cannot work; the installed config is checked here, before the restart.
+- name: Validate the rsyslog config
+  ansible.builtin.command: rsyslogd -N1
+  changed_when: false
+  listen: Restart rsyslog
+
 - name: Restart rsyslog
   ansible.builtin.service:
     name: rsyslog
