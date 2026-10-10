@@ -307,7 +307,7 @@ groups:
           summary: "etcd on {{ $labels.node }} backend commit p99 is {{ $value | printf \"%.3f\" }}s"
 
       - alert: EtcdLeaderChanges
-        expr: increase(etcd_server_leader_changes_seen_total[1h]) > 2
+        expr: increase(etcd_server_leader_changes_seen_total[1h]) > 3
         for: 0m
         labels:
           severity: warning
