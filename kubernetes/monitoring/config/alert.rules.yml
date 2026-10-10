@@ -430,9 +430,8 @@ groups:
 
   - name: ceph
     rules:
-      # AUTH_INSECURE_* are standing waivers until Talos reaches kernel 7.0, so overall health_status is always 1 today.
       - alert: CephHealthWarn
-        expr: ceph_health_detail{name!~"AUTH_INSECURE_.*"} == 1
+        expr: ceph_health_detail == 1
         for: 15m
         labels:
           severity: warning
