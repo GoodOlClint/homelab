@@ -22,7 +22,7 @@ locals {
 
   # offset doubles as the last octet on BOTH legs; VMID = 230 + index.
   talos_nodes = {
-    talos-cp-a = { vm_id = 230, node_name = "ms-01a", offset = 61 }
+    talos-cp-a = { vm_id = 230, node_name = "ms-01c", offset = 61 }
     talos-cp-b = { vm_id = 231, node_name = "ms-01b", offset = 62 }
     talos-cp-c = { vm_id = 232, node_name = "msi", offset = 63 }
   }

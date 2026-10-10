@@ -35,7 +35,7 @@ locals {
     {
       name         = "dns1"
       type         = "lxc"
-      node_name    = "ms-01a"
+      node_name    = "ms-01c"
       vm_id        = 218
       vlans        = ["vlan40"]
       ip_offset    = 18
@@ -60,7 +60,7 @@ locals {
     {
       name         = "adguard1"
       type         = "lxc"
-      node_name    = "ms-01a"
+      node_name    = "ms-01c"
       vm_id        = 251
       vlans        = ["vlan40"]
       ip_offset    = 51
@@ -118,7 +118,7 @@ locals {
     {
       name         = "authentik"
       type         = "lxc"
-      node_name    = "ms-01a"
+      node_name    = "msi"
       vm_id        = 213
       vlans        = ["vlan40"]
       ip_offset    = 113
@@ -131,6 +131,7 @@ locals {
     },
     {
       name           = "unifi"
+      node_name      = "ms-01c"
       vm_id          = 200 # old 100 + 100 (ADR 0028)
       mgmt_ip_offset = 10  # static management IP (decoupled from VMID)
       vlans          = ["vlan10"]
@@ -141,6 +142,7 @@ locals {
     },
     {
       name         = "infisical"
+      node_name    = "ms-01c"
       vm_id        = 205 # old 105 + 100 (ADR 0028)
       vlans        = ["vlan40"]
       ip_offset    = 105
@@ -152,6 +154,7 @@ locals {
     },
     {
       name         = "apt-cache"
+      node_name    = "msi"
       vm_id        = 216 # old 116 + 100 (ADR 0028); hypervisor plane (ADR 0030)
       vlans        = ["vlan30"]
       ip_offset    = 16
@@ -162,6 +165,7 @@ locals {
     # Human management pane for the cluster + worklab (ADR 0030); class S, no volume.
     {
       name         = "pdm"
+      node_name    = "ms-01b"
       vm_id        = 220
       vlans        = ["vlan30"]
       ip_offset    = 20
@@ -173,6 +177,7 @@ locals {
     },
     {
       name         = "pxe"
+      node_name    = "msi"
       vm_id        = 217 # old 117 + 100 (ADR 0028); hypervisor plane (ADR 0030)
       vlans        = ["vlan30"]
       ip_offset    = 17
@@ -254,7 +259,7 @@ locals {
     {
       name         = "code-intel"
       type         = "lxc"
-      node_name    = "ms-01a"
+      node_name    = "msi"
       vm_id        = 280
       vlans        = ["vlan40"]
       ip_offset    = 80
