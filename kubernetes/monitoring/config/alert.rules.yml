@@ -323,20 +323,20 @@ groups:
           summary: "etcd member on {{ $labels.node }} has no leader"
 
       - alert: ApiserverEtcdSlow
-        expr: histogram_quantile(0.99, sum by (instance, le) (rate(etcd_request_duration_seconds_bucket[5m]))) > 1
+        expr: histogram_quantile(0.99, sum by (node, le) (rate(etcd_request_duration_seconds_bucket[5m]))) > 1
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "apiserver {{ $labels.instance }} sees etcd request p99 of {{ $value | printf \"%.2f\" }}s"
+          summary: "apiserver on {{ $labels.node }} sees etcd request p99 of {{ $value | printf \"%.2f\" }}s"
 
       - alert: ApiserverRequestTerminations
-        expr: sum by (instance) (increase(apiserver_request_terminations_total[10m])) > 5
+        expr: sum by (node) (increase(apiserver_request_terminations_total[10m])) > 5
         for: 0m
         labels:
           severity: warning
         annotations:
-          summary: "apiserver {{ $labels.instance }} terminated {{ $value | printf \"%.0f\" }} requests in 10m"
+          summary: "apiserver on {{ $labels.node }} terminated {{ $value | printf \"%.0f\" }} requests in 10m"
 
       - alert: TalosDiskSaturated
         expr: rate(container_fs_io_time_seconds_total{id="/"}[5m]) > 0.8
