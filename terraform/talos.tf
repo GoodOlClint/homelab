@@ -61,7 +61,7 @@ moved {
 resource "proxmox_download_file" "talos" {
   content_type       = "iso"
   datastore_id       = var.virtual_environment_storage
-  node_name          = var.virtual_environment_node
+  node_name          = var.proxmox_nodes[0] # ms-01a is gone; cephfs is shared, so any member serves the image
   url                = var.cloud_images.talos.url
   file_name          = var.cloud_images.talos.file_name
   checksum           = var.cloud_images.talos.checksum
