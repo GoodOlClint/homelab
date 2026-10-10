@@ -61,8 +61,39 @@ scrape_configs:
       - source_labels: [__meta_kubernetes_node_name]
         target_label: node
     metric_relabel_configs:
+      - source_labels: [__name__, id]
+        separator: ';'
+        regex: 'container_fs_((reads|writes)_(bytes_)?total|io_time_seconds_total);/|container_(cpu_usage_seconds_total|memory_working_set_bytes|network_(receive|transmit)_bytes_total|cpu_cfs_throttled_periods_total|cpu_cfs_periods_total);.*'
+        action: keep
+
+  # etcd listens for metrics on the node address via machine.etcd.extraArgs (talos.sh).
+  - job_name: 'etcd'
+    kubernetes_sd_configs: [{role: node}]
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_node_address_InternalIP]
+        regex: '(.+)'
+        target_label: __address__
+        replacement: '$1:2381'
+      - source_labels: [__meta_kubernetes_node_name]
+        target_label: node
+    metric_relabel_configs:
       - source_labels: [__name__]
-        regex: 'container_(cpu_usage_seconds_total|memory_working_set_bytes|network_(receive|transmit)_bytes_total|cpu_cfs_throttled_periods_total|cpu_cfs_periods_total)'
+        regex: 'etcd_disk_(wal_fsync|backend_commit)_duration_seconds_(bucket|sum|count)|etcd_server_(leader_changes_seen_total|has_leader|is_leader|proposals_(failed|pending|committed_total|applied_total)|slow_(apply|read_indexes)_total|heartbeat_send_failures_total)|etcd_network_peer_round_trip_time_seconds_(bucket|sum|count)|etcd_mvcc_db_total_size_in_bytes'
+        action: keep
+
+  # etcd_request_duration_seconds is the apiserver's view of etcd latency: it separates a slow etcd disk from a slow apiserver.
+  - job_name: 'apiserver'
+    scheme: https
+    tls_config: {ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt}
+    authorization: {credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token}
+    kubernetes_sd_configs: [{role: endpoints}]
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+        regex: 'default;kubernetes;https'
+        action: keep
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'etcd_request_duration_seconds_(bucket|sum|count)|apiserver_request_terminations_total|apiserver_current_inflight_requests|apiserver_storage_objects|process_cpu_seconds_total'
         action: keep
 
   # Debian prometheus-node-exporter on each cluster node's storage-VLAN address (hwmon temperatures); rendered by the seed.

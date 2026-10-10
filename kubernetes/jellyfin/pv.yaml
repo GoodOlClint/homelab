@@ -23,7 +23,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata: {name: config, namespace: jellyfin}
-spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 20Gi}}}
+spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 40Gi}}}
 ---
 # Transcode scratch — bounded so a session can never pressure a Talos node.
 apiVersion: v1

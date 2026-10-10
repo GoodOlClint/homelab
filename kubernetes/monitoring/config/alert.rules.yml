@@ -288,6 +288,64 @@ groups:
         annotations:
           summary: "Node {{ $labels.node }} reports {{ $labels.condition }}"
 
+  - name: etcd
+    rules:
+      - alert: EtcdSlowFsync
+        expr: histogram_quantile(0.99, sum by (node, le) (rate(etcd_disk_wal_fsync_duration_seconds_bucket[5m]))) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "etcd on {{ $labels.node }} WAL fsync p99 is {{ $value | printf \"%.3f\" }}s (etcd wants under 10 ms on good disks; the engine logs at 100 ms)"
+
+      - alert: EtcdSlowBackendCommit
+        expr: histogram_quantile(0.99, sum by (node, le) (rate(etcd_disk_backend_commit_duration_seconds_bucket[5m]))) > 0.25
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "etcd on {{ $labels.node }} backend commit p99 is {{ $value | printf \"%.3f\" }}s"
+
+      - alert: EtcdLeaderChanges
+        expr: increase(etcd_server_leader_changes_seen_total[1h]) > 2
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "etcd on {{ $labels.node }} saw {{ $value | printf \"%.0f\" }} leader changes in 1h"
+
+      - alert: EtcdNoLeader
+        expr: etcd_server_has_leader == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "etcd member on {{ $labels.node }} has no leader"
+
+      - alert: ApiserverEtcdSlow
+        expr: histogram_quantile(0.99, sum by (instance, le) (rate(etcd_request_duration_seconds_bucket[5m]))) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "apiserver {{ $labels.instance }} sees etcd request p99 of {{ $value | printf \"%.2f\" }}s"
+
+      - alert: ApiserverRequestTerminations
+        expr: sum by (instance) (increase(apiserver_request_terminations_total[10m])) > 5
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "apiserver {{ $labels.instance }} terminated {{ $value | printf \"%.0f\" }} requests in 10m"
+
+      - alert: TalosDiskSaturated
+        expr: rate(container_fs_io_time_seconds_total{id="/"}[5m]) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk {{ $labels.device }} on {{ $labels.node }} is busy {{ $value | humanizePercentage }} of the time"
+
   - name: hardware
     rules:
       # node_exporter hwmon: node_hwmon_temp_celsius{chip,sensor}; node_hwmon_chip_names{chip,chip_name} maps the sysfs chip id to the driver name.

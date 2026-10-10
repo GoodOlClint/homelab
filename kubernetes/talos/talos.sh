@@ -25,7 +25,7 @@ need talosctl kubectl jq sops infisical
 j() { jq -r "$1" "$NODES"; }
 VIP=$(j .api_vip); GW=$(j .gateway); PLEN=$(j .prefix_len); SUBNET=$(j .subnet)
 SCHEMATIC=$(j .schematic); VERSION=$(j .version)
-NODE_NAMES=$(j '.nodes | keys[]')
+NODE_NAMES=${NODE_NAMES:-$(j '.nodes | keys[]')}
 ip_of() { j ".nodes[\"$1\"].services_ip"; }
 
 infisical_token() {
@@ -95,6 +95,8 @@ machine:
 cluster:
   etcd:
     advertisedSubnets: [$SUBNET]
+    extraArgs:
+      listen-metrics-urls: http://0.0.0.0:2381
 ---
 apiVersion: v1alpha1
 kind: HostnameConfig
