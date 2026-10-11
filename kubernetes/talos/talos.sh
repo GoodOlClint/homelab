@@ -79,6 +79,10 @@ machine:
       rotate-server-certificates: "true"
     nodeIP:
       validSubnets: [$SUBNET]
+  disks:
+    - device: /dev/vdb
+      partitions:
+        - mountpoint: /var/mnt/scratch
   network:
     hostname: $n
     nameservers: [$dns]

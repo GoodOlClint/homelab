@@ -24,7 +24,7 @@ k8s_seed_namespaces:
   kiwix: baseline
   metallb-system: privileged
   monitoring: baseline
-  plex-services: baseline
+  plex-services: privileged # hostPath: SABnzbd's scratch is a node-local disk (ADR 0037 consequence, 2026-10-10)
   traefik: baseline
   zot: baseline
 # Trees whose namespace is not their own name (kube-system is never labelled by the seed); a list = a

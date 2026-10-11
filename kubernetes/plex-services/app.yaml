@@ -245,8 +245,15 @@ spec:
     spec:
       enableServiceLinks: false
       affinity: {nodeAffinity: {preferredDuringSchedulingIgnoredDuringExecution: [{weight: 100, preference: {matchExpressions: [{key: kubernetes.io/hostname, operator: NotIn, values: [talos-cp-w]}]}}]}}
-      # fsGroup so the scratch PVC is writable for the dropped-privilege uid 2003 (s6 chowns /config only).
       securityContext: {fsGroup: 2000, fsGroupChangePolicy: OnRootMismatch}
+      # fsGroup does not reach a hostPath; s6 chowns /config only.
+      initContainers:
+        - name: scratch-owner
+          image: ${REGISTRY}/public.ecr.aws/docker/library/busybox:stable
+          imagePullPolicy: IfNotPresent
+          command: [chown, "2003:2000", /scratch]
+          resources: {requests: {cpu: 10m, memory: 16Mi}}
+          volumeMounts: [{name: scratch, mountPath: /scratch}]
       containers:
         - name: sabnzbd
           image: ${REGISTRY}/ghcr.io/hotio/sabnzbd:testing
@@ -260,12 +267,13 @@ spec:
           volumeMounts:
             - {name: config, mountPath: /config, subPath: data}
             - {name: media, mountPath: /data, subPath: data}
-            - {name: scratch, mountPath: /scratch, subPath: data}
+            - {name: scratch, mountPath: /scratch}
           readinessProbe: {httpGet: {path: "/api?mode=version", port: 8080}, initialDelaySeconds: 15, periodSeconds: 10}
       volumes:
         - {name: config, persistentVolumeClaim: {claimName: sabnzbd}}
         - {name: media, persistentVolumeClaim: {claimName: media}}
-        - {name: scratch, persistentVolumeClaim: {claimName: sab-scratch}}
+        # Node-local (talos.sh machine.disks); a reschedule starts empty and SAB re-fetches the queue.
+        - {name: scratch, hostPath: {path: /var/mnt/scratch/sabnzbd, type: DirectoryOrCreate}}
 ---
 apiVersion: v1
 kind: Service

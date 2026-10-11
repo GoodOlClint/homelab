@@ -133,6 +133,17 @@ resource "proxmox_virtual_environment_vm" "talos_cp" {
     discard      = "on"
     size         = 40
   }
+  # Unpack scratch on the node's own NVMe, never Ceph: a 400 MiB/s unpack stalled
+  # etcd fsync on every member (2026-10-10). Talos mounts it at /var/mnt/scratch.
+  disk {
+    datastore_id = "local-zfs"
+    interface    = "virtio1"
+    iothread     = true
+    discard      = "on"
+    size         = 100
+    file_format  = "raw"
+    backup       = false
+  }
 
   network_device {
     bridge      = local.talos_services_vlan.bridge

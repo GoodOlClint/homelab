@@ -34,12 +34,6 @@ kind: PersistentVolumeClaim
 metadata: {name: sabnzbd, namespace: plex-services}
 spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 1Gi}}}
 ---
-# SAB unpack scratch: bounded so a queue can never pressure a Talos node (ADR 0037); expandable.
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata: {name: sab-scratch, namespace: plex-services}
-spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 120Gi}}}
----
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata: {name: tautulli, namespace: plex-services}
