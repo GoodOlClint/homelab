@@ -272,7 +272,7 @@ groups:
 
       - alert: PodMemoryAboveRequest
         expr: >-
-          max by (namespace, pod, container) (container_memory_working_set_bytes{container!=""})
+          max by (namespace, pod, container) (container_memory_rss{container!=""})
           > 3 * max by (namespace, pod, container) (kube_pod_container_resource_requests{resource="memory"})
         for: 30m
         labels:
