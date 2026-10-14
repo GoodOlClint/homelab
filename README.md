@@ -301,6 +301,8 @@ The NAS media tree reaches the pods through a kubelet-mounted NFS PersistentVolu
 
 Flux tree `games` (ADR 0038): one `valheim` pod — the crossplay dedicated server, the `valheim-status` PlayFab lobby sidecar (keyed by server name, serves `status.json` for Uptime Kuma) — with UDP 2456-2458 on a MetalLB LoadBalancer (services offset 67, `externalTrafficPolicy: Local`) that the VPS relay/pfSense forward targets; `kiwix.<domain>` serves the NAS ZIM library through a read-only NFS PV. The one-off migration from the retired guest is done; its state copy and Kuma repoint paths were removed 2026-09-09.
 
+Flux tree `static-viewer`: a private shared static-file viewer at `viewer.<domain>/<project>/…` (nginx over a read-only NAS NFS PV, authentik forward-auth, noindex, no public DNS); projects deploy by `rsync` to the NAS, see [docs/static-viewer.md](docs/static-viewer.md).
+
 ### Infisical Secret Vault (infisical VM)
 
 Self-hosted secret management platform deployed via Docker Compose:

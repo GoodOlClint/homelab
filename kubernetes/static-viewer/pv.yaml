@@ -1,0 +1,20 @@
+# The NAS static-viewer export as a read-only kubelet-mounted NFS PV (ADR 0037 shape); projects rsync into it from outside the cluster.
+apiVersion: v1
+kind: PersistentVolume
+metadata: {name: static-viewer}
+spec:
+  capacity: {storage: 1Ti}
+  accessModes: [ReadOnlyMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: [nfsvers=4.1, hard, noatime, rsize=1048576, wsize=1048576, nconnect=4, ro]
+  nfs: {server: "${SYNOLOGY_STORAGE}", path: /volume1/static-viewer, readOnly: true}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: static-viewer, namespace: static-viewer}
+spec:
+  accessModes: [ReadOnlyMany]
+  storageClassName: ""
+  volumeName: static-viewer
+  resources: {requests: {storage: 1Ti}}

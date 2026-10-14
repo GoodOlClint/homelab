@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources: [pv.yaml, app.yaml]
+configMapGenerator:
+  - name: static-viewer-nginx
+    namespace: static-viewer
+    files: [default.conf]
+    options:
+      annotations: {kustomize.toolkit.fluxcd.io/substitute: disabled}

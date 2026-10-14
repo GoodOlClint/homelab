@@ -25,13 +25,14 @@ k8s_seed_namespaces:
   metallb-system: privileged
   monitoring: baseline
   plex-services: privileged # hostPath: SABnzbd's scratch is a node-local disk (ADR 0037 consequence, 2026-10-10)
+  static-viewer: baseline
   traefik: baseline
   zot: baseline
 # Trees whose namespace is not their own name (kube-system is never labelled by the seed); a list = a
 # tree spanning several namespaces (arc: the controller in arc-systems, the scale sets in arc-runners).
 k8s_seed_tree_namespaces: {metrics: kube-system, metallb: metallb-system, infisical: infisical-operator, arc: [arc-systems, arc-runners]}
 # Trees whose Flux Kustomization manages PersistentVolumes (cluster-scoped) beside its namespace.
-k8s_seed_pv_trees: [jellyfin, kiwix, plex-services]
+k8s_seed_pv_trees: [jellyfin, kiwix, plex-services, static-viewer]
 # Trees that declare cluster-scoped resources (ClusterIssuer, StorageClass).
 k8s_seed_cluster_cr_trees: [cert-manager, ceph-csi]
 

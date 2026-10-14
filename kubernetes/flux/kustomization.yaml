@@ -4,6 +4,7 @@ resources:
   - flux-system/gotk-components.yaml
   - flux-system/gotk-sync.yaml
   - apps/kiwix.yaml
+  - apps/static-viewer.yaml
   - apps/homepage.yaml
   - apps/games.yaml
   - apps/jellyfin.yaml

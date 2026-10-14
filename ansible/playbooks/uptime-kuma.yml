@@ -57,6 +57,7 @@
       - {name: "UniFi controller", monitor_type: port, hostname: "{{ hostvars['unifi'].ansible_host }}", port: 11443}
       - {name: "apt-cacher-ng — proxy TCP 3142", monitor_type: port, hostname: "{{ hostvars['apt-cache'].service_ip }}", port: 3142}
       - {name: Homepage, monitor_type: http, url: "http://homepage.homepage.svc.cluster.local", accepted_statuscodes: "{{ _redirects }}"}
+      - {name: "Static viewer", monitor_type: http, url: "http://static-viewer.static-viewer.svc.cluster.local:8080/healthz"}
       - {name: "authentik — internal realm", monitor_type: http, url: "https://auth.{{ service_domain }}/-/health/ready/", expiry_notification: true}
       - {name: "authentik — external realm", monitor_type: http, url: "http://authentik-server.authentik-ext.svc.cluster.local/-/health/ready/"}
       - {name: "VPS — public IP", monitor_type: ping, hostname: "vps.{{ media_domain }}"}
