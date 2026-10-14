@@ -8,7 +8,7 @@ A shared, private static-file viewer on the Talos cluster. Top-level folders bel
 
 - Reachable from the LAN and the mobile WireGuard VLAN only. There is no public DNS record (ADR 0044 mode `none`); external-dns publishes the Ingress host into BIND only.
 - Behind authentik forward-auth, so only `authentik Admins` get in.
-- Never indexed: every response carries `X-Robots-Tag: noindex, nofollow, noarchive`, `/robots.txt` disallows everything, and `autoindex` is off (a folder with no `index.html` is a 404, not a listing).
+- Never indexed: every response carries `X-Robots-Tag: noindex, nofollow, noarchive`, `/robots.txt` disallows everything, and `autoindex` is off (a folder with no `index.html` answers 403, never a listing).
 - The probe path `/healthz` answers 200 for the readiness and liveness probes and for the Uptime Kuma row, which uses in-cluster service DNS because the forward-auth 302 would break a probe of the public host.
 
 ## Deploy a project
