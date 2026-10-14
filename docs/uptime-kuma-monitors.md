@@ -14,7 +14,7 @@ One channel, shared with Alertmanager: **ntfy** (`ntfy (homelab alerts)`, type `
 
 ## Monitors
 
-26 monitors — the authoritative list is the playbook. No monitor ignores TLS (ADR 0040 forbids it on Traefik-fronted apps; the ingress cert is Let's Encrypt since P5b). Per-monitor defaults: 60 s interval, 2 retries (1 for AxoSyslog, so the syslog path trips fast), 60 s retry interval, 16 s timeout, accepted status `200-299` — widened to `300-399` for services that redirect to a login page.
+31 monitors — the authoritative list is the playbook. No monitor ignores TLS (ADR 0040 forbids it on Traefik-fronted apps; the ingress cert is Let's Encrypt since P5b). Per-monitor defaults: 60 s interval, 2 retries (1 for AxoSyslog, so the syslog path trips fast), 60 s retry interval, 16 s timeout, accepted status `200-299` — widened to `300-399` for services that redirect to a login page.
 
 **Certificate expiry is a second opinion here, not a Kuma responsibility.** The nine TLS-fronted monitors (Plex, Jellyfin, Grafana, OpenObserve, Prometheus, Alertmanager, Infisical, authentik — internal realm, Cloudflare Tunnel — Tautulli) carry `expiry_notification: true` (collection v0.3.1, P10 item 3), so Kuma pings ntfy on Uptime Kuma's own expiry schedule as well. The owner of expiry stays the metrics lane per ADR 0011: `blackbox-tls` → `TLSCertExpiringSoon` in Prometheus/Alertmanager, verifying against the fleet root since P9. The flag is unset on every other row (svc-DNS http, port, ping, dns, json) — the module leaves an unset value alone, so nothing there is touched.
 
@@ -33,6 +33,7 @@ One channel, shared with Alertmanager: **ntfy** (`ntfy (homelab alerts)`, type `
 | UniFi controller | TCP port | unifi `:11443` |
 | apt-cacher-ng — proxy TCP 3142 | TCP port | apt-cache `:3142` |
 | Homepage | HTTP | in-cluster `homepage.homepage.svc.cluster.local` (the ingress host sits behind forward-auth since P5c) |
+| Static viewer | HTTP | in-cluster `static-viewer.static-viewer.svc.cluster.local:8080/healthz` (the ingress host sits behind forward-auth, whose 302 would fail a probe) |
 | authentik — internal realm | HTTP | `https://auth.<service domain>/-/health/ready/` through Traefik |
 | authentik — external realm | HTTP | in-cluster `authentik-server.authentik-ext.svc.cluster.local/-/health/ready/` (the tunnel path is the operator's phone test until P5d adds a row) |
 | VPS — public IP | Ping | `vps.<media domain>` |
