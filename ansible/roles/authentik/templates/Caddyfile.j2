@@ -1,5 +1,10 @@
 {
     auto_https off
+    servers {
+        # Traefik's forward-auth subrequest arrives SNATed to a Talos node (services offsets 60-63);
+        # untrusted, Caddy rewrites X-Forwarded-Host to this host and the outpost redirects back to itself.
+        trusted_proxies static {{ services_vlan_prefix }}60/30
+    }
 }
 :80 {
     redir https://{{ authentik_host }}{uri} permanent
