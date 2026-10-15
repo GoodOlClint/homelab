@@ -171,8 +171,13 @@
       changed_when: true
       when: "'noout' in _health.stdout or (_apt_plan is changed and idle_gave_up | default([]) | length == 0)"
 
+    # Right after a reboot crm-command answers "no such cluster node" for a quorate member.
     - name: Leave HA node maintenance
       ansible.builtin.command: ha-manager crm-command node-maintenance disable {{ inventory_hostname }}
+      register: _maint_off
+      until: _maint_off.rc == 0
+      retries: 18
+      delay: 10
       changed_when: true
       when: "'(maintenance mode' in _rejoined.stdout"
 
