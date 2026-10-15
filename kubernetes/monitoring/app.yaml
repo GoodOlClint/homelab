@@ -391,6 +391,31 @@ spec: {selector: {app: pbs-exporter}, ports: [{port: 10019}]}
 ---
 apiVersion: apps/v1
 kind: Deployment
+metadata: {name: nut-exporter, namespace: monitoring}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: nut-exporter}}
+  template:
+    metadata: {labels: {app: nut-exporter}}
+    spec:
+      enableServiceLinks: false
+      securityContext: {runAsUser: 65534, runAsGroup: 65534}
+      containers:
+        - name: nut-exporter
+          image: ${REGISTRY}/docker.io/druggeri/nut_exporter:3.3.0
+          args:
+            - --nut.server=${GATEWAY}
+            - --nut.vars_enable=battery.charge,battery.runtime,ups.load,ups.status
+          resources: {requests: {cpu: 10m, memory: 32Mi}}
+          ports: [{containerPort: 9199}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: nut-exporter, namespace: monitoring}
+spec: {selector: {app: nut-exporter}, ports: [{port: 9199}]}
+---
+apiVersion: apps/v1
+kind: Deployment
 metadata: {name: uptime-kuma, namespace: monitoring}
 spec:
   replicas: 1

@@ -288,6 +288,23 @@ groups:
         annotations:
           summary: "Node {{ $labels.node }} reports {{ $labels.condition }}"
 
+      # Flux controllers expose only reconcile durations; Ready state comes from kube-state-metrics' custom resource config (kubernetes/metrics).
+      - alert: FluxResourceNotReady
+        expr: gotk_resource_info{ready!="True", suspended!="true"} == 1
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Flux {{ $labels.customresource_kind }} {{ $labels.exported_namespace }}/{{ $labels.name }} has not been Ready for 15m"
+
+      - alert: FluxMetricsAbsent
+        expr: absent(gotk_resource_info{customresource_kind="Kustomization"}) or absent(gotk_resource_info{customresource_kind="HelmRelease"})
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No Flux Kustomization or HelmRelease state in kube-state-metrics; FluxResourceNotReady cannot fire"
+
   - name: etcd
     rules:
       - alert: EtcdSlowFsync
@@ -388,6 +405,77 @@ groups:
           severity: warning
         annotations:
           summary: "NVMe drive on {{ $labels.instance }} is at {{ $value | printf \"%.0f\" }} C"
+
+      # Ceph cluster NICs are the Mellanox ports: node_network_info carries no driver, so the match is the hardware MAC's
+      # vendor prefix, which a bond inherits from its first member (the post-ADR 0057 bond counts). VLAN sub-interfaces
+      # share the MAC and are excluded by name. Speed and info come from the node_exporter netclass collector.
+      # A bond reports the sum of its members; a down port exposes no speed series.
+      - alert: CephNicLinkSpeedLow
+        expr: >-
+          node_network_speed_bytes < 3125000000 and on (instance, device)
+          node_network_info{address=~"(?i)(00:02:c9|0c:42:a1|1c:34:da|24:8a:07|98:03:9b|a0:88:c2|b8:ce:f6):.*", device!~".+[.].+"}
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Ceph cluster NIC {{ $labels.device }} on {{ $labels.instance }} negotiated {{ $value | humanize }}B/s, below 25 Gb/s"
+
+      - alert: CephNicSpeedAbsent
+        expr: >-
+          label_replace(group by (hostname) (ceph_osd_metadata), "instance", "$1", "hostname", "(.*)")
+          unless on (instance)
+          (node_network_speed_bytes and on (instance, device) node_network_info{address=~"(?i)(00:02:c9|0c:42:a1|1c:34:da|24:8a:07|98:03:9b|a0:88:c2|b8:ce:f6):.*", device!~".+[.].+"})
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.instance }} hosts OSDs but exposes no link speed for a Ceph NIC (link down, collector off, or no Mellanox port)"
+
+      - alert: CephNicErrors
+        expr: >-
+          (rate(node_network_receive_errs_total[5m]) + rate(node_network_transmit_errs_total[5m])
+          + rate(node_network_receive_drop_total[5m]) + rate(node_network_transmit_drop_total[5m])) > 1
+          and on (instance, device)
+          node_network_info{address=~"(?i)(00:02:c9|0c:42:a1|1c:34:da|24:8a:07|98:03:9b|a0:88:c2|b8:ce:f6):.*", device!~".+[.].+"}
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Ceph cluster NIC {{ $labels.device }} on {{ $labels.instance }} is dropping or erroring {{ $value | printf \"%.1f\" }} packets/s"
+
+      # io_time is the fraction of the window the device had I/O in flight; whole disks only (not dm, rbd, zd or partitions).
+      - alert: HostDiskBusy
+        expr: rate(node_disk_io_time_seconds_total{device=~"nvme[0-9]+n[0-9]+|sd[a-z]+"}[5m]) > 0.9
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk {{ $labels.device }} on {{ $labels.instance }} is busy {{ $value | humanizePercentage }} of the time"
+
+      # pfSense serves NUT; flags come from ups.status (OB on battery, LB low battery).
+      - alert: UPSOnBattery
+        expr: network_ups_tools_ups_status{flag="OB"} == 1
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "UPS {{ $labels.ups }} is on battery"
+
+      - alert: UPSLowBattery
+        expr: network_ups_tools_ups_status{flag="LB"} == 1 or network_ups_tools_battery_charge < 30
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "UPS {{ $labels.ups }} battery is low"
+
+      - alert: UPSMetricsAbsent
+        expr: absent(network_ups_tools_ups_status{ups="ups", flag="OB"}) or absent(network_ups_tools_ups_status{ups="network-ups", flag="OB"})
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No NUT status for one of the UPSes; pfSense upsd or the nut-exporter is down"
 
   - name: availability
     rules:

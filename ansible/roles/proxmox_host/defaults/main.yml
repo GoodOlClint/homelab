@@ -114,5 +114,5 @@ proxmox_host_vfio_pci_ids:
 # the inventory host's last octet on the storage VLAN, the fleet octet scheme (terraform/hosts storage_ip).
 proxmox_host_node_exporter_port: 9100
 proxmox_host_node_exporter_listen: "{{ network_data.ipv4_prefix }}.{{ proxmox_host_storage_vlan }}.{{ ansible_host.split('.')[-1] }}"
-proxmox_host_node_exporter_collectors: [cpu, filesystem, hwmon, loadavg, meminfo]
+proxmox_host_node_exporter_collectors: [cpu, diskstats, filesystem, hwmon, loadavg, meminfo, netclass, netdev]
 proxmox_host_node_exporter_fs_types_exclude: "^(tmpfs|squashfs|overlay|devtmpfs|ramfs|proc|sysfs|cgroup2?|autofs|binfmt_misc|debugfs|tracefs|securityfs|pstore|configfs|mqueue|hugetlbfs|nsfs|rpc_pipefs|fusectl|bpf|efivarfs|fuse.*|nfs4?|cifs|ceph)$"
