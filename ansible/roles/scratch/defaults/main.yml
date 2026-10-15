@@ -18,8 +18,6 @@ scratch_guests:
       - { path: /srv/code-intel/generations, owner: ci-writer }
       - { path: /srv/code-intel/current, owner: ci-writer }
     secrets:
-      github_app_private_key: ci-writer
-      athena_embedding_token: ci-writer
       openrouter_api_key: ci-writer
       llm.llm_api_key_code_intel: ci-writer
       codeintel.writer_password: ci-writer
