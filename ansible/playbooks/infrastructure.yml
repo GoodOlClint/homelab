@@ -40,6 +40,27 @@
     - phase1
     - ca-trust
 
+# LXC templates ship UTC and bpg's container resource has no timezone; VMs get it from cloud-init.
+- name: "Phase 0: Fleet timezone"
+  hosts: all
+  become: true
+  vars_files:
+    - ../group_vars/all.yml
+  tasks:
+    - name: Set the system timezone
+      community.general.timezone:
+        name: "{{ timezone }}"
+      register: _fleet_tz
+
+    - name: Restart cron so its schedules follow the new zone
+      ansible.builtin.service:
+        name: cron
+        state: restarted
+      when: _fleet_tz is changed
+  tags:
+    - phase1
+    - timezone
+
 - name: "Phase 1: Configure dns VM (BIND9)"
   hosts: dns
   become: true

@@ -3,6 +3,7 @@ kind: CronJob
 metadata: {name: pg-backup, namespace: "${NS}"}
 spec:
   schedule: "${SCHEDULE}"
+  timeZone: "${TZ}"
   suspend: false
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 1
