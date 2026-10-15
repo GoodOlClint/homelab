@@ -9,7 +9,10 @@ kind: Deployment
 metadata:
   name: valheim2
   namespace: games
-  annotations: {secrets.infisical.com/auto-reload: "true"}
+  annotations:
+    secrets.infisical.com/auto-reload: "true"
+    # make k8s-update leaves the pod alone unless the PlayFab lobby reports nobody connected
+    homelab/idle-check: 'grep -Eq "\"players\": *0[,}]" /status/status.json'
 spec:
   replicas: 1
   strategy: {type: Recreate}

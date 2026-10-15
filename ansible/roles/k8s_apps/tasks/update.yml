@@ -19,7 +19,8 @@
       {%- if r.spec.template.spec.containers | map(attribute='image') | select('match', '.*:latest$') | list -%}
       {%- set sel = [] -%}
       {%- for k, v in r.spec.selector.matchLabels.items() -%}{{- sel.append(k ~ '=' ~ v) -}}{%- endfor -%}
-      {{- out.append({'ns': r.metadata.namespace, 'kind': r.kind | lower, 'name': r.metadata.name, 'selector': sel | join(',')}) -}}
+      {{- out.append({'ns': r.metadata.namespace, 'kind': r.kind | lower, 'name': r.metadata.name, 'selector': sel | join(','),
+                      'idle_check': (r.metadata.annotations | default({}, true)).get('homelab/idle-check', '')}) -}}
       {%- endif -%}
       {%- endfor -%}
       {{ out }}
@@ -27,11 +28,28 @@
 - ansible.builtin.debug:
     msg: "{{ _latest | map(attribute='ns') | zip(_latest | map(attribute='name')) | map('join', '/') | list or 'nothing on :latest' }}"
 
+# A workload people outside the house use carries a `homelab/idle-check` annotation: a shell command run in
+# its pod that exits 0 only when nobody is connected. Busy, or a check that cannot run, skips it this pass.
+- name: Ask workloads with an idle check whether anyone is connected
+  ansible.builtin.command: >-
+    {{ k8s_apps_kubectl }} -n {{ item.ns }} exec {{ item.kind }}/{{ item.name }} -- sh -c {{ item.idle_check | quote }}
+  register: _idle
+  changed_when: false
+  failed_when: false
+  loop: "{{ _latest | selectattr('idle_check') | list }}"
+  loop_control: {label: "{{ item.ns }}/{{ item.name }}"}
+
+- name: Workloads left alone because someone is connected
+  ansible.builtin.debug:
+    msg: "skipped {{ item.item.ns }}/{{ item.item.name }}: idle check exited {{ item.rc }}"
+  loop: "{{ _idle.results | rejectattr('rc', 'eq', 0) | list }}"
+  loop_control: {label: "{{ item.item.ns }}/{{ item.item.name }}"}
+
 # One workload at a time: every re-pull is an anonymous upstream tag check from the house's one WAN address (#31).
 - name: Recreate their pods, one workload at a time
   ansible.builtin.shell: >-
     {{ k8s_apps_kubectl }} -n {{ item.ns }} delete pod -l {{ item.selector }} --wait=false
     && {{ k8s_apps_kubectl }} -n {{ item.ns }} rollout status {{ item.kind }}/{{ item.name }} --timeout=600s
   changed_when: true
-  loop: "{{ _latest }}"
+  loop: "{{ _latest | reject('in', _idle.results | rejectattr('rc', 'eq', 0) | map(attribute='item') | list) | list }}"
   loop_control: {label: "{{ item.ns }}/{{ item.name }}"}

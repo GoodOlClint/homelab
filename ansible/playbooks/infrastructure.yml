@@ -50,13 +50,12 @@
     - name: Set the system timezone
       community.general.timezone:
         name: "{{ timezone }}"
-      register: _fleet_tz
-
-    - name: Restart cron so its schedules follow the new zone
+      notify: Restart cron
+  handlers:
+    - name: Restart cron
       ansible.builtin.service:
         name: cron
         state: restarted
-      when: _fleet_tz is changed
   tags:
     - phase1
     - timezone
