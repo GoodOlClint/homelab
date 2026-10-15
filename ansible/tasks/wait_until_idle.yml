@@ -1,15 +1,23 @@
 ---
-# Polls idle_cmd (bash; exit 0 = idle) once a minute and passes after idle_quiet_minutes consecutive
-# idle polls. A failing or unreadable check counts as busy. On give-up after idle_max_minutes the
-# service is appended to idle_gave_up (a host fact) and the play carries on; the caller skips.
-# Inputs: idle_service (name for messages), idle_cmd (omit for plex), optional idle_delegate_to, idle_become,
-# idle_pct_vmid (run the check inside that CT through pct exec).
-- name: Wait until {{ idle_service }} is idle
+# Polls once a minute and passes on the first poll where every check is idle (exit 0); while busy it
+# re-polls until idle_max_minutes (default 30, `make update IDLE_MAX=`). A failing or unreadable check
+# counts as busy. On give-up the combined service name is appended to idle_gave_up (a host fact) and the
+# play carries on; the caller skips.
+# Default: Plex on the inventory host (idle_become for sudo). idle_node: true runs delegated to localhost
+# and ANDs every check in one poll: idle_pct_vmid (Plex CT, ssh as ansible_user + pct exec) and
+# idle_workloads (list of {ns, name, check}, kubectl exec with `kubeconfig`).
+- name: Name what is being waited on
+  ansible.builtin.set_fact:
+    _idle_names: >-
+      {%- set out = [] -%}
+      {%- if not idle_node | default(false) or idle_pct_vmid | default('') | length > 0 -%}{{- out.append('plex') -}}{%- endif -%}
+      {%- for w in idle_workloads | default([]) -%}{{- out.append(w.ns ~ '/' ~ w.name) -}}{%- endfor -%}
+      {{ out | join(', ') }}
+
+- name: Wait until {{ _idle_names }} idle
   ansible.builtin.shell: |
-    quiet=0
     for (( poll = 1; poll <= {{ idle_max_minutes | default(30) }}; poll++ )); do
-      if bash -c "$IDLE_CMD" >/dev/null 2>&1; then quiet=$((quiet+1)); else quiet=0; fi
-      (( quiet >= {{ idle_quiet_minutes | default(5) }} )) && exit 0
+      bash -c "$IDLE_CMD" >/dev/null 2>&1 && exit 0
       sleep 60
     done
     exit 3
@@ -21,10 +29,20 @@
       n=$(curl -sf --max-time 10 -H "X-Plex-Token: $T" http://localhost:32400/status/sessions
       | grep -o '<MediaContainer[^>]*size="[0-9]*"' | sed -E 's/.*size="([0-9]+)"/\1/');
       [ "$n" = 0 ]
-    _cmd: "{{ idle_cmd | default(_plex_cmd) }}"
+    _checks: >-
+      {%- set out = [] -%}
+      {%- if idle_pct_vmid | default('') | length > 0 -%}
+      {{- out.append('ssh -o BatchMode=yes ' ~ ((ansible_user | default('root')) ~ '@' ~ ansible_host) | quote ~ ' '
+          ~ ('pct exec ' ~ idle_pct_vmid ~ ' -- bash -c ' ~ (_plex_cmd | quote)) | quote) -}}
+      {%- endif -%}
+      {%- for w in idle_workloads | default([]) -%}
+      {{- out.append('kubectl --kubeconfig ' ~ (kubeconfig | quote) ~ ' -n ' ~ (w.ns | quote) ~ ' exec deploy/' ~ (w.name | quote)
+          ~ ' -- sh -c ' ~ (w.check | quote)) -}}
+      {%- endfor -%}
+      {{ out | join(' && ') }}
   environment:
-    IDLE_CMD: "{{ ('pct exec ' ~ idle_pct_vmid ~ ' -- bash -c ' ~ (_cmd | quote)) if idle_pct_vmid is defined else _cmd }}"
-  delegate_to: "{{ idle_delegate_to | default(inventory_hostname) }}"
+    IDLE_CMD: "{{ _checks if idle_node | default(false) else _plex_cmd }}"
+  delegate_to: "{{ 'localhost' if idle_node | default(false) else inventory_hostname }}"
   become: "{{ idle_become | default(false) }}"
   register: _idle_wait
   failed_when: _idle_wait.rc not in [0, 3]
@@ -32,7 +50,7 @@
   check_mode: false
   when: not ansible_check_mode
 
-- name: Record that {{ idle_service }} never went idle
+- name: Record that {{ _idle_names }} never went idle
   ansible.builtin.set_fact:
-    idle_gave_up: "{{ idle_gave_up | default([]) + [idle_service] }}"
+    idle_gave_up: "{{ idle_gave_up | default([]) + [_idle_names] }}"
   when: _idle_wait is not skipped and _idle_wait.rc == 3

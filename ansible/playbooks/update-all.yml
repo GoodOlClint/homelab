@@ -6,16 +6,30 @@
   hosts: all:!proxmox:!mcp
   become: true
   tasks:
+    # The apt module skips cache.update() under check_mode, so the plan needs a separate refresh.
+    - name: Refresh the apt lists on plex
+      ansible.builtin.apt:
+        update_cache: true
+      check_mode: false
+      changed_when: false
+      when: inventory_hostname == 'plex'
+
+    - name: Check whether plex has apt work
+      ansible.builtin.apt:
+        upgrade: dist
+      check_mode: true
+      register: _plex_apt_plan
+      when: inventory_hostname == 'plex'
+
     - name: Wait for Plex to be idle
       ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/wait_until_idle.yml"
       vars:
-        idle_service: plex
         idle_become: true
-      when: inventory_hostname == 'plex'
+      when: inventory_hostname == 'plex' and _plex_apt_plan is changed and not ansible_check_mode
 
     - name: Skip Plex this run
       ansible.builtin.debug:
-        msg: "plex was never idle for 5 minutes within 30, so its upgrade and reboot are skipped this run"
+        msg: "plex was not idle within the wait, so its upgrade and reboot are skipped this run"
       when: "'plex' in idle_gave_up | default([])"
 
     - name: Update apt cache and upgrade all packages (Debian/Ubuntu)
@@ -70,6 +84,12 @@
       ansible.builtin.stat:
         path: /var/run/reboot-required
       register: reboot_required_file
+
+    - name: Wait for Plex to be idle before rebooting
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/wait_until_idle.yml"
+      vars:
+        idle_become: true
+      when: inventory_hostname == 'plex' and reboot_required_file.stat.exists and 'plex' not in idle_gave_up | default([])
 
     - name: Reboot server if required
       ansible.builtin.reboot:

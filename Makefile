@@ -266,16 +266,19 @@ ansible-services:
 ansible-pfsense:
 	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/pfsense.yaml ansible/playbooks/pfsense.yml
 
+# IDLE_MAX=<minutes> caps the wait for a busy Plex/Valheim (default 30).
+IDLE_ARGS = $(if $(IDLE_MAX),-e idle_max_minutes=$(IDLE_MAX),)
+
 # Fleet patch: cluster nodes serially (update-nodes), then guests + worklab + VPS with
 # one-at-a-time reboots (update-all.yml, hosts all:!proxmox:!mcp), then the cluster's
 # :latest re-pull (k8s-update). VM=<host> limits the guest play to one host and
 # skips the node and cluster halves.
 update:
 ifdef VM
-	@$(ANSIBLE_PLAYBOOK) -i ansible/inventory/proxmox.yaml -i ansible/inventory/vps.yaml ansible/playbooks/update-all.yml --limit $(VM)
+	@$(ANSIBLE_PLAYBOOK) -i ansible/inventory/proxmox.yaml -i ansible/inventory/vps.yaml ansible/playbooks/update-all.yml --limit $(VM) $(IDLE_ARGS)
 else
 	@$(MAKE) update-nodes
-	@$(ANSIBLE_PLAYBOOK) -i ansible/inventory/proxmox.yaml -i ansible/inventory/vps.yaml ansible/playbooks/update-all.yml
+	@$(ANSIBLE_PLAYBOOK) -i ansible/inventory/proxmox.yaml -i ansible/inventory/vps.yaml ansible/playbooks/update-all.yml $(IDLE_ARGS)
 	@$(MAKE) k8s-update
 endif
 
@@ -291,7 +294,7 @@ dns-records:
 # Patch the cluster nodes one at a time; a node reboots only for a new kernel, after
 # draining its Talos guest, HA node-maintenance and ceph noout (LIMIT= for one node).
 update-nodes:
-	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/proxmox.yaml ansible/playbooks/update-nodes.yml $(if $(LIMIT),--limit $(LIMIT),)
+	@ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventory/proxmox.yaml ansible/playbooks/update-nodes.yml $(if $(LIMIT),--limit $(LIMIT),) $(IDLE_ARGS)
 
 update-dns:
 	@$(ANSIBLE_PLAYBOOK) -i ansible/inventory/proxmox.yaml ansible/playbooks/update-dns.yml

@@ -86,23 +86,15 @@
               {%- endfor -%}
               {{ out }}
 
-    - name: Wait for Plex to be idle
+    - name: Wait until every service on this node is idle
       ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/wait_until_idle.yml"
       vars:
-        idle_service: plex
+        idle_node: true
         idle_pct_vmid: "{{ _plex_ct.stdout }}"
-      when: _apt_plan is changed and not ansible_check_mode and _plex_ct.stdout | length > 0
-
-    - name: Wait for workloads with an idle check
-      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/wait_until_idle.yml"
-      vars:
-        idle_service: "{{ wl.ns }}/{{ wl.name }}"
-        idle_cmd: "kubectl --kubeconfig {{ kubeconfig }} -n {{ wl.ns }} exec deploy/{{ wl.name }} -- sh -c {{ wl.check | quote }}"
-        idle_delegate_to: localhost
-      loop: "{{ _idle_workloads | default([]) }}"
-      loop_control:
-        loop_var: wl
-      when: _apt_plan is changed and not ansible_check_mode
+        idle_workloads: "{{ _idle_workloads | default([]) }}"
+      when: >-
+        _apt_plan is changed and not ansible_check_mode
+        and (_plex_ct.stdout | length > 0 or _idle_workloads | default([]) | length > 0)
 
     - name: Skip this node, someone is using a service on it
       ansible.builtin.debug:
