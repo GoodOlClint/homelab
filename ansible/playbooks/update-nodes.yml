@@ -43,8 +43,74 @@
       check_mode: true
       register: _apt_plan
 
-    - name: Empty the node and upgrade
+    - name: Find the Plex CT if it lives on this node
+      ansible.builtin.shell: |
+        set -o pipefail
+        pct list | awk '$NF == "plex" {print $1}'
+      args:
+        executable: /bin/bash
+      register: _plex_ct
+      changed_when: false
+      check_mode: false
+
+    - name: Find workloads with an idle check on this node's Talos guest
+      delegate_to: localhost
+      when: _apt_plan is changed and not ansible_check_mode and _talos.stdout | length > 0
+      block:
+        - name: List Deployments and the pods on this node
+          ansible.builtin.command: kubectl --kubeconfig {{ kubeconfig }} get {{ item }} -A -o json
+          loop: ["deployments", "pods --field-selector spec.nodeName={{ _talos.stdout }}"]
+          register: _kube
+          changed_when: false
+          check_mode: false
+
+        - name: Keep the annotated Deployments that have a pod here
+          ansible.builtin.set_fact:
+            _idle_workloads: >-
+              {%- set out = [] -%}
+              {%- for d in ((_kube.results[0].stdout | from_json)['items']) -%}
+              {%- set check = (d.metadata.annotations | default({}, true)).get('homelab/idle-check', '') -%}
+              {%- set found = namespace(here=false) -%}
+              {%- if check -%}
+              {%- for p in ((_kube.results[1].stdout | from_json)['items']) if p.metadata.namespace == d.metadata.namespace -%}
+              {%- set m = namespace(ok=true) -%}
+              {%- for k, v in d.spec.selector.matchLabels.items() -%}
+              {%- if (p.metadata.labels | default({}, true)).get(k) != v -%}{%- set m.ok = false -%}{%- endif -%}
+              {%- endfor -%}
+              {%- if m.ok -%}{%- set found.here = true -%}{%- endif -%}
+              {%- endfor -%}
+              {%- endif -%}
+              {%- if found.here -%}
+              {{- out.append({'ns': d.metadata.namespace, 'name': d.metadata.name, 'check': check}) -}}
+              {%- endif -%}
+              {%- endfor -%}
+              {{ out }}
+
+    - name: Wait for Plex to be idle
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/wait_until_idle.yml"
+      vars:
+        idle_service: plex
+        idle_pct_vmid: "{{ _plex_ct.stdout }}"
+      when: _apt_plan is changed and not ansible_check_mode and _plex_ct.stdout | length > 0
+
+    - name: Wait for workloads with an idle check
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/wait_until_idle.yml"
+      vars:
+        idle_service: "{{ wl.ns }}/{{ wl.name }}"
+        idle_cmd: "kubectl --kubeconfig {{ kubeconfig }} -n {{ wl.ns }} exec deploy/{{ wl.name }} -- sh -c {{ wl.check | quote }}"
+        idle_delegate_to: localhost
+      loop: "{{ _idle_workloads | default([]) }}"
+      loop_control:
+        loop_var: wl
       when: _apt_plan is changed and not ansible_check_mode
+
+    - name: Skip this node, someone is using a service on it
+      ansible.builtin.debug:
+        msg: "{{ idle_gave_up | join(', ') }} never went idle within the wait, so {{ inventory_hostname }} is not drained or upgraded this run"
+      when: idle_gave_up | default([]) | length > 0
+
+    - name: Empty the node and upgrade
+      when: _apt_plan is changed and not ansible_check_mode and idle_gave_up | default([]) | length == 0
       block:
         - name: Drain the Talos guest
           ansible.builtin.command: >-
@@ -111,7 +177,7 @@
     - name: Unset Ceph noout
       ansible.builtin.command: ceph osd unset noout
       changed_when: true
-      when: "'noout' in _health.stdout or _apt_plan is changed"
+      when: "'noout' in _health.stdout or (_apt_plan is changed and idle_gave_up | default([]) | length == 0)"
 
     - name: Leave HA node maintenance
       ansible.builtin.command: ha-manager crm-command node-maintenance disable {{ inventory_hostname }}

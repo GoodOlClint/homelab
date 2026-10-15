@@ -6,6 +6,18 @@
   hosts: all:!proxmox:!mcp
   become: true
   tasks:
+    - name: Wait for Plex to be idle
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/wait_until_idle.yml"
+      vars:
+        idle_service: plex
+        idle_become: true
+      when: inventory_hostname == 'plex'
+
+    - name: Skip Plex this run
+      ansible.builtin.debug:
+        msg: "plex was never idle for 5 minutes within 30, so its upgrade and reboot are skipped this run"
+      when: "'plex' in idle_gave_up | default([])"
+
     - name: Update apt cache and upgrade all packages (Debian/Ubuntu)
       ansible.builtin.apt:
         update_cache: true
@@ -13,7 +25,7 @@
         autoremove: true
         autoclean: true
       register: upgrade_result
-      when: ansible_os_family | default('') == 'Debian'
+      when: ansible_os_family | default('') == 'Debian' and 'plex' not in idle_gave_up | default([])
 
     - name: Update all packages (Alpine)
       community.general.apk:
@@ -65,4 +77,4 @@
         connect_timeout: 20
         test_command: uptime
         msg: "Rebooting due to system updates"
-      when: reboot_required_file.stat.exists
+      when: reboot_required_file.stat.exists and 'plex' not in idle_gave_up | default([])
