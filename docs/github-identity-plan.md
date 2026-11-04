@@ -1,5 +1,7 @@
 # GitHub agent identity: change plan
 
+Status: landed 2026-11-04. ADR 0059 is Accepted; this document is kept as the plan of record, and the as-built notes are in the ADR.
+
 Records [ADR 0059](decisions/0059-agent-github-identity-is-selected-per-session-by-a-wrapper-that-reads-the-repo-origin-and-a-per-org-map.md) (Proposed). Rulings cited by number are the 2026-11-04 GitHub identity discussion rulings.
 
 Terms. An App is a GitHub App, a bot identity installed on an account or organization; each agent kind (Claude, Codex) has one. MCP is the Model Context Protocol the CLIs use to talk to tool servers. `github-mcp-server` is the GitHub MCP server. `push_verified` is the tool in `mcp-server-github` (server binary `push-verified`) that re-authors a local branch as the App through the GitHub API so the commit is Verified.
@@ -15,7 +17,7 @@ Terms. An App is a GitHub App, a bot identity installed on an account or organiz
 
 ## Design
 
-- Wrapper `scripts/github-agent-mcp <claude|codex> <github|push>`: python stdlib, absolute path in each CLI's config. getcwd only, never env. Drops every `GIT_*` variable, then parses `git config --local --get remote.origin.url` strictly (host github.com; scp and `ssh://` forms with the literal `git@` user, `https://` with no userinfo; no port, query or fragment; org case-insensitive; names ASCII, never `.` or `..`). Refuses with a one-line stderr reason on no repo, no origin, other host, unknown org, or no entry for that agent. Else sets `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY_PATH` and execs the server.
+- Wrapper `scripts/github-agent-mcp <claude|codex> <github|push>`: python stdlib, absolute path in each CLI's config. getcwd only, never env. Drops every `GIT_*` variable and every `GITHUB_*` variable except `GITHUB_TOOLSETS` and `GITHUB_EXCLUDE_TOOLS`, then parses `git config --local --get remote.origin.url` strictly (host github.com; scp and `ssh://` forms with the literal `git@` user, `https://` with no userinfo; no port, query or fragment; org case-insensitive; names ASCII, never `.` or `..`). Refuses with a one-line stderr reason on no repo, no origin, other host, unknown org, or no entry for that agent. Else sets `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY_PATH` and execs the server.
 - Map `~/.config/github-agent/identities.json` (untracked; example `docs/github-identities.example.json`): `orgs -> org -> {agents: {claude|codex: {app_id, installation_id, key_path}}, push_mode, repos: {repo: push_mode}}` plus server binary paths. Silent means push_verified. JSON, not TOML: under Codex's scrubbed env `env python3` may be the macOS system python without `tomllib` (unverified; JSON removes the question).
 - `push` mode also refuses any layout whose `git rev-parse --git-common-dir` is not named `.git` (bare repo, bare worktree, submodule, separate-git-dir), since `--repo-root` would otherwise point at the wrong tree. Residual: a separate-git-dir store literally named `.git` passes; `--bind-repo` still holds, so the destination is still the origin's repo.
 - `push_mode` allows only `plain` and `push_verified`; absent means default, anything else refuses before either server starts.
@@ -61,3 +63,5 @@ Codex adversarial review, 2026-11-04, verdict needs-attention, 3 findings; all 3
 - Medium, a misspelled push mode enables pushes: accepted. Allowlist, pinned in WP1.
 
 Codex did not check live authentication, remote writes or rollback. WP2 to WP4 cover those.
+
+Second round, 2026-11-04, after cutover: Codex adversarial review, High, an inherited `GITHUB_HOST` or `GITHUB_PERSONAL_ACCESS_TOKEN` survives the wrapper (redirects the App token exchange; makes the server exit). Fixed in f7a9451 (all `GITHUB_*` dropped except toolsets and exclude-tools, test first). Re-review against 354156c: approve, 0 findings.

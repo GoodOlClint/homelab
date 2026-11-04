@@ -119,7 +119,7 @@ Before a cutover, copy `~/.codex/config.toml` and write the current `github` and
 
 ### Adding an org
 
-1. The operator creates the org's two Apps (section 1) and installs them on the org; keep the PEMs at 0600 in `~/.config/github-agent/`.
+1. The operator creates the org's two Apps in the org's own settings (not the personal account) and installs them on the org, keeping each PEM at 0600 in `~/.config/github-agent/`. The secrets go in Infisical `/github/mcp` under the existing key names with an org prefix, for example `us_law_dev_claude_app_id` and `us_law_dev_claude_mcp_app_private_key`.
 2. Add `orgs.<Org>.agents.{claude,codex}` (app id, installation id, key path) and, if the default should not be `push_verified`, `push_mode` and `repos` overrides to the map. No code and no CLI change: the next session started in a repo of that org picks it up.
 3. From a repo of that org, run the wrapper by hand for each agent and kind, then a fresh session of each CLI (see the proof list below).
 
