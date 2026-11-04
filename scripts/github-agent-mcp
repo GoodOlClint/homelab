@@ -58,7 +58,8 @@ def main():
     if len(sys.argv) != 3 or sys.argv[1] not in ("claude", "codex") or sys.argv[2] not in ("github", "push"):
         die("usage: github-agent-mcp <claude|codex> <github|push>")
     who, kind = sys.argv[1:]
-    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    keep = ("GITHUB_TOOLSETS", "GITHUB_EXCLUDE_TOOLS")
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_") and (k in keep or not k.startswith("GITHUB_"))}
     cwd = os.getcwd()
     origin = git(env, "config", "--local", "--get", "remote.origin.url")
     if origin is None:

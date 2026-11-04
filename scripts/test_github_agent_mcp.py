@@ -208,6 +208,16 @@ class T(unittest.TestCase):
         o = self.ok(self.run_w(p, env={"HOME": self.tmp, "GITHUB_TOOLSETS": "repos,issues", "GITHUB_EXCLUDE_TOOLS": "push_files"}))
         self.assertEqual((o["env"]["GITHUB_TOOLSETS"], o["env"]["GITHUB_EXCLUDE_TOOLS"]), ("repos,issues", "push_files"))
 
+    def test_inherited_github_auth_settings_dropped(self):
+        p = self.repo("git@github.com:GoodOlClint/foo.git")
+        dirty = {"GITHUB_HOST": "https://evil.example", "GITHUB_PERSONAL_ACCESS_TOKEN": "pat", "GITHUB_APP_PRIVATE_KEY": "inline",
+                 "GITHUB_OAUTH_CLIENT_ID": "x", "GITHUB_OAUTH_CLIENT_SECRET": "y", "GITHUB_READ_ONLY": "1", "GITHUB_TOKEN": "t"}
+        for m in ("github", "push"):
+            o = self.ok(self.run_w(p, m=m, env={"HOME": self.tmp, "GITHUB_TOOLSETS": "repos", "GITHUB_EXCLUDE_TOOLS": "push_files", **dirty}))["env"]
+            self.assertEqual(sorted(k for k in o if k.startswith("GITHUB_")),
+                             ["GITHUB_APP_ID", "GITHUB_APP_INSTALLATION_ID", "GITHUB_APP_PRIVATE_KEY_PATH", "GITHUB_EXCLUDE_TOOLS", "GITHUB_TOOLSETS"])
+            self.assertEqual((o["GITHUB_TOOLSETS"], o["GITHUB_EXCLUDE_TOOLS"]), ("repos", "push_files"))
+
     def test_home_unset_reads_map_through_passwd(self):
         real = os.path.expanduser("~/.config/github-agent/identities.json")
         if os.environ.get("HOME") is None or not os.path.exists(real):
