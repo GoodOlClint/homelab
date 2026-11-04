@@ -31,6 +31,10 @@ Terms. An App is a GitHub App, a bot identity installed on an account or organiz
 - WP2: write the map. Trial with per-invocation config only (`--mcp-config --strict-mcp-config` for Claude, `-c` for Codex), no global change. Live reads on GoodOlClint with each App; confirm the refuse cases; measure what the spike left open: a session started with `hc run --cwd`, and Codex through the companion runtime.
 - WP3 (operator-approved remote write): one throwaway branch per agent on the proof repo, from a linked-worktree session passing main path plus branch. The commit shows Verified and is authored by that agent's App; delete the branch after. First check the Codex App has Contents write.
 - WP4: cutover with `claude mcp remove` and `add -s user` and a backed-up `~/.codex/config.toml` edit; rollback restores both. Check a fresh session of each CLI in a GoodOlClint repo (tools, push), in plain homelab (no push server), and in `~/Source` (no tools).
+  - Before cutover: rebuild and reinstall `push-verified` after the WP0 PR (#9) merges. The installed binary rejects `--bind-repo`, so cutting over first breaks every push server.
+  - At cutover: stop the running Codex companion brokers. They keep the old server, and a fresh session does not replace them.
+  - Check which App answered each live read (for example the author or installation shown on a read), not only that a read worked.
+  - After cutover: run a real `adversarial-review` on the branch.
 - WP5: rewrite `docs/github-agent-identity.md` (its line 79 goes), add a pointer in homelab `CLAUDE.md`, flip ADR 0059 to Accepted.
 
 ## Out of scope, with owner
