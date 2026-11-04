@@ -1,0 +1,64 @@
+#!/usr/bin/env python3
+"""github-agent-mcp <claude|codex> <github|push>: exec the GitHub MCP server as the App for the session repo's org (ADR 0059)."""
+import json, os, re, subprocess, sys
+
+MODES = ("plain", "push_verified")
+URL = re.compile(r"(?:git@github\.com:|ssh://git@github\.com/|https://(?:[^/@]+@)?github\.com/)([\w.-]+)/([\w.-]+?)(?:\.git)?/?")
+
+
+def die(msg):
+    sys.exit("github-agent-mcp: " + msg)
+
+
+def git(env, *a):
+    r = subprocess.run(["git"] + list(a), env=env, capture_output=True, text=True)
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+def main():
+    if len(sys.argv) != 3 or sys.argv[1] not in ("claude", "codex") or sys.argv[2] not in ("github", "push"):
+        die("usage: github-agent-mcp <claude|codex> <github|push>")
+    who, kind = sys.argv[1:]
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    if "PATH" not in env:
+        env["PATH"] = "/usr/bin:/bin"
+    cwd = os.getcwd()
+    os.chdir(cwd)
+    origin = git(env, "config", "--local", "--get", "remote.origin.url")
+    if origin is None:
+        die("%s is not a git repo with an origin remote" % cwd)
+    m = URL.fullmatch(origin)
+    if not m:
+        die("origin is not a github.com url")
+    org, repo = m.groups()
+    try:
+        with open(os.path.expanduser("~/.config/github-agent/identities.json")) as f:
+            cfg = json.load(f)
+        o = next(v for k, v in cfg["orgs"].items() if k.lower() == org.lower())
+    except (OSError, ValueError, KeyError, StopIteration, AttributeError):
+        die("no identity map entry for org %s (~/.config/github-agent/identities.json)" % org)
+    modes = [o.get("push_mode", "push_verified")] + list((o.get("repos") or {}).values())
+    if any(not isinstance(x, str) or x not in MODES for x in modes):
+        die("push_mode must be one of %s" % ", ".join(MODES))
+    mode = next((v for k, v in (o.get("repos") or {}).items() if k.lower() == repo.lower()), o.get("push_mode", "push_verified"))
+    a = (o.get("agents") or {}).get(who)
+    try:
+        env.update(GITHUB_APP_ID=str(a["app_id"]), GITHUB_APP_INSTALLATION_ID=str(a["installation_id"]),
+                   GITHUB_APP_PRIVATE_KEY_PATH=os.path.expanduser(a["key_path"]))
+        argv = [cfg["servers"]["github"], "stdio"]
+        if kind == "push":
+            if mode == "plain":
+                die("%s/%s is push mode plain: no push_verified here" % (org, repo))
+            common = git(env, "rev-parse", "--path-format=absolute", "--git-common-dir")
+            if not common:
+                die("cannot find the main working tree")
+            argv = [cfg["servers"]["push_verified"], "--repo-root", os.path.dirname(common), "--bind-repo", "%s/%s" % (org, repo)]
+    except (TypeError, KeyError):
+        die("no %s identity for org %s, or server paths missing in the map" % (who, org))
+    try:
+        os.execve(argv[0], argv, env)
+    except OSError as e:
+        die("cannot start %s: %s" % (argv[0], e))
+
+
+main()

@@ -1,0 +1,16 @@
+{
+  "servers": {
+    "github": "/opt/homebrew/bin/github-mcp-server",
+    "push_verified": "/Users/EXAMPLE/go/bin/mcp-server-github"
+  },
+  "orgs": {
+    "ExampleOrg": {
+      "agents": {
+        "claude": {"app_id": "000001", "installation_id": "000002", "key_path": "~/.config/github-agent/claude.pem"},
+        "codex": {"app_id": "000003", "installation_id": "000004", "key_path": "~/.config/github-agent/codex.pem"}
+      },
+      "push_mode": "push_verified",
+      "repos": {"some-repo": "plain"}
+    }
+  }
+}
