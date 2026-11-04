@@ -430,6 +430,7 @@ validate:
 	@$(VENV_PYTHON) scripts/test_axosyslog_routing.py
 	@$(VENV_PYTHON) scripts/check_apt_proxy_probe.py $(CURDIR)
 	@PATH=$(CURDIR)/.venv/bin:$$PATH $(VENV_PYTHON) scripts/test_identity_paging.py
+	@$(VENV_PYTHON) scripts/test_github_agent_mcp.py
 	@bash scripts/test_security_guardrails.sh
 	@! grep -rnE "from-literal=|(echo|printf '%s') '\{\{[^}]*(password|secret|token|private_key)" ansible/roles ansible/tasks ansible/playbooks kubernetes scripts || { echo "secret on argv (#17): use stdin: / --value-stdin"; exit 1; }
 	@echo "argv-secrets: none"
