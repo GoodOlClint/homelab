@@ -186,6 +186,9 @@
       delegate_to: localhost
       when: _talos.stdout | length > 0
       register: _uncordon
+      until: _uncordon.rc == 0
+      retries: 12
+      delay: 10
       changed_when: "'already uncordoned' not in _uncordon.stdout"
 
     - name: Wait for the Talos node to be Ready
