@@ -76,7 +76,7 @@ class T(unittest.TestCase):
         self.assertEqual(self.ok(self.run_w(a))["argv"], ["stdio"])
 
     def test_url_forms_and_case(self):
-        for i, u in enumerate(["git@github.com:goodolclint/x.git", "ssh://git@github.com/GOODOLCLINT/x", "https://github.com/GoodOlClint/x.git", "https://tok@github.com/GoodOlClint/x/"]):
+        for i, u in enumerate(["git@github.com:goodolclint/x.git", "ssh://git@github.com/GOODOLCLINT/x", "https://github.com/GoodOlClint/x.git", "https://github.com/GoodOlClint/x/"]):
             self.assertEqual(self.ok(self.run_w(self.repo(u, "f%d" % i)))["env"]["GITHUB_APP_ID"], "id-gc-claude", u)
 
     def test_refuse_unknown_org(self):
@@ -162,6 +162,125 @@ class T(unittest.TestCase):
                 for m in ("github", "push"):
                     with self.subTest(bad=bad, where=where, mode=m):
                         self.refuses(self.run_w(p, m=m))
+
+    def bad(self, r, word="bad"):
+        self.refuses(r)
+        self.assertNotIn("Traceback", r.stderr)
+        self.assertEqual(len(r.stderr.strip().splitlines()), 1, r.stderr)
+        self.assertIn(word, r.stderr)
+
+    def test_refuse_userinfo_and_url_tricks(self):
+        urls = ["https://evil.example#@github.com/GoodOlClint/x", "https://evil.example?@github.com/GoodOlClint/x",
+                "https://evil.example\\@github.com/GoodOlClint/x", "https://tok@github.com/GoodOlClint/x",
+                "https://github.com@evil.example/GoodOlClint/x", "https://github.com/x/y/z", "https://github.com/GoodOlClint/x?a=b",
+                "https://github.com/GoodOlClint", "ssh://git@github.com:22/GoodOlClint/x", "https://github.com:443/GoodOlClint/x",
+                "git@github.com:22:GoodOlClint/x", "ssh://other@github.com/GoodOlClint/x", "https://github.com/GoodOlClint/x#frag"]
+        for i, u in enumerate(urls):
+            with self.subTest(u=u):
+                self.refuses(self.run_w(self.repo(u, "u%d" % i)))
+
+    def test_refuse_dot_names(self):
+        for i, u in enumerate(["git@github.com:GoodOlClint/..", "git@github.com:GoodOlClint/.", "git@github.com:../x", "git@github.com:./x"]):
+            self.refuses(self.run_w(self.repo(u, "d%d" % i)))
+
+    def test_repo_override_is_case_insensitive(self):
+        self.refuses(self.run_w(self.repo("git@github.com:GoodOlClint/PlainRepo.git", "c"), m="push"))
+
+    def test_cwd_from_getcwd_not_pwd(self):
+        a = self.repo("git@github.com:GoodOlClint/foo.git", "a")
+        b = self.repo("git@github.com:Other-Org/bar.git", "b")
+        o = self.ok(self.run_w(a, env={"HOME": self.tmp, "PWD": b}))
+        self.assertEqual(o["env"]["GITHUB_APP_ID"], "id-gc-claude")
+
+    def test_origin_read_is_local_only(self):
+        with open(os.path.join(self.tmp, ".gitconfig"), "w") as f:
+            f.write('[remote "origin"]\n\turl = git@github.com:GoodOlClint/foo.git\n')
+        self.refuses(self.run_w(self.repo(None, "nl")))
+
+    def test_key_path_tilde_expands(self):
+        self.orgs["GoodOlClint"]["agents"]["claude"]["key_path"] = "~/k.pem"
+        self.write_map()
+        p = self.repo("git@github.com:GoodOlClint/foo.git")
+        self.assertEqual(self.ok(self.run_w(p))["env"]["GITHUB_APP_PRIVATE_KEY_PATH"], os.path.join(self.tmp, "k.pem"))
+
+    def test_toolsets_pass_through(self):
+        p = self.repo("git@github.com:GoodOlClint/foo.git")
+        o = self.ok(self.run_w(p, env={"HOME": self.tmp, "GITHUB_TOOLSETS": "repos,issues", "GITHUB_EXCLUDE_TOOLS": "push_files"}))
+        self.assertEqual((o["env"]["GITHUB_TOOLSETS"], o["env"]["GITHUB_EXCLUDE_TOOLS"]), ("repos,issues", "push_files"))
+
+    def test_home_unset_reads_map_through_passwd(self):
+        real = os.path.expanduser("~/.config/github-agent/identities.json")
+        if os.environ.get("HOME") is None or not os.path.exists(real):
+            self.skipTest("no real map to find")
+        r = self.run_w(self.repo("git@github.com:Nobody-Zz/x.git"), env={})
+        self.refuses(r)
+        self.assertIn("no identity map entry", r.stderr)
+
+    def test_push_refuses_when_common_dir_is_not_dot_git(self):
+        bare = os.path.join(self.tmp, "bare.git")
+        git(self.tmp, "init", "-q", "--bare", bare)
+        git(bare, "remote", "add", "origin", "git@github.com:GoodOlClint/foo.git")
+        self.refuses(self.run_w(bare, m="push"))
+        sep = os.path.join(self.tmp, "sep")
+        os.makedirs(sep)
+        git(sep, "init", "-q", "--separate-git-dir", os.path.join(self.tmp, "gitstore"))
+        git(sep, "remote", "add", "origin", "git@github.com:GoodOlClint/foo.git")
+        self.refuses(self.run_w(sep, m="push"))
+        sup = self.repo("git@github.com:GoodOlClint/foo.git", "sup")
+        src = self.repo("git@github.com:GoodOlClint/foo.git", "src")
+        git(src, "commit", "-q", "--allow-empty", "-m", "x")
+        git(sup, "-c", "protocol.file.allow=always", "submodule", "add", "-q", src, "sm")
+        git(os.path.join(sup, "sm"), "remote", "set-url", "origin", "git@github.com:GoodOlClint/foo.git")
+        self.refuses(self.run_w(os.path.join(sup, "sm"), m="push"))
+        self.ok(self.run_w(os.path.join(sup, "sm")))
+
+    def test_bare_worktree_refuses_push(self):
+        src = self.repo("git@github.com:GoodOlClint/foo.git", "src2")
+        git(src, "commit", "-q", "--allow-empty", "-m", "x")
+        bare = os.path.join(self.tmp, "b2.git")
+        git(self.tmp, "clone", "-q", "--bare", src, bare)
+        git(bare, "remote", "set-url", "origin", "git@github.com:GoodOlClint/foo.git")
+        wt = os.path.join(self.tmp, "b2wt")
+        git(bare, "worktree", "add", "-q", wt, "-b", "side")
+        self.refuses(self.run_w(wt, m="push"))
+
+    def test_map_value_guards(self):
+        def with_agent(**kw):
+            a = agent("x")
+            a.update(kw)
+            return {"GoodOlClint": {"agents": {"claude": a}}}
+        cases = [with_agent(app_id=None), with_agent(app_id=""), with_agent(installation_id=None), with_agent(installation_id=""),
+                 with_agent(key_path=None), with_agent(key_path=""), with_agent(key_path="rel/k.pem"), with_agent(key_path=7), with_agent(app_id=True),
+                 {"GoodOlClint": {"agents": ["claude"]}}, {"GoodOlClint": {"agents": {"claude": ["x"]}}}, {"GoodOlClint": ["x"]},
+                 {"GoodOlClint": {"agents": {"claude": agent("x")}, "repos": ["homelab"]}}, ["GoodOlClint"]]
+        for i, orgs in enumerate(cases):
+            with self.subTest(i=i):
+                self.orgs = orgs
+                self.write_map()
+                p = os.path.join(self.tmp, "mg")
+                if not os.path.exists(p):
+                    self.repo("git@github.com:GoodOlClint/foo.git", "mg")
+                self.bad(self.run_w(p))
+
+    def test_map_server_guards(self):
+        p = self.repo("git@github.com:GoodOlClint/foo.git", "sg")
+        mp = os.path.join(self.tmp, ".config", "github-agent", "identities.json")
+        for servers in ({"github": "gh-stub", "push_verified": "/x"}, {"github": ""}, {"github": None}, {"push_verified": "/x"}, [], "x"):
+            with self.subTest(servers=servers):
+                self.write_map()
+                with open(mp) as f:
+                    m = json.load(f)
+                m["servers"] = servers
+                with open(mp, "w") as f:
+                    json.dump(m, f)
+                self.bad(self.run_w(p))
+        for raw in ("not json", "[]", "null", ""):
+            with self.subTest(raw=raw):
+                with open(mp, "w") as f:
+                    f.write(raw)
+                self.bad(self.run_w(p))
+        os.remove(mp)
+        self.bad(self.run_w(p))
 
 
 if __name__ == "__main__":

@@ -3,7 +3,11 @@
 import json, os, re, subprocess, sys
 
 MODES = ("plain", "push_verified")
-URL = re.compile(r"(?:git@github\.com:|ssh://git@github\.com/|https://(?:[^/@]+@)?github\.com/)([\w.-]+)/([\w.-]+?)(?:\.git)?/?")
+URL = re.compile(r"(?:git@github\.com:|ssh://git@github\.com/|https://github\.com/)([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?/?")
+
+
+class Bad(Exception):
+    pass
 
 
 def die(msg):
@@ -15,50 +19,82 @@ def git(env, *a):
     return r.stdout.strip() if r.returncode == 0 else None
 
 
+def text(v, what):
+    if isinstance(v, int) and not isinstance(v, bool):
+        v = str(v)
+    if not isinstance(v, str) or not v:
+        raise Bad("%s must be a non-empty string" % what)
+    return v
+
+
+def path(v, what):
+    v = os.path.expanduser(text(v, what))
+    if not os.path.isabs(v):
+        raise Bad("%s must be an absolute path" % what)
+    return v
+
+
+def obj(v, what):
+    if not isinstance(v, dict):
+        raise Bad("%s must be an object" % what)
+    return v
+
+
+def resolve(who, kind, org, repo):
+    with open(os.path.expanduser("~/.config/github-agent/identities.json")) as f:
+        cfg = obj(json.load(f), "map")
+    servers = obj(cfg.get("servers"), "servers")
+    orgs = obj(cfg.get("orgs"), "orgs")
+    o = next((obj(v, "org") for k, v in orgs.items() if k.lower() == org.lower()), None)
+    if o is None:
+        die("no identity map entry for org %s" % org)
+    repos = obj(o.get("repos", {}), "repos")
+    modes = [o.get("push_mode", "push_verified")] + list(repos.values())
+    if any(x not in MODES or not isinstance(x, str) for x in modes):
+        raise Bad("push_mode must be one of %s" % ", ".join(MODES))
+    mode = next((v for k, v in repos.items() if k.lower() == repo.lower()), o.get("push_mode", "push_verified"))
+    a = obj(o.get("agents", {}), "agents").get(who)
+    if a is None:
+        die("org %s has no %s identity in the map" % (org, who))
+    a = obj(a, "agent entry")
+    ids = {"GITHUB_APP_ID": text(a.get("app_id"), "app_id"), "GITHUB_APP_INSTALLATION_ID": text(a.get("installation_id"), "installation_id"),
+           "GITHUB_APP_PRIVATE_KEY_PATH": path(a.get("key_path"), "key_path")}
+    if kind == "push":
+        if mode == "plain":
+            die("%s/%s is push mode plain: no push_verified here" % (org, repo))
+        return ids, path(servers.get("push_verified"), "servers.push_verified"), mode
+    return ids, path(servers.get("github"), "servers.github"), mode
+
+
 def main():
     if len(sys.argv) != 3 or sys.argv[1] not in ("claude", "codex") or sys.argv[2] not in ("github", "push"):
         die("usage: github-agent-mcp <claude|codex> <github|push>")
     who, kind = sys.argv[1:]
     env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
-    if "PATH" not in env:
-        env["PATH"] = "/usr/bin:/bin"
+    env.setdefault("PATH", "/usr/bin:/bin")
     cwd = os.getcwd()
-    os.chdir(cwd)
     origin = git(env, "config", "--local", "--get", "remote.origin.url")
     if origin is None:
         die("%s is not a git repo with an origin remote" % cwd)
     m = URL.fullmatch(origin)
-    if not m:
-        die("origin is not a github.com url")
+    if not m or {m.group(1), m.group(2)} & {".", ".."}:
+        die("origin is not a plain github.com org/repo url")
     org, repo = m.groups()
     try:
-        with open(os.path.expanduser("~/.config/github-agent/identities.json")) as f:
-            cfg = json.load(f)
-        o = next(v for k, v in cfg["orgs"].items() if k.lower() == org.lower())
-    except (OSError, ValueError, KeyError, StopIteration, AttributeError):
-        die("no identity map entry for org %s (~/.config/github-agent/identities.json)" % org)
-    modes = [o.get("push_mode", "push_verified")] + list((o.get("repos") or {}).values())
-    if any(not isinstance(x, str) or x not in MODES for x in modes):
-        die("push_mode must be one of %s" % ", ".join(MODES))
-    mode = next((v for k, v in (o.get("repos") or {}).items() if k.lower() == repo.lower()), o.get("push_mode", "push_verified"))
-    a = (o.get("agents") or {}).get(who)
+        ids, server, _ = resolve(who, kind, org, repo)
+    except Exception as e:
+        die("identity map is bad (%s)" % " ".join(str(e).split()))
+    env.update(ids)
+    argv = [server, "stdio"]
+    if kind == "push":
+        common = git(env, "rev-parse", "--path-format=absolute", "--git-common-dir")
+        if not common or os.path.basename(common) != ".git":
+            die("push needs an ordinary checkout; %s is a bare, submodule or separate-git-dir repo" % cwd)
+        argv = [server, "--repo-root", os.path.dirname(common), "--bind-repo", "%s/%s" % (org, repo)]
     try:
-        env.update(GITHUB_APP_ID=str(a["app_id"]), GITHUB_APP_INSTALLATION_ID=str(a["installation_id"]),
-                   GITHUB_APP_PRIVATE_KEY_PATH=os.path.expanduser(a["key_path"]))
-        argv = [cfg["servers"]["github"], "stdio"]
-        if kind == "push":
-            if mode == "plain":
-                die("%s/%s is push mode plain: no push_verified here" % (org, repo))
-            common = git(env, "rev-parse", "--path-format=absolute", "--git-common-dir")
-            if not common:
-                die("cannot find the main working tree")
-            argv = [cfg["servers"]["push_verified"], "--repo-root", os.path.dirname(common), "--bind-repo", "%s/%s" % (org, repo)]
-    except (TypeError, KeyError):
-        die("no %s identity for org %s, or server paths missing in the map" % (who, org))
-    try:
-        os.execve(argv[0], argv, env)
+        os.execve(server, argv, env)
     except OSError as e:
-        die("cannot start %s: %s" % (argv[0], e))
+        die("cannot start %s: %s" % (server, e))
 
 
 main()
