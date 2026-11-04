@@ -282,6 +282,27 @@ class T(unittest.TestCase):
         os.remove(mp)
         self.bad(self.run_w(p))
 
+    def test_push_server_path_guard(self):
+        p = self.repo("git@github.com:GoodOlClint/foo.git", "ps")
+        mp = os.path.join(self.tmp, ".config", "github-agent", "identities.json")
+        with open(mp) as f:
+            m = json.load(f)
+        m["servers"]["push_verified"] = "rel/bin"
+        with open(mp, "w") as f:
+            json.dump(m, f)
+        self.bad(self.run_w(p, m="push"))
+        self.ok(self.run_w(p))
+
+    def test_int_ids_convert(self):
+        self.orgs["GoodOlClint"]["agents"]["claude"].update(app_id=12345, installation_id=678)
+        self.write_map()
+        e = self.ok(self.run_w(self.repo("git@github.com:GoodOlClint/foo.git")))["env"]
+        self.assertEqual((e["GITHUB_APP_ID"], e["GITHUB_APP_INSTALLATION_ID"]), ("12345", "678"))
+
+    def test_non_ascii_name_refused(self):
+        self.refuses(self.run_w(self.repo("git@github.com:GoodOlClint/f\u00f6o.git")))
+        self.refuses(self.run_w(self.repo("https://github.com/Goo\u0434OlClint/x", "na2")))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)
