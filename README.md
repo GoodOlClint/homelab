@@ -688,6 +688,8 @@ homelab/
 
 | Document | Description |
 |----------|-------------|
+| [docs/make-targets.md](docs/make-targets.md) | Every make target with its gotchas (moved out of CLAUDE.md) |
+| [docs/LESSONS.md](docs/LESSONS.md) | The incident behind each CLAUDE.md and `.claude/rules/` rule |
 | [docs/pfsense-wireguard-vps-peer.md](docs/pfsense-wireguard-vps-peer.md) | VPS tunnel peer setup on pfSense |
 | [docs/pfsense-wireguard-mobile-peers.md](docs/pfsense-wireguard-mobile-peers.md) | Mobile WireGuard client configuration |
 | [docs/pfsense-firewall-rules.md](docs/pfsense-firewall-rules.md) | pfSense firewall rules reference |
