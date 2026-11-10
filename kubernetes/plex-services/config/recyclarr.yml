@@ -190,3 +190,10 @@ radarr:
             score: -10000
           - name: UHD Bluray + WEB
             score: -10000
+      - trash_ids:
+          - b337d6812e06c200ec9a2d3cfa9d20a7
+          - f700d29429c023a5734505e77daeaea7
+          - 923b6abef9b17f937fab56cfcf89e1f1
+        assign_scores_to:
+          - name: UHD Bluray + WEB
+            score: -10000
