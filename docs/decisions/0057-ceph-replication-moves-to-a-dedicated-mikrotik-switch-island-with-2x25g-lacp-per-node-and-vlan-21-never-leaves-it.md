@@ -21,7 +21,7 @@ The Ceph cluster network moves to a dedicated **MikroTik CRS518-16XS-2XQ-RM** (1
 
 - Its data ports carry **VLAN 21 only**, `l2mtu` 9000, and **VLAN 21 never leaves the switch**. Its one link to the UniFi fabric is a **management uplink**: the MGMT RJ45 (or one port in its own bridge, isolated from the VLAN 21 bridge) on a vlan10 access port. VLAN 21 is never tagged on it and it is never bridged to the data ports.
 - Each OSD host connects with **both ConnectX ports as an LACP (802.3ad) bond**, layer3+4 hash, MTU 9000, with the static VLAN 21 address on the bond.
-- The switch is powered from the compute UPS with both PSU inputs connected, never through PoE from a fabric switch.
+- The switch is powered from the compute UPS, never through PoE from a fabric switch. It runs on one PSU: the operator chose on 2026-11-16 not to connect the second, so a PSU failure stops replication until it is swapped (the same outcome as the switch failing, accepted below).
 - The QSFP28 ports stay dark.
 
 VLAN 20 (Ceph public) stays on the Pro-Agg, unchanged.

@@ -2,7 +2,7 @@
 
 The MikroTik CRS518-16XS-2XQ-RM that carries the Ceph cluster network (VLAN 21, [ADR 0057](decisions/0057-ceph-replication-moves-to-a-dedicated-mikrotik-switch-island-with-2x25g-lacp-per-node-and-vlan-21-never-leaves-it.md)). RouterOS is hand-managed (ADR 0005 pattern): this file is the record, the live `/export` is the truth.
 
-- Identity `ceph-switch`, RouterOS 7.20.8 long-term, RouterBOOT 7.20.8. First configured 2026-10-21 over the serial console.
+- Identity `ceph-switch`, RouterOS 7.24.6 long-term with RouterBOOT to match (upgraded from 7.20.8 on 2026-11-16). First configured 2026-10-21 over the serial console.
 - Admin password: Infisical `/infrastructure/ceph_switch_admin_password`. Management address: `cluster.ceph_switch_mgmt_ip` in `network-data/local/host-bindings.yaml`.
 - Management is the MGMT RJ45 (`ether1`) only, on a Pro-Max port with the `mgmt` profile (vlan10 access). It is not in the bridge. VLAN 21 never leaves the switch.
 
@@ -42,7 +42,7 @@ Applied after removing the default configuration at first login. `<mgmt address>
 /ip dns set servers=<AdGuard VIP>
 /system ntp client set enabled=yes servers=<vlan10 gateway>,pool.ntp.org
 /ip service set [find where name~"telnet|ftp|www|api"] disabled=yes
-/ip service set [find where name~"ssh|winbox"] address=<internal /12>
+/ip service set [find where name~"ssh|winbox"] available-from=<internal /12>
 /ip ssh set strong-crypto=yes
 /tool mac-server set allowed-interface-list=none
 /tool mac-server mac-winbox set allowed-interface-list=MGMT
@@ -73,6 +73,7 @@ VLAN 21 spans both switches through the `sfp28-16` interconnect until the last O
 
 ## Checks
 
-- After racking: both PSU cords in (compute UPS), `/system health print` shows `psu1-state` and `psu2-state` `ok`, then again under replication load for temperatures (ADR 0057 airflow note).
+- After racking: `/system health print` shows `psu1-state` `ok`, then again under replication load for temperatures (ADR 0057 airflow note). PSU2 is not connected (operator choice 2026-11-16), so `psu2-state` reads `fail`; that is expected, not a fault.
+- Upgrades: stay on the `long-term` channel. `/export` and `/system backup save` first and copy both off the switch, `/system package update install`, then `/system routerboard upgrade` and a second reboot. A reboot stops all replication once nodes depend on the switch, so set `noout` first. Afterwards re-check `sfp28-16` (forced speed and FEC), `/ip ssh print` and `/ip service print`.
 - Per node at cutover: `/interface bonding monitor bond-ms01X` shows both slaves active, the host shows `ethtool <port>` `Speed: 25000Mb/s` on both ports, `ping -M do -s 8972` crosses VLAN 21 to a node still on the Pro-Agg, and the ConnectX temperature with both ports linked stays under the 105 °C warning.
 - Serial console: 115200 8N1. Log in as `admin+ct` to skip the terminal-size probe.
