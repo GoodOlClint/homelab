@@ -17,7 +17,9 @@
 #                 VLAN 32 access port); "vmbr0" on pve (ring1 rides the bond as a VLAN 32 sub-if).
 #   ceph_nic    : the ConnectX 25G port cabled to an SFP28 switch port — Ceph
 #                 cluster network, access/native VLAN 33, jumbo (ADR-0014).
-#                 The second ConnectX port stays uncabled (spare).
+#                 A string is one port (the second stays uncabled); a list of
+#                 two (["nic4", "nic5"]) renders an 802.3ad bond named
+#                 proxmox_host_ceph_bond, both ports in one switch LACP group (ADR-0057).
 #   osd_disks   : whole-disk devices for Ceph OSDs (e.g. /dev/nvme1n1). NOT the boot
 #                 disks. Empty list = no OSDs on this node.
 # Per-node IPs on rings/ceph derive from the node's install_cidr last octet:

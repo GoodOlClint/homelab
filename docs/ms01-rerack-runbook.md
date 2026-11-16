@@ -78,7 +78,7 @@ Watch each on its console. If a node sits after "unmounting" with no progress fo
 
 - [ ] Re-rack ms-01a and ms-01b in the Racknex mounts.
 - [ ] Recable exactly as labelled. Same switch, same port for every cable.
-- [ ] The 25G DAC goes in the ConnectX's **first** cage (`nic4`); the second (`nic5`) is the unconfigured spare. On 2026-09-28 ms-01b's went into the second cage and came up with no Ceph link: `ethtool -m nic4` / `nic5` shows which cage holds the module.
+- [ ] The 25G DAC goes in the ConnectX's **first** cage (`nic4`); the second (`nic5`) is the unconfigured spare on a single-port node and the second bond member on a node whose `ceph_nic` is a list (ADR 0057). On 2026-09-28 ms-01b's went into the second cage and came up with no Ceph link: `ethtool -m nic4` / `nic5` shows which cage holds the module.
 
 ## Bring-up
 

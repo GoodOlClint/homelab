@@ -23,7 +23,26 @@ iface {{ _r1_iface }} inet static
 
 # Ceph cluster network — 25G SFP28 to the aggregation switch, access/native
 # VLAN {{ proxmox_host_ceph_vlan }} (ADR-0014), jumbo. No gateway: unrouted L2.
+{# ceph_nic list = 802.3ad bond, layer3+4 hash, fast LACP (ADR-0057) #}
+{% if proxmox_host_node.ceph_nic is string %}
 auto {{ proxmox_host_node.ceph_nic }}
 iface {{ proxmox_host_node.ceph_nic }} inet static
     address {{ proxmox_host_ceph_ip }}/24
     mtu {{ proxmox_host_ceph_mtu }}
+{% else %}
+{% for _nic in proxmox_host_node.ceph_nic %}
+auto {{ _nic }}
+iface {{ _nic }} inet manual
+    mtu {{ proxmox_host_ceph_mtu }}
+
+{% endfor %}
+auto {{ proxmox_host_ceph_bond }}
+iface {{ proxmox_host_ceph_bond }} inet static
+    address {{ proxmox_host_ceph_ip }}/24
+    bond-slaves {{ proxmox_host_node.ceph_nic | join(' ') }}
+    bond-mode 802.3ad
+    bond-xmit-hash-policy layer3+4
+    bond-lacp-rate fast
+    bond-miimon 100
+    mtu {{ proxmox_host_ceph_mtu }}
+{% endif %}

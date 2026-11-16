@@ -13,6 +13,7 @@ proxmox_host_storage_vlan: "{{ network_data.vlans.storage.id }}"
 # Ceph cluster network: switched 25G — SFP28 ports on the aggregation switch,
 # access/native VLAN on each node's ConnectX port (ADR-0014; replaces the FRR mesh).
 proxmox_host_ceph_vlan: "{{ network_data.vlans.ceph.id }}"
+proxmox_host_ceph_bond: bond1
 proxmox_host_ceph_mtu: "{{ network_data.vlans.ceph.mtu | default(9000) }}"
 
 # Ceph network split (ADR-0009, decided at pveceph init — retrofit is painful):
