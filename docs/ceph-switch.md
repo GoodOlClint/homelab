@@ -54,7 +54,7 @@ Applied after removing the default configuration at first login. `<mgmt address>
 /system logging add topics=warning action=axosyslog
 /system logging add topics=error action=axosyslog
 # TEMP migration interconnect (remove: see Migration below)
-/interface ethernet set sfp28-16 disabled=no l2mtu=9216 mtu=9000
+/interface ethernet set sfp28-16 disabled=no l2mtu=9216 mtu=9000 auto-negotiation=no speed=25G-baseCR fec-mode=fec74
 /interface bridge port add bridge=br-ceph interface=sfp28-16 pvid=21 frame-types=admit-only-untagged-and-priority-tagged comment=TEMP-interconnect
 /interface bridge vlan set [find vlan-ids=21] untagged=bond-ms01a,bond-ms01b,bond-ms01c,sfp28-16
 ```
@@ -63,7 +63,9 @@ Applied after removing the default configuration at first login. `<mgmt address>
 
 VLAN 21 spans both switches through the `sfp28-16` interconnect until the last OSD leaves the Pro-Agg, so no node is cut off mid-move (ADR 0057 amendment).
 
-1. Cable the interconnect: CRS518 `sfp28-16` to Pro-Agg p30. Do it at `HEALTH_OK` with every OSD up: a link change on Pro-Agg p29–32 can drop the other nodes' 25G links for about a minute (2026-11-04). Afterwards `ethtool` on ms-01b, ms-01c and msi must still read `25000Mb/s`, and `/interface ethernet monitor sfp28-16 once` the same.
+1. Cable the interconnect: CRS518 `sfp28-16` to Pro-Agg p30. **Done 2026-11-16**, `link-ok` at 25Gbps. Pro-Agg p30 is set by hand in UniFi to 25G full duplex (no auto-negotiation), so `sfp28-16` is forced to match: `auto-negotiation=no speed=25G-baseCR fec-mode=fec74`. With auto-negotiation on, or with `fec91`, the link stays down. Both a Ubiquiti `DAC-SFP28-0.5M` and an FS `SFP-25G-PC02` (2 m) link with these settings.
+
+**Any re-provision of the Pro-Agg drops all of p29–32** for 5–15 s (2026-11-16: one port-setting change in UniFi took ms-01b, ms-01c and msi down together), and the ports can come back at 10G. Plugging or unplugging a cable on p30 does not. So change a Pro-Agg setting, or run `make unifi-apply`, only at `HEALTH_OK` with every OSD up, and afterwards confirm `ethtool` reads `25000Mb/s` on every node still cabled there.
 2. ms-01a rejoins the cluster on the island: fan header fitted, both ConnectX ports to `sfp28-1` and `sfp28-2`, `ceph_nic` a two-port list in `host-bindings.yaml` so `proxmox_host` renders the bond. Run the per-node checks below before it gets OSDs.
 3. ms-01b, then ms-01c, one at a time under `noout`, `HEALTH_OK` before the next, HA parked while the node is out: card out for the fan header, back in with both ports on its bond pair, `ceph_nic` to the list form, re-render the interfaces, confirm OSD heartbeats. Its Pro-Agg port is then free.
 4. msi's OSDs are drained (ADR 0056).
