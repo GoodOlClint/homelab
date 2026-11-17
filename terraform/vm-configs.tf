@@ -35,7 +35,7 @@ locals {
     {
       name         = "dns1"
       type         = "lxc"
-      node_name    = "ms-01c"
+      node_name    = "ms-01a"
       vm_id        = 218
       vlans        = ["vlan40"]
       ip_offset    = 18
@@ -60,7 +60,7 @@ locals {
     {
       name         = "adguard1"
       type         = "lxc"
-      node_name    = "ms-01c"
+      node_name    = "ms-01a"
       vm_id        = 251
       vlans        = ["vlan40"]
       ip_offset    = 51
@@ -131,7 +131,7 @@ locals {
     },
     {
       name           = "unifi"
-      node_name      = "ms-01c"
+      node_name      = "ms-01a"
       vm_id          = 200 # old 100 + 100 (ADR 0028)
       mgmt_ip_offset = 10  # static management IP (decoupled from VMID)
       vlans          = ["vlan10"]
@@ -142,7 +142,7 @@ locals {
     },
     {
       name         = "infisical"
-      node_name    = "ms-01c"
+      node_name    = "ms-01a"
       vm_id        = 205 # old 105 + 100 (ADR 0028)
       vlans        = ["vlan40"]
       ip_offset    = 105
