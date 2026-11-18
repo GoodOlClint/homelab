@@ -131,15 +131,6 @@
     sysctl_file: /etc/sysctl.d/90-llm.conf
   tags: [llm, packages]
 
-- name: xpu-smi package
-  ansible.builtin.get_url:
-    url: "{{ llm_xpu_smi_url }}"
-    dest: /var/cache/xpu-smi.deb
-    checksum: "sha256:{{ llm_xpu_smi_sha256 }}"
-    mode: "0644"
-    timeout: 120
-  tags: [llm, packages]
-
 - name: GPU firmware, pinned Mesa Vulkan, toolchain, Caddy
   ansible.builtin.apt:
     name:
@@ -158,13 +149,9 @@
       - git
       - zstd
       - caddy
+      - xpu-smi # the card's nvidia-smi, from the Intel PPA
     state: present
     cache_valid_time: 3600
-  tags: [llm, packages]
-
-- name: xpu-smi installed (its libigsc1 dependency resolves from the Intel PPA)
-  ansible.builtin.apt:
-    deb: /var/cache/xpu-smi.deb
   tags: [llm, packages]
 
 - name: Render node present

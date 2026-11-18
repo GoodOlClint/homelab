@@ -12,9 +12,6 @@ llm_mesa_ppa_fingerprint: EB8B81E14DA65431D7504EA8F63F0F2B90935439
 llm_mesa_version: "26.2.2~kisak1~r"
 llm_intel_ppa: kobuk-team/intel-graphics
 llm_intel_ppa_fingerprint: 0C0E6AF955CE463C03FC51574D098D70AFBE5E1F
-# xpu-smi is the card's nvidia-smi; its dependency libigsc1 exists only in the Intel PPA above.
-llm_xpu_smi_url: "https://github.com/intel/xpumanager/releases/download/v2.1.0/xpu-smi_2.1.0%2B26.33.6468cec-1.26.04_amd64.deb"
-llm_xpu_smi_sha256: ca20368a893c7cde1cd25218ed3def4b2b39ab0a1e2cd6169694fc5bdd0e3ee7
 
 # Weights: a node-local disk, re-downloaded on rebuild — not ADR 0015 state (plan §7.3).
 llm_models_device: /dev/vdc
@@ -128,6 +125,8 @@ llm_embed_model_url: "https://huggingface.co/gpustack/bge-m3-GGUF/resolve/2d48f1
 llm_embed_model_sha256: daec91ffb5dd0c27411bd71f29932917c49cf529a641d0168496c3a501e3062c
 llm_embed_alias: baai/bge-m3
 llm_embed_port: 8082
+# Level Zero index of the card the embedder lives on; 0 is guest PCI 01:00.0, host card 03:00 (hostpci0).
+llm_embed_ze_device: 0
 # -ub 2048, NOT the bench's 8192: beside an engine holding 0.90 of the card, the SYCL flash-attention path
 # cannot reserve its scratch from the VMM pool at 8192 and llama-server ABORTS (SIGABRT in
 # ggml_sycl_flash_attn_ext -> ggml_sycl_pool_vmm::alloc) rather than refusing the request. The bench measured

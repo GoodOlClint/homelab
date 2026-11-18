@@ -1,6 +1,6 @@
 # VM 240 on two Arc Pro B70s — change plan
 
-- **Status:** PROPOSED 2026-11-18, awaiting operator approval. No implementation code is written.
+- **Status:** APPROVED by the operator 2026-11-18; in progress.
 - **Amends:** [ADR 0051](decisions/0051-local-inference-on-vm-240-is-ollama-plus-nvidia-pair-behind-caddy-with-per-client-keys-pair-is-opt-in-and-the-macs-join-only-after-a-cross-vlan-enrollment-gate.md) (engine layout), consistent with [ADR 0056](decisions/0056-msi-leaves-ceph-but-stays-a-non-ceph-cluster-member-as-the-gpu-host-and-its-drain-waits-for-three-healthy-osd-hosts.md) (msi as the 2× B70 GPU host).
 - **Operator decisions (interview 2026-11-18):** the chat model spans both cards with vLLM tensor parallel (TP: each layer's weights are split across the cards and both compute every token); VM 240 may be restarted as needed.
 
@@ -31,27 +31,25 @@ Both B70s are passed to VM 240 and the served chat engine runs one model across 
 | Guest RAM | One card's Level Zero stack pins about 11 GB of guest RAM; a second worker adds an unmeasured amount, and a guest OOM during init costs a 20-minute cycle. | Raise to 48 GB with the attach; record `MemAvailable` and `drm-total-gtt` at peak; shrink afterwards if the peak allows. |
 | Embedder lands on the wrong card or on both | A SYCL process with two cards visible picks a default device. | Pin with `ONEAPI_DEVICE_SELECTOR` (verify the index with `sycl-ls` in the guest; not taken from documentation). The engine's sizing gate stays. |
 | PCIe link | TP moves activations between cards every layer. The endpoints report 2.5 GT/s x1, which is normal behind the on-card switch; the real link is on the upstream bridge. | Read the upstream bridges' `LnkSta` on msi in phase 1; expect x8 on both. |
-| Power | ADR 0056: two B70s plus a 253 W CPU is near the EVGA 850 G5's limit, and this box has reset on PSU behaviour before. | Operator question below. Phase 2 watches msi for a reset under the 8-stream run. |
+| Power | Two B70s plus a 253 W CPU; the PSU is now 1200 W (ADR 0056 amendment). This box has reset on PSU behaviour before (the ECO switch). | Phase 2 watches msi for a reset under the 8-stream run. |
 | Wedge detection | `vllm-wedge-capture` reads `xpu-smi stats -d 0` only. | Phase 3 edit covers both devices. |
 
-## Conflict with ADR 0056 (blocking, operator ruling needed)
+## ADR 0056 conditions (operator ruling 2026-11-18)
 
-ADR 0056 sets two conditions on the second B70, and the installed state meets neither on the record:
+ADR 0056 set two conditions on the second B70. Both are settled and recorded as an amendment in ADR 0056:
 
-| ADR 0056 condition | State on 2026-11-18 |
+| ADR 0056 condition | Ruling |
 |---|---|
-| "A PSU upgrade (1000–1200 W) or enforced CPU/GPU power caps is a prerequisite for installing B70 #2." | The card is installed. No PSU change is recorded in the repo, and the LLM rules say "No power cap." |
-| "The second B70 waits for" the msi OSD drain, so there are always three healthy OSD hosts apart from msi. | msi still holds `osd.2` and `osd.3`, both up. ms-01b left the cluster today, so the OSD hosts are ms-01a, ms-01c and msi: a reset of msi under two-card load leaves two. |
-
-Phase 0 below does not start until the operator rules on both lines. A ruling that departs from ADR 0056 is recorded as an amendment to it in the phase 1 commit.
+| A PSU upgrade (1000–1200 W) or enforced power caps before B70 #2 | Met: the PSU is an ASRock Steel Legend SL-1200P (1200 W). "No power cap" stands. |
+| The second B70 waits for the msi OSD drain | Relaxed: another MS-01 failure keeps msi's OSDs in service, so testing proceeds now under `ceph osd set noout` with msi as one of three OSD hosts. |
 
 ## Phases
 
 ### Phase 0 — preflight (no changes)
 
-1. The operator's ruling on the two ADR 0056 conditions above is written into this plan.
+1. The operator's ruling on the two ADR 0056 conditions above is written into this plan (done 2026-11-18).
 2. `ceph -s` is `HEALTH_OK` and `ceph osd set noout` is in place before any two-card load on msi (rules file: noout before any msi experiment); it is unset when phase 2 ends.
-3. The single-card rollback point is named: the commit before phase 1, which holds the complete served config (arguments, environment, warm-up, embedder unit, device checks).
+3. The single-card rollback point is named: `fba62b9`, the commit before phase 1, which holds the complete served config (arguments, environment, warm-up, embedder unit, device checks).
 
 ### Phase 1 — attach the card (one commit, one restart)
 
@@ -101,12 +99,6 @@ Order matters: restore the single-card service config first, detach the card sec
 - A larger chat model on the 64 GB pair. TP is proven on the current model first; a model change is its own bench and ADR note.
 - Passing the audio functions (`04:00`, `08:00`). Card 1 never needed its own.
 - GPU temperature alerting for the second card.
-
-## Open questions for the operator
-
-1. Power: has the PSU been upgraded from the EVGA 850 G5? If not, which is it: upgrade first, enforce caps (which reverses the "No power cap" rule), or an accepted exception to ADR 0056?
-2. Ceph: does the two-card load wait for the msi OSD drain, as ADR 0056 says, or proceed now under `noout` with msi as one of three OSD hosts?
-3. Are the adoption thresholds right, or is more concurrency worth a larger single-stream loss?
 
 ## Review disposition
 

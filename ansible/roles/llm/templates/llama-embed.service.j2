@@ -9,6 +9,9 @@ StartLimitBurst=3
 User={{ llm_user }}
 Group={{ llm_user }}
 SupplementaryGroups=video render
+# Level Zero device index. Unset, llama-server allocates on every card it can see (2.3 GiB on the second
+# B70, 2026-11-18), and the engine sizes each card after the embedder is warm.
+Environment=ZE_AFFINITY_MASK={{ llm_embed_ze_device }}
 ExecStartPre=/bin/sh -c 'vulkaninfo --summary 2>/dev/null | grep -q PHYSICAL_DEVICE_TYPE_DISCRETE_GPU'
 ExecStart={{ llm_llama_cpp_dir }}/bin/llama-server \
   --host 127.0.0.1 --port {{ llm_embed_port }} \

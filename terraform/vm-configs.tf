@@ -229,11 +229,11 @@ locals {
       cpu_cores    = 6
       cpu_type     = "host"
       cpu_affinity = "0,2,4,6,8,10" # one thread of P-cores 0-5 on msi (lscpu -e 2026-09-11); re-derive if the firmware re-enumerates
-      memory_mb    = 32768          # weights sit in VRAM, but the SYCL/Level Zero stack pins ~11 GB of guest RAM and the embedder reaches 6.5 GB under batch load (16 GB OOMed 2026-09-15); vfio pins it all at start
+      memory_mb    = 49152          # weights sit in VRAM, but each card's SYCL/Level Zero stack pins ~11 GB of guest RAM and the embedder reaches 6.5 GB under batch load (16 GB OOMed 2026-09-15); vfio pins it all at start
       on_boot      = true
       disk_size_gb = 32
       extra_disks  = [{ size_gb = 300, storage = "local-zfs", backup = false }] # weights are re-downloadable, never ADR 0015 state
-      pci_devices  = [{ id = "0000:03:00" }]
+      pci_devices  = [{ id = "0000:03:00" }, { id = "0000:07:00" }]
       data_volume  = { name = "llm" }
     },
     # homelab-mcp gateway (ADR 0052): a VM for its fleet token bundle, outside the Talos cluster.
