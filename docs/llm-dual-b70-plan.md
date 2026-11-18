@@ -118,6 +118,8 @@ Tensor parallel does not work on this guest. Reports: b70-bench `runs/2026-11-18
 
 **Not yet tried:** capping the guest with `host-phys-bits-limit=39` (a second `-cpu` in `args`), SeaBIOS with the switch layout, a patched communicator that stages through host memory (the image hardcodes `dist_backend = "xccl"`), a standalone two-card all-reduce and `zeDeviceCanAccessPeer` integrity test outside vLLM.
 
+**Correction to the state below (2026-11-18, from the Codex session's `qm config` capture at 13:42:54, not re-verified by this session):** the `host-phys-bits-limit=39` change listed above as not yet tried was interrupted mid-command and did reach the VM config. `args` ends with `-cpu host,+kvm_pv_eoi,+kvm_pv_unhalt,host-phys-bits=on,host-phys-bits-limit=39`, `cpu:` is `host`, and the guest agent stopped responding afterwards, so whether VM 240 restarted, and whether the served engine is up, is unknown. No run has tested that setting. Later findings are in the Codex session's own investigation file, not here.
+
 **Testing handed to the Codex session 2026-11-18 (operator instruction).** State of VM 240 at handover, all firmware and topology settings made by hand with `qm set` and absent from Terraform (`make plan llm` will show drift, and an apply would put the `hostpci` lines back beside the `args` devices):
 
 - `bios: ovmf` with `efidisk0` on `ceph-rbd`; `cpu: host,phys-bits=39` (ineffective, safe to remove); `memory: 49152`.
