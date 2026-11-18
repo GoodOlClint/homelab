@@ -46,7 +46,7 @@ locals {
     {
       name         = "dns2"
       type         = "lxc"
-      node_name    = "ms-01b"
+      node_name    = "ms-01c"
       vm_id        = 219
       vlans        = ["vlan40"]
       ip_offset    = 19
@@ -72,7 +72,7 @@ locals {
     {
       name         = "adguard2"
       type         = "lxc"
-      node_name    = "ms-01b"
+      node_name    = "ms-01c"
       vm_id        = 252
       vlans        = ["vlan40"]
       ip_offset    = 52
@@ -85,7 +85,7 @@ locals {
     {
       name      = "proxmox-backup"
       vm_id     = 201 # old 101 + 100 (ADR 0028)
-      node_name = "ms-01b"
+      node_name = "ms-01c"
       # Hypervisor plane (ADR 0030) + the vlan20 leg for the Synology iSCSI LUN (ADR 0017 exception).
       # ip_offset 101 keeps the LUN-side address; on vlan30 it sits inside the DHCP pool (pfSense probes before leasing).
       vlans        = ["vlan30", "vlan20"]
@@ -101,7 +101,7 @@ locals {
     {
       name           = "control"
       type           = "lxc"
-      node_name      = "ms-01b"
+      node_name      = "ms-01c"
       vm_id          = 212
       mgmt_ip_offset = 12
       vlans          = ["vlan10"]
@@ -165,7 +165,7 @@ locals {
     # Human management pane for the cluster + worklab (ADR 0030); class S, no volume.
     {
       name         = "pdm"
-      node_name    = "ms-01b"
+      node_name    = "ms-01c"
       vm_id        = 220
       vlans        = ["vlan30"]
       ip_offset    = 20
@@ -198,7 +198,7 @@ locals {
     {
       name         = "plex"
       type         = "lxc"
-      node_name    = "ms-01b"
+      node_name    = "ms-01c"
       vm_id        = 208 # old 108 + 100 (ADR 0028)
       vlans        = ["vlan40"]
       ip_offset    = 108
