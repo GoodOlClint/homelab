@@ -87,6 +87,27 @@ Recorded per run: decode tokens per second per stream at 1 / 2 / 4 / 8 streams o
 
 **Done when:** `make ansible llm` is zero-changed on a second run; over 24 hours the journal shows every liveness probe as a completed generation with `vllm.service` continuously active, zero probe failures and zero engine restarts (a green timer alone proves nothing, since the probe exits 0 on a stopped engine); a code-intel embed run and a 4-stream chat run complete together; and `make plan` is clean for VM 240.
 
+## Phase 2 results (2026-11-18)
+
+Tensor parallel does not work on this guest. Reports: b70-bench `runs/2026-11-18-tp2/`, harness `scripts/tp-bench-remote.sh`.
+
+**Baseline, one card, both cards attached:** 62.6 / 54.9 / 50.7 / 39.1 tokens per second per stream at 1 / 2 / 4 / 8 streams (short prompts), KV pool 268,965 tokens, prefix cache and reasoning checks pass.
+
+| Run | Guest layout and container | Result |
+|---|---|---|
+| A, A2 | PCIe root ports, SeaBIOS, unprivileged (A2: `CCL_TOPO_P2P_ACCESS=0`) | `oneCCL: mem_to_ipc_handle: device_fd is invalid value` |
+| A3 | A, `--privileged` | `zeMemOpenIpcHandle ... ZE_RESULT_ERROR_INVALID_ARGUMENT` |
+| B1–B4 | A, `--cap-add=SYS_PTRACE`, exchange mode `pidfd` or `sockets`, with and without USM mode and graph capture | Handle exchange succeeds (`pidfd exchange mode is verified successfully`); same `zeMemOpenIpcHandle` failure |
+| C1 | Both cards on the one conventional PCI bridge (`pcie = false`) | Kernel refusal gone; both workers spin in `empty_cache` (`xpu_worker.py:115`) for 14 minutes, never finish |
+| D1 | PCIe root ports, OVMF | Same failure as B1 |
+| E1 | D1 plus `CCL_TOPO_ALGO=0` | **Starts**, KV pool 934,482 tokens, but the output is garbage: MTP acceptance 0 %, nonsense text at temperature 0, decode 28 tokens per second |
+
+**Cause, as far as it is established.** On every failing run the guest kernel logs `xe 0000:01:00.0: cannot be used for peer-to-peer DMA as the client and provider (0000:02:00.0) do not share an upstream bridge or whitelisted host bridge`. Proxmox gives each `hostpci` device its own root port under the emulated q35 host bridge, the kernel refuses peer-to-peer DMA across them, the cross-card memory import fails, and Level Zero reports `p2p_access: 0`. Two container facts sit in front of that: Docker's default seccomp profile blocks `pidfd_getfd` without `SYS_PTRACE`, and `CCL_TOPO_P2P_ACCESS=0` does not avoid the import. Firmware type is ruled out (D1). E1 shows the engine can be made to start without the direct path, and that doing so corrupts the data, so a start is not evidence of a working config: any future attempt must pass the answer check, not only `/health`.
+
+**Not established:** why other Proxmox users report success with the same layout (guest kernel 7.0's `xe` is the first suspect, unverified), and whether a real shared PCIe upstream bridge (an emulated PCIe switch, not Proxmox's `hostpci` placement) would carry the transfer or hang as C1 did.
+
+**State left on VM 240:** both cards attached on PCIe, 48 GB, embedder pinned to card 1, served engine unchanged on one card. `bios: ovmf` and `efidisk0` were set by hand with `qm set` for D1 and are not in Terraform; the module has no firmware input.
+
 ### Rollback
 
 Order matters: restore the single-card service config first, detach the card second.
