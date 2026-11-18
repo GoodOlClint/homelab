@@ -1,0 +1,121 @@
+# VM 240 on two Arc Pro B70s — change plan
+
+- **Status:** PROPOSED 2026-11-18, awaiting operator approval. No implementation code is written.
+- **Amends:** [ADR 0051](decisions/0051-local-inference-on-vm-240-is-ollama-plus-nvidia-pair-behind-caddy-with-per-client-keys-pair-is-opt-in-and-the-macs-join-only-after-a-cross-vlan-enrollment-gate.md) (engine layout), consistent with [ADR 0056](decisions/0056-msi-leaves-ceph-but-stays-a-non-ceph-cluster-member-as-the-gpu-host-and-its-drain-waits-for-three-healthy-osd-hosts.md) (msi as the 2× B70 GPU host).
+- **Operator decisions (interview 2026-11-18):** the chat model spans both cards with vLLM tensor parallel (TP: each layer's weights are split across the cards and both compute every token); VM 240 may be restarted as needed.
+
+## Goal
+
+Both B70s are passed to VM 240 and the served chat engine runs one model across the two cards, with every served number measured on this guest, or the plan ends on a named, measured fallback.
+
+## Existing state (mapped 2026-11-18)
+
+| Fact | Source |
+|---|---|
+| Card 2 is at host `0000:07:00` (GPU, IOMMU group 29), its audio at `08:00` (group 30), both on `vfio-pci`. Card 1 is `03:00` (group 24). | read live on msi |
+| The host binding needs no change: `proxmox_host_vfio_pci_ids.msi` lists device ids `8086:e223` and `8086:e2f7`, which match both cards. | `ansible/roles/proxmox_host/defaults/main.yml` |
+| VM 240 passes only the GPU function of card 1 (`pci_devices = [{ id = "0000:03:00" }]`), 32 GB, 6 vCPUs pinned to P-cores, running. | `terraform/vm-configs.tf`, `qm config 240` |
+| msi has 64 GB of memory available, with 57 GB committed to guests. | `free -g`, `qm list` |
+| Chat is vLLM XPU in a digest-pinned container at `0.90 / 8 / 4096` (GPU memory fraction / max concurrent sequences / max batched tokens), 200k context, MTP (multi-token prediction, the model's built-in speculative decoding head), prefix caching, XPU graph capture on. | `ansible/roles/llm/defaults/main.yml` |
+| The bge-m3 embedder is a host llama.cpp SYCL process on the same card. It must be warm before the engine sizes the card (`PartOf=`, `is-active` gate). | `vllm.service.j2`, `llama-embed.service.j2` |
+| Single-card baseline: 61 / 57 / 40 tokens per second per stream at 1 / 2 / 4 streams on 4k prompts; KV pool (the key-value attention cache, which bounds context × concurrency) 255,172 tokens with prefix caching. | role defaults, ADR 0051 2026-09-16 |
+| Intel's llm-scaler README documents `--tensor-parallel-size 2`, `VLLM_WORKER_MULTIPROC_METHOD=spawn`, `ZE_AFFINITY_MASK`, `--shm-size 32g`, and the `/dev/dri/by-path` mount (already present here). Its multi-GPU examples all use `--enforce-eager`; graph capture under TP is not covered. | fetched 2026-11-18 |
+
+## Known risks, each with its check
+
+| Risk | Why it is real here | Check |
+|---|---|---|
+| TP workers trip the two-XPU-processes rule | Two XPU processes initialising at once failed an engine init through the shared triton/NEO compile cache (rules file). TP=2 starts two workers by design. | Phase 2, first run. If init fails on the cache, try a per-worker cache dir; two failures on this point stops the phase (two-attempt box). |
+| Graph capture under TP | Served config sets `VLLM_XPU_ENABLE_XPU_GRAPH=1`; Intel's TP examples run eager. | Bench both; eager is an accepted served mode if graph fails. |
+| MTP, prefix caching and Mamba `align` under TP | None is documented as limited, none is measured here. | Bench matrix below; correctness spot-check, not only speed. |
+| Guest RAM | One card's Level Zero stack pins about 11 GB of guest RAM; a second worker adds an unmeasured amount, and a guest OOM during init costs a 20-minute cycle. | Raise to 48 GB with the attach; record `MemAvailable` and `drm-total-gtt` at peak; shrink afterwards if the peak allows. |
+| Embedder lands on the wrong card or on both | A SYCL process with two cards visible picks a default device. | Pin with `ONEAPI_DEVICE_SELECTOR` (verify the index with `sycl-ls` in the guest; not taken from documentation). The engine's sizing gate stays. |
+| PCIe link | TP moves activations between cards every layer. The endpoints report 2.5 GT/s x1, which is normal behind the on-card switch; the real link is on the upstream bridge. | Read the upstream bridges' `LnkSta` on msi in phase 1; expect x8 on both. |
+| Power | ADR 0056: two B70s plus a 253 W CPU is near the EVGA 850 G5's limit, and this box has reset on PSU behaviour before. | Operator question below. Phase 2 watches msi for a reset under the 8-stream run. |
+| Wedge detection | `vllm-wedge-capture` reads `xpu-smi stats -d 0` only. | Phase 3 edit covers both devices. |
+
+## Conflict with ADR 0056 (blocking, operator ruling needed)
+
+ADR 0056 sets two conditions on the second B70, and the installed state meets neither on the record:
+
+| ADR 0056 condition | State on 2026-11-18 |
+|---|---|
+| "A PSU upgrade (1000–1200 W) or enforced CPU/GPU power caps is a prerequisite for installing B70 #2." | The card is installed. No PSU change is recorded in the repo, and the LLM rules say "No power cap." |
+| "The second B70 waits for" the msi OSD drain, so there are always three healthy OSD hosts apart from msi. | msi still holds `osd.2` and `osd.3`, both up. ms-01b left the cluster today, so the OSD hosts are ms-01a, ms-01c and msi: a reset of msi under two-card load leaves two. |
+
+Phase 0 below does not start until the operator rules on both lines. A ruling that departs from ADR 0056 is recorded as an amendment to it in the phase 1 commit.
+
+## Phases
+
+### Phase 0 — preflight (no changes)
+
+1. The operator's ruling on the two ADR 0056 conditions above is written into this plan.
+2. `ceph -s` is `HEALTH_OK` and `ceph osd set noout` is in place before any two-card load on msi (rules file: noout before any msi experiment); it is unset when phase 2 ends.
+3. The single-card rollback point is named: the commit before phase 1, which holds the complete served config (arguments, environment, warm-up, embedder unit, device checks).
+
+### Phase 1 — attach the card (one commit, one restart)
+
+1. `terraform/vm-configs.tf`: `pci_devices = [{ id = "0000:03:00" }, { id = "0000:07:00" }]`, `memory_mb = 49152`.
+2. `llama-embed.service.j2`: pin the embedder to card 1.
+3. `make plan` must show an in-place update of VM 240 and nothing else. Check that no code-intel index build is in flight, then stop and start the guest.
+
+**Done when:** the guest shows two render nodes and `xpu-smi discovery` lists two devices; the upstream bridges report the expected link width; `systemctl is-active llama-embed vllm` is `active`; the liveness probe passes; the embedder's memory appears on card 1 only. The served config is still the measured single-card one, so this state is safe to stay in.
+
+### Phase 2 — measure TP on the guest (no commits to the served config)
+
+The harness is b70-bench's `scripts/bakeoff-remote.sh` vLLM arm with `oai-bench.py`, not `llm-bench.sh`: that script still drives the retired `llama-server` router and stops the embedder. The vLLM arm needs three changes in b70-bench first: the image pinned by the served digest instead of the `0.26.0-b2` tag, the served checkpoint path, and a TP arm. Each candidate runs as a `vllm-bench` container with `vllm.service` stopped and `llama-embed` active and warmed, because the embedder's residency is part of the memory budget. When the phase ends the bench container is removed, `systemctl start vllm` restores the served engine, and a completed generation through Caddy confirms it. The first result is whether the engine initialises at all.
+
+| Run | Config |
+|---|---|
+| A | TP=2, current flags (graph on, MTP, prefix caching), `spawn`, `--shm-size 32g` |
+| B | A with `--enforce-eager` (only if A fails or to compare) |
+| C | Best of A/B without MTP |
+| D | Best config with `--max-num-seqs 16` |
+
+Recorded per run: decode tokens per second per stream at 1 / 2 / 4 / 8 streams on 4k prompts, prefill speed, KV pool size in tokens, warm-up time, peak guest RAM and `drm-total-gtt`, `cached_tokens` on a repeated prefix, `reasoning` field present, and a fixed-prompt answer comparison against the single-card engine at temperature 0.
+
+**Adoption thresholds (proposed, the operator may change them):** KV pool at least 1.8× the baseline 255k tokens, single-stream decode at least 80 % of 61 t/s, 4-stream decode at least the baseline 40 t/s, no wrong-answer regression, and 20 completed generations sent to the candidate's own port five minutes apart, each inside the 90-second liveness timeout. The `vllm-liveness` script does not count here: it exits 0 whenever `vllm.service` is inactive, which it is for the whole phase.
+
+**Fallback if TP misses them or will not initialise:** serve split by role (chat alone on card 1, embedder alone on card 2), which needs no new engine mode. The ADR amendment records the measured reason. The cards still share the workload, but not one model.
+
+### Phase 3 — land the served config (role, docs, ADR)
+
+- `llm_vllm_args` and `vllm.service.j2`: the TP flag, environment and shm size that phase 2 measured; the budget comment replaced with the new measured figures.
+- `vllm-warmup.j2`: warm the concurrency shape the new `--max-num-seqs` implies.
+- `tasks/main.yml`: the render-node check covers both cards.
+- `vllm-wedge-capture.j2`: `xpu-smi` statistics for both devices, and a stack dump of every process in the engine container, not only the API server and one `EngineCore`. Under TP a hung worker leaves `EngineCore` waiting, and the worker's stack is the evidence. A forced capture must show both workers before adoption.
+- ADR 0051 consequence note with the numbers; `.claude/rules/llm.md` pipeline paragraph and any new What Never To Do line; `docs/LESSONS.md`; results published in b70-bench.
+- Codex adversarial review of the branch before it is pushed.
+
+**Done when:** `make ansible llm` is zero-changed on a second run; over 24 hours the journal shows every liveness probe as a completed generation with `vllm.service` continuously active, zero probe failures and zero engine restarts (a green timer alone proves nothing, since the probe exits 0 on a stopped engine); a code-intel embed run and a 4-stream chat run complete together; and `make plan` is clean for VM 240.
+
+### Rollback
+
+Order matters: restore the single-card service config first, detach the card second.
+
+1. Engine: `git revert` the phase 3 commit and run `make ansible llm`. That restores the whole served config from the phase 0 rollback point (arguments, environment, shm size, warm-up, wedge capture, device checks), not only the TP flag. Verify one chat generation and one embedding through Caddy.
+2. Card: only then revert the phase 1 commit (the `pci_devices` line, memory, and the embedder pin, which must not name a card that is gone) and restart the guest. Verify chat and embeddings again.
+
+## Out of scope
+
+- A larger chat model on the 64 GB pair. TP is proven on the current model first; a model change is its own bench and ADR note.
+- Passing the audio functions (`04:00`, `08:00`). Card 1 never needed its own.
+- GPU temperature alerting for the second card.
+
+## Open questions for the operator
+
+1. Power: has the PSU been upgraded from the EVGA 850 G5? If not, which is it: upgrade first, enforce caps (which reverses the "No power cap" rule), or an accepted exception to ADR 0056?
+2. Ceph: does the two-card load wait for the msi OSD drain, as ADR 0056 says, or proceed now under `noout` with msi as one of three OSD hosts?
+3. Are the adoption thresholds right, or is more concurrency worth a larger single-stream loss?
+
+## Review disposition
+
+One Codex adversarial pass, 2026-11-18. Each finding was checked against the repo before it was accepted.
+
+| Finding (severity) | Disposition |
+|---|---|
+| ADR 0056 requires a PSU upgrade or power caps before card 2, and makes the card wait for the Ceph drain; the plan replaced both with "watch for resets" (high) | **Accepted.** Verified in ADR 0056 and live (`osd.2`, `osd.3` up on msi). Now a blocking section and phase 0; the ruling is the operator's. |
+| `llm-bench.sh` drives the retired llama.cpp router and stops the embedder (high) | **Accepted.** Verified in `llm-bench-remote.sh`. Phase 2 names `bakeoff-remote.sh`'s vLLM arm and the three changes it needs. |
+| Liveness acceptance can pass with no generation, because the probe exits 0 on an inactive unit (high) | **Accepted.** Verified in `vllm-liveness.j2`. Both acceptance checks now count completed generations. |
+| Rollback restored only the TP flag and could detach a card the embedder is pinned to (medium) | **Accepted.** Rollback is a revert of whole commits, in a fixed order. |
+| Wedge capture dumps one `EngineCore` and would miss a hung TP worker (medium) | **Accepted.** Phase 3 captures every process in the container. |
