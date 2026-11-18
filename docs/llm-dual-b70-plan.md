@@ -106,7 +106,25 @@ Tensor parallel does not work on this guest. Reports: b70-bench `runs/2026-11-18
 
 **Not established:** why other Proxmox users report success with the same layout (guest kernel 7.0's `xe` is the first suspect, unverified), and whether a real shared PCIe upstream bridge (an emulated PCIe switch, not Proxmox's `hostpci` placement) would carry the transfer or hang as C1 did.
 
-**State left on VM 240:** both cards attached on PCIe, 48 GB, embedder pinned to card 1, served engine unchanged on one card. `bios: ovmf` and `efidisk0` were set by hand with `qm set` for D1 and are not in Terraform; the module has no firmware input.
+### After the first eleven runs (same day)
+
+| Run | Guest layout and container | Result |
+|---|---|---|
+| F1 | OVMF, both cards behind one emulated PCIe switch (raw QEMU `args`: `x3130-upstream` on `ich9-pcie-port-3`, two `xio3130-downstream`, two `vfio-pci`; no `hostpci` lines), `--cap-add=SYS_PTRACE`, `pidfd` | Guest kernel refusal gone (zero peer-to-peer lines). Workers hang in `empty_cache` (`xpu_worker.py:115`), as in C1. |
+
+**What F1 added.** While F1 hung, the **host** logged `DMAR: [DMA Read NO_PASID] Request device [07:00.0] fault addr 0x427a0e40000 [fault reason 0x04] Access beyond MGAW`, for both cards. msi's VT-d is 39-bit (`DMAR: Host address width 39`, a 512 GB limit). The guest runs `cpu: host` with 46 physical address bits, and OVMF places the cards' 32 GB BARs at `0x381000000000` and `0x382000000000`. Card-to-card DMA therefore targets guest addresses the host IOMMU cannot translate, and the transfer never completes. This is the leading explanation for the C1 and F1 hangs; it is not yet proven by a run that works.
+
+**Tried and not effective:** `qm set 240 --cpu host,phys-bits=39`. QEMU received `phys-bits=39` and warned `Host physical bits (46) does not match phys-bits property (39)`, but the guest still reports 46 bits and the same BAR placement.
+
+**Not yet tried:** capping the guest with `host-phys-bits-limit=39` (a second `-cpu` in `args`), SeaBIOS with the switch layout, a patched communicator that stages through host memory (the image hardcodes `dist_backend = "xccl"`), a standalone two-card all-reduce and `zeDeviceCanAccessPeer` integrity test outside vLLM.
+
+**Testing handed to the Codex session 2026-11-18 (operator instruction).** State of VM 240 at handover, all firmware and topology settings made by hand with `qm set` and absent from Terraform (`make plan llm` will show drift, and an apply would put the `hostpci` lines back beside the `args` devices):
+
+- `bios: ovmf` with `efidisk0` on `ceph-rbd`; `cpu: host,phys-bits=39` (ineffective, safe to remove); `memory: 49152`.
+- No `hostpci0`/`hostpci1`. `args:` carries the emulated switch and both `vfio-pci` devices; the cards are guest `05:00.0` and `06:00.0`.
+- Served single-card engine and embedder start at boot and answer correctly on every layout tested. No bench container is running.
+- `ceph osd set noout` is still set and must be unset when two-card testing ends.
+- Guest `~/tp-bench/` holds every report and full log; copies of the reports through E1 are in b70-bench `runs/2026-11-18-tp2/`; `scripts/tp-bench-remote.sh` there is uncommitted. Never stop a run with `pkill -f`; kill the pid in the run's `.pid` file.
 
 ### Rollback
 
