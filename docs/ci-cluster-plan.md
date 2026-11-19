@@ -209,6 +209,20 @@ Operator direction 2026-11-19, to be carried into the Mac runner plan for ADR 00
 
 WP0 is the operator's and gates WP2. WP1 can start at once. Rough effort: WP1 two days, WP2 and WP3 one and a half days, WP4 half a day, WP5 and WP6 one day. Five days in all, up from three before the review.
 
+## Build notes
+
+What the build changed against the plan as written. WP1, WP3 and WP4 are merged to local `main`, unpushed; WP2, WP5 and WP6 wait on WP0.
+
+- **Runner pods are placed by the absence of the control-plane label,** not by a worker label. A Talos worker carries no role label, and a label a worker could give itself would be no boundary.
+- **`make talos-build` targets each VM instance by name.** A whole-resource target would also build or restart the other cluster's VMs.
+- **The node map is `terraform/talos-nodes.json`,** read by Terraform, the Makefile and `update-nodes.yml`.
+- **The cache is a hostPath on the worker's scratch disk.** It does not fail closed if a second worker is added; the note in the manifest says so.
+- **The CI Flux root reuses the services root's `gotk-components.yaml` by path,** so a local build needs `--load-restrictor LoadRestrictionsNone`. Whether Flux's own build accepts the reference shows at the first reconcile on the CI cluster.
+- **The CI seed carries no root CA and an empty `cluster-bindings`;** `ci-arc` needs neither.
+- **The new reaper ships suspended.** Order before the next push: `make hosts-apply`, `make k8s-seed`, then push. A seed run before `hosts-apply` fails on the missing token output.
+- **Open for WP2:** the CI nodes take the fleet DNS server; ADR 0064 names the pfSense resolver on the new VLAN.
+- **Found, not fixed:** the existing `kubernetes/arc/values.yaml` runner containers have no CPU or memory requests, and `flux_check.py` does not look inside HelmRelease values. Both go away when `kubernetes/arc/` is deleted at cutover.
+
 ## Review disposition
 
 One Codex adversarial review of the first draft, 2026-11-19. Verdict: needs attention. Thirteen findings; twelve fixed in this revision, one fixed in part. Four were spot-checked against the files and held (the DHCP fallback in `talos.sh`, the `talos-cp-` match in `update-nodes.yml`, the unpinned Flux controllers, and SDN living in the fleet root).
