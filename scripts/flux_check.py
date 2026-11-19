@@ -5,9 +5,10 @@ Every pod-template container must carry a cpu+memory request (#31, the scheduler
 A resource carrying `kustomize.toolkit.fluxcd.io/substitute: disabled` is exempt — that is how a
 ConfigMap whose payload has its own `${…}` syntax (syslog-ng macros, JS template literals) is shipped.
 
-usage: flux_check.py <repo root> [--build-only] [--kubeconfig PATH]   (reads kubernetes/flux/apps/*.yaml and the live
+usage: flux_check.py <repo root> [--build-only] [--cluster services|ci] [--kubeconfig PATH]   (reads the cluster's Flux
+root apps — kubernetes/flux/apps/*.yaml for services, the default, kubernetes/flux-ci/apps/*.yaml for ci — and the live
 cluster-bindings; --build-only skips the binding check so a clone with no cluster — CI — still proves every tree builds;
---kubeconfig defaults to the services cluster's, kubernetes/talos/.secrets/kubeconfig)
+--kubeconfig defaults to the cluster's, kubernetes/talos/.secrets[/ci]/kubeconfig)
 """
 import re, subprocess, sys, json
 import yaml
@@ -16,7 +17,15 @@ root = sys.argv[1]
 TOKEN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")   # a token with a :-/:= default is bound by definition
 args = sys.argv[2:]
 build_only = "--build-only" in args
-kubeconfig = f"{root}/kubernetes/talos/.secrets/kubeconfig"
+ROOTS = {"services": ("kubernetes/flux", "kubernetes/talos/.secrets"), "ci": ("kubernetes/flux-ci", "kubernetes/talos/.secrets/ci")}
+cluster = "services"
+if "--cluster" in args:
+    i = args.index("--cluster")
+    if i + 1 >= len(args) or args[i + 1] not in ROOTS:
+        sys.exit(f"flux_check: --cluster needs one of: {' '.join(ROOTS)}")
+    cluster = args[i + 1]
+flux_root, talos_dir = ROOTS[cluster]
+kubeconfig = f"{root}/{talos_dir}/kubeconfig"
 if "--kubeconfig" in args:
     i = args.index("--kubeconfig")
     if i + 1 >= len(args):
@@ -27,7 +36,7 @@ if not build_only:
     kc = ["kubectl", "--kubeconfig", kubeconfig]
     bindings = set(json.loads(subprocess.check_output(kc + ["-n", "flux-system", "get", "cm", "cluster-bindings", "-o", "json"]))["data"])
 bad = 0
-for app in sorted(__import__("glob").glob(f"{root}/kubernetes/flux/apps/*.yaml")):
+for app in sorted(__import__("glob").glob(f"{root}/{flux_root}/apps/*.yaml")):
     for ks in yaml.safe_load_all(open(app)):
         if not ks or ks.get("kind") != "Kustomization":
             continue
