@@ -188,6 +188,14 @@ Questions the pilot plan must answer before any build:
 7. Failure: a failed boot, a cancelled job and a controller restart, each followed by a check that no runner record, VM, disk or directory object is left.
 8. Licensing for the edition, the host and the peak number of running guests, including idle warm ones.
 
+### Mac runner: notes for its own plan
+
+Operator direction 2026-11-19, to be carried into the Mac runner plan for ADR 0061.
+
+- The Studio is enrolled in an MDM server by hand at its rebuild, as a lab exercise that transfers to a managed fleet. The server pushes the privacy-permission profile, the VM tool and the supervisor. Fleet, self-hosted, is the first candidate.
+- Zero-touch re-enrollment needs Apple Business Manager, which needs an organisation. It waits on the operator converting their developer account, which has the same prerequisites.
+- Two existing tools to evaluate before writing a supervisor: GitHub's `actions/scaleset` library and `runscaler`, which is built on it and already runs macOS VM runners.
+
 ## Risks
 
 - **Editing `talos.sh` and `update-nodes.yml` can break production's lifecycle tooling.** Mitigation: WP1's four checks, run before anything else.
