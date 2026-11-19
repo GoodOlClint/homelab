@@ -34,7 +34,7 @@ if "--kubeconfig" in args:
 bindings = set()
 if not build_only:
     kc = ["kubectl", "--kubeconfig", kubeconfig]
-    bindings = set(json.loads(subprocess.check_output(kc + ["-n", "flux-system", "get", "cm", "cluster-bindings", "-o", "json"]))["data"])
+    bindings = set(json.loads(subprocess.check_output(kc + ["-n", "flux-system", "get", "cm", "cluster-bindings", "-o", "json"])).get("data") or {})
 bad = 0
 for app in sorted(__import__("glob").glob(f"{root}/{flux_root}/apps/*.yaml")):
     for ks in yaml.safe_load_all(open(app)):
