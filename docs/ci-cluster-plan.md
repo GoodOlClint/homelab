@@ -243,4 +243,18 @@ One Codex adversarial review of the first draft, 2026-11-19. Verdict: needs atte
 | 12 | medium | Jobs could not resolve their test guests from the new VLAN | Fixed: resolver, zone forward and BIND allow in WP0, checked from the VLAN |
 | 13 | medium | The Talos render binds etcd metrics to all interfaces, reachable from the worker | Fixed: omitted from the CI render; ports checked from the worker's segment in WP2 |
 
+### Review of the merged work packages
+
+One Codex adversarial review of WP1, WP3 and WP4 as merged (`980fddd..43bc908`), 2026-11-19. Verdict: needs attention, hold the push. Seven findings.
+
+| # | Severity | Finding | Disposition |
+|---|---|---|---|
+| A | high | `update-nodes.yml` skips the drain when the services kubeconfig is missing | Fix in progress: a missing services kubeconfig fails the host; only a `ci` guest may be skipped |
+| B | high | A CI worker keeps the cluster's Kubernetes bootstrap token in its machine config. With it, code that has taken the worker could enrol under another node's identity and read what that node's pods may read, the App key included | Open, blocks seeding the App key on the CI cluster. To be settled on the real cluster in WP2: close bootstrap enrolment after the worker joins (rotate the token on the control plane), and prove a credential kept on the worker cannot obtain a control-plane node identity |
+| C | high | A failed authenticated probe makes `talos.sh` fall back to an unauthenticated apply to the recorded address, and the CI worker shares the control plane's segment | Rejected as a code change: the fallback is how every fresh node is provisioned and is unchanged for production. Mitigated by procedure in WP2: CI workers are powered off whenever the CI control plane is built or rebuilt |
+| D | high | A drain failure on the CI guest leaves the services guest cordoned | Fix in progress: preflight before the first cordon, and uncordon what the run cordoned on failure |
+| E | high | Host maintenance can evict a running CI job; the idle check reads only the services cluster | Fix in progress: fail the host when the CI cluster has unfinished runner pods. The brief for WP1 had dropped this plan requirement |
+| F | medium | The reaper reports success when Proxmox rejects a stop or delete, or the pool listing fails | Fix in progress, in the new reaper only; the old one is deleted at cutover |
+| G | medium | The live Flux check raises on the CI cluster's empty `cluster-bindings` | Fix in progress |
+
 Not verified by anyone: live pfSense state, and whether ARC 0.14.2 behaves as its source reads for scale-set ids. The rehearsal in WP5 is where both show.
