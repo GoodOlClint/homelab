@@ -48,20 +48,31 @@
       register: _talos_kc
       check_mode: false
 
-    # A cluster with no kubeconfig yet (the ci cluster before it is built) has nothing to drain.
-    - name: Keep the Talos guests whose cluster has a kubeconfig
+    - name: Describe each Talos guest
       ansible.builtin.set_fact:
-        _talos: >-
+        _talos_all: >-
           {%- set out = [] -%}
-          {%- for r in _talos_kc.results if r.stat.exists -%}
-          {{- out.append({'name': r.item, 'cluster': talos_node_map[r.item].cluster, 'kubeconfig': r.stat.path}) -}}
+          {%- for r in _talos_kc.results -%}
+          {{- out.append({'name': r.item, 'cluster': talos_node_map[r.item].cluster, 'role': talos_node_map[r.item].role,
+                          'exists': r.stat.exists, 'kubeconfig': r.invocation.module_args.path}) -}}
           {%- endfor -%}
           {{ out }}
-        _talos_skipped: "{{ _talos_kc.results | rejectattr('stat.exists') | map(attribute='item') | list }}"
+
+    - name: Refuse a Talos guest whose kubeconfig is missing outside the unbuilt ci cluster
+      ansible.builtin.assert:
+        that: _talos_all | rejectattr('exists') | rejectattr('cluster', 'equalto', 'ci') | list | length == 0
+        fail_msg: >-
+          no kubeconfig to drain through for
+          {{ _talos_all | rejectattr('exists') | rejectattr('cluster', 'equalto', 'ci') | map(attribute='name') | join(', ') }}
+        quiet: true
+
+    - name: Keep the Talos guests whose cluster has a kubeconfig
+      ansible.builtin.set_fact:
+        _talos: "{{ _talos_all | selectattr('exists') | list }}"
+        _talos_skipped: "{{ _talos_all | rejectattr('exists') | map(attribute='name') | list }}"
         _talos_services: >-
-          {{ _talos_kc.results | selectattr('stat.exists') | map(attribute='item')
-             | select('in', talos_node_map | dict2items | selectattr('value.cluster', 'equalto', 'services') | map(attribute='key') | list)
-             | first | default('') }}
+          {{ _talos_all | selectattr('exists') | selectattr('cluster', 'equalto', 'services')
+             | map(attribute='name') | first | default('') }}
 
     - name: Say which Talos guests have no cluster kubeconfig to drain through
       ansible.builtin.debug:
@@ -91,6 +102,16 @@
       register: _plex_ct
       changed_when: false
       check_mode: false
+
+    - name: Check each Talos node is reachable through its kubeconfig
+      ansible.builtin.command: kubectl --kubeconfig {{ item.kubeconfig }} get node {{ item.name }} -o name
+      loop: "{{ _talos }}"
+      loop_control:
+        label: "{{ item.cluster }}/{{ item.name }}"
+      delegate_to: localhost
+      changed_when: false
+      check_mode: false
+      when: _apt_plan is changed and not ansible_check_mode
 
     - name: Find workloads with an idle check on this node's Talos guest
       delegate_to: localhost
@@ -143,15 +164,60 @@
     - name: Empty the node and upgrade
       when: _apt_plan is changed and not ansible_check_mode and idle_gave_up | default([]) | length == 0
       block:
-        - name: Drain the Talos guests, each through its own cluster
-          ansible.builtin.command: >-
-            kubectl --kubeconfig {{ item.kubeconfig }} drain {{ item.name }}
-            --ignore-daemonsets --delete-emptydir-data --timeout=300s
-          loop: "{{ _talos }}"
+        - name: Count the unfinished CI runner pods on this node's CI workers
+          ansible.builtin.command: kubectl --kubeconfig {{ item.kubeconfig }} -n arc-runners get pods -o json
+          loop: "{{ _talos | selectattr('cluster', 'equalto', 'ci') | selectattr('role', 'equalto', 'worker') | list }}"
           loop_control:
             label: "{{ item.cluster }}/{{ item.name }}"
           delegate_to: localhost
-          changed_when: true
+          register: _ci_pods
+          changed_when: false
+          check_mode: false
+
+        - name: Refuse to evict a running CI job
+          ansible.builtin.assert:
+            that: >-
+              (item.stdout | from_json)['items']
+              | selectattr('status.phase', 'in', ['Pending', 'Running']) | list | length == 0
+            fail_msg: >-
+              {{ (item.stdout | from_json)['items'] | selectattr('status.phase', 'in', ['Pending', 'Running']) | list | length }}
+              unfinished runner pod(s) in arc-runners, so {{ item.item.name }} on {{ inventory_hostname }} is not drained
+            quiet: true
+          loop: "{{ _ci_pods.results }}"
+          loop_control:
+            label: "{{ item.item.name }}"
+
+        - name: Drain the Talos guests, uncordoning them all if any drain fails
+          block:
+            - name: Drain the Talos guests, each through its own cluster
+              ansible.builtin.command: >-
+                kubectl --kubeconfig {{ item.kubeconfig }} drain {{ item.name }}
+                --ignore-daemonsets --delete-emptydir-data --timeout=300s
+              loop: "{{ _talos }}"
+              loop_control:
+                label: "{{ item.cluster }}/{{ item.name }}"
+              delegate_to: localhost
+              changed_when: true
+          rescue:
+            - name: Uncordon every Talos guest this run cordoned
+              ansible.builtin.command: kubectl --kubeconfig {{ item.kubeconfig }} uncordon {{ item.name }}
+              loop: "{{ _talos }}"
+              loop_control:
+                label: "{{ item.cluster }}/{{ item.name }}"
+              delegate_to: localhost
+              register: _uncordon_back
+              changed_when: false
+              failed_when: false
+
+            - name: Fail the host, nothing was upgraded
+              ansible.builtin.fail:
+                msg: >-
+                  drain failed for
+                  {{ ansible_failed_result.results | default([]) | selectattr('failed', 'defined') | selectattr('failed')
+                     | map(attribute='item.name') | join(', ') | default('a Talos guest', true) }};
+                  {{ 'and uncordon failed for ' ~ (_uncordon_back.results | rejectattr('rc', 'equalto', 0) | map(attribute='item.name') | join(', '))
+                     if _uncordon_back.results | rejectattr('rc', 'equalto', 0) | list | length > 0
+                     else 'every Talos guest on ' ~ inventory_hostname ~ ' was uncordoned' }}
 
         - name: Enter HA node maintenance
           ansible.builtin.command: ha-manager crm-command node-maintenance enable {{ inventory_hostname }}
