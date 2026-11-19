@@ -1,6 +1,6 @@
 # ADR 0063 — The CI cluster is a second Talos cluster built by the same tooling, which takes a cluster name and gains a worker role
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-19
 - **Deciders:** operator + Claude
 - **Context source:** brownfield gate for [ADR 0062](0062-arc-moves-off-the-services-cluster-onto-a-dedicated-two-node-ci-cluster-with-the-github-app-key-kept-from-job-nodes.md); plan in [docs/ci-cluster-plan.md](../ci-cluster-plan.md)

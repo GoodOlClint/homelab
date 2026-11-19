@@ -1,6 +1,6 @@
 # CI cluster change plan
 
-Change plan for [ADR 0062](decisions/0062-arc-moves-off-the-services-cluster-onto-a-dedicated-two-node-ci-cluster-with-the-github-app-key-kept-from-job-nodes.md), with the implementation decisions in [ADR 0063](decisions/0063-the-ci-cluster-is-a-second-talos-cluster-built-by-the-same-tooling-which-takes-a-cluster-name-and-gains-a-worker-role.md) and [ADR 0064](decisions/0064-the-ci-cluster-nodes-sit-on-a-dedicated-ci-runner-vlan-filtered-at-pfsense.md). Status: revised after the Codex review, awaiting operator review. No implementation code is written until this plan is approved.
+Change plan for [ADR 0062](decisions/0062-arc-moves-off-the-services-cluster-onto-a-dedicated-two-node-ci-cluster-with-the-github-app-key-kept-from-job-nodes.md), with the implementation decisions in [ADR 0063](decisions/0063-the-ci-cluster-is-a-second-talos-cluster-built-by-the-same-tooling-which-takes-a-cluster-name-and-gains-a-worker-role.md) and [ADR 0064](decisions/0064-the-ci-cluster-nodes-sit-on-a-dedicated-ci-runner-vlan-filtered-at-pfsense.md). Status: approved by the operator 2026-11-19, after one Codex review.
 
 ## Goal
 
