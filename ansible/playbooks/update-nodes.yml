@@ -1,6 +1,7 @@
 ---
 # Patch the cluster nodes one at a time. When apt has work, the node is emptied
-# FIRST (Talos guest drained, HA node-maintenance so shutdown_policy=migrate moves
+# FIRST (each Talos guest drained through its own cluster's kubeconfig, a cluster
+# not built yet skipped; HA node-maintenance so shutdown_policy=migrate moves
 # the resources, ceph noout) so a wedged upgrade never strands guests on it;
 # then dist-upgrade, a reboot only if the newest installed kernel is not the
 # running one, and the recovery tail — which always runs, so a re-run heals a
@@ -10,7 +11,9 @@
   hosts: proxmox
   serial: 1
   vars:
-    kubeconfig: "{{ playbook_dir }}/../../kubernetes/talos/.secrets/kubeconfig"
+    talos_secrets: "{{ playbook_dir }}/../../kubernetes/talos/.secrets"
+    talos_node_map: "{{ lookup('ansible.builtin.file', playbook_dir ~ '/../../terraform/talos-nodes.json') | from_json }}"
+    kubeconfig: "{{ talos_secrets }}/kubeconfig"
   tasks:
     - name: Refuse to start on an unhealthy cluster (a noout-only warning is ours)
       ansible.builtin.command: ceph health
@@ -19,15 +22,51 @@
       check_mode: false
       failed_when: not (_health.stdout is match('HEALTH_OK') or _health.stdout is match('HEALTH_WARN noout flag'))
 
-    - name: Find this node's Talos guest
+    - name: Find this node's Talos guests
       ansible.builtin.shell: |
         set -o pipefail
-        qm list | awk '/talos-cp-/{print $2}'
+        qm list | awk '$2 ~ /^talos-/ {print $2}'
       args:
         executable: /bin/bash
-      register: _talos
+      register: _talos_found
       changed_when: false
       check_mode: false
+
+    - name: Refuse a Talos guest the node map does not know
+      ansible.builtin.assert:
+        that: _talos_found.stdout_lines | difference(talos_node_map.keys() | list) | length == 0
+        fail_msg: >-
+          {{ _talos_found.stdout_lines | difference(talos_node_map.keys() | list) | join(', ') }}
+          not in terraform/talos-nodes.json, so its cluster and kubeconfig are unknown
+        quiet: true
+
+    - name: Find each Talos guest's cluster kubeconfig
+      ansible.builtin.stat:
+        path: "{{ talos_secrets }}{{ '' if talos_node_map[item].cluster == 'services' else '/' ~ talos_node_map[item].cluster }}/kubeconfig"
+      loop: "{{ _talos_found.stdout_lines }}"
+      delegate_to: localhost
+      register: _talos_kc
+      check_mode: false
+
+    # A cluster with no kubeconfig yet (the ci cluster before it is built) has nothing to drain.
+    - name: Keep the Talos guests whose cluster has a kubeconfig
+      ansible.builtin.set_fact:
+        _talos: >-
+          {%- set out = [] -%}
+          {%- for r in _talos_kc.results if r.stat.exists -%}
+          {{- out.append({'name': r.item, 'cluster': talos_node_map[r.item].cluster, 'kubeconfig': r.stat.path}) -}}
+          {%- endfor -%}
+          {{ out }}
+        _talos_skipped: "{{ _talos_kc.results | rejectattr('stat.exists') | map(attribute='item') | list }}"
+        _talos_services: >-
+          {{ _talos_kc.results | selectattr('stat.exists') | map(attribute='item')
+             | select('in', talos_node_map | dict2items | selectattr('value.cluster', 'equalto', 'services') | map(attribute='key') | list)
+             | first | default('') }}
+
+    - name: Say which Talos guests have no cluster kubeconfig to drain through
+      ansible.builtin.debug:
+        msg: "{{ _talos_skipped | join(', ') }}: no kubeconfig for its cluster here, not drained (cluster not built)"
+      when: _talos_skipped | length > 0
 
     # The apt module skips cache.update() under check_mode, so the dry run below
     # would otherwise plan against whatever apt-daily last fetched.
@@ -55,11 +94,11 @@
 
     - name: Find workloads with an idle check on this node's Talos guest
       delegate_to: localhost
-      when: _apt_plan is changed and not ansible_check_mode and _talos.stdout | length > 0
+      when: _apt_plan is changed and not ansible_check_mode and _talos_services | length > 0
       block:
         - name: List Deployments and the pods on this node
           ansible.builtin.command: kubectl --kubeconfig {{ kubeconfig }} get {{ item }} -A -o json
-          loop: ["deployments", "pods --field-selector spec.nodeName={{ _talos.stdout }}"]
+          loop: ["deployments", "pods --field-selector spec.nodeName={{ _talos_services }}"]
           register: _kube
           changed_when: false
           check_mode: false
@@ -104,12 +143,14 @@
     - name: Empty the node and upgrade
       when: _apt_plan is changed and not ansible_check_mode and idle_gave_up | default([]) | length == 0
       block:
-        - name: Drain the Talos guest
+        - name: Drain the Talos guests, each through its own cluster
           ansible.builtin.command: >-
-            kubectl --kubeconfig {{ kubeconfig }} drain {{ _talos.stdout }}
+            kubectl --kubeconfig {{ item.kubeconfig }} drain {{ item.name }}
             --ignore-daemonsets --delete-emptydir-data --timeout=300s
+          loop: "{{ _talos }}"
+          loop_control:
+            label: "{{ item.cluster }}/{{ item.name }}"
           delegate_to: localhost
-          when: _talos.stdout | length > 0
           changed_when: true
 
         - name: Enter HA node maintenance
@@ -181,27 +222,31 @@
       changed_when: true
       when: "'(maintenance mode' in _rejoined.stdout"
 
-    - name: Uncordon the Talos guest
-      ansible.builtin.command: kubectl --kubeconfig {{ kubeconfig }} uncordon {{ _talos.stdout }}
+    - name: Uncordon the Talos guests
+      ansible.builtin.command: kubectl --kubeconfig {{ item.kubeconfig }} uncordon {{ item.name }}
+      loop: "{{ _talos }}"
+      loop_control:
+        label: "{{ item.cluster }}/{{ item.name }}"
       delegate_to: localhost
-      when: _talos.stdout | length > 0
       register: _uncordon
       until: _uncordon.rc == 0
       retries: 12
       delay: 10
       changed_when: "'already uncordoned' not in _uncordon.stdout"
 
-    - name: Wait for the Talos node to be Ready
+    - name: Wait for the Talos nodes to be Ready
       ansible.builtin.shell: >-
-        kubectl --kubeconfig {{ kubeconfig }} get node {{ _talos.stdout }}
+        kubectl --kubeconfig {{ item.kubeconfig }} get node {{ item.name }}
         -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+      loop: "{{ _talos }}"
+      loop_control:
+        label: "{{ item.cluster }}/{{ item.name }}"
       delegate_to: localhost
       register: _ready
       until: _ready.stdout == "True"
       retries: 60
       delay: 10
       changed_when: false
-      when: _talos.stdout | length > 0
 
     - name: Wait for Ceph HEALTH_OK
       ansible.builtin.command: ceph health
