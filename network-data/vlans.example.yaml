@@ -190,6 +190,21 @@ vlans:
     is_wireguard: false
     managed_by: ["pfsense", "unifi"]
 
+  ci_runner:
+    id: REPLACE_WITH_VLAN_ID
+    name: "CI Runner"
+    bridge: "REPLACE_WITH_SDN_VNET"
+    sdn_zone: "Homelab"
+    description: "CI cluster nodes (ADR 0064) — filtered at pfSense; DHCP reservations per node MAC (terraform output talos_ci_nodes)"
+    domain_prefix: "ci-runner"
+    dhcp_enabled: true
+    dhcp_range_start: "REPLACE"
+    dhcp_range_end: "REPLACE"
+    client_isolation: false
+    allows_mdns: false
+    is_wireguard: false
+    managed_by: ["pfsense", "unifi"]
+
   media:
     id: REPLACE_WITH_VLAN_ID
     name: "Media"

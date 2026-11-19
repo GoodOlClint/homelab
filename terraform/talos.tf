@@ -1,4 +1,5 @@
-# Talos control-plane VMs (ADR 0031 build, ADR 0033 forks). Plain resources,
+# Talos VMs of the services cluster (ADR 0031 build, ADR 0033 forks) and the
+# ci cluster (ADR 0063), one map in talos-nodes.json. Plain resources,
 # not modules/proxmox-vm: Talos has no cloud-init, takes its config over its
 # own API. No HA resource ever (two etcd members on one host = lost quorum).
 # The temporary worklab member (ADR 0031) retired 2026-09-08 when msi returned;
@@ -19,13 +20,16 @@ provider "proxmox" {
 locals {
   talos_services_vlan = module.network.vlans["vlan40"]
   talos_ceph_vlan     = module.network.vlans["vlan20"]
-
-  # offset doubles as the last octet on BOTH legs; VMID = 230 + index.
-  talos_nodes = {
-    talos-cp-a = { vm_id = 230, node_name = "ms-01a", offset = 61 }
-    talos-cp-b = { vm_id = 231, node_name = "ms-01c", offset = 62 }
-    talos-cp-c = { vm_id = 232, node_name = "msi", offset = 63 }
+  # null until the operator adds ci_runner to vlans.yaml; the ci nodes drop out of the plan until then.
+  talos_ci_vlan = try(module.network.vlans["vlan${module.network.network_data.vlans.ci_runner.id}"], null)
+  talos_cluster_vlans = {
+    services = local.talos_services_vlan
+    ci       = local.talos_ci_vlan
   }
+
+  # talos-nodes.json is also read by the Makefile (per-cluster -target) and update-nodes.yml.
+  # offset doubles as the last octet on every leg; only the services cluster has a Ceph leg.
+  talos_nodes   = jsondecode(file("${path.module}/talos-nodes.json"))
   talos_api_vip = cidrhost(local.talos_services_vlan.subnet, 60)
 
   # Host memory pressure must never select a services-plane node: -1000 exempts
@@ -43,13 +47,19 @@ locals {
 
   talos_node_addrs = {
     for name, n in local.talos_nodes : name => {
-      vm_id        = n.vm_id
-      node_name    = n.node_name
-      services_ip  = cidrhost(local.talos_services_vlan.subnet, n.offset)
-      ceph_ip      = cidrhost(local.talos_ceph_vlan.subnet, n.offset)
-      services_mac = format("52:54:00:%02x:00:%02x", n.vm_id - 200, local.talos_services_vlan.vlan_id)
-      ceph_mac     = format("52:54:00:%02x:00:%02x", n.vm_id - 200, local.talos_ceph_vlan.vlan_id)
-    }
+      cluster    = n.cluster
+      role       = n.role
+      vm_id      = n.vm_id
+      node_name  = n.node_name
+      cores      = n.cores
+      memory     = n.memory
+      scratch_gb = n.scratch_gb
+      bridge     = local.talos_cluster_vlans[n.cluster].bridge
+      ip         = cidrhost(local.talos_cluster_vlans[n.cluster].subnet, n.offset)
+      mac        = format("52:54:00:%02x:00:%02x", n.vm_id - 200, local.talos_cluster_vlans[n.cluster].vlan_id)
+      ceph_ip    = n.cluster == "services" ? cidrhost(local.talos_ceph_vlan.subnet, n.offset) : null
+      ceph_mac   = n.cluster == "services" ? format("52:54:00:%02x:00:%02x", n.vm_id - 200, local.talos_ceph_vlan.vlan_id) : null
+    } if local.talos_cluster_vlans[n.cluster] != null
   }
 }
 
@@ -77,7 +87,7 @@ resource "proxmox_download_file" "talos" {
 # needs the adj applied once by hand
 # (echo -1000 > /proc/$(cat /var/run/qemu-server/<vmid>.pid)/oom_score_adj).
 resource "proxmox_virtual_environment_file" "talos_oom_hook" {
-  for_each = toset([for n in values(local.talos_node_addrs) : n.node_name])
+  for_each = toset([for n in values(local.talos_node_addrs) : n.node_name if n.cluster == "services"])
 
   content_type = "snippets"
   datastore_id = "local"
@@ -114,15 +124,15 @@ resource "proxmox_virtual_environment_vm" "talos_cp" {
   on_boot             = true
   machine             = "q35"
   bios                = "seabios"
-  tags                = ["talos", "control-plane"]
-  hook_script_file_id = proxmox_virtual_environment_file.talos_oom_hook[each.value.node_name].id
+  tags                = each.value.cluster == "services" ? ["talos", "control-plane"] : ["talos", each.value.cluster, each.value.role == "worker" ? "worker" : "control-plane"]
+  hook_script_file_id = each.value.cluster == "services" ? proxmox_virtual_environment_file.talos_oom_hook[each.value.node_name].id : null
 
   agent { enabled = true }
   cpu {
-    cores = 6
+    cores = each.value.cores
     type  = "host"
   }
-  memory { dedicated = 16384 }
+  memory { dedicated = each.value.memory }
   operating_system { type = "l26" }
 
   disk {
@@ -135,25 +145,31 @@ resource "proxmox_virtual_environment_vm" "talos_cp" {
   }
   # Unpack scratch on the node's own NVMe, never Ceph: a 400 MiB/s unpack stalled
   # etcd fsync on every member (2026-10-10). Talos mounts it at /var/mnt/scratch.
-  disk {
-    datastore_id = "local-zfs"
-    interface    = "virtio1"
-    iothread     = true
-    discard      = "on"
-    size         = 100
-    file_format  = "raw"
-    backup       = false
+  dynamic "disk" {
+    for_each = each.value.scratch_gb > 0 ? [each.value.scratch_gb] : []
+    content {
+      datastore_id = "local-zfs"
+      interface    = "virtio1"
+      iothread     = true
+      discard      = "on"
+      size         = disk.value
+      file_format  = "raw"
+      backup       = false
+    }
   }
 
   network_device {
-    bridge      = local.talos_services_vlan.bridge
-    mac_address = each.value.services_mac
+    bridge      = each.value.bridge
+    mac_address = each.value.mac
   }
-  network_device {
-    bridge      = local.talos_ceph_vlan.bridge
-    vlan_id     = local.talos_ceph_vlan.vlan_id
-    mtu         = local.talos_ceph_vlan.mtu
-    mac_address = each.value.ceph_mac
+  dynamic "network_device" {
+    for_each = each.value.ceph_mac == null ? [] : [each.value.ceph_mac]
+    content {
+      bridge      = local.talos_ceph_vlan.bridge
+      vlan_id     = local.talos_ceph_vlan.vlan_id
+      mtu         = local.talos_ceph_vlan.mtu
+      mac_address = network_device.value
+    }
   }
 
   lifecycle {
@@ -173,9 +189,42 @@ output "talos_nodes" {
     schematic   = regex("image/([0-9a-f]+)/", var.cloud_images.talos.url)[0]
     version     = regex("/(v[0-9.]+)/", var.cloud_images.talos.url)[0]
     nodes = {
-      for name, n in local.talos_node_addrs : name => merge(n, {
-        dhcp_ips = try(proxmox_virtual_environment_vm.talos_cp[name].ipv4_addresses, [])
-      })
+      for name, n in local.talos_node_addrs : name => {
+        vm_id        = n.vm_id
+        node_name    = n.node_name
+        services_ip  = n.ip
+        ceph_ip      = n.ceph_ip
+        services_mac = n.mac
+        ceph_mac     = n.ceph_mac
+        dhcp_ips     = try(proxmox_virtual_environment_vm.talos_cp[name].ipv4_addresses, [])
+      } if n.cluster == "services"
+    }
+  }
+}
+
+# The CI cluster (ADR 0063): one leg on ci_runner, no VIP (the endpoint is the control-plane node),
+# no Ceph leg. null until ci_runner exists in vlans.yaml. Each mac is what the DHCP reservation keys on.
+output "talos_ci_nodes" {
+  description = "Talos CI cluster addressing for kubernetes/talos (make talos-apply CLUSTER=ci)"
+  value = local.talos_ci_vlan == null ? null : {
+    cluster     = "ci"
+    gateway     = cidrhost(local.talos_ci_vlan.subnet, 1)
+    prefix_len  = split("/", local.talos_ci_vlan.subnet)[1]
+    subnet      = local.talos_ci_vlan.subnet
+    dns_servers = module.network.dns_servers
+    domain      = module.network.service_domain
+    schematic   = regex("image/([0-9a-f]+)/", var.cloud_images.talos.url)[0]
+    version     = regex("/(v[0-9.]+)/", var.cloud_images.talos.url)[0]
+    nodes = {
+      for name, n in local.talos_node_addrs : name => {
+        vm_id      = n.vm_id
+        node_name  = n.node_name
+        role       = n.role
+        ip         = n.ip
+        mac        = n.mac
+        scratch_gb = n.scratch_gb
+        dhcp_ips   = try(proxmox_virtual_environment_vm.talos_cp[name].ipv4_addresses, [])
+      } if n.cluster == "ci"
     }
   }
 }
