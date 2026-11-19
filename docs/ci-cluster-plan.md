@@ -167,6 +167,27 @@ These parts are a pattern, independent of Talos, Proxmox and pfSense.
 - **Who may dispatch.** A personal GitHub account has no runner groups. An organisation account does, and can restrict a group to selected repositories and workflows; that is the enforcement point ADR 0061 could not use.
 - **Job isolation between runs.** One shared worker is accepted here. A site running untrusted pull requests needs a VM per job or single-use nodes.
 
+### Windows runners: a separate pilot, after this build
+
+Discussed with Codex on 2026-11-19. Operator rulings: this plan is built first and its shape does not change; Windows follows as its own pilot with its own plan.
+
+- **This plan is the Linux implementation.** ARC already handles demand, scheduling, single-use registration and cleanup for Linux pods. It is not the mechanism for Windows.
+- **ARC has no supported Windows path for this cluster.** GitHub's Windows guide covers only the legacy mode, Talos has no Windows nodes, and Windows containers cannot supply what the reference case needs.
+- **The reference case** is an on-premises hypervisor, tests that drive a real desktop, and tests that need domain behaviour or a reboot. That means a full Windows guest per job: create the VM, register it once, run one job, destroy it.
+- **No ready-made tool was found for on-premises hypervisors.** GARM creates Windows VMs on Azure and AWS, and its provider list has no Proxmox, vSphere or Hyper-V entry. The two starting points are a GARM external provider or GitHub's `actions/scaleset` library, which is in public preview. The pilot plan chooses between them. No shared provisioner for Mac and Windows is designed until both exist.
+- **What this build leaves ready for it:** the CI cluster's control-plane node is the candidate home for the piece that issues single-use registrations, since it already holds the App key away from job code. Windows guests can live in pool `ci` on the `ci` VLAN, where the reaper already removes anything older than six hours.
+
+Questions the pilot plan must answer before any build:
+
+1. The image: edition (Server with desktop, or a client edition), how it is patched and versioned, and Sysprep generalisation.
+2. How the single-use registration reaches the guest after boot, over a channel bound to that one instance. No App key, domain credential or runner identity is ever baked into a template.
+3. Domain: an isolated test domain with a disposable identity per run, and removal of the computer account afterwards. A workgroup guest wherever the test allows it.
+4. Reboots: a runner reboot is not a resumable workflow step, so a rebooting installer needs a separate test target or a continuation design.
+5. Desktop: the job must run in an interactive logged-in session, proven by a test that clicks something.
+6. Speed: measure queue-to-first-step from a cold start before paying for a warm pool.
+7. Failure: a failed boot, a cancelled job and a controller restart, each followed by a check that no runner record, VM, disk or directory object is left.
+8. Licensing for the edition, the host and the peak number of running guests, including idle warm ones.
+
 ## Risks
 
 - **Editing `talos.sh` and `update-nodes.yml` can break production's lifecycle tooling.** Mitigation: WP1's four checks, run before anything else.
