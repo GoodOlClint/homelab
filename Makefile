@@ -56,7 +56,7 @@ ifneq (,$(filter build rebuild plan ansible update,$(firstword $(MAKECMDGOALS)))
 endif
 
 # === Core Operations ===
-.PHONY: refresh k8s-seed k8s-apps k8s-smoke k8s-update plex-pbs-image flux-check flux-reconcile monitoring-users talos-plan talos-build talos-secrets talos-apply talos-bootstrap all apply plan init terraform-apply terraform-bootstrap inventory bootstrap ansible-bootstrap build rebuild rebuild-infisical data-volumes backup-jobs sdn-apply
+.PHONY: refresh k8s-seed k8s-apps k8s-smoke k8s-update plex-pbs-image flux-check flux-reconcile monitoring-users talos-plan talos-build talos-secrets talos-apply talos-bootstrap talos-print all apply plan init terraform-apply terraform-bootstrap inventory bootstrap ansible-bootstrap build rebuild rebuild-infisical data-volumes backup-jobs sdn-apply
 
 all: apply
 
@@ -125,19 +125,43 @@ endif
 # === Talos control plane (ADR 0031/0033) ===
 # Terraform owns the VMs only; everything past first boot is talosctl driven
 # from kubernetes/talos (the canonical pipeline — never Ansible).
-TALOS_TARGETS = -target=proxmox_download_file.talos -target=proxmox_virtual_environment_vm.talos_cp
+# CLUSTER=services (default) | ci (ADR 0063) picks the VM instances from terraform/talos-nodes.json,
+# the inventory output and the secrets dir; talos.sh reads the same CLUSTER from the environment.
+CLUSTER ?= services
+TALOS_CLUSTERS := services ci
+TALOS_DIR_services := kubernetes/talos/.secrets
+TALOS_DIR_ci := kubernetes/talos/.secrets/ci
+TALOS_OUTPUT_services := talos_nodes
+TALOS_OUTPUT_ci := talos_ci_nodes
+TALOS_DIR = $(TALOS_DIR_$(CLUSTER))
+TALOS_KUBECONFIG = $(TALOS_DIR)/kubeconfig
+TALOS_GUARD = @case " $(TALOS_CLUSTERS) " in *" $(CLUSTER) "*) ;; *) echo "unknown CLUSTER=$(CLUSTER) (one of: $(TALOS_CLUSTERS))" >&2; exit 2 ;; esac
+TALOS_TARGETS = -target=proxmox_download_file.talos $(foreach n,$(shell jq -r --arg c '$(CLUSTER)' 'to_entries[] | select(.value.cluster == $$c) | .key' terraform/talos-nodes.json),-target='proxmox_virtual_environment_vm.talos_cp["$(n)"]')
 talos-plan:
+	$(TALOS_GUARD)
 	@cd terraform && terraform init && terraform plan -no-color $(TALOS_TARGETS)
 talos-build:
+	$(TALOS_GUARD)
 	@cd terraform && terraform init && terraform apply -no-color -auto-approve $(TALOS_TARGETS)
-	@cd terraform && terraform output -json talos_nodes > ../kubernetes/talos/.secrets/nodes.json
+	@mkdir -p $(TALOS_DIR)
+	@cd terraform && terraform output -json $(TALOS_OUTPUT_$(CLUSTER)) > ../$(TALOS_DIR)/nodes.json
 talos-secrets:
+	$(TALOS_GUARD)
 	@kubernetes/talos/talos.sh secrets
 # apply is also how the nodes pick up a changed root CA (machine.registries) or kubelet args
 talos-apply:
+	$(TALOS_GUARD)
 	@kubernetes/talos/talos.sh apply
 talos-bootstrap:
+	$(TALOS_GUARD)
 	@kubernetes/talos/talos.sh bootstrap
+# Offline: what CLUSTER= selects (terraform targets, inventory, kubeconfig, talos.sh paths); runs nothing
+talos-print:
+	$(TALOS_GUARD)
+	@echo "terraform targets:"; printf '  %s\n' $(TALOS_TARGETS)
+	@echo "terraform output:  $(TALOS_OUTPUT_$(CLUSTER)) -> $(TALOS_DIR)/nodes.json"
+	@echo "flux kubeconfig:   $(TALOS_KUBECONFIG)"
+	@kubernetes/talos/talos.sh print
 
 # === Services plane (ADR 0048) ===
 # Flux owns every workload from kubernetes/<tree> (one Kustomization per tree in kubernetes/flux/apps/);
@@ -146,11 +170,13 @@ talos-bootstrap:
 K8S_PLAY = $(ANSIBLE_PLAYBOOK) -i ansible/inventory/proxmox.yaml -i ansible/inventory/vps.yaml ansible/playbooks/kubernetes.yml $(if $(CHECK),--check --diff,)
 # Refuse to adopt a tree whose ${VAR}s are not all bound — Flux blanks the rest and fails open.
 flux-check:
-	@.venv/bin/python3 scripts/flux_check.py $(CURDIR)
+	$(TALOS_GUARD)
+	@.venv/bin/python3 scripts/flux_check.py $(CURDIR)$(if $(filter-out services,$(CLUSTER)), --kubeconfig $(TALOS_KUBECONFIG),)
 # Reconcile one tree now instead of waiting for its interval: make flux-reconcile TREE=traefik
 flux-reconcile:
+	$(TALOS_GUARD)
 	@test -n "$(TREE)" || { echo "usage: make flux-reconcile TREE=<name from kubernetes/flux/apps/>"; exit 1; }
-	@flux --kubeconfig kubernetes/talos/.secrets/kubeconfig reconcile kustomization $(TREE) --with-source
+	@flux --kubeconfig $(TALOS_KUBECONFIG) reconcile kustomization $(TREE) --with-source
 k8s-seed:
 	@$(K8S_PLAY) --tags seed
 # In-app tail (jellyfin wizard/LDAP plugin/libraries, arr external auth + SAB whitelist, authentik-ext secrets + blueprint)

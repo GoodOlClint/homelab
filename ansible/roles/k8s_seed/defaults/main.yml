@@ -2,9 +2,12 @@
 # ADR 0048: the only Kubernetes objects Ansible creates — Flux owns everything else. Each item here
 # is either fleet-derived (bindings), out-of-band by nature (bootstrap Secrets, the CA material), or
 # generated from the inventory (monitoring targets). Adding an object kind here is an ADR-level change.
-k8s_seed_kubeconfig: "{{ playbook_dir }}/../../kubernetes/talos/.secrets/kubeconfig"
+# services | ci (ADR 0063): selects the secrets dir talos.sh writes for that cluster.
+k8s_seed_cluster: services
+k8s_seed_talos_dir: "{{ playbook_dir }}/../../kubernetes/talos/.secrets{{ '' if k8s_seed_cluster == 'services' else '/' ~ k8s_seed_cluster }}"
+k8s_seed_kubeconfig: "{{ k8s_seed_talos_dir }}/kubeconfig"
 k8s_seed_root_ca: "{{ playbook_dir }}/../../kubernetes/.secrets/homelab-ca.crt"
-k8s_seed_nodes_json: "{{ playbook_dir }}/../../kubernetes/talos/.secrets/nodes.json"
+k8s_seed_nodes_json: "{{ k8s_seed_talos_dir }}/nodes.json"
 k8s_seed_flux_namespace: flux-system
 # namespace → pod-security enforce level (privileged: SYS_NICE/hostNetwork/CSI; baseline: everything else)
 k8s_seed_namespaces:

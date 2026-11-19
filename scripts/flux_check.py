@@ -5,18 +5,26 @@ Every pod-template container must carry a cpu+memory request (#31, the scheduler
 A resource carrying `kustomize.toolkit.fluxcd.io/substitute: disabled` is exempt — that is how a
 ConfigMap whose payload has its own `${…}` syntax (syslog-ng macros, JS template literals) is shipped.
 
-usage: flux_check.py <repo root> [--build-only]   (reads kubernetes/flux/apps/*.yaml and the live cluster-bindings;
---build-only skips the binding check so a clone with no cluster — CI — still proves every tree builds)
+usage: flux_check.py <repo root> [--build-only] [--kubeconfig PATH]   (reads kubernetes/flux/apps/*.yaml and the live
+cluster-bindings; --build-only skips the binding check so a clone with no cluster — CI — still proves every tree builds;
+--kubeconfig defaults to the services cluster's, kubernetes/talos/.secrets/kubeconfig)
 """
 import re, subprocess, sys, json
 import yaml
 
 root = sys.argv[1]
 TOKEN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")   # a token with a :-/:= default is bound by definition
-build_only = "--build-only" in sys.argv[2:]
+args = sys.argv[2:]
+build_only = "--build-only" in args
+kubeconfig = f"{root}/kubernetes/talos/.secrets/kubeconfig"
+if "--kubeconfig" in args:
+    i = args.index("--kubeconfig")
+    if i + 1 >= len(args):
+        sys.exit("flux_check: --kubeconfig needs a path")
+    kubeconfig = args[i + 1]
 bindings = set()
 if not build_only:
-    kc = ["kubectl", "--kubeconfig", f"{root}/kubernetes/talos/.secrets/kubeconfig"]
+    kc = ["kubectl", "--kubeconfig", kubeconfig]
     bindings = set(json.loads(subprocess.check_output(kc + ["-n", "flux-system", "get", "cm", "cluster-bindings", "-o", "json"]))["data"])
 bad = 0
 for app in sorted(__import__("glob").glob(f"{root}/kubernetes/flux/apps/*.yaml")):
