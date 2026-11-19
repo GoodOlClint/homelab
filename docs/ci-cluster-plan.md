@@ -65,7 +65,7 @@ Check: the VNET is active on both chosen hosts. A throwaway guest on the new VLA
 
 ### WP1 — Talos tooling takes a cluster name
 
-- `talos.tf`: the node map gains the two CI nodes with a cluster and a role attribute. Existing keys and resource addresses are unchanged. The CI nodes have one network leg and no Ceph leg, VIP or registry trust patch.
+- `talos.tf`: the node map gains the CI nodes with a cluster and a role attribute, and accepts any number of workers. Existing keys and resource addresses are unchanged. The CI nodes have one network leg and no Ceph leg, VIP or registry trust patch.
 - `talos.sh`: one validated cluster selection derives the node inventory file, the secrets directory, the Infisical folder, the kubeconfig and the control-plane endpoint. An unknown cluster, or an inventory that does not match the selection, fails before any write. A worker render is added. The CI render does not bind etcd metrics to all interfaces.
 - Makefile: `talos-build CLUSTER=…` targets only that cluster's VM instances and writes only that cluster's inventory file.
 - `flux_check.py` and `k8s_seed`: the kubeconfig becomes a cluster argument that defaults to the services cluster.
@@ -90,7 +90,7 @@ Check: both nodes Ready; the worker carries no control-plane role; from the work
 - `k8s_seed` gains a per-cluster object set. The CI set is: the two ARC namespaces, the Flux service account and role bindings for the ARC tree, `cluster-bindings`, the root CA, and `github-app` holding the new key. No Ceph, Infisical operator or registry objects.
 - A second Flux root, `kubernetes/flux-ci/`, lists only `kubernetes/ci-arc/`. It reads the same public repository with no credential, as ADR 0048 requires. It patches all Flux controllers onto the control-plane node.
 - `kubernetes/ci-arc/` is new. `kubernetes/arc/` is not edited in this package, because the services Flux root deploys that path and would roll the changes into production.
-- In `ci-arc`: pod networking; runner pods select the worker; controller and listener select the control-plane node; the cache is a local volume; the scale set is `psproxmoxve-ci`; no `pbs-collection`; no reaper.
+- In `ci-arc`: pod networking; runner pods select the worker role label, not a hostname; controller and listener select the control-plane node; the cache is a local volume; the scale set is `psproxmoxve-ci`; no `pbs-collection`; no reaper.
 
 Checks:
 
@@ -134,6 +134,38 @@ The gates from ADR 0062, each run and its output recorded:
 7. Host maintenance on a Proxmox node that carries a guest from each cluster drains both.
 
 Documentation: CLAUDE.md, `.claude/rules/kubernetes.md`, `docs/pfsense-ci-vlan.md`, `docs/make-targets.md`, `docs/LESSONS.md`, README. A `make` target rebuilds the worker on request.
+
+## Portability and scale
+
+Added 2026-11-19 at the operator's request: the design should carry to another organisation and grow past one worker. This section was written after the Codex review and has not been reviewed.
+
+### What carries anywhere ARC runs
+
+These parts are a pattern, independent of Talos, Proxmox and pfSense.
+
+- Runners live on a cluster that holds no production credential and is not joined to production.
+- Two node pools: a protected pool for the controller, listeners and deploy tooling, and a job pool for runner pods only. Credentialed workloads are pinned by a label the job pool cannot set on itself.
+- The GitHub App is installed only where runners are used, with a key issued for the runner cluster.
+- Scale sets get new names at a migration, and cutover is the consumer's `runs-on` line.
+- Cleanup of test resources runs outside the job pool, under its own identity.
+- The job pool sits on its own network segment with a named allow list.
+- The acceptance gates in WP6 are written as questions any install can be asked.
+
+### What is bound to this homelab
+
+`talos.sh` and the Terraform node map, pfSense rules, the Ansible seed role, Infisical, and Proxmox pool permissions. Another site swaps these for its own cluster build, firewall, secret store and cloud permissions. ARC's values file carries no homelab address or name; those arrive through `cluster-bindings`.
+
+### What changes in this plan so it scales
+
+- **Workers are a pool, not a host.** The node map takes any number of worker entries, and runner pods select the worker role label, never a hostname. Adding a worker is one map entry and one build.
+- **The cache is the scale limit.** Jobs pass Terraform state and an SSH key to the next job through a node-local volume, so all three jobs of a run must land on one worker. This build keeps one worker and that behaviour. The change that unlocks a second worker is in the consumer: pass job-to-job state as workflow artifacts and keep the cache for downloads only. It is listed here as the first follow-up, outside this plan.
+- **One control-plane node.** A failure stops new jobs until it returns; it does not affect production. Three control-plane nodes is a node-map change when that matters.
+
+### Open questions a larger install must answer
+
+- **Privileged Docker-in-Docker.** Kept here because the consumer runs container jobs. A site with stricter rules chooses among ARC's Kubernetes mode, rootless Docker, a sandboxed runtime, or a VM per job.
+- **Who may dispatch.** A personal GitHub account has no runner groups. An organisation account does, and can restrict a group to selected repositories and workflows; that is the enforcement point ADR 0061 could not use.
+- **Job isolation between runs.** One shared worker is accepted here. A site running untrusted pull requests needs a VM per job or single-use nodes.
 
 ## Risks
 
