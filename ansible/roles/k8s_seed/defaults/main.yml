@@ -9,6 +9,9 @@ k8s_seed_kubeconfig: "{{ k8s_seed_talos_dir }}/kubeconfig"
 k8s_seed_root_ca: "{{ playbook_dir }}/../../kubernetes/.secrets/homelab-ca.crt"
 k8s_seed_nodes_json: "{{ k8s_seed_talos_dir }}/nodes.json"
 k8s_seed_flux_namespace: flux-system
+# The ci cluster's object set (tasks/ci.yml): only the ci-arc tree's namespaces; nothing below is seeded there.
+k8s_seed_ci_namespaces: {flux-system: baseline, arc-systems: baseline, arc-runners: privileged}
+k8s_seed_ci_tree_namespaces: {ci-arc: [arc-systems, arc-runners]}
 # namespace → pod-security enforce level (privileged: SYS_NICE/hostNetwork/CSI; baseline: everything else)
 k8s_seed_namespaces:
   flux-system: baseline

@@ -1,0 +1,61 @@
+---
+# The ci cluster's allowlist (ADR 0062/0063): ARC's namespaces, the ci-arc tree's Flux account, its bindings and
+# the GitHub App Secret holding the ci cluster's own key. No Ceph, Infisical operator, monitoring, registry,
+# root CA or Proxmox token objects.
+- name: Namespaces with their pod-security level
+  kubernetes.core.k8s:
+    kubeconfig: "{{ k8s_seed_kubeconfig }}"
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ item.key }}"
+        labels: {pod-security.kubernetes.io/enforce: "{{ item.value }}"}
+  loop: "{{ k8s_seed_ci_namespaces | dict2items }}"
+  loop_control: {label: "{{ item.key }}"}
+
+- name: ClusterRole for the custom resource kinds the tree declares (admin covers none of them)
+  kubernetes.core.k8s:
+    kubeconfig: "{{ k8s_seed_kubeconfig }}"
+    definition:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRole
+      metadata: {name: flux-tree-crds}
+      rules:
+        - {apiGroups: [helm.toolkit.fluxcd.io], resources: [helmreleases], verbs: ["*"]}
+        - {apiGroups: [source.toolkit.fluxcd.io], resources: [helmrepositories, ocirepositories], verbs: ["*"]}
+
+- name: Flux service account + RBAC per tree
+  kubernetes.core.k8s:
+    kubeconfig: "{{ k8s_seed_kubeconfig }}"
+    template: flux-rbac.yaml.j2
+  vars:
+    tree: "{{ item.key }}"
+    tree_namespaces: "{{ item.value }}"
+  loop: "{{ k8s_seed_ci_tree_namespaces | dict2items }}"
+  loop_control: {label: "{{ item.key }}"}
+
+- name: Fleet bindings for Flux post-build substitution (ci-arc substitutes none yet)
+  kubernetes.core.k8s:
+    kubeconfig: "{{ k8s_seed_kubeconfig }}"
+    apply: true
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata: {name: cluster-bindings, namespace: "{{ k8s_seed_flux_namespace }}"}
+      data: {}
+
+- name: Bootstrap Secrets
+  kubernetes.core.k8s:
+    kubeconfig: "{{ k8s_seed_kubeconfig }}"
+    definition: "{{ item }}"
+  loop:
+    - apiVersion: v1
+      kind: Secret
+      metadata: {name: github-app, namespace: arc-runners}
+      stringData:
+        github_app_id: "{{ secrets.github_runner.ci_github_app_id }}"
+        github_app_installation_id: "{{ secrets.github_runner.ci_github_app_installation_id }}"
+        github_app_private_key: "{{ secrets.github_runner.ci_github_app_private_key }}"
+  loop_control: {label: "{{ item.metadata.namespace }}/{{ item.metadata.name }}"}
+  no_log: "{{ k8s_seed_debug is not defined }}"

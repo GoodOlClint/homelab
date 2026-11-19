@@ -8,6 +8,18 @@
       - groups['proxmox'] is defined
     quiet: true
 
+- name: The ci cluster's object set (ADR 0063)
+  when: k8s_seed_cluster != 'services'
+  block:
+    - name: Refuse an unknown cluster
+      ansible.builtin.assert:
+        that: k8s_seed_cluster == 'ci'
+        fail_msg: "k8s_seed_cluster must be services or ci, not {{ k8s_seed_cluster }}"
+    - name: Seed the ci cluster
+      ansible.builtin.include_tasks: ci.yml
+    - name: Nothing below belongs on the ci cluster
+      ansible.builtin.meta: end_role
+
 - name: Read the cluster's addressing (talos_nodes output)
   ansible.builtin.set_fact:
     _nodes: "{{ lookup('file', k8s_seed_nodes_json) | from_json }}"

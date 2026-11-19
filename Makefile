@@ -178,7 +178,8 @@ flux-reconcile:
 	@test -n "$(TREE)" || { echo "usage: make flux-reconcile TREE=<name from kubernetes/flux/apps/>"; exit 1; }
 	@flux --kubeconfig $(TALOS_KUBECONFIG) reconcile kustomization $(TREE) --with-source
 k8s-seed:
-	@$(K8S_PLAY) --tags seed
+	$(TALOS_GUARD)
+	@$(K8S_PLAY) --tags seed$(if $(filter-out services,$(CLUSTER)), -e k8s_seed_cluster=$(CLUSTER),)
 # In-app tail (jellyfin wizard/LDAP plugin/libraries, arr external auth + SAB whitelist, authentik-ext secrets + blueprint)
 k8s-apps:
 	@$(K8S_PLAY) --tags apps
