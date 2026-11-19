@@ -1,0 +1,29 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  # The services root's install, so both clusters run one Flux version. A file outside this root:
+  # kustomize-controller builds without load restrictions inside the source; a local build needs
+  # --load-restrictor LoadRestrictionsNone.
+  - ../flux/flux-system/gotk-components.yaml
+  - flux-system/gotk-sync.yaml
+  - apps/ci-arc.yaml
+patches:
+  # A Kustomization may only reference sources and secrets in its own namespace (ADR 0048).
+  - target: {kind: Deployment, name: kustomize-controller}
+    patch: |
+      - op: add
+        path: /spec/template/spec/containers/0/args/-
+        value: --no-cross-namespace-refs=true
+      - op: add
+        path: /spec/template/spec/containers/0/args/-
+        value: --no-remote-bases=true
+  # Every Flux controller holds cluster-wide credentials, so none may run on a worker (ADR 0062).
+  - target: {kind: Deployment, namespace: flux-system}
+    patch: |
+      - op: add
+        path: /spec/template/spec/nodeSelector/node-role.kubernetes.io~1control-plane
+        value: ""
+      - op: add
+        path: /spec/template/spec/tolerations
+        value:
+          - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
