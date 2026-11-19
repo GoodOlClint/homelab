@@ -40,6 +40,14 @@
   check_mode: false
   no_log: true
 
+- name: The reaper's own pool-scoped token (hosts root output)
+  ansible.builtin.command:
+    cmd: terraform -chdir={{ playbook_dir }}/../../terraform/hosts output -raw ci_reaper_api_token
+  register: _reaper_token
+  changed_when: false
+  check_mode: false
+  no_log: true
+
 - name: Namespaces with their pod-security level
   kubernetes.core.k8s:
     kubeconfig: "{{ k8s_seed_kubeconfig }}"
@@ -180,7 +188,7 @@
       kind: ConfigMap
       metadata: {name: homelab-root-ca, namespace: "{{ item }}"}
       data: {homelab-ca.crt: "{{ lookup('file', k8s_seed_root_ca) }}"}
-  loop: [infisical-operator, monitoring, arc-runners]
+  loop: [infisical-operator, monitoring, arc-runners, ci-reaper]
 
 - name: Bootstrap Secrets
   kubernetes.core.k8s:
@@ -206,6 +214,10 @@
       kind: Secret
       metadata: {name: pve-ci-token, namespace: arc-runners}
       stringData: {token: "{{ _ci_token.stdout }}"}
+    - apiVersion: v1
+      kind: Secret
+      metadata: {name: pve-reaper-token, namespace: ci-reaper}
+      stringData: {token: "{{ _reaper_token.stdout }}"}
     - apiVersion: v1
       kind: Secret
       metadata: {name: zot-secret, namespace: zot}

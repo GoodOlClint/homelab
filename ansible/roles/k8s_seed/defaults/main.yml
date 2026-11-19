@@ -16,6 +16,7 @@ k8s_seed_namespaces:
   arc-runners: privileged
   authentik-ext: baseline
   ceph-csi: privileged
+  ci-reaper: baseline # runs as root for `apk add`
   codeintel: baseline
   cert-manager: baseline
   external-dns: baseline
