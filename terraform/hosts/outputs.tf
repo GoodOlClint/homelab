@@ -13,3 +13,9 @@ output "ci_api_token" {
   value       = proxmox_user_token.ci.value
   sensitive   = true
 }
+
+output "ci_reaper_api_token" {
+  description = "ci-reaper@pve!reaper token for the services-cluster reaper CronJob (ADR 0062) — seeded as Secret pve-reaper-token, never given to jobs"
+  value       = proxmox_user_token.ci_reaper.value
+  sensitive   = true
+}
