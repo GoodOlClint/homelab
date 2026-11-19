@@ -22,6 +22,7 @@ resources:
   - apps/arc.yaml
   - apps/authentik-ext.yaml
   - apps/codeintel.yaml
+  - apps/ci-reaper.yaml
 patches:
   # A Kustomization may only reference sources and secrets in its own namespace (ADR 0048).
   - target: {kind: Deployment, name: kustomize-controller}
