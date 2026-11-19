@@ -30,16 +30,34 @@ spec:
               args:
                 - |
                   apk add --no-cache curl jq >/dev/null
-                  api() { curl -s --cacert /ca/homelab-ca.crt -H "Authorization: PVEAPIToken=$TOKEN" "$@"; }
+                  api() { curl -sS --fail-with-body --cacert /ca/homelab-ca.crt -H "Authorization: PVEAPIToken=$TOKEN" "$@"; }
                   now=$(date +%s)
-                  api "$PVE_API/api2/json/pools/ci" | jq -r '.data.members[] | select(.type=="qemu" or .type=="lxc") | "\(.node) \(.type) \(.vmid)"' |
+                  pool=$(api "$PVE_API/api2/json/pools/ci")
+                  members=$(printf '%s' "$pool" | jq -r '(.data.members // [])[] | select(.type=="qemu" or .type=="lxc") | "\(.node) \(.type) \(.vmid)"')
+                  failed=0
                   while read -r node type vmid; do
-                    ctime=$(api "$PVE_API/api2/json/nodes/$node/$type/$vmid/config" | jq -r '.data.meta // "" | capture("ctime=(?<t>[0-9]+)").t // empty')
+                    [ -n "$vmid" ] || continue
+                    if ! cfg=$(api "$PVE_API/api2/json/nodes/$node/$type/$vmid/config"); then
+                      echo "config read rejected for $type/$vmid on $node" >&2
+                      failed=1
+                      continue
+                    fi
+                    ctime=$(printf '%s' "$cfg" | jq -r '.data.meta // "" | capture("ctime=(?<t>[0-9]+)").t // empty')
                     [ -n "$ctime" ] && [ $((now - ctime)) -gt 21600 ] || continue
                     echo "reaping $type/$vmid on $node (age $(( (now - ctime) / 3600 ))h)"
-                    api -X POST "$PVE_API/api2/json/nodes/$node/$type/$vmid/status/stop" >/dev/null || true
+                    if ! api -X POST "$PVE_API/api2/json/nodes/$node/$type/$vmid/status/stop" >/dev/null; then
+                      echo "stop rejected for $type/$vmid on $node" >&2
+                      failed=1
+                      continue
+                    fi
                     sleep 10
-                    api -X DELETE "$PVE_API/api2/json/nodes/$node/$type/$vmid?purge=1&destroy-unreferenced-disks=1" >/dev/null
-                  done
+                    if ! api -X DELETE "$PVE_API/api2/json/nodes/$node/$type/$vmid?purge=1&destroy-unreferenced-disks=1" >/dev/null; then
+                      echo "delete rejected for $type/$vmid on $node" >&2
+                      failed=1
+                    fi
+                  done <<EOF
+                  $members
+                  EOF
+                  exit "$failed"
           volumes:
             - {name: ca, configMap: {name: homelab-root-ca}}
