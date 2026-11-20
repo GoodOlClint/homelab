@@ -53,8 +53,9 @@
         _talos_all: >-
           {%- set out = [] -%}
           {%- for r in _talos_kc.results -%}
-          {{- out.append({'name': r.item, 'cluster': talos_node_map[r.item].cluster, 'role': talos_node_map[r.item].role,
-                          'exists': r.stat.exists, 'kubeconfig': r.invocation.module_args.path}) -}}
+          {%- set c = talos_node_map[r.item].cluster -%}
+          {{- out.append({'name': r.item, 'cluster': c, 'role': talos_node_map[r.item].role, 'exists': r.stat.exists,
+                          'kubeconfig': talos_secrets ~ ('' if c == 'services' else '/' ~ c) ~ '/kubeconfig'}) -}}
           {%- endfor -%}
           {{ out }}
 
