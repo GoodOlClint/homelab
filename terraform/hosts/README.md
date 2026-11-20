@@ -57,6 +57,7 @@ i226 (ring1, WP2) — so a re-apply can never drop the link Terraform is talking
    unsigned and the installed systemd-boot is not enrolled in the firmware SB
    db, so re-enabling SB bricks boot — recovery is disabling SB in BIOS; see
    ADR 0026).
+   **Reinstalling a node that was removed from the cluster:** it is parked with the NIC first in the BIOS boot order, so it cannot boot its old install and come up believing it is still a member. Put the disk first again in BIOS setup right after the reinstall. The install itself boots from disk for a while, so the miss only shows at a later reboot: the node loops on the iPXE menu every ~19 s and never reaches the disk, because iPXE's `exit` does not fall through on the MS-01 firmware (ms-01a, 2026-11-19, first `make update-nodes` after its rejoin). The tell is repeating `boot.ipxe` requests in `/var/log/nginx/pxe.access.log` on the pxe guest.
    *Fallback when the network itself is down:* step 2's ISO over AMT IDE-R
    (~1–2 MB/s — measured 2026-08-18); without the pxe guest the `[first-boot]`
    section is dropped at bake time, so run the pinning command by hand.
