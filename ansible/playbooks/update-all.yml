@@ -37,7 +37,7 @@
         update_cache: true
         upgrade: dist
         autoremove: true
-        autoclean: true
+        clean: true
       register: upgrade_result
       when: ansible_os_family | default('') == 'Debian' and 'plex' not in idle_gave_up | default([])
 

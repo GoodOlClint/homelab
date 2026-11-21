@@ -244,7 +244,7 @@
           ansible.builtin.apt:
             upgrade: dist
             autoremove: true
-            autoclean: true
+            clean: true
 
         - name: Compare the running kernel with the newest installed one
           ansible.builtin.shell: |
