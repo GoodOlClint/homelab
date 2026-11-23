@@ -554,7 +554,7 @@ node-bootstrap:
 # NODE=<name> scopes the plan/apply to that node's resources — REQUIRED before the
 # node is clustered (a standalone node's API cannot reach the others); omit it
 # once the cluster exists to converge every node through the VIP.
-HOSTS_TARGETS = $(if $(NODE),-target='proxmox_network_linux_bond.bond0["$(NODE)"]' -target='proxmox_network_linux_bridge.vmbr0["$(NODE)"]' -target='proxmox_network_linux_vlan.storage["$(NODE)"]',)
+HOSTS_TARGETS = $(if $(NODE),-target='proxmox_network_linux_bond.bond0["$(NODE)"]' -target='proxmox_network_linux_bridge.vmbr0["$(NODE)"]' -target='proxmox_network_linux_vlan.storage["$(NODE)"]',) $(foreach t,$(TARGET),-target='$(t)')
 # ENDPOINT defaults to the VIP name (its SAN is on every node cert, ADR 0041); pass a node URL during bring-up.
 ENDPOINT ?= https://pve.$(shell .venv/bin/python3 -c "import yaml;print(yaml.safe_load(open('network-data/vlans.yaml'))['service_domain'])"):8006/
 hosts-plan:
