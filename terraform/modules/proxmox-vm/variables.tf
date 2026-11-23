@@ -117,6 +117,7 @@ variable "vm_configurations" {
       pcie   = optional(bool, true)
       rombar = optional(bool, true)
     })), [])
+    uefi = optional(bool, false)
     # Additional cloud-init or VM configuration options
     extra_config = optional(map(string), {})
   }))

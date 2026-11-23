@@ -2,10 +2,10 @@
 Description=vLLM XPU ({{ llm_vllm_served_name }})
 After=network-online.target docker.service llama-embed.service {{ llm_models_dir | replace('/', '-') | regex_replace('^-', '') }}.mount
 Requires=docker.service {{ llm_models_dir | replace('/', '-') | regex_replace('^-', '') }}.mount
-# The engine holds 0.90 of the card, so the embedder cannot re-allocate its pool while the engine is up: a
-# restart of the embedder alone aborts. PartOf makes an embedder restart take the engine down and bring it
-# back, and After= above orders it - engine stops, embedder restarts and warms, engine starts and sizes.
+{% if llm_chat_ze_device == llm_embed_ze_device %}
+# On a shared card the embedder must rebuild its allocation pool before vLLM reserves memory.
 PartOf=llama-embed.service
+{% endif %}
 # A crash loop of a 32 GB engine is expensive, so the limit stays — but 3600 s locked the unit out for an hour
 # after three init failures during the cutover, and a latched unit hides whether the next fix worked
 # (`systemctl reset-failed vllm` before judging one).
@@ -24,6 +24,7 @@ ExecStart=/usr/bin/docker run --rm --name {{ llm_vllm_container }} \
   --device /dev/dri -v /dev/dri/by-path:/dev/dri/by-path:ro \
   --group-add {{ ansible_facts.getent_group.render[1] }} --shm-size 4g \
   -p 127.0.0.1:{{ llm_chat_port }}:8000 \
+  -e ZE_AFFINITY_MASK={{ llm_chat_ze_device }} \
   -e TRITON_INTEL_DEVICE_ARCH=20.2.0 -e VLLM_XPU_ENABLE_XPU_GRAPH=1 \
   -v {{ llm_vllm_model_dir }}:/model:ro -v {{ llm_vllm_cache_dir }}:/root/.cache \
   {{ llm_vllm_image }} /model \

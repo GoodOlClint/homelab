@@ -46,6 +46,7 @@ llm_vllm_image: "intel/llm-scaler-vllm@sha256:52218ad85513ab6686d4c090c83c2bd8c5
 llm_vllm_container: vllm
 llm_vllm_served_name: Qwen3.8-27B
 llm_chat_port: 8081
+llm_chat_ze_device: 0
 llm_vllm_repo: SergiioB/Qwen3.8-27B-GPTQ-Int4-sym-G128-MTP-BF16
 llm_vllm_revision: e28c5f952bdd5d814297a07d85a064a87af26a3f
 llm_vllm_model_dir: "{{ llm_models_dir }}/vllm/Qwen3.8-27B-GPTQ-Int4-MTP"
@@ -125,8 +126,8 @@ llm_embed_model_url: "https://huggingface.co/gpustack/bge-m3-GGUF/resolve/2d48f1
 llm_embed_model_sha256: daec91ffb5dd0c27411bd71f29932917c49cf529a641d0168496c3a501e3062c
 llm_embed_alias: baai/bge-m3
 llm_embed_port: 8082
-# Level Zero index of the card the embedder lives on; 0 is guest PCI 01:00.0, host card 03:00 (hostpci0).
-llm_embed_ze_device: 0
+# Level Zero indexes follow the guest PCI addresses: 0 is 01:00.0 and 1 is 02:00.0.
+llm_embed_ze_device: 1
 # -ub 2048, NOT the bench's 8192: beside an engine holding 0.90 of the card, the SYCL flash-attention path
 # cannot reserve its scratch from the VMM pool at 8192 and llama-server ABORTS (SIGABRT in
 # ggml_sycl_flash_attn_ext -> ggml_sycl_pool_vmm::alloc) rather than refusing the request. The bench measured

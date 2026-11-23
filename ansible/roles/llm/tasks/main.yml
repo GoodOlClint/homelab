@@ -236,7 +236,7 @@
     - { path: "{{ llm_vllm_model_dir }}", owner: root, mode: "0755" }
     - { path: "{{ llm_vllm_cache_dir }}", owner: root, mode: "0700" }
     - { path: "{{ llm_docker_dir }}", owner: root, mode: "0710" }
-    - { path: "{{ llm_containerd_dir }}", owner: root, mode: "0711" }
+    - { path: "{{ llm_containerd_dir }}", owner: root, mode: "0700" }
     - { path: "{{ llm_data_dir }}/ollama", owner: ollama, mode: "0750" }
     - { path: "{{ llm_caddy_tls_dir }}", owner: root, mode: "0755" }
     - { path: /etc/systemd/system/caddy.service.d, owner: root, mode: "0755" }
@@ -252,6 +252,15 @@
     state: link
     force: true
   notify: Restart the container runtime
+  tags: [llm, docker]
+
+- name: Docker configuration directory
+  ansible.builtin.file:
+    path: /etc/docker
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
   tags: [llm, docker]
 
 - name: Docker's data-root lives on the weights disk
@@ -292,7 +301,7 @@
   ansible.builtin.getent:
     database: group
     key: render
-  tags: [llm, docker]
+  tags: [llm, docker, llm_units]
 
 - name: Installed llama.cpp commit
   ansible.builtin.command: "cat {{ llm_llama_cpp_dir }}/bin/.commit"
@@ -446,12 +455,28 @@
     mode: "0755"
   tags: [llm, config]
 
-- name: Units
+- name: Chat service unit
+  ansible.builtin.template:
+    src: vllm.service.j2
+    dest: /etc/systemd/system/vllm.service
+    mode: "0644"
+  notify: Restart vllm
+  tags: [llm, config, llm_units]
+
+- name: Embedding service unit
+  ansible.builtin.template:
+    src: llama-embed.service.j2
+    dest: /etc/systemd/system/llama-embed.service
+    mode: "0644"
+  notify: Restart llama-embed
+  tags: [llm, config, llm_units]
+
+- name: Ollama and liveness units
   ansible.builtin.template:
     src: "{{ item }}.j2"
     dest: "/etc/systemd/system/{{ item }}"
     mode: "0644"
-  loop: [vllm.service, llama-embed.service, ollama.service, vllm-liveness.service, vllm-liveness.timer]
+  loop: [ollama.service, vllm-liveness.service, vllm-liveness.timer]
   notify: "Restart {{ item | regex_replace('\\.(service|timer)$', '') }}"
   tags: [llm, config]
 
@@ -491,9 +516,9 @@
   vars:
     cert_client_fqdn: "{{ llm_fqdn }}"
     cert_client_deploy_hook: >-
-      install -m 0644 "$RENEWED_LINEAGE/fullchain.pem" {{ llm_caddy_tls_dir }}/fullchain.pem &&
+      install -o caddy -g caddy -m 0644 "$RENEWED_LINEAGE/fullchain.pem" {{ llm_caddy_tls_dir }}/fullchain.pem &&
       install -o caddy -g caddy -m 0600 "$RENEWED_LINEAGE/privkey.pem" {{ llm_caddy_tls_dir }}/privkey.pem &&
-      systemctl reload caddy
+      systemctl try-restart caddy
   when: secrets.infrastructure.acme_directory_url is defined
   tags: [llm, tls]
 

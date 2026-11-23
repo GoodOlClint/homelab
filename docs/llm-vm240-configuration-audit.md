@@ -1,0 +1,118 @@
+# VM 240 configuration audit
+
+November 18, 2026. Scope covered the Proxmox host configuration and running QEMU process, Terraform, the Ubuntu guest, model files, inference services, network entry point, monitoring and backup coverage. Claude identified which changes it had made by hand during testing. The observations below come from live checks on the host and guest.
+
+## Two corrections
+
+**Firmware drift.** VM 240 booted under OVMF, the UEFI firmware implementation for QEMU. Its firmware settings disk was attached on Ceph. The original targeted Terraform plan proposed switching back to legacy SeaBIOS, removing the settings disk and broadening both GPU addresses from function zero to all functions. The guest declaration now selects UEFI, a 4 MiB-format settings disk without pre-enrolled keys, and both exact PCI functions. The follow-up `make plan llm` reported zero changes. Terraform validation, formatting and all seven existing VM module tests passed. No Terraform apply or VM reboot was needed.
+
+**Embedding allocation failure.** Both production engines used the first B70. A batch of eight distinct synthetic passages of 496 tokens each made BGE-M3 abort while reserving Intel GPU memory. Its former systemd restart dependency also interrupted Qwen. Both recovered automatically. The identical batch produced eight vectors of 1,024 values on a temporary copy of the same embedding model on the second card. The production Ansible units now pin Qwen to device 0 and BGE-M3 to device 1. Cold starts remain ordered. An embedder restart only propagates to chat when the two services are configured to share a card. The two inference units have independent Ansible restart handlers.
+
+## Production verification
+
+The same batch succeeded through the authenticated HTTPS endpoint after deployment. Qwen answered 17 × 23 with 391. The running Qwen worker had resident GPU memory on guest PCI address `01:00.0`, and BGE-M3 on `02:00.0`. Both services were active with zero automatic restarts since the rollout. The temporary listener was removed. A repeat Ansible check scoped to the inference units reported zero changes.
+
+Four chat requests each generated exactly 256 tokens, with a warmed, repeated short prompt per stream. During the indexing runs a separate client continuously sent eight-passage batches to the production embedder. Rates are total output tokens divided by wall time for all four chat requests, including request overhead.
+
+Qwen also returned the first five primes correctly. Repeating a 4,288-token prompt reused 2,048 cached tokens. Repeating a 21,658-token prompt reused 18,432. The engine reported a 2,048-token attention block.
+
+| Indexing during chat | First run | Second run |
+| --- | ---: | ---: |
+| Idle | 162.9 tokens/s | 162.3 tokens/s |
+| Active on the second B70 | 162.6 tokens/s | 162.4 tokens/s |
+
+Each active run completed 22 embedding batches including the initial synchronization batch. The old placement failed before it could produce a comparable timing. This short test establishes isolation for these requests. Long prompts, another chat worker, and EmbeddingGemma-2 colocated with BGE-M3 remain separate workloads.
+
+## Configuration inventory
+
+| Area | Verified configuration and assessment |
+| --- | --- |
+| Processor and memory | Six virtual CPUs, one socket, host CPU type. QEMU's allowed processor set was 0, 2, 4, 6, 8 and 10, one hardware thread on each of six distinct performance cores. This is an affinity set rather than six reserved cores. Fixed 48 GiB, no ballooning or guest swap. Roughly 28 GiB available in the guest after startup. Retain headroom for GPU-mapped host memory. The snapshot does not establish the minimum safe guest size. |
+| Passthrough | Q35 with two native virtual root ports. Host functions `03:00.0` and `07:00.0` were bound to VFIO, the host's device-passthrough driver. Both physical CPU root ports reported 32 gigatransfers per second across eight lanes. Each card had a 32 GiB memory aperture. The endpoint capability also displayed 2.5 gigatransfers/s ×1 on its card-internal path. QEMU had neither the artificial upstream switch nor the CPU address-width override. Proxmox reported no pending changes. [Peer-transfer investigation](llm-dual-b70-investigation.md). |
+| Guest and model runtime | Ubuntu 26.04.1 LTS, kernel `7.0.0-43-generic`, Intel xe driver. The production container matched the pinned Intel vLLM image digest. Active vLLM version was `0.26.1.dev0+g568afb3a1.d20260907`. All 15 declared Qwen model/configuration files and the BGE-M3 model passed their SHA-256 checksums. Before the repair, all ten deployed unit, helper and Caddy files matched the role templates. |
+| Chat and search | Qwen3.8-27B with 4-bit quantized weights, graph execution, four speculative tokens, prefix caching, 90% GPU memory budget, eight sequences, 4,096 tokens per processing batch, 200,000-token maximum context. The restarted engine reported an attention cache for 255,172 tokens, down from 268,965 before the change. Eight shorter requests can share the pool. Eight full-length contexts cannot. BGE-M3 kept the same model, alias, first-token pooling and 2,048-token micro-batch. |
+| Disks and backups | 32 GiB Ceph root disk, a separate 100 GiB persistent disk on the holder VM mounted at `/data`, and a 300 GiB local ZFS disk mounted at `/var/lib/llm/models` for weights, Docker and the compilation cache. The weights disk had 229 GiB available. The holder disk had about 16 GiB of Ollama data. The nightly backup job covers VM 240 and holder VM 900. Both had November 18 backups, predating this audit. The holder disk is backed up through VM 900. The local weights disk is excluded by design. Ceph reported healthy. |
+| Network and monitoring | One 1,500-byte MTU VirtIO interface on the Services network. Chat, embeddings and CPU-only Ollama listened on loopback. Caddy served HTTPS with a valid certificate and per-client keys. An anonymous model listing returned HTTP 401 and a wrong embedding model returned 400. The optional PAIR route returned 503 as configured. Telegraf listened on the monitoring port. The vLLM liveness timer was active. Its generation check tests availability and discards the response body, so a wrong answer can still pass it. The audit included an independent answer check. |
+
+## Recovery limits
+
+The pinned Ubuntu download URL returned HTTP 404. The cached image on CephFS matched Terraform's expected SHA-256 digest. The guest's configured package indexes also no longer listed the installed pins for Mesa, the Level Zero loader and Intel's GPU runtime. Keep the verified image and obtain a recoverable set of the pinned packages, or qualify replacement pins, before a from-scratch rebuild. The observed backup listings establish coverage. This audit did not exercise a restore, recreate the guest or test recovery after loss of its cache.
+
+## Joint provisioning review
+
+The running Claude homelab session independently reviewed the Ansible role, service units, Terraform module and Make targets through CrossTalk. Codex checked the findings against the working tree, queried VM 240, tested package retrieval and ran a read-only fleet inventory refresh plan. The findings below apply to the installed Ubuntu 26.04.1 guest. The chat engine and embedder were both active during these checks.
+
+### Rebuild blockers
+
+1. **The package sources cannot supply the tested guest GPU stack.** Ubuntu's package manager (APT) reported no download source for each exact version below. The corresponding publisher pool paths returned HTTP 404, and the guest package cache contained none of the four installers. Launchpad still lists the Mesa publication as superseded and returned zero binary file URLs for it. The compiler and math-library metapackages both resolved and returned HTTP 200. Their complete dependency trees still need a clean download test. [Package selection](../ansible/roles/llm/tasks/main.yml) and [version declarations](../ansible/roles/llm/defaults/main.yml).
+
+   | Guest package | Running version | Candidate with installed-package records excluded |
+   | --- | --- | --- |
+   | `mesa-vulkan-drivers` | `26.2.2~kisak1~r` | `26.2.6~kisak1~r` |
+   | `libze1` and `libze-dev` (Level Zero loader and development files) | `1.32.0-1~26.04~ppa1` | `1.34.0-1~26.04~ppa1` |
+   | `libze-intel-gpu1` (Intel GPU runtime) | `26.31.39395.13-1~26.04~ppa1` | `26.40.40196.15-1~26.04~ppa1` |
+
+   The explicit Mesa install will fail on a fresh guest. The Level Zero APT preferences can admit newer packages when their preferred versions disappear. The installed `xpu-smi` package directly depends on `libze-intel-gpu1`, resolving Claude's question about how the driver gets installed. The GPU package sources use HTTPS directly in the role and are outside the fleet cache's configured repository remaps. These findings affect guest provisioning and the native embedder. The chat container carries separate Intel userspace libraries.
+
+   **Three installers recovered.** Launchpad's historical binary publications still provided the exact Intel packages. I downloaded all three to a temporary directory and matched each file's SHA-256 hash to its binary publication record. The original Mesa build file URL also returned 404. A recoverable set of all required packages still needs assembly and a clean install. [Intel loader record](https://api.launchpad.net/devel/~kobuk-team/+archive/ubuntu/intel-graphics/+binarypub/248472323?ws.op=binaryFileUrls&include_meta=true), [headers record](https://api.launchpad.net/devel/~kobuk-team/+archive/ubuntu/intel-graphics/+binarypub/248472320?ws.op=binaryFileUrls&include_meta=true), [GPU runtime record](https://api.launchpad.net/devel/~kobuk-team/+archive/ubuntu/intel-graphics/+binarypub/249166236?ws.op=binaryFileUrls&include_meta=true).
+
+2. **The rebuild can replace VM 240 and then stop before Ansible.** The Make recipe replaces the guest before it refreshes the fleet inventory or checks build inputs. A read-only equivalent of the inventory refresh failed with Proxmox HTTP 595 (“No route to host”), including the retired `ms-01b` host and the `adguard2` container resource. The successful VM-specific plan omits those fleet resources. The 300 GiB weights and runtime disk belongs to the disposable guest. The persistent holder disk has separate ownership. [Rebuild and inventory targets](../Makefile).
+
+### Other findings
+
+| Priority | Finding and evidence | Disposition |
+| --- | --- | --- |
+| High | The role checks that `/dev/vdc` exists, then labels an existing ext4 filesystem there as `llm-models` if its label differs. The mounted holder and weights disks have distinct guest PCI paths and no disk serials. A changed device order could relabel persistent storage. | Verify the Terraform attachment identity and reject a foreign filesystem, partitions or conflicting mounts before formatting or relabeling. Exercise blank, correctly labelled and wrong-disk cases on scratch disks. |
+| High | Docker and containerd keep their data on a `nofail` weights mount. Both live services had empty `RequiresMountsFor` and no unit overrides. The two inference units already require their mounts. A boot without the weights disk can put runtime data on the small root filesystem. The embedding service account also owns the weights mount root, which contains root-managed runtime directories. Its own systemd unit does mount the model path read-only. | Make both runtimes require the weights mount and give the service account write access only where needed. Verify a boot with the weights disk absent on a disposable guest. |
+| High | A llama.cpp upgrade deletes `/opt/llama.cpp/build` before the new build completes. The installed executable's library search path is `/opt/llama.cpp/build/bin`. Renaming each new executable into place does not preserve the old libraries if compilation fails. | Stage a complete new build separately, run it, then switch releases. Confirm the previous embedder can start after an intentionally failed scratch build. |
+| Medium | Chat still waits for a healthy, warmed embedder at startup on separate cards. The package check only verifies `renderD128`. An absent second card can therefore prevent a healthy first card from serving chat after restart. The host and container select devices by numeric index in separate runtimes. Placement was verified on this boot. | Preserve serialized initialization for healthy simultaneous starts. Test degraded boot and recovery with one device unavailable, and verify physical placement after runtime upgrades. The source alone does not establish a permanent systemd start-limit failure or CPU fallback. |
+| Medium | A full Make-driven Ansible dry run stops in `infisical_client`. Check mode skips the identity lookup and creation requests, then a fact reads the missing creation response. The scoped inference-unit check passes. | Provide a dry-run path for an existing identity and verify first-install and repeat-run behavior separately. The observed failure concerns previewing changes. |
+| Medium | A stale or unavailable model response can cause an immediate embedder restart followed by another restart from a queued handler. The chat warm-up's final bare shell `wait` can hide individual request failures. The liveness probe discards the generation body. | Coalesce restart notifications and test actual chat and embedding results during acceptance. No automatic restart on a model-quality judgment was introduced. |
+
+Claude also raised a possible Docker-handler ordering problem. On the ordinary full play, the runtime notifications are flushed before the image pull or engine configuration can notify vLLM. We did not establish that failure on the normal path. A newly added client key and kernel upgrades under active inference remain untested operational cases. The optional NVIDIA router is disabled and its enrollment was outside this review.
+
+### Corrections verified in the working tree
+
+- The LLM role creates `/etc/docker` before copying `daemon.json`. We executed the old and new Ansible tasks against empty temporary directories. The old copy failed because its parent was missing. The new tasks created the configuration, and a second pass reported zero changes.
+- The role now declares containerd's store mode as `0700`, matching the live daemon-owned directory. The old declaration used `0711`.
+- The certificate-renewal hook uses `systemctl try-restart caddy` after installing both files. An active Caddy process rereads its certificate on restart. A stopped service stays stopped until its normal start. The deployed unit's reload command uses the Caddy admin interface that the deployed Caddyfile disables. The Caddy restart handler also asks systemd to reread unit overrides. We checked the live unit and hook, compared the rendered actions, and syntax-checked the shell. A real renewal and served-certificate rotation remain untested.
+
+These edits were local. The review did not run a deployment or restart production services. The role passed offline Ansible lint. The repository validation run passed Terraform validation, the VM module tests, Ansible lint, syntax checks for 24 playbooks and the Flux configuration build. The subsequent logging-service test stopped because the container registry denied its AxoSyslog image pull.
+
+### Recovery acceptance
+
+Keep Ansible as the installer. Retain the verified Ubuntu image and the exact approved GPU packages, including their dependencies and signed package metadata, in backed-up storage independent of VM 240. Ubuntu documents how signed archive metadata authenticates the package hashes. If the original installers cannot be recovered, qualify one replacement set on a disposable guest and retain that set before promoting it. [Ubuntu archive verification](https://documentation.ubuntu.com/security/software-integrity/archive-verification/).
+
+Use the disposable guest to install with empty caches, rerun Ansible, and reboot. Check disk identity, mount failures, certificate renewal and service restart behavior there. With a B70 available, verify an actual chat answer and a known embedding request, then compare throughput with the recorded baseline. Exercise a backup restore separately. Move the inventory and artifact checks ahead of production replacement. The existing guest remains the working reference until those checks pass.
+
+### Proposed update policy
+
+Keep exact revisions for the vLLM container, llama.cpp, and model weights. The embedding model and preprocessing are part of the stored search index's contract. A model change needs a retrieval comparison and, if the vector space changes, its own rebuilt index. For the native embedder, retain the tested Level Zero loader and Intel runtime as a set, and record the compiler and math library used to build the binary. Normal Ubuntu security maintenance can continue for the rest of the guest. Record kernel and firmware versions and test both cards after a maintenance reboot.
+
+Mesa's exact pin was justified by a benchmark on the former Vulkan chat engine. The current chat engine uses the container's own userspace, the embedder uses SYCL, and its startup check invokes Vulkan. The isolated comparison below supports retiring the custom Mesa archive and exact pin for this configuration.
+
+The fleet update play includes VM 240. The repository's Renovate rules have no explicit coverage for the guest GPU packages. A proposed weekly check would compare approved versions with upstream versions using fresh package metadata independently of the production pins, and verify that approved files remain fetchable from retained storage. An applicable security advisory merits immediate review. A needed correctness fix, compatibility change, or missing rebuild input merits an earlier qualification run. Routine new releases can wait for a monthly maintenance window. Preserve the current and previous tested package sets so rollback can use a verified artifact. [Intel security advisories](https://www.intel.com/content/www/us/en/security-center/default.html), [Intel GPU runtime releases](https://github.com/intel/compute-runtime/releases), [Ubuntu security notices](https://ubuntu.com/security/notices).
+
+## Ubuntu Mesa qualification and Intel container identity
+
+On November 18 the running chat container's reference and image identifier matched the role's `intel/llm-scaler-vllm@sha256:52218ad85513ab6686d4c090c83c2bd8c5b02423c63aa4dabd41837fe641fe3b`. Docker Hub returned that exact digest for the Intel tags `1.5` and `0.26.0-b2`. The running Python package reports `0.26.1.dev0+g568afb3a1.d20260907.xpu`. Its mounts are the device-path directory, model and cache. The guest supplies the kernel GPU driver. The container carries the chat engine's userspace. Intel documents B70 support for this image family. [Intel release 1.5](https://github.com/intel/llm-scaler/releases/tag/vllm-1.5), [LLM Scaler documentation](https://github.com/intel/llm-scaler).
+
+For the native embedder, APT (Ubuntu's package manager) resolved `mesa-vulkan-drivers=26.0.8-1ubuntu0.3` and Ubuntu's four `libdrm` graphics support packages at `2.4.131-1`. The simulated transaction required five downgrades, zero new packages and zero removals. The test extracted the five packages into temporary storage. A temporary copy of the production BGE-M3 server used the same binary, model, arguments and service account, with a separate loopback port and cache. Vulkan reported both devices with PCI device ID `e223` under each Mesa version. The server's process mappings showed the selected `libdrm` for each run, and its GPU memory was resident on card 2 (`02:00.0`).
+
+| Sequential trial | Median input tokens processed per second across 15 eight-passage requests |
+| --- | ---: |
+| Installed Kisak packages, before | 13,572 |
+| Ubuntu packages | 13,535 |
+| Installed Kisak packages, after | 13,685 |
+
+Across all three starts, the three query vectors, three reference document vectors and eight longer passage vectors matched exactly in the returned responses. Each query ranked its expected document first. The fixed eight-passage request contained 3,968 input tokens. Ubuntu's median rate was 0.7% below the average of the two installed-package medians, within the variation between those two runs. This comparison covers the served SYCL embedding workload and Vulkan discovery. It does not measure the historical Vulkan chat workload or boot a guest after a system-wide package migration.
+
+**Disposition.** Use Ubuntu's Mesa and graphics support packages for the current serving configuration. Removing the version constraint alone leaves the third-party archive eligible, and removing the archive leaves its newer installed packages in place. A migration of the running guest therefore needs to account for all five packages. This qualification changed neither the Ansible package declarations nor the guest's installed packages. After the trial, production chat answered 17 × 23 correctly, BGE-M3 returned a 1,024-value embedding, both services were active with zero automatic restarts, and the test port was free.
+
+## llama.cpp 1.0.0 and containerized embeddings
+
+On November 18, upstream's November 13 release linked to binary build `b12359`, commit `b1b770d90`. The Ubuntu SYCL FP16 release archive passed its published SHA-256 checksum. Its executable needed Intel's oneDNN shared library (`libdnnl.so.3`), which was absent from the production build environment. We extracted matching Intel runtime packages into temporary storage for the trial. Both engines served the same BGE-M3 model file with the production alias, first-token pooling and batch settings on the second B70. [llama.cpp 1.0.0](https://github.com/ggml-org/llama.cpp/releases/tag/v1.0.0), [release binaries](https://github.com/ggml-org/llama.cpp/releases/tag/b12359).
+
+The September service processed a median of 13,700 input tokens per second across ten eight-passage requests. The release binary with its own runtime processed 17,165. The same client measured the endpoints sequentially on guest loopback. Both returned 1,024 finite values for each of 22 inputs and placed the expected document first for all three search queries. Across corresponding vectors the minimum cosine similarity was 0.99999967 (1 is identical direction) and the maximum absolute component difference was 0.000096. Both handled an eight-text batch totaling 10,584 input tokens. The trial measured the combined binary and runtime change and used a small synthetic search set. Production stayed on the September build. Both services remained active with zero automatic restarts and the temporary listener closed.
+
+Two container paths preserve the existing front door. Upstream llama.cpp's Intel server image can mount the same BGE-M3 file. On November 18 the rolling `server-intel` tag's Linux image identified itself as `b12464`; the registry returned 404 for `server-intel-b12359` and `server-intel-v1.0.0`. The release binary and that rolling image require separate qualification. Alternatively, Intel's deployed vLLM 1.5 image contains the `BgeM3EmbeddingModel` implementation used for an embeddings-only worker. The vLLM route would also change the inference backend and model packaging. Neither container served the comparison above. Before sending existing index queries to a replacement, compare retrieval against a frozen copy of the real index and exercise the authenticated API with the exact candidate image digest. [llama.cpp container documentation](https://github.com/ggml-org/llama.cpp/blob/v1.0.0/docs/docker.md), [vLLM's BGE-M3 pooling documentation](https://docs.vllm.ai/en/latest/models/pooling_models/specific_models/).

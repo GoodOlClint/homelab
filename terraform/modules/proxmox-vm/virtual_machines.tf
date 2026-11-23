@@ -227,6 +227,16 @@ resource "proxmox_virtual_environment_vm" "vms" {
   }
 
   machine = "q35"
+  bios    = each.value.uefi ? "ovmf" : "seabios"
+
+  dynamic "efi_disk" {
+    for_each = each.value.uefi ? [true] : []
+    content {
+      datastore_id      = coalesce(each.value.disk_storage, var.primary_disk_storage)
+      type              = "4m"
+      pre_enrolled_keys = false
+    }
+  }
 
   cpu {
     cores    = each.value.cpu_cores

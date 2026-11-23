@@ -224,6 +224,7 @@ locals {
       name         = "llm"
       node_name    = "msi"
       vm_id        = 240
+      uefi         = true
       vlans        = ["vlan40"]
       ip_offset    = 40
       cpu_cores    = 6
@@ -233,7 +234,7 @@ locals {
       on_boot      = true
       disk_size_gb = 32
       extra_disks  = [{ size_gb = 300, storage = "local-zfs", backup = false }] # weights are re-downloadable, never ADR 0015 state
-      pci_devices  = [{ id = "0000:03:00" }, { id = "0000:07:00" }]
+      pci_devices  = [{ id = "0000:03:00.0" }, { id = "0000:07:00.0" }]
       data_volume  = { name = "llm" }
     },
     # homelab-mcp gateway (ADR 0052): a VM for its fleet token bundle, outside the Talos cluster.
