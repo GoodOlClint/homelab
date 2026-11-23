@@ -12,6 +12,10 @@ This repo automates a Proxmox-based homelab with Terraform (VM provisioning, SDN
 
 ## Canonical pipelines
 
+The [proposed embedding container migration](docs/llm-embedding-container-plan.md) and [ADR 0060](docs/decisions/0060-serve-embeddings-from-a-pinned-llama-cpp-intel-container.md) record the VM 240 trial and recovery gates.
+
+VM 240 uses Q35 with OVMF firmware and an EFI settings disk. The Qwen service uses the first B70 and BGE-M3 uses the second. Colocating them exhausted GPU memory on an eight-passage embedding request and interrupted chat. The [VM 240 configuration audit](docs/llm-vm240-configuration-audit.md) records the hardware mapping and workload checks.
+
 The per-subsystem pipeline notes load from `.claude/rules/<subsystem>.md` when a matching file is touched (`ansible`, `kubernetes`, `proxmox`, `dns-network`, `identity-pki`, `llm`). Repo-wide:
 
 **Agent GitHub identity** is chosen per session by `scripts/github-agent-mcp` from the repo's `origin` (`homelab` is `plain`: the operator pushes, the Apps do PRs); see [docs/github-agent-identity.md](docs/github-agent-identity.md), ADR 0059. Never put an App id, installation id or key path in a CLI config.
