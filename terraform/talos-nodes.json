@@ -3,5 +3,5 @@
   "talos-cp-b": { "cluster": "services", "role": "controlplane", "vm_id": 231, "node_name": "ms-01c", "offset": 62, "cores": 6, "memory": 16384, "scratch_gb": 100 },
   "talos-cp-c": { "cluster": "services", "role": "controlplane", "vm_id": 232, "node_name": "msi", "offset": 63, "cores": 6, "memory": 16384, "scratch_gb": 100 },
   "talos-ci-cp": { "cluster": "ci", "role": "controlplane", "vm_id": 235, "node_name": "ms-01a", "offset": 35, "cores": 2, "memory": 4096, "scratch_gb": 0 },
-  "talos-ci-w1": { "cluster": "ci", "role": "worker", "vm_id": 236, "node_name": "ms-01c", "offset": 36, "cores": 6, "memory": 16384, "scratch_gb": 100 }
+  "talos-ci-w1": { "cluster": "ci", "role": "worker", "vm_id": 236, "node_name": "msi", "offset": 36, "cores": 6, "memory": 16384, "scratch_gb": 100 }
 }

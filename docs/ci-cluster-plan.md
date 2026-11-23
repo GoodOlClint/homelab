@@ -221,6 +221,8 @@ What the build changed against the plan as written. WP1, WP3 and WP4 are merged 
 - **The CI seed carries no root CA and an empty `cluster-bindings`;** `ci-arc` needs neither.
 - **The new reaper ships suspended.** Order before the next push: `make hosts-apply`, `make k8s-seed`, then push. A seed run before `hosts-apply` fails on the missing token output.
 - **Open for WP2:** the CI nodes take the fleet DNS server; ADR 0064 names the pfSense resolver on the new VLAN.
+- **WP4 done 2026-11-23.** `make hosts-apply` (targeted, since ms-01b is out of the cluster) created `ci-reaper@pve`; `make k8s-seed` seeded it and a second run reported 0 changed. A diskless VM backdated 7 h in pool `ci` was stopped and destroyed by a hand-started Job from the new CronJob, between two runs of the old reaper; the Proxmox task log credits `qmstop` and `qmdestroy` to `ci-reaper@pve`. The token's effective privileges are `Pool.Audit`, `VM.Allocate`, `VM.Audit` and `VM.PowerMgmt` on `/pool/ci` only.
+- **The CI worker is placed on msi until ms-01b returns** (operator 2026-11-23). ms-01c took ms-01b's guests and has 45 GB of running guests plus three 4 GB OSDs on 63 GB, so a 16 GB worker no longer fits there; msi has about 35 GB free. The worker is not OOM-exempt (the hookscript covers the services cluster only), and VM 240 on msi is not either.
 - **Found, not fixed:** the existing `kubernetes/arc/values.yaml` runner containers have no CPU or memory requests, and `flux_check.py` does not look inside HelmRelease values. Both go away when `kubernetes/arc/` is deleted at cutover.
 
 ## Review disposition
