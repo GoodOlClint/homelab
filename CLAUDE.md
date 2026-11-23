@@ -117,6 +117,7 @@ Each Infisical folder is owned by the role that generates/provisions its secrets
 | `/llm` | `llm` role (`generate_secret.yml`, one `llm_api_key_<client>` per entry in `llm_api_clients`) | the `llm` VM (Infisical agent, `llm.env` → Caddy `EnvironmentFile`) | llm_api_key_agents, llm_api_key_operator, llm_api_key_code_intel (delivered to the `code-intel` scratch guest by the `scratch` role), llm_api_key_mcp (the mcp VM's code-intel embeddings) | — |
 | `/scratch/<guest>` | — (operator seeds; ADR 0054) | — (no agent; the `scratch` role reads it at deploy time) | — | whatever the guest's `scratch_guests` spec lists (code-intel: openrouter_api_key) |
 | `/talos` | `kubernetes/talos/talos.sh` (`make talos-secrets`, no Ansible role) | — (no agent) | talos_secrets_yaml, talosconfig (base64) | — |
+| `/talos-ci` | `kubernetes/talos/talos.sh` (`make talos-secrets CLUSTER=ci`, ADR 0063) | — (no agent) | talos_secrets_yaml, talosconfig (base64) | — |
 
 **Key rules:**
 - The `ansible-admin` identity's universal auth trusts `0.0.0.0/0` with a non-expiring client secret — deliberately, not by omission: Infisical's IP allowlist is a paid-plan feature and the self-hosted free instance answers any other value with a 400 (#21, 2026-09-10). The compensating control is the vault's reach: the services VLAN and pfSense's rules, not the identity.

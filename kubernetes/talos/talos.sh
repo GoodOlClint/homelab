@@ -8,6 +8,7 @@
 #   apply     render per-node configs and apply-config (maintenance nodes via DHCP, then by static IP)
 #   bootstrap bootstrap etcd on the first control-plane node, fetch kubeconfig, wait for Ready
 #   render    render per-node configs into the secrets directory, apply nothing
+#   close-join (ci) rotate the join token so only the control plane holds a valid one
 #   print     print what CLUSTER resolves to, write nothing
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -133,7 +134,7 @@ YAML
 # the ci cluster runs no kubelet-serving CSR approver, so the kubelet would never get a cert.
 patch_ci() {
   local n=$1 role=$2 p="$SEC/$1.patch.yaml" mac ip dns scratch
-  mac=$(j ".nodes[\"$n\"].mac"); ip=$(ip_of "$n"); dns=$(j '.dns_servers[0]')
+  mac=$(j ".nodes[\"$n\"].mac"); ip=$(ip_of "$n"); dns=$GW   # pfSense's resolver on the VLAN (ADR 0064)
   scratch=$(j ".nodes[\"$n\"].scratch_gb // 0")
   cat > "$p" <<YAML
 machine:
@@ -170,6 +171,61 @@ apiVersion: v1alpha1
 kind: HostnameConfig
 $patch: delete
 YAML
+  # The worker runs job code (ADR 0062): from it, the control plane answers only the Talos
+  # and Kubernetes APIs. etcd and the kubelet stay reachable from the node's own address.
+  if [ "$role" = controlplane ]; then
+    cat >> "$p" <<YAML
+---
+apiVersion: v1alpha1
+kind: NetworkDefaultActionConfig
+ingress: block
+---
+apiVersion: v1alpha1
+kind: NetworkRuleConfig
+name: talos-and-kubernetes-api
+portSelector:
+  ports: [6443, 50000, 50001]
+  protocol: tcp
+ingress:
+  - subnet: 0.0.0.0/0
+---
+apiVersion: v1alpha1
+kind: NetworkRuleConfig
+name: flannel-vxlan
+portSelector:
+  ports: [4789]
+  protocol: udp
+ingress:
+  - subnet: $SUBNET
+---
+apiVersion: v1alpha1
+kind: NetworkRuleConfig
+name: etcd-and-kubelet-self
+portSelector:
+  ports: [2379, 2380, 10250]
+  protocol: tcp
+ingress:
+  - subnet: $ip/32
+---
+apiVersion: v1alpha1
+kind: NetworkRuleConfig
+name: host-dns-from-pods
+portSelector:
+  ports: [53]
+  protocol: udp
+ingress:
+  - subnet: 10.0.0.0/8
+---
+apiVersion: v1alpha1
+kind: NetworkRuleConfig
+name: host-dns-from-pods-tcp
+portSelector:
+  ports: [53]
+  protocol: tcp
+ingress:
+  - subnet: 10.0.0.0/8
+YAML
+  fi
 }
 
 render() {
@@ -207,7 +263,10 @@ cmd_apply() {
       dhcp=$(jq -r --arg n "$n" '.nodes[$n].dhcp_ips | flatten | map(select(startswith("127")|not)) | .[0] // empty' "$NODES")
       [ -n "$dhcp" ] || { echo "$n: no DHCP address in $NODES — re-run make talos-build CLUSTER=$CLUSTER" >&2; exit 1; }
       echo "$n: maintenance mode at $dhcp -> $ip"
-      talosctl -n "$dhcp" -e "$dhcp" apply-config --insecure -f "$f"
+      for i in $(seq 36); do   # the DHCP lease shows before the maintenance API listens
+        talosctl -n "$dhcp" -e "$dhcp" apply-config --insecure -f "$f" && break
+        [ "$i" = 36 ] && { echo "$n: maintenance API at $dhcp never answered" >&2; exit 1; }; sleep 5
+      done
     fi
   done
   echo "waiting for Talos API on static addresses"
@@ -216,6 +275,7 @@ cmd_apply() {
     for i in $(seq 120); do talosctl -n "$ip" -e "$ip" version --short >/dev/null 2>&1 && break; [ "$i" = 120 ] && { echo "$n: Talos API at $ip not up after 10 min" >&2; exit 1; }; sleep 5; done
     echo "$n up"
   done
+  if [ "$CLUSTER" = ci ] && [ -f "$SEC/kubeconfig" ] && [ "$NODE_NAMES" != "$CP_NAMES" ]; then cmd_close_join; fi
 }
 
 cmd_bootstrap() {
@@ -226,7 +286,9 @@ cmd_bootstrap() {
   talosctl config endpoint "${eps[@]}"
   talosctl config node "$ip"
   # `etcd members` blocks on an unbootstrapped node; the service state does not.
-  if talosctl -n "$ip" service etcd 2>/dev/null | grep -q "STATE *Preparing"; then
+  local etcd_state
+  etcd_state=$(talosctl -n "$ip" service etcd 2>/dev/null || true)
+  if grep -q "STATE *Preparing" <<<"$etcd_state"; then
     echo "bootstrapping etcd on $first"
     talosctl -n "$ip" bootstrap
   fi
@@ -235,6 +297,47 @@ cmd_bootstrap() {
   echo "export KUBECONFIG=$SEC/kubeconfig"
   KUBECONFIG="$SEC/kubeconfig" kubectl get nodes -o wide
   talosctl -n "$ip" etcd members
+  if [ "$CLUSTER" = ci ]; then cmd_close_join; fi
+}
+
+# The CI worker runs job code, and a valid join token lets its holder enrol as any node,
+# the control plane included (the nodeclient CSR auto-approval is not name-bound). Once every
+# node is Ready, rotate the token in the bundle, give the new one to the control plane only,
+# and delete every other bootstrap-token Secret: the worker keeps a dead token. Talos only
+# creates missing manifests, so a deleted token Secret does not come back.
+cmd_close_join() {
+  [ "$CLUSTER" = ci ] || { echo "close-join is for CLUSTER=ci only" >&2; exit 2; }
+  local kc="$SEC/kubeconfig" new id n cps all stale old code
+  [ -f "$kc" ] || { echo "no $kc — make talos-bootstrap CLUSTER=ci first" >&2; exit 1; }
+  all=$(j '.nodes | keys[]')
+  cps=$(j '[.nodes | to_entries[] | select((.value.role // "controlplane") == "controlplane") | .key][]')
+  for n in $all; do   # a rebuilt node has no Node object until its kubelet registers
+    for i in $(seq 120); do KUBECONFIG="$kc" kubectl get node "$n" >/dev/null 2>&1 && break
+      [ "$i" = 120 ] && { echo "$n never registered" >&2; exit 1; }; sleep 5; done
+    KUBECONFIG="$kc" kubectl wait --for=condition=Ready "node/$n" --timeout=10m
+  done
+  old=$(KUBECONFIG="$kc" kubectl -n kube-system get secret --field-selector type=bootstrap.kubernetes.io/token \
+    -o go-template='{{range .items}}{{index .data "token-id" | base64decode}}.{{index .data "token-secret" | base64decode}}{{"\n"}}{{end}}')
+  new="$(openssl rand -hex 3).$(openssl rand -hex 8)"; id=${new%%.*}
+  NEW_TOKEN="$new" perl -pi -e 's/^(\s+bootstraptoken:\s+).*/$1$ENV{NEW_TOKEN}/' "$SEC/secrets.yaml"
+  infisical_token
+  inf secrets set "talos_secrets_yaml=$(base64 < "$SEC/secrets.yaml")" >/dev/null
+  for n in $cps; do talosctl -n "$(ip_of "$n")" -e "$(ip_of "$n")" apply-config -f "$(render "$n")"; done
+  for i in $(seq 60); do KUBECONFIG="$kc" kubectl -n kube-system get secret "bootstrap-token-$id" >/dev/null 2>&1 && break
+    [ "$i" = 60 ] && { echo "bootstrap-token-$id never appeared; old tokens left in place" >&2; exit 1; }; sleep 5; done
+  stale=$(KUBECONFIG="$kc" kubectl -n kube-system get secret -o name --field-selector type=bootstrap.kubernetes.io/token)
+  stale=$(grep -v "/bootstrap-token-$id\$" <<<"$stale" || true)
+  [ -z "$stale" ] || KUBECONFIG="$kc" kubectl -n kube-system delete $stale
+  for t in $old; do
+    for i in $(seq 24); do   # the API server restarts on the new config and drops deleted tokens from its cache
+      code=$(curl -sk -m 5 -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $t" "$ENDPOINT/api" || true)
+      [ "$code" = 401 ] && break; sleep 5
+    done
+    [ "$code" = 401 ] || { echo "join token ${t%%.*} still authenticates (HTTP $code)" >&2; exit 1; }
+    echo "join token ${t%%.*} rejected (401)"
+  done
+  for i in $(seq 60); do KUBECONFIG="$kc" kubectl get --raw /readyz >/dev/null 2>&1 && break; sleep 5; done
+  echo "join closed: bootstrap-token-$id is held by the control plane only"
 }
 
 cmd_print() {
@@ -256,12 +359,13 @@ cmd_print() {
 
 case "${1:-}" in
   print) need jq; cmd_print; exit 0 ;;
-  secrets|apply|bootstrap|render) need talosctl kubectl jq sops infisical; load_inventory ;;
-  *) echo "usage: CLUSTER={services|ci} $0 {secrets|apply|bootstrap|render|print}" >&2; exit 2 ;;
+  secrets|apply|bootstrap|render|close-join) need talosctl kubectl jq sops infisical; load_inventory ;;
+  *) echo "usage: CLUSTER={services|ci} $0 {secrets|apply|bootstrap|render|close-join|print}" >&2; exit 2 ;;
 esac
 case "$1" in
   secrets) cmd_secrets ;;
   apply) cmd_apply ;;
   bootstrap) cmd_bootstrap ;;
   render) cmd_render ;;
+  close-join) cmd_close_join ;;
 esac

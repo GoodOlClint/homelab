@@ -29,7 +29,7 @@ _read_secret = $(shell sops -d --extract '["bootstrap"]["$(1)"]' $(SOPS_BOOTSTRA
 _secret = $(if $(_sc_$(1)),,$(eval _sc_$(1) := $$(call _read_secret,$(1))))$(_sc_$(1))
 TF_TARGETS := plan apply init terraform-apply terraform-bootstrap ansible-bootstrap inventory refresh build rebuild \
   rebuild-infisical data-volumes backup-jobs sdn-apply expand-disk update-dns clean clean-vps-ssh \
-  hosts-plan hosts-apply unifi-plan unifi-apply talos-plan talos-build validate \
+  hosts-plan hosts-apply unifi-plan unifi-apply talos-plan talos-build talos-rebuild-worker validate \
   vps-deploy vps-rebuild vps-destroy vps-close-ssh vps-rotate-keys tf
 $(TF_TARGETS): export TF_VAR_virtual_environment_password = $(call _secret,proxmox_password)
 $(TF_TARGETS): export TF_VAR_vultr_api_key = $(call _secret,vultr_api_key)
@@ -56,7 +56,7 @@ ifneq (,$(filter build rebuild plan ansible update,$(firstword $(MAKECMDGOALS)))
 endif
 
 # === Core Operations ===
-.PHONY: refresh k8s-seed k8s-apps k8s-smoke k8s-update plex-pbs-image flux-check flux-reconcile monitoring-users talos-plan talos-build talos-secrets talos-apply talos-bootstrap talos-print all apply plan init terraform-apply terraform-bootstrap inventory bootstrap ansible-bootstrap build rebuild rebuild-infisical data-volumes backup-jobs sdn-apply
+.PHONY: refresh k8s-seed k8s-apps k8s-smoke k8s-update plex-pbs-image flux-check flux-reconcile monitoring-users talos-plan talos-build talos-secrets talos-apply talos-bootstrap talos-close-join talos-rebuild-worker talos-print all apply plan init terraform-apply terraform-bootstrap inventory bootstrap ansible-bootstrap build rebuild rebuild-infisical data-volumes backup-jobs sdn-apply
 
 all: apply
 
@@ -155,6 +155,18 @@ talos-apply:
 talos-bootstrap:
 	$(TALOS_GUARD)
 	@kubernetes/talos/talos.sh bootstrap
+talos-close-join:
+	$(TALOS_GUARD)
+	@kubernetes/talos/talos.sh close-join
+# One worker from a blank disk: drain, delete the Node, replace only its VM, apply, close the join again
+talos-rebuild-worker:
+	$(TALOS_GUARD)
+	@[ "$$(jq -r --arg n '$(NODE)' '"\(.[$$n].cluster) \(.[$$n].role)"' terraform/talos-nodes.json)" = "$(CLUSTER) worker" ] || { echo "NODE=<a worker of CLUSTER=$(CLUSTER)>" >&2; exit 2; }
+	-@KUBECONFIG=$(TALOS_DIR)/kubeconfig kubectl drain $(NODE) --ignore-daemonsets --delete-emptydir-data --timeout=5m
+	-@KUBECONFIG=$(TALOS_DIR)/kubeconfig kubectl delete node $(NODE)
+	@cd terraform && terraform apply -no-color -auto-approve -replace='proxmox_virtual_environment_vm.talos_cp["$(NODE)"]' -target='proxmox_virtual_environment_vm.talos_cp["$(NODE)"]'
+	@cd terraform && terraform output -json $(TALOS_OUTPUT_$(CLUSTER)) > ../$(TALOS_DIR)/nodes.json
+	@NODE_NAMES=$(NODE) kubernetes/talos/talos.sh apply
 # Offline: what CLUSTER= selects (terraform targets, inventory, kubeconfig, talos.sh paths); runs nothing
 talos-print:
 	$(TALOS_GUARD)
