@@ -10,6 +10,22 @@ The `CI` interface (VLAN 60) exists with DHCP enabled and public DNS, but as of 
 | 4 | Block | any | CI net | `<internal supernet>` (the `/12` in `vlans.yaml`) | * | CI guests never reach the fleet, the nodes, or the workstation |
 | 5 | Pass | any | CI net | any | * | internet (Debian/Proxmox repos, GitHub) |
 
+## CIControl rules (VLAN 61, the CI cluster nodes, ADR 0064)
+
+The `CIControl` interface carries the two CI cluster nodes. Apply on **Firewall → Rules → CIControl**, top to bottom (first match wins):
+
+| # | Action | Proto | Source | Destination | Port | Why |
+|---|---|---|---|---|---|---|
+| 1 | Pass | TCP/UDP | CIControl net | CIControl address | 53 | the split resolver below (DHCP DNS for the nodes) |
+| 2 | Pass | TCP/UDP | CIControl net | `<BIND VIP>` (`dns_server.bind_ipv4`) | 53 | jobs register test-guest names in the `ci` zone with `ci-update-key` |
+| 3 | Pass | TCP | CIControl net | Infrastructure net (VLAN 30) | 8006 | the Proxmox API, for jobs and their guests in pool `ci` |
+| 4 | Pass | any | CIControl net | CI net (VLAN 60) | * | jobs reach the guests they build; replies ride state |
+| 5 | Block | any | CIControl net | This Firewall (self) | * | no pfSense GUI or SSH from job nodes |
+| 6 | Block | any | CIControl net | `<internal supernet>` (the `/12`) | * | nothing else internal |
+| 7 | Pass | any | CIControl net | any | * | internet: GitHub, image registries, Talos discovery, NTP |
+
+Nothing inbound is added: the CI VLAN's supernet block already stops CI guests reaching these nodes, and the operator workstation on Core reaches the Talos (50000) and Kubernetes (6443) API ports through Core's existing pass rules. The resolver needs `CIControl` in its Network Interfaces and an Allow entry for the CIControl subnet in its Access Lists, as for CI below.
+
 ## CI split resolver (DHCP DNS for the sandbox)
 
 CI guests take everything from DHCP, and their resolver must answer both `ci.<service domain>` (the BIND child zone) and public names. BIND cannot be that resolver — it is authoritative-only (no recursion), and its per-zone ACL denies CI sources on every other zone — so pfSense carries a split resolver scoped to this VLAN:
