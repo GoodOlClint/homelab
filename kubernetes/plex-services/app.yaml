@@ -61,11 +61,12 @@ spec:
             - {name: PUID, value: "2002"}
             - {name: PGID, value: "2000"}
             - {name: UMASK, value: "002"}
+            - {name: SONARR__SERVER__ALLOWEDHOSTS, value: "sonarr,sonarr.plex-services.svc,sonarr.plex-services.svc.cluster.local,sonarr.${DOMAIN}"}
           volumeMounts:
             - {name: config, mountPath: /config, subPath: data}
             - {name: media, mountPath: /data, subPath: data}
-          readinessProbe: {httpGet: {path: /ping, port: 8989}, initialDelaySeconds: 15, periodSeconds: 10}
-          livenessProbe: {httpGet: {path: /ping, port: 8989}, initialDelaySeconds: 60, periodSeconds: 30, failureThreshold: 10}
+          readinessProbe: {httpGet: {path: /ping, port: 8989, httpHeaders: [{name: Host, value: localhost}]}, initialDelaySeconds: 15, periodSeconds: 10}
+          livenessProbe: {httpGet: {path: /ping, port: 8989, httpHeaders: [{name: Host, value: localhost}]}, initialDelaySeconds: 60, periodSeconds: 30, failureThreshold: 10}
       volumes:
         - {name: config, persistentVolumeClaim: {claimName: sonarr}}
         - {name: media, persistentVolumeClaim: {claimName: media}}
@@ -99,11 +100,12 @@ spec:
             - {name: PUID, value: "2001"}
             - {name: PGID, value: "2000"}
             - {name: UMASK, value: "002"}
+            - {name: RADARR__SERVER__ALLOWEDHOSTS, value: "radarr,radarr.plex-services.svc,radarr.plex-services.svc.cluster.local,radarr.${DOMAIN}"}
           volumeMounts:
             - {name: config, mountPath: /config, subPath: data}
             - {name: media, mountPath: /data, subPath: data}
-          readinessProbe: {httpGet: {path: /ping, port: 7878}, initialDelaySeconds: 15, periodSeconds: 10}
-          livenessProbe: {httpGet: {path: /ping, port: 7878}, initialDelaySeconds: 60, periodSeconds: 30, failureThreshold: 10}
+          readinessProbe: {httpGet: {path: /ping, port: 7878, httpHeaders: [{name: Host, value: localhost}]}, initialDelaySeconds: 15, periodSeconds: 10}
+          livenessProbe: {httpGet: {path: /ping, port: 7878, httpHeaders: [{name: Host, value: localhost}]}, initialDelaySeconds: 60, periodSeconds: 30, failureThreshold: 10}
       volumes:
         - {name: config, persistentVolumeClaim: {claimName: radarr}}
         - {name: media, persistentVolumeClaim: {claimName: media}}
@@ -137,11 +139,12 @@ spec:
             - {name: PUID, value: "2008"}
             - {name: PGID, value: "2000"}
             - {name: UMASK, value: "002"}
+            - {name: LIDARR__SERVER__ALLOWEDHOSTS, value: "lidarr,lidarr.plex-services.svc,lidarr.plex-services.svc.cluster.local,lidarr.${DOMAIN}"}
           volumeMounts:
             - {name: config, mountPath: /config, subPath: data}
             - {name: media, mountPath: /data, subPath: data}
-          readinessProbe: {httpGet: {path: /ping, port: 8686}, initialDelaySeconds: 15, periodSeconds: 10}
-          livenessProbe: {httpGet: {path: /ping, port: 8686}, initialDelaySeconds: 60, periodSeconds: 30, failureThreshold: 10}
+          readinessProbe: {httpGet: {path: /ping, port: 8686, httpHeaders: [{name: Host, value: localhost}]}, initialDelaySeconds: 15, periodSeconds: 10}
+          livenessProbe: {httpGet: {path: /ping, port: 8686, httpHeaders: [{name: Host, value: localhost}]}, initialDelaySeconds: 60, periodSeconds: 30, failureThreshold: 10}
       volumes:
         - {name: config, persistentVolumeClaim: {claimName: lidarr}}
         - {name: media, persistentVolumeClaim: {claimName: media}}
@@ -175,10 +178,11 @@ spec:
             - {name: PUID, value: "2005"}
             - {name: PGID, value: "2000"}
             - {name: UMASK, value: "002"}
+            - {name: PROWLARR__SERVER__ALLOWEDHOSTS, value: "prowlarr,prowlarr.plex-services.svc,prowlarr.plex-services.svc.cluster.local,prowlarr.${DOMAIN}"}
           volumeMounts:
             - {name: config, mountPath: /config, subPath: data}
-          readinessProbe: {httpGet: {path: /ping, port: 9696}, initialDelaySeconds: 15, periodSeconds: 10}
-          livenessProbe: {httpGet: {path: /ping, port: 9696}, initialDelaySeconds: 60, periodSeconds: 30, failureThreshold: 10}
+          readinessProbe: {httpGet: {path: /ping, port: 9696, httpHeaders: [{name: Host, value: localhost}]}, initialDelaySeconds: 15, periodSeconds: 10}
+          livenessProbe: {httpGet: {path: /ping, port: 9696, httpHeaders: [{name: Host, value: localhost}]}, initialDelaySeconds: 60, periodSeconds: 30, failureThreshold: 10}
       volumes:
         - {name: config, persistentVolumeClaim: {claimName: prowlarr}}
 ---
