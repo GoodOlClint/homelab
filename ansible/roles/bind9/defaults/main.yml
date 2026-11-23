@@ -24,10 +24,10 @@ bind9_vip_state: started
 # the DNS half of the ci-isos isolation (ADR 0032).
 bind9_ci_zone: "ci.{{ service_domain }}"
 bind9_forward_zones: "{{ (internal_zones | list) + [bind9_ci_zone] }}"
-# The Ci VLAN subnet is denied queries on every zone except the ci zone: CI
-# guests can resolve their own names but cannot enumerate or resolve fleet
-# names through BIND. IPv4-only — the Ci VLAN carries no v6.
-bind9_ci_subnet: "{{ network_data.ipv4_prefix }}.{{ network_data.vlans.ci.id }}.0/24"
+# The Ci and ci_runner VLAN subnets are denied queries on every zone except the
+# ci zone: CI guests and the job node can resolve ci names but cannot enumerate
+# or resolve fleet names through BIND. IPv4-only — neither VLAN carries v6.
+bind9_ci_vlans: [ci, ci_runner]
 # CI guests churn per run: a 300s negative TTL blinds a wait-for-registration
 # poll for 5 minutes after the record lands. 30s bounds both stale answers and
 # cached NXDOMAINs; CI's own nsupdate should register records with TTL <= this.

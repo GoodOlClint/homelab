@@ -25,7 +25,7 @@ key "ci-update-key" {
 zone "{{ name }}" {
 {% if name != bind9_ci_zone %}
     // per-zone allow-query replaces the global one: restate internal, minus CI
-    allow-query { !{{ bind9_ci_subnet }}; 127.0.0.1; ::1; {{ internal_network_cidr | default(network_data.ipv4_prefix ~ '.0.0/12') }}; };
+    allow-query { {% for v in bind9_ci_vlans if v in network_data.vlans %}!{{ network_data.ipv4_prefix }}.{{ network_data.vlans[v].id }}.0/24; {% endfor %}127.0.0.1; ::1; {{ internal_network_cidr | default(network_data.ipv4_prefix ~ '.0.0/12') }}; };
 {% endif %}
 {% if bind9_primary %}
     type primary;
