@@ -6,7 +6,7 @@ kind: CronJob
 metadata: {name: ci-reaper, namespace: ci-reaper}
 spec:
   schedule: "17 * * * *"
-  suspend: true
+  suspend: false
   concurrencyPolicy: Forbid
   jobTemplate:
     spec:
