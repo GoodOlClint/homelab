@@ -1,4 +1,12 @@
 ---
+- name: Create the transcode directory on the data volume
+  ansible.builtin.file:
+    path: "{{ plex_transcode_dir }}"
+    state: directory
+    owner: plex
+    group: plex
+    mode: "0755"
+
 - name: Read Plex server preferences
   ansible.builtin.uri:
     url: "http://127.0.0.1:32400/:/prefs?X-Plex-Token={{ plex_token }}"

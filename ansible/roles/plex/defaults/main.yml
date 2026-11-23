@@ -24,5 +24,8 @@ plex_gid: 988
 plex_lan_networks: >-
   {{ network_data.vlans.values() | map(attribute='id') | map('string')
      | map('regex_replace', '^(.*)$', network_data.ipv4_prefix ~ '.\1.0/24') | join(',') }}
+# The CT's /tmp is a tmpfs sized past the CT's RAM; transcode segments there throttle the whole CT on memory.high.
+plex_transcode_dir: /var/lib/plexmediaserver/transcode
 plex_prefs:
   LanNetworksBandwidth: "{{ plex_lan_networks }}"
+  TranscoderTempDirectory: "{{ plex_transcode_dir }}"
