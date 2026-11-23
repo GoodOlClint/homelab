@@ -24,7 +24,7 @@ The `CIControl` interface carries the two CI cluster nodes. Apply on **Firewall 
 | 6 | Block | any | CIControl net | `<internal supernet>` (the `/12`) | * | nothing else internal |
 | 7 | Pass | any | CIControl net | any | * | internet: GitHub, image registries, Talos discovery, NTP |
 
-Nothing inbound is added: the CI VLAN's supernet block already stops CI guests reaching these nodes, and the operator workstation on Core reaches the Talos (50000) and Kubernetes (6443) API ports through Core's existing pass rules. The resolver needs `CIControl` in its Network Interfaces and an Allow entry for the CIControl subnet in its Access Lists, as for CI below.
+Nothing inbound is added: the CI VLAN's supernet block already stops CI guests reaching these nodes, and the operator workstation on Core reaches the Talos (50000) and Kubernetes (6443) API ports through Core's existing pass rules. The resolver needs `CIControl` in its Network Interfaces and an Allow entry for the CIControl subnet in its Access Lists, as for CI below. Jobs reach the Proxmox API by its fleet name, which the resolver does not know, so it also carries a **Domain Override** for that one name, `pve.<service domain>` → `<BIND VIP>`. Only that name: the job node learns no other fleet address.
 
 ## CI split resolver (DHCP DNS for the sandbox)
 
