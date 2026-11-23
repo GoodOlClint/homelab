@@ -44,14 +44,6 @@
     _ceph_key: "{{ _ceph.stdout_lines[2] }}"
   no_log: "{{ k8s_seed_debug is not defined }}"
 
-- name: The pool-scoped CI token (hosts root output)
-  ansible.builtin.command:
-    cmd: terraform -chdir={{ playbook_dir }}/../../terraform/hosts output -raw ci_api_token
-  register: _ci_token
-  changed_when: false
-  check_mode: false
-  no_log: true
-
 - name: The reaper's own pool-scoped token (hosts root output)
   ansible.builtin.command:
     cmd: terraform -chdir={{ playbook_dir }}/../../terraform/hosts output -raw ci_reaper_api_token
@@ -200,7 +192,7 @@
       kind: ConfigMap
       metadata: {name: homelab-root-ca, namespace: "{{ item }}"}
       data: {homelab-ca.crt: "{{ lookup('file', k8s_seed_root_ca) }}"}
-  loop: [infisical-operator, monitoring, arc-runners, ci-reaper]
+  loop: [infisical-operator, monitoring, ci-reaper]
 
 - name: Bootstrap Secrets
   kubernetes.core.k8s:
@@ -215,17 +207,6 @@
       kind: Secret
       metadata: {name: csi-rbd-secret, namespace: ceph-csi}
       stringData: {userID: csi-rbd, userKey: "{{ _ceph_key }}"}
-    - apiVersion: v1
-      kind: Secret
-      metadata: {name: github-app, namespace: arc-runners}
-      stringData:
-        github_app_id: "{{ secrets.github_runner.github_app_id }}"
-        github_app_installation_id: "{{ secrets.github_runner.github_app_installation_id }}"
-        github_app_private_key: "{{ secrets.github_runner.github_app_private_key }}"
-    - apiVersion: v1
-      kind: Secret
-      metadata: {name: pve-ci-token, namespace: arc-runners}
-      stringData: {token: "{{ _ci_token.stdout }}"}
     - apiVersion: v1
       kind: Secret
       metadata: {name: pve-reaper-token, namespace: ci-reaper}

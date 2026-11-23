@@ -19,7 +19,6 @@ resources:
   - apps/traefik.yaml
   - apps/zot.yaml
   - apps/ceph-csi.yaml
-  - apps/arc.yaml
   - apps/authentik-ext.yaml
   - apps/codeintel.yaml
   - apps/ci-reaper.yaml
