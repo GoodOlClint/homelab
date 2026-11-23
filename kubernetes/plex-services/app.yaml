@@ -256,7 +256,7 @@ spec:
           volumeMounts: [{name: scratch, mountPath: /scratch}]
       containers:
         - name: sabnzbd
-          image: ${REGISTRY}/ghcr.io/hotio/sabnzbd:testing
+          image: ${REGISTRY}/ghcr.io/hotio/sabnzbd:release
           resources: {requests: {cpu: 100m, memory: 256Mi}}
           ports: [{containerPort: 8080}]
           env:
