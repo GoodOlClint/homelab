@@ -1,0 +1,40 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata: {name: mysql-backup, namespace: "${NS}"}
+spec:
+  schedule: "${SCHEDULE}"
+  timeZone: "${TZ}"
+  suspend: false
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          enableServiceLinks: false
+          initContainers:
+            - name: mysqldump
+              image: ${REGISTRY}/docker.io/library/mysql:8.4
+              imagePullPolicy: IfNotPresent
+              resources: {requests: {cpu: 50m, memory: 128Mi}}
+              command: [bash, -ec, 'set -o pipefail; f=/backups/mysqldump-$(date +%F).sql.gz; mysqldump -h ${MYSQL_HOST} -uroot --single-transaction --all-databases | gzip > "$f.tmp" && mv "$f.tmp" "$f"; find /backups -name "mysqldump-*.sql.gz" -mtime +${KEEP_DAYS:=30} -delete']
+              env:
+                - {name: MYSQL_PWD, valueFrom: {secretKeyRef: {name: "${MYSQL_SECRET}", key: "${MYSQL_SECRET_KEY}"}}}
+              volumeMounts:
+                - {name: backups, mountPath: /backups, subPath: data}
+          containers:
+            - name: pbs-push
+              image: ${REGISTRY}/homelab/proxmox-backup-client:trixie
+              imagePullPolicy: IfNotPresent
+              resources: {requests: {cpu: 50m, memory: 128Mi}}
+              # The trailing snapshot list is the verification signal: judge this lane by snapshot recency in the log, never by exit code.
+              command: [sh, -ec, 'proxmox-backup-client namespace create databases 2>/dev/null || true; proxmox-backup-client backup ${BACKUP_ID}.pxar:/backups --ns databases --backup-id ${BACKUP_ID}; proxmox-backup-client snapshot list --ns databases | tail -5']
+              env:
+                - {name: PBS_REPOSITORY, value: "${PBS_REPOSITORY}"}
+                - {name: PBS_PASSWORD, valueFrom: {secretKeyRef: {name: pbs-secrets, key: PBS_PASSWORD}}}
+              volumeMounts:
+                - {name: backups, mountPath: /backups, subPath: data}
+          volumes:
+            - {name: backups, persistentVolumeClaim: {claimName: backups}}

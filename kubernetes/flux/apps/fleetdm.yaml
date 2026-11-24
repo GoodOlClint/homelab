@@ -9,7 +9,7 @@ spec:
   serviceAccountName: flux-fleetdm
   postBuild:
     substituteFrom: [{kind: ConfigMap, name: cluster-bindings}]
-    substitute: {NS: fleetdm}
+    substitute: {NS: fleetdm, MYSQL_HOST: mysql, MYSQL_SECRET: fleetdm-secrets, MYSQL_SECRET_KEY: MYSQL_ROOT_PASSWORD, BACKUP_ID: fleetdm-mysql, SCHEDULE: "50 2 * * *", KEEP_DAYS: "1"}
   healthChecks:
     - {apiVersion: apps/v1, kind: Deployment, name: mysql, namespace: fleetdm}
     - {apiVersion: apps/v1, kind: Deployment, name: fleet, namespace: fleetdm}
