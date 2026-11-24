@@ -14,3 +14,114 @@
     - {key: server_private_key, cmd: openssl rand -base64 32, comment: Fleet server private key (encrypts the stored Apple push certificate)}
     - {key: admin_password, cmd: openssl rand -hex 24, comment: Fleet break-glass admin password}
   loop_control: {loop_var: sk, label: "{{ sk.key }}"}
+
+- name: fleetdm rolled out
+  ansible.builtin.command: "{{ k8s_apps_kubectl }} -n fleetdm rollout status deploy/fleet --timeout=600s"
+  changed_when: false
+
+# v4.95.0 has no GET setup endpoint: while setup is open every non-osquery API path answers 404, once closed an unauthenticated /me answers 401.
+- name: fleetdm API over a port-forward
+  block:
+    - name: fleetdm port-forward state directory
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: fleetdm-pf-
+      register: _fleetdm_pf
+      changed_when: false
+
+    - name: fleetdm port-forward started
+      ansible.builtin.shell:
+        cmd: >-
+          setsid -f sh -c 'echo $$ > {{ _fleetdm_pf.path }}/pid;
+          exec {{ k8s_apps_kubectl }} -n fleetdm port-forward --address 127.0.0.1 svc/fleet-service :8080'
+          </dev/null >{{ _fleetdm_pf.path }}/log 2>&1
+      changed_when: false
+
+    - name: fleetdm port-forward local port
+      ansible.builtin.slurp:
+        src: "{{ _fleetdm_pf.path }}/log"
+      register: _fleetdm_pf_log
+      until: (_fleetdm_pf_log.content | b64decode) is search('Forwarding from 127.0.0.1:[0-9]+')
+      retries: 30
+      delay: 1
+
+    - name: fleetdm API address
+      ansible.builtin.set_fact:
+        _fleetdm_base: "https://127.0.0.1:{{ _fleetdm_pf_log.content | b64decode | regex_search('Forwarding from 127.0.0.1:([0-9]+)', '\\1') | first }}/api/v1"
+
+    - name: fleetdm setup state
+      ansible.builtin.uri:
+        url: "{{ _fleetdm_base }}/fleet/me"
+        validate_certs: false
+        status_code: [401, 404]
+      register: _fleetdm_probe
+      changed_when: false
+
+    - name: fleetdm setup is open and first setup was not requested
+      ansible.builtin.fail:
+        msg: >-
+          Fleet setup is open: an unauthenticated visitor could create the admin. On a first install run
+          `make k8s-apps FLEETDM_FIRST_SETUP=1`; otherwise this Fleet started on an empty database (a recovery
+          that skipped the restore) and must not be exposed.
+      when: _fleetdm_probe.status == 404 and not (fleetdm_first_setup | default(false) | bool)
+
+    - name: fleetdm first setup
+      ansible.builtin.uri:
+        url: "{{ _fleetdm_base }}/setup"
+        method: POST
+        body_format: json
+        body:
+          admin:
+            name: "{{ fleetdm_admin_name }}"
+            email: "{{ fleetdm_admin_email }}"
+            password: "{{ secrets.fleetdm.admin_password }}"
+          org_info: {org_name: "{{ fleetdm_org_name }}"}
+          server_url: "https://{{ fleetdm_host }}"
+        validate_certs: false
+        status_code: 200
+      when: _fleetdm_probe.status == 404
+      changed_when: true
+      no_log: true
+
+    - name: fleetdm admin login
+      ansible.builtin.uri:
+        url: "{{ _fleetdm_base }}/fleet/login"
+        method: POST
+        body_format: json
+        body:
+          email: "{{ fleetdm_admin_email }}"
+          password: "{{ secrets.fleetdm.admin_password }}"
+        validate_certs: false
+        status_code: 200
+      register: _fleetdm_login
+      changed_when: false
+      no_log: true
+
+    - name: fleetdm users
+      ansible.builtin.uri:
+        url: "{{ _fleetdm_base }}/fleet/users"
+        headers:
+          Authorization: "Bearer {{ _fleetdm_login.json.token }}"
+        validate_certs: false
+      register: _fleetdm_users
+      changed_when: false
+      no_log: true
+
+    - name: fleetdm global admins are exactly the expected ones
+      ansible.builtin.assert:
+        that: >-
+          (_fleetdm_users.json.users | selectattr('global_role', 'equalto', 'admin') | map(attribute='email') | sort | list)
+          == (fleetdm_expected_admins | sort | list)
+        fail_msg: >-
+          Fleet's global admins differ from fleetdm_expected_admins:
+          {{ _fleetdm_users.json.users | selectattr('global_role', 'equalto', 'admin') | map(attribute='email') | list }}
+        quiet: true
+
+  always:
+    - name: fleetdm port-forward stopped
+      ansible.builtin.shell:
+        cmd: |
+          if [ -f {{ _fleetdm_pf.path }}/pid ]; then kill "$(cat {{ _fleetdm_pf.path }}/pid)" 2>/dev/null || true; fi
+          rm -rf {{ _fleetdm_pf.path }}
+      when: _fleetdm_pf is defined and _fleetdm_pf.path is defined
+      changed_when: false

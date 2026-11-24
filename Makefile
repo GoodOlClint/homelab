@@ -194,7 +194,7 @@ k8s-seed:
 	@$(K8S_PLAY) --tags seed$(if $(filter-out services,$(CLUSTER)), -e k8s_seed_cluster=$(CLUSTER),)
 # In-app tail (jellyfin wizard/LDAP plugin/libraries, arr external auth + SAB whitelist, authentik-ext secrets + blueprint)
 k8s-apps:
-	@$(K8S_PLAY) --tags apps
+	@$(K8S_PLAY) --tags apps$(if $(FLEETDM_FIRST_SETUP), -e fleetdm_first_setup=true,)
 # Fail-loud smokes: rbd, registry, nfs, infisical
 k8s-smoke:
 	@$(K8S_PLAY) --tags smoke

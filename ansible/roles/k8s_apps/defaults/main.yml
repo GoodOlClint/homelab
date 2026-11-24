@@ -20,3 +20,8 @@ k8s_apps_sab_hosts: ["sabnzbd.{{ service_domain }}", sabnzbd.plex-services.svc, 
 k8s_apps_update_ns: ""
 k8s_apps_pbs_image: "{{ k8s_apps_registry }}/homelab/proxmox-backup-client:trixie"
 k8s_apps_pbs_image_dir: "{{ playbook_dir }}/../../kubernetes/plex-services/pbs-client"
+fleetdm_host: "fleet.{{ service_domain }}"
+fleetdm_admin_name: Break-glass admin
+fleetdm_admin_email: "fleet-admin@{{ service_domain }}"
+fleetdm_org_name: Homelab
+fleetdm_expected_admins: ["{{ fleetdm_admin_email }}"]
