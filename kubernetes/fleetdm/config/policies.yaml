@@ -1,0 +1,20 @@
+# Fleet global policies, kept in Fleet by k8s_apps (matched by name). run_script names a script in scripts/;
+# Fleet (Premium) runs it on a host that fails the policy.
+- name: "CIS level 1 (mSCP): results are under 7 days old"
+  platform: darwin
+  description: cis-compliance-check.sh last wrote /Library/Preferences/org.cis_lvl1_studio.audit.plist within 7 days.
+  resolution: Fleet reruns cis-compliance-check.sh on failure; run it by hand from the host's Scripts tab if this stays failing.
+  run_script: cis-compliance-check.sh
+  query: >-
+    SELECT 1 FROM file WHERE path = '/Library/Preferences/org.cis_lvl1_studio.audit.plist'
+    AND mtime > CAST(strftime('%s', 'now') AS INTEGER) - 604800;
+- name: "CIS level 1 (mSCP): every rule passes"
+  platform: darwin
+  description: No rule in the last cis-compliance-check.sh run has finding = true, except rules exempted in profiles/cis-exemptions.mobileconfig (kubernetes/fleetdm/config/cis/cis_lvl1_studio.yaml is the baseline).
+  resolution: Run cis-compliance-check.sh from the host's Scripts tab; its output lists the failing rules. Profiles in config/profiles/cis-* enforce most of them.
+  query: >-
+    SELECT 1 WHERE EXISTS (SELECT 1 FROM file WHERE path = '/Library/Preferences/org.cis_lvl1_studio.audit.plist')
+    AND NOT EXISTS (SELECT 1 FROM plist WHERE path = '/Library/Preferences/org.cis_lvl1_studio.audit.plist'
+    AND subkey = 'finding' AND value = '1'
+    AND key NOT IN (SELECT key FROM plist WHERE path = '/Library/Managed Preferences/org.cis_lvl1_studio.audit.plist'
+    AND subkey = 'exempt' AND value = '1'));

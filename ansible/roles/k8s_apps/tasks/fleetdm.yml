@@ -324,6 +324,70 @@
         quiet: true
       when: _fleetdm_apns.status == 200
 
+    # Policies live on "No team" (teams/0): a run-script automation needs a team scope, and the hosts and scripts sit there.
+    - name: fleetdm scripts after sync
+      ansible.builtin.uri:
+        url: "{{ _fleetdm_base }}/fleet/scripts"
+        headers: {Authorization: "Bearer {{ _fleetdm_login.json.token }}"}
+        validate_certs: false
+      register: _fleetdm_scripts_now
+      changed_when: false
+      no_log: true
+
+    - name: fleetdm policies before
+      ansible.builtin.uri:
+        url: "{{ _fleetdm_base }}/fleet/teams/0/policies"
+        headers: {Authorization: "Bearer {{ _fleetdm_login.json.token }}"}
+        validate_certs: false
+      register: _fleetdm_policies_before
+      changed_when: false
+      no_log: true
+
+    - name: fleetdm policies from the tree exist
+      ansible.builtin.uri:
+        url: "{{ _fleetdm_base }}/fleet/teams/0/policies"
+        method: POST
+        headers: {Authorization: "Bearer {{ _fleetdm_login.json.token }}"}
+        body_format: json
+        body: {name: "{{ item.name }}", query: "{{ item.query }}", platform: "{{ item.platform }}"}
+        validate_certs: false
+      loop: "{{ lookup('file', fleetdm_policies_file) | from_yaml
+                | rejectattr('name', 'in', _fleetdm_policies_before.json.policies | default([], true) | map(attribute='name') | list) | list }}"
+      loop_control: {label: "{{ item.name }}"}
+      changed_when: true
+      no_log: true
+
+    - name: fleetdm policies now
+      ansible.builtin.uri:
+        url: "{{ _fleetdm_base }}/fleet/teams/0/policies"
+        headers: {Authorization: "Bearer {{ _fleetdm_login.json.token }}"}
+        validate_certs: false
+      register: _fleetdm_policies_now
+      changed_when: false
+      no_log: true
+
+    - name: fleetdm policies match the tree
+      vars:
+        _live: "{{ _fleetdm_policies_now.json.policies | selectattr('name', 'equalto', item.name) | first }}"
+        _script_id: >-
+          {{ (_fleetdm_scripts_now.json.scripts | selectattr('name', 'equalto', item.run_script) | map(attribute='id') | first)
+             if item.run_script is defined else none }}
+        _want: {query: "{{ item.query }}", description: "{{ item.description | default('') }}", resolution: "{{ item.resolution | default('') }}", platform: "{{ item.platform }}"}
+      ansible.builtin.uri:
+        url: "{{ _fleetdm_base }}/fleet/teams/0/policies/{{ _live.id }}"
+        method: PATCH
+        headers: {Authorization: "Bearer {{ _fleetdm_login.json.token }}"}
+        body_format: json
+        body: "{{ _want | combine({'script_id': _script_id}) }}"
+        validate_certs: false
+      loop: "{{ lookup('file', fleetdm_policies_file) | from_yaml }}"
+      loop_control: {label: "{{ item.name }}"}
+      when: >-
+        (_live | dict2items | selectattr('key', 'in', _want.keys() | list) | items2dict) != _want
+        or ((_live.run_script | default(none, true)) or {}).get('id') != _script_id
+      changed_when: true
+      no_log: true
+
   always:
     - name: fleetdm port-forward stopped
       ansible.builtin.shell:

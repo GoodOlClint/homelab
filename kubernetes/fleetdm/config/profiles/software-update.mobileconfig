@@ -10,14 +10,14 @@
       <key>PayloadUUID</key><string>2CF524E0-622D-451B-97D4-B1F47904363D</string>
       <key>PayloadVersion</key><integer>1</integer>
       <key>AutomaticCheckEnabled</key><true/>
-      <key>AutomaticDownload</key><false/>
+      <key>AutomaticDownload</key><true/>
       <key>AutomaticallyInstallMacOSUpdates</key><false/>
-      <key>AutomaticallyInstallAppUpdates</key><false/>
+      <key>AutomaticallyInstallAppUpdates</key><true/>
       <key>CriticalUpdateInstall</key><false/>
       <key>ConfigDataInstall</key><true/>
     </dict>
   </array>
-  <key>PayloadDisplayName</key><string>Software update: never install on its own</string>
+  <key>PayloadDisplayName</key><string>Software update: download and update apps, never install macOS on its own</string>
   <key>PayloadIdentifier</key><string>homelab.fleetdm.software-update</string>
   <key>PayloadScope</key><string>System</string>
   <key>PayloadType</key><string>Configuration</string>

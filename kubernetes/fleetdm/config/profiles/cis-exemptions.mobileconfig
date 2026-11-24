@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>PayloadContent</key>
+  <array>
+    <dict>
+      <key>PayloadType</key><string>org.cis_lvl1_studio.audit</string>
+      <key>PayloadIdentifier</key><string>homelab.fleetdm.cis-exemptions.audit</string>
+      <key>PayloadUUID</key><string>50EC32A0-8F66-49CE-BC4A-6290DE1823B5</string>
+      <key>PayloadVersion</key><integer>1</integer>
+      <key>os_external_apfs_hfs_volumes_encrypted</key>
+      <dict>
+        <key>exempt</key><true/>
+        <key>exempt_reason</key><string>The only external volume is macOS's own read-only MetalToolchainCryptex disk image, which the rule's disk-image filter misses.</string>
+      </dict>
+      <key>system_settings_software_update_download_enforce</key>
+      <dict>
+        <key>exempt</key><true/>
+        <key>exempt_reason</key><string>The check reads the DDM software-update state, which needs a supervised Mac; software-update.mobileconfig sets AutomaticDownload until the Studio is supervised (ADR 0066).</string>
+      </dict>
+    </dict>
+  </array>
+  <key>PayloadDisplayName</key><string>[cis_lvl1_studio] exemptions</string>
+  <key>PayloadIdentifier</key><string>homelab.fleetdm.cis-exemptions</string>
+  <key>PayloadScope</key><string>System</string>
+  <key>PayloadType</key><string>Configuration</string>
+  <key>PayloadUUID</key><string>E390EA34-A3D0-407D-9153-857F549FD7A2</string>
+  <key>PayloadVersion</key><integer>1</integer>
+</dict>
+</plist>

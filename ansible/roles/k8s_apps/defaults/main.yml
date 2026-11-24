@@ -31,4 +31,5 @@ fleetdm_expected_admins: "{{ [fleetdm_admin_email] + (fleetdm_sso_admins | map(a
 fleetdm_scripts: "{{ query('fileglob', playbook_dir ~ '/../../kubernetes/fleetdm/config/scripts/*.sh') | sort }}"
 fleetdm_script_timeout: 1800
 fleetdm_alert_rules: "{{ playbook_dir }}/../../kubernetes/monitoring/config/alert.rules.yml"
+fleetdm_policies_file: "{{ playbook_dir }}/../../kubernetes/fleetdm/config/policies.yaml"
 fleetdm_profiles: "{{ query('fileglob', playbook_dir ~ '/../../kubernetes/fleetdm/config/profiles/*.mobileconfig') | sort }}"
