@@ -78,7 +78,7 @@ Separate axis. coreboot + Secure Boot + TPM. Note this no longer makes the firew
 ## What would actually decide this
 
 1. Plus licensing trajectory — the strongest single driver, and outside our control.
-2. Whether `pfSense-pkg-RESTAPI` keeps tracking Plus releases. It does today (a `26.07` build exists); if it stalls, the manageability argument flips hard.
+2. Whether `pfSense-pkg-RESTAPI` keeps tracking Plus releases. It does today (a `26.07.2` build exists, v2.11.1), but the v2.11.1 release notes (2026-11-21) say the project will end soon in favour of the official pfSense API (upstream announcement #962). The only consumer here is the unfinished MCP gateway's `pfsense_api_key` (`/mcp`), so nothing is built on it; new pfSense automation should wait for the official API rather than target pfrest.
 3. Whether firewall SSO matters enough to want a pluggable auth stack. Today: no — LDAP covers the credential-unification half at zero risk.
 4. A hardware refresh creating the window anyway.
 

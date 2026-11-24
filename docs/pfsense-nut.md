@@ -14,7 +14,7 @@ Global box — required, or both drivers stay "Driver not connected" ("UPS Daemo
 user = root
 ```
 
-`usbhid-ups` drops to user `nut`, but the devd rule set (`/usr/local/etc/devd/nut-usb.conf`) has no entry for the OR2200PFCRT2U / CP1500PFCRM2U product IDs, so the `ugen` nodes stay `root:operator 0600` and the driver cannot open them. Rediscovered 2026-08-21 after the 26.07 upgrade dropped the NUT package (and its whole config section) — note every pfSense upgrade may require re-entering all of this; check Services → UPS after each one.
+`usbhid-ups` drops to user `nut`, but the devd rule set (`/usr/local/etc/devd/nut-usb.conf`) has no entry for the OR2200PFCRT2U / CP1500PFCRM2U product IDs, so the `ugen` nodes stay `root:operator 0600` and the driver cannot open them. Rediscovered 2026-08-21 after the 26.07 upgrade dropped the NUT package (and its whole config section) — note every pfSense upgrade may require re-entering all of this; check Services → UPS after each one. The 26.07 → 26.07.2 point release (2026-11-24) kept NUT and its config; the only package it removed was the third-party `pfSense-pkg-RESTAPI`, whose settings and keys came back from its own `/usr/local/share/pfSense-pkg-RESTAPI/backup.json` on reinstall (`env SSL_CA_CERT_PATH=/etc/ssl/certs pkg-static add <release URL for the new base>`).
 
 Rendered result:
 
