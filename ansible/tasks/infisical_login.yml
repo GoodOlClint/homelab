@@ -63,6 +63,7 @@
     - authentik
     - authentik-ext
     - codeintel
+    - fleetdm
     - jellyfin
     - llm
     - mcp

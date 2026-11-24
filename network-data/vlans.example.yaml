@@ -54,6 +54,7 @@ metallb:
     valheim: 67
     codeintel: 68
     valheim2: 69
+    fleetdm: 70
 
 # --- Proxmox SDN Zones ---
 sdn_zones:

@@ -21,6 +21,7 @@ k8s_seed_namespaces:
   codeintel: baseline
   cert-manager: baseline
   external-dns: baseline
+  fleetdm: baseline
   games: privileged
   headlamp: baseline
   homepage: baseline

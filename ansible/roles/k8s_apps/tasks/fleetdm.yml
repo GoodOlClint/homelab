@@ -1,0 +1,16 @@
+---
+# ADR 0065: server_private_key encrypts the stored Apple push certificate inside MySQL, so rotating it orphans every backup.
+- name: fleetdm secrets
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/generate_secret.yml"
+  vars:
+    secret_key: "{{ sk.key }}"
+    secret_gen_cmd: "{{ sk.cmd }}"
+    secret_comment: "Fleet MDM: {{ sk.comment }}"
+    secret_infisical_path: /fleetdm
+    secret_dict_path: fleetdm
+  loop:
+    - {key: mysql_root_password, cmd: openssl rand -hex 24, comment: MySQL root password (the mysql-backup CronJob)}
+    - {key: mysql_password, cmd: openssl rand -hex 24, comment: MySQL password of the fleet user}
+    - {key: server_private_key, cmd: openssl rand -base64 32, comment: Fleet server private key (encrypts the stored Apple push certificate)}
+    - {key: admin_password, cmd: openssl rand -hex 24, comment: Fleet break-glass admin password}
+  loop_control: {loop_var: sk, label: "{{ sk.key }}"}
