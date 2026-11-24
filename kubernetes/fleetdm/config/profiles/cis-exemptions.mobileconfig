@@ -14,6 +14,11 @@
         <key>exempt</key><true/>
         <key>exempt_reason</key><string>The only external volume is macOS's own read-only MetalToolchainCryptex disk image, which the rule's disk-image filter misses.</string>
       </dict>
+      <key>system_settings_remote_management_disable</key>
+      <dict>
+        <key>exempt</key><true/>
+        <key>exempt_reason</key><string>Remote Management (ARDAgent) is off, but mdmclient reports RemoteDesktopEnabled = 1 whenever screensharingd runs, and the baseline keeps Screen Sharing for the headless Studio.</string>
+      </dict>
       <key>system_settings_software_update_download_enforce</key>
       <dict>
         <key>exempt</key><true/>
