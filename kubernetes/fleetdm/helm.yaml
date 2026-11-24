@@ -15,13 +15,20 @@ spec:
       sourceRef: {kind: HelmRepository, name: fleet}
   install: {remediation: {retries: 5}}
   upgrade: {remediation: {retries: 5}}
+  postRenderers:
+    - kustomize:
+        patches:
+          - target: {kind: Deployment, name: fleet}
+            patch: '[{"op": "remove", "path": "/spec/template/spec/containers/0/resources/limits"}]'
+          - target: {kind: Job, name: fleet-migration}
+            patch: '[{"op": "remove", "path": "/spec/template/spec/containers/0/resources/limits"}]'
   values:
     hostName: fleet.${DOMAIN}
     replicas: 1
     imageRepository: ${REGISTRY}/docker.io/fleetdm/fleet
     imageTag: v4.95.0
     resources:
-      limits: {cpu: "", memory: ""}
+      limits: {cpu: "2", memory: 2Gi}
       requests: {cpu: 250m, memory: 512Mi}
     ingress: {enabled: false}
     fleet:
