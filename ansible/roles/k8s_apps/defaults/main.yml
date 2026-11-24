@@ -30,6 +30,10 @@ fleetdm_sso_admins: []
 fleetdm_expected_admins: "{{ [fleetdm_admin_email] + (fleetdm_sso_admins | map(attribute='email') | list) }}"
 fleetdm_scripts: "{{ query('fileglob', playbook_dir ~ '/../../kubernetes/fleetdm/config/scripts/*.sh') | sort }}"
 fleetdm_script_timeout: 1800
+# Top-level keys of Fleet's mdm config that k8s_apps keeps (Premium). Recovery Lock: Fleet sets, escrows and rotates
+# the password that recoveryOS asks for; it lives only in Fleet's MySQL (backed up nightly).
+fleetdm_mdm_settings:
+  enable_recovery_lock_password: true
 fleetdm_alert_rules: "{{ playbook_dir }}/../../kubernetes/monitoring/config/alert.rules.yml"
 fleetdm_policies_file: "{{ playbook_dir }}/../../kubernetes/fleetdm/config/policies.yaml"
 fleetdm_profiles: "{{ query('fileglob', playbook_dir ~ '/../../kubernetes/fleetdm/config/profiles/*.mobileconfig') | sort }}"

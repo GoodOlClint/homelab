@@ -193,6 +193,18 @@
           {{ _fleetdm_users.json.users | selectattr('global_role', 'equalto', 'admin') | map(attribute='email') | list }}
         quiet: true
 
+    - name: fleetdm MDM settings
+      ansible.builtin.uri:
+        url: "{{ _fleetdm_base }}/fleet/config"
+        method: PATCH
+        headers: {Authorization: "Bearer {{ _fleetdm_login.json.token }}"}
+        body_format: json
+        body: {mdm: "{{ fleetdm_mdm_settings }}"}
+        validate_certs: false
+      when: (_fleetdm_config.json.mdm | dict2items | selectattr('key', 'in', fleetdm_mdm_settings.keys() | list) | items2dict) != fleetdm_mdm_settings
+      changed_when: true
+      no_log: true
+
     # Fleet kills a script at script_execution_timeout (default 300 s); a brew upgrade outlasts that.
     - name: fleetdm script timeout
       ansible.builtin.uri:
