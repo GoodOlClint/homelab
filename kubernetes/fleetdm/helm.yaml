@@ -33,6 +33,7 @@ spec:
     ingress: {enabled: false}
     fleet:
       secretName: fleetdm-secrets
+      license: {secretName: fleetdm-secrets, licenseKey: FLEET_LICENSE_KEY}
       tls:
         enabled: true
         uniqueTLSSecret: true
