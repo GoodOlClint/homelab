@@ -140,6 +140,15 @@ groups:
 
   - name: services
     rules:
+      # Fleet's push-certificate endpoint is admin-only, so the renew date is pinned here (Unix seconds, from
+      # Fleet → Settings → Integrations → MDM → Apple). `make k8s-apps` fails when it no longer matches Fleet.
+      - alert: FleetAPNsCertExpiringSoon
+        expr: vector(1827065300) - time() < 86400 * 30
+        labels:
+          severity: critical
+        annotations:
+          summary: "Fleet's Apple push certificate expires within 30 days; renew it in Fleet → Settings → Integrations → MDM → Apple (every Mac re-enrolls if it lapses)"
+
       # OpenObserve answers on 5080 while rejecting every write (2026-07 schema wedge, 2026-10 inode exhaustion),
       # so reachability checks pass. Its memtable size moves whenever logs arrive and sat flat for 8 h during the
       # 2026-10 outage. No log-ingest request series exists on this version; absent() covers a vanished metric. max(): a replaced pod leaves a flat series inside the window.

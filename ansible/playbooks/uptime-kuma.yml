@@ -59,6 +59,7 @@
       - {name: Homepage, monitor_type: http, url: "http://homepage.homepage.svc.cluster.local", accepted_statuscodes: "{{ _redirects }}"}
       - {name: "Static viewer", monitor_type: http, url: "http://static-viewer.static-viewer.svc.cluster.local:8080/healthz"}
       - {name: "authentik — internal realm", monitor_type: http, url: "https://auth.{{ service_domain }}/-/health/ready/", expiry_notification: true}
+      - {name: "Fleet MDM", monitor_type: http, url: "https://fleet.{{ service_domain }}/healthz", expiry_notification: true}
       - {name: "authentik — external realm", monitor_type: http, url: "http://authentik-server.authentik-ext.svc.cluster.local/-/health/ready/"}
       - {name: "VPS — public IP", monitor_type: ping, hostname: "vps.{{ media_domain }}"}
       - {name: "VPS — WireGuard tunnel peer", monitor_type: ping, hostname: "{{ vps_wg_tunnel.tunnel_address.split('/')[0] }}"}

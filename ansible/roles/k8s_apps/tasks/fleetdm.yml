@@ -298,6 +298,32 @@
       changed_when: true
       no_log: true
 
+    # 400 until the push certificate is uploaded (operator step 1 of docs/fleetdm-plan.md).
+    - name: fleetdm push certificate
+      ansible.builtin.uri:
+        url: "{{ _fleetdm_base }}/fleet/mdm/apple"
+        headers: {Authorization: "Bearer {{ _fleetdm_login.json.token }}"}
+        validate_certs: false
+        status_code: [200, 400, 404]
+      register: _fleetdm_apns
+      changed_when: false
+      no_log: true
+
+    - name: fleetdm push certificate date matches the expiry alert
+      vars:
+        _rule: >-
+          {{ (lookup('file', fleetdm_alert_rules) | from_yaml).groups | map(attribute='rules') | flatten
+             | selectattr('alert', 'defined') | selectattr('alert', 'equalto', 'FleetAPNsCertExpiringSoon') | first }}
+        _pinned: "{{ _rule.expr | regex_search('vector\\(([0-9]+)\\)', '\\1') | first | int }}"
+        _live: "{{ ((_fleetdm_apns.json.renew_date | to_datetime('%Y-%m-%dT%H:%M:%SZ')) - ('1970-01-01' | to_datetime('%Y-%m-%d'))).total_seconds() | int }}"
+      ansible.builtin.assert:
+        that: _pinned | int == _live | int
+        fail_msg: >-
+          FleetAPNsCertExpiringSoon pins {{ _pinned }} but Fleet's push certificate renews at
+          {{ _fleetdm_apns.json.renew_date }} ({{ _live }}); update vector(...) in kubernetes/monitoring/config/alert.rules.yml.
+        quiet: true
+      when: _fleetdm_apns.status == 200
+
   always:
     - name: fleetdm port-forward stopped
       ansible.builtin.shell:
