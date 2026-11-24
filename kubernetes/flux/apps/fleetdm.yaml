@@ -1,0 +1,15 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata: {name: fleetdm, namespace: flux-system}
+spec:
+  interval: 10m
+  path: ./kubernetes/fleetdm
+  prune: false
+  sourceRef: {kind: GitRepository, name: homelab}
+  serviceAccountName: flux-fleetdm
+  postBuild:
+    substituteFrom: [{kind: ConfigMap, name: cluster-bindings}]
+    substitute: {NS: fleetdm}
+  healthChecks:
+    - {apiVersion: apps/v1, kind: Deployment, name: mysql, namespace: fleetdm}
+    - {apiVersion: apps/v1, kind: Deployment, name: fleet, namespace: fleetdm}

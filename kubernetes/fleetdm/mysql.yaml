@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+  namespace: fleetdm
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: mysql}}
+  template:
+    metadata: {labels: {app: mysql}}
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: mysql
+          # Pinned LTS line (ADR 0065): move to the next LTS only by the rule recorded there, never to an Innovation release.
+          image: ${REGISTRY}/docker.io/library/mysql:8.4
+          args: [--character-set-server=utf8mb4, --collation-server=utf8mb4_unicode_ci]
+          resources: {requests: {cpu: 250m, memory: 1Gi}}
+          ports: [{containerPort: 3306}]
+          env:
+            - {name: TZ, value: "${TZ}"}
+            - {name: MYSQL_DATABASE, value: fleet}
+            - {name: MYSQL_USER, value: fleet}
+            - {name: MYSQL_ROOT_PASSWORD, valueFrom: {secretKeyRef: {name: fleetdm-secrets, key: MYSQL_ROOT_PASSWORD}}}
+            - {name: MYSQL_PASSWORD, valueFrom: {secretKeyRef: {name: fleetdm-secrets, key: MYSQL_PASSWORD}}}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/mysql, subPath: data}
+          startupProbe:
+            exec: {command: [sh, -c, 'mysqladmin ping -h 127.0.0.1 -uroot -p"$MYSQL_ROOT_PASSWORD"']}
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            exec: {command: [sh, -c, 'mysqladmin ping -h 127.0.0.1 -uroot -p"$MYSQL_ROOT_PASSWORD"']}
+            periodSeconds: 10
+          livenessProbe:
+            exec: {command: [sh, -c, 'mysqladmin ping -h 127.0.0.1 -uroot -p"$MYSQL_ROOT_PASSWORD"']}
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 4
+      volumes:
+        - {name: data, persistentVolumeClaim: {claimName: mysql}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: mysql, namespace: fleetdm}
+spec:
+  selector: {app: mysql}
+  ports: [{port: 3306}]

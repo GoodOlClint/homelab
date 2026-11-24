@@ -1,0 +1,7 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: {name: fleet-tls, namespace: fleetdm}
+spec:
+  dnsNames: ["fleet.${DOMAIN}"]
+  secretName: fleet-tls
+  issuerRef: {name: letsencrypt, kind: ClusterIssuer}

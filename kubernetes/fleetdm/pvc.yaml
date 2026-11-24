@@ -1,0 +1,10 @@
+# One ceph-rbd volume per stateful service (ADR 0036 shape); the StorageClass carries reclaimPolicy Retain.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: mysql, namespace: fleetdm}
+spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 10Gi}}}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: backups, namespace: fleetdm}
+spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 10Gi}}}
