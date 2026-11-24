@@ -9,6 +9,7 @@ before=$(sudo -u "$owner" -H "$brew" list --versions omlx)
 sudo -u "$owner" -H "$brew" update --quiet
 sudo -u "$owner" -H "$brew" upgrade omlx
 after=$(sudo -u "$owner" -H "$brew" list --versions omlx)
+if [ "$before" = "$after" ]; then echo "$after already current; no restart"; exit 0; fi
 echo "$before -> $after"
 launchctl kickstart -k system/local.omlx
 for _ in $(seq 1 60); do
