@@ -12,3 +12,11 @@ if [ -z "$outdated" ]; then echo "nothing outdated"; exit 0; fi
 echo "upgrading: $(tr "\n" " " <<<"$outdated")"
 # shellcheck disable=SC2086
 as_owner upgrade $outdated
+# A brew Python upgrade moves Python.app to a new Cellar path, which the application firewall treats as a
+# new app and blocks behind an on-screen prompt; omlx serves through it. A firewall profile would lock these
+# command-line rules out, so the firewall stays locally managed.
+for app in /opt/homebrew/Cellar/python@*/*/Frameworks/Python.framework/Versions/*/Resources/Python.app; do
+  [ -d "$app" ] || continue
+  /usr/libexec/ApplicationFirewall/socketfilterfw --add "$app" >/dev/null
+  /usr/libexec/ApplicationFirewall/socketfilterfw --unblockapp "$app" >/dev/null
+done

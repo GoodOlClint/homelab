@@ -11,6 +11,14 @@ sudo -u "$owner" -H "$brew" upgrade omlx
 after=$(sudo -u "$owner" -H "$brew" list --versions omlx)
 if [ "$before" = "$after" ]; then echo "$after already current; no restart"; exit 0; fi
 echo "$before -> $after"
+# A brew Python upgrade moves Python.app to a new Cellar path, which the application firewall treats as a
+# new app and blocks behind an on-screen prompt; omlx serves through it. A firewall profile would lock these
+# command-line rules out, so the firewall stays locally managed.
+for app in /opt/homebrew/Cellar/python@*/*/Frameworks/Python.framework/Versions/*/Resources/Python.app; do
+  [ -d "$app" ] || continue
+  /usr/libexec/ApplicationFirewall/socketfilterfw --add "$app" >/dev/null
+  /usr/libexec/ApplicationFirewall/socketfilterfw --unblockapp "$app" >/dev/null
+done
 launchctl kickstart -k system/local.omlx
 for _ in $(seq 1 60); do
   if curl -fsS -m 2 http://127.0.0.1:8000/health >/dev/null; then echo "omlx healthy"; exit 0; fi
