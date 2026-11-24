@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>PayloadContent</key>
+  <array>
+    <dict>
+      <key>PayloadType</key><string>com.apple.security.firewall</string>
+      <key>PayloadIdentifier</key><string>homelab.fleetdm.firewall.settings</string>
+      <key>PayloadUUID</key><string>7A50EAA5-F3F2-4C2D-AF83-08197941F84D</string>
+      <key>PayloadVersion</key><integer>1</integer>
+      <key>EnableFirewall</key><true/>
+      <key>BlockAllIncoming</key><false/>
+      <key>EnableStealthMode</key><true/>
+      <key>AllowSigned</key><true/>
+      <key>AllowSignedApp</key><true/>
+    </dict>
+  </array>
+  <key>PayloadDisplayName</key><string>Firewall</string>
+  <key>PayloadIdentifier</key><string>homelab.fleetdm.firewall</string>
+  <key>PayloadScope</key><string>System</string>
+  <key>PayloadType</key><string>Configuration</string>
+  <key>PayloadUUID</key><string>90D36F5B-215A-418C-89DA-98C8F03688A4</string>
+  <key>PayloadVersion</key><integer>1</integer>
+</dict>
+</plist>

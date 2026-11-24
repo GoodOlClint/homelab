@@ -245,6 +245,59 @@
       changed_when: true
       no_log: true
 
+    - name: fleetdm profiles
+      ansible.builtin.uri:
+        url: "{{ _fleetdm_base }}/fleet/configuration_profiles"
+        headers: {Authorization: "Bearer {{ _fleetdm_login.json.token }}"}
+        validate_certs: false
+      register: _fleetdm_profiles
+      changed_when: false
+      no_log: true
+
+    - name: fleetdm profile contents
+      ansible.builtin.uri:
+        url: "{{ _fleetdm_base }}/fleet/configuration_profiles/{{ item.profile_uuid }}?alt=media"
+        headers: {Authorization: "Bearer {{ _fleetdm_login.json.token }}"}
+        validate_certs: false
+        return_content: true
+      loop: "{{ _fleetdm_profiles.json.profiles | default([], true) }}"
+      loop_control: {label: "{{ item.name }}"}
+      register: _fleetdm_profile_contents
+      changed_when: false
+      no_log: true
+
+    # Fleet has no profile update: a changed or unknown profile is deleted, and the tree's copy uploaded.
+    # The multipart upload arrives with CRLF line ends, so stored copies compare after normalizing them.
+    - name: fleetdm profiles not in the tree removed
+      vars:
+        _tree: "{{ query('file', *fleetdm_profiles) }}"
+      ansible.builtin.uri:
+        url: "{{ _fleetdm_base }}/fleet/configuration_profiles/{{ item.item.profile_uuid }}"
+        method: DELETE
+        headers: {Authorization: "Bearer {{ _fleetdm_login.json.token }}"}
+        validate_certs: false
+        status_code: [200, 204]
+      loop: "{{ _fleetdm_profile_contents.results | selectattr('content', 'defined') | list }}"
+      loop_control: {label: "{{ item.item.name }}"}
+      when: item.content | replace('\r\n', '\n') not in _tree
+      changed_when: true
+      no_log: true
+
+    - name: fleetdm profiles from the tree uploaded
+      ansible.builtin.uri:
+        url: "{{ _fleetdm_base }}/fleet/configuration_profiles"
+        method: POST
+        headers: {Authorization: "Bearer {{ _fleetdm_login.json.token }}"}
+        body_format: form-multipart
+        body:
+          profile: {filename: "{{ item | basename }}", content: "{{ lookup('file', item) }}", mime_type: application/x-apple-aspen-config}
+        validate_certs: false
+      loop: "{{ fleetdm_profiles }}"
+      loop_control: {label: "{{ item | basename }}"}
+      when: lookup('file', item) not in (_fleetdm_profile_contents.results | map(attribute='content') | map('replace', '\r\n', '\n') | list)
+      changed_when: true
+      no_log: true
+
   always:
     - name: fleetdm port-forward stopped
       ansible.builtin.shell:

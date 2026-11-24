@@ -30,3 +30,4 @@ fleetdm_sso_admins: []
 fleetdm_expected_admins: "{{ [fleetdm_admin_email] + (fleetdm_sso_admins | map(attribute='email') | list) }}"
 fleetdm_scripts: "{{ query('fileglob', playbook_dir ~ '/../../kubernetes/fleetdm/config/scripts/*.sh') | sort }}"
 fleetdm_script_timeout: 1800
+fleetdm_profiles: "{{ query('fileglob', playbook_dir ~ '/../../kubernetes/fleetdm/config/profiles/*.mobileconfig') | sort }}"
