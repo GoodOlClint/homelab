@@ -12,6 +12,8 @@ vrrp_instance {{ vip_group | upper }}_VIP {
     virtual_router_id {{ vip_router_id }}
     priority {{ vip_base_priority | default(150) | int - (groups[vip_group].index(inventory_hostname) * 10) }}
     advert_int 1
+    # A peer that lost the election can leave neighbours with its MAC for the VIP; pfSense keeps an ARP entry 20 min.
+    garp_master_refresh 30
     unicast_src_ip {{ ansible_host }}
     unicast_peer {
 {% for host in groups[vip_group] if host != inventory_hostname %}

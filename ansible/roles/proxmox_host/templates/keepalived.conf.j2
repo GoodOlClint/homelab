@@ -12,6 +12,8 @@ vrrp_instance PVE_VIP {
     virtual_router_id {{ proxmox_host_vrrp_router_id }}
     priority {{ proxmox_host_vrrp_base_priority - (groups['proxmox'].index(inventory_hostname) * 10) }}
     advert_int 1
+    # A peer that lost the election can leave neighbours with its MAC for the VIP; pfSense keeps an ARP entry 20 min.
+    garp_master_refresh 30
     unicast_src_ip {{ proxmox_host_mgmt_ip }}
     unicast_peer {
 {% for host in groups['proxmox'] if host != inventory_hostname %}
