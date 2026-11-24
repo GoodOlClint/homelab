@@ -34,6 +34,9 @@ fleetdm_script_timeout: 1800
 # the password that recoveryOS asks for; it lives only in Fleet's MySQL (backed up nightly).
 fleetdm_mdm_settings:
   enable_recovery_lock_password: true
+  # FileVault on with the personal recovery key escrowed to Fleet. A Mac already encrypted escrows only after its key
+  # is rotated (`sudo fdesetup changerecovery -personal` at the Mac); the escrowed key replaces any earlier copy.
+  enable_disk_encryption: true
 fleetdm_alert_rules: "{{ playbook_dir }}/../../kubernetes/monitoring/config/alert.rules.yml"
 fleetdm_policies_file: "{{ playbook_dir }}/../../kubernetes/fleetdm/config/policies.yaml"
 fleetdm_profiles: "{{ query('fileglob', playbook_dir ~ '/../../kubernetes/fleetdm/config/profiles/*.mobileconfig') | sort }}"
