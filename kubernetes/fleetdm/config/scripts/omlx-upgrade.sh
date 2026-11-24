@@ -1,6 +1,8 @@
 #!/bin/bash
 # Run only when no inference is running: the restart drops in-flight requests.
 set -euo pipefail
+# Fleet starts scripts in a root-only directory, which brew cannot read as the prefix owner.
+cd /
 brew=/opt/homebrew/bin/brew
 owner=$(stat -f %Su /opt/homebrew)
 before=$(sudo -u "$owner" -H "$brew" list --versions omlx)
