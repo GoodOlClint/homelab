@@ -24,4 +24,7 @@ fleetdm_host: "fleet.{{ service_domain }}"
 fleetdm_admin_name: Break-glass admin
 fleetdm_admin_email: "fleet-admin@{{ service_domain }}"
 fleetdm_org_name: Homelab
-fleetdm_expected_admins: ["{{ fleetdm_admin_email }}"]
+fleetdm_sso_metadata_url: "https://auth.{{ service_domain }}/application/saml/fleetdm/metadata/"
+# SSO admins as [{name, email}]; the emails are the operators' authentik emails, so the list is a binding in all.yml.
+fleetdm_sso_admins: []
+fleetdm_expected_admins: "{{ [fleetdm_admin_email] + (fleetdm_sso_admins | map(attribute='email') | list) }}"

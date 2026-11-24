@@ -107,15 +107,81 @@
       changed_when: false
       no_log: true
 
+    - name: fleetdm config
+      ansible.builtin.uri:
+        url: "{{ _fleetdm_base }}/fleet/config"
+        headers: {Authorization: "Bearer {{ _fleetdm_login.json.token }}"}
+        validate_certs: false
+      register: _fleetdm_config
+      changed_when: false
+      no_log: true
+
+    # Fleet refuses a metadata_url that resolves to a private address, so the metadata travels inline.
+    - name: fleetdm IdP metadata
+      ansible.builtin.uri:
+        url: "{{ fleetdm_sso_metadata_url }}"
+        return_content: true
+      register: _fleetdm_idp_metadata
+      changed_when: false
+
+    - name: fleetdm SSO settings
+      vars:
+        _want:
+          enable_sso: true
+          entity_id: "https://{{ fleetdm_host }}"
+          idp_name: authentik
+          metadata: "{{ _fleetdm_idp_metadata.content }}"
+          metadata_url: ""
+          enable_sso_idp_login: false
+      ansible.builtin.uri:
+        url: "{{ _fleetdm_base }}/fleet/config"
+        method: PATCH
+        headers: {Authorization: "Bearer {{ _fleetdm_login.json.token }}"}
+        body_format: json
+        body: {sso_settings: "{{ _want }}"}
+        validate_certs: false
+      when: (_fleetdm_config.json.sso_settings | default({})) | dict2items | selectattr('key', 'in', _want.keys() | list) | items2dict != _want
+      changed_when: true
+      no_log: true
+
+    - name: fleetdm users before
+      ansible.builtin.uri:
+        url: "{{ _fleetdm_base }}/fleet/users"
+        headers: {Authorization: "Bearer {{ _fleetdm_login.json.token }}"}
+        validate_certs: false
+      register: _fleetdm_users_before
+      changed_when: false
+      no_log: true
+
+    - name: fleetdm SSO admins exist
+      ansible.builtin.uri:
+        url: "{{ _fleetdm_base }}/fleet/users/admin"
+        method: POST
+        headers: {Authorization: "Bearer {{ _fleetdm_login.json.token }}"}
+        body_format: json
+        body: {name: "{{ item.name }}", email: "{{ item.email }}", sso_enabled: true, global_role: admin}
+        validate_certs: false
+      loop: "{{ fleetdm_sso_admins | rejectattr('email', 'in', _fleetdm_users_before.json.users | map(attribute='email') | list) | list }}"
+      loop_control: {label: "{{ item.name }}"}
+      changed_when: true
+      no_log: true
+
     - name: fleetdm users
       ansible.builtin.uri:
         url: "{{ _fleetdm_base }}/fleet/users"
-        headers:
-          Authorization: "Bearer {{ _fleetdm_login.json.token }}"
+        headers: {Authorization: "Bearer {{ _fleetdm_login.json.token }}"}
         validate_certs: false
       register: _fleetdm_users
       changed_when: false
       no_log: true
+
+    - name: fleetdm SSO admins sign in by SSO only
+      ansible.builtin.assert:
+        that: >-
+          (_fleetdm_users.json.users | selectattr('email', 'in', fleetdm_sso_admins | map(attribute='email') | list)
+           | rejectattr('sso_enabled') | list) == []
+        fail_msg: An SSO admin in Fleet has sso_enabled false (a password login); fix it in Fleet's user settings.
+        quiet: true
 
     - name: fleetdm global admins are exactly the expected ones
       ansible.builtin.assert:

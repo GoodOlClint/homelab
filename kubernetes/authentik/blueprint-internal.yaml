@@ -237,3 +237,29 @@ entries:
   - model: authentik_policies.policybinding
     identifiers: {target: !KeyOf pfsense-app, group: !KeyOf pfsense-admins, order: 0}
     attrs: {enabled: true}
+
+  # Fleet MDM (ADR 0065). Fleet matches the assertion's audience against its entity_id and the NameID
+  # against an existing Fleet user's email; free Fleet never creates users from SSO, so k8s_apps creates them.
+  - model: authentik_providers_saml.samlprovider
+    id: fleetdm
+    identifiers: {name: fleetdm}
+    attrs:
+      acs_url: "https://fleet.${DOMAIN}/api/v1/fleet/sso/callback"
+      audience: "https://fleet.${DOMAIN}"
+      sp_binding: post
+      sign_assertion: true
+      sign_response: true
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      signing_kp: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+      name_id_mapping: !Find [authentik_providers_saml.samlpropertymapping, [managed, goauthentik.io/providers/saml/email]]
+      property_mappings:
+        - !Find [authentik_providers_saml.samlpropertymapping, [managed, goauthentik.io/providers/saml/email]]
+        - !Find [authentik_providers_saml.samlpropertymapping, [managed, goauthentik.io/providers/saml/name]]
+  - model: authentik_core.application
+    id: fleetdm-app
+    identifiers: {slug: fleetdm}
+    attrs: {name: Fleet, provider: !KeyOf fleetdm, meta_launch_url: "https://fleet.${DOMAIN}"}
+  - model: authentik_policies.policybinding
+    identifiers: {target: !KeyOf fleetdm-app, group: !Find [authentik_core.group, [name, authentik Admins]], order: 0}
+    attrs: {enabled: true}
