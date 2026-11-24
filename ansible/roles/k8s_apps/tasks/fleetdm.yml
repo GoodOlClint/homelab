@@ -193,6 +193,58 @@
           {{ _fleetdm_users.json.users | selectattr('global_role', 'equalto', 'admin') | map(attribute='email') | list }}
         quiet: true
 
+    # Fleet kills a script at script_execution_timeout (default 300 s); a brew upgrade outlasts that.
+    - name: fleetdm script timeout
+      ansible.builtin.uri:
+        url: "{{ _fleetdm_base }}/fleet/config"
+        method: PATCH
+        headers: {Authorization: "Bearer {{ _fleetdm_login.json.token }}"}
+        body_format: json
+        body: {agent_options: "{{ _fleetdm_config.json.agent_options | combine({'script_execution_timeout': fleetdm_script_timeout}) }}"}
+        validate_certs: false
+      when: _fleetdm_config.json.agent_options.script_execution_timeout | default(0) != fleetdm_script_timeout
+      changed_when: true
+      no_log: true
+
+    - name: fleetdm scripts
+      ansible.builtin.uri:
+        url: "{{ _fleetdm_base }}/fleet/scripts"
+        headers: {Authorization: "Bearer {{ _fleetdm_login.json.token }}"}
+        validate_certs: false
+      register: _fleetdm_scripts
+      changed_when: false
+      no_log: true
+
+    - name: fleetdm script contents
+      ansible.builtin.uri:
+        url: "{{ _fleetdm_base }}/fleet/scripts/{{ item.id }}?alt=media"
+        headers: {Authorization: "Bearer {{ _fleetdm_login.json.token }}"}
+        validate_certs: false
+        return_content: true
+      loop: "{{ _fleetdm_scripts.json.scripts | default([], true) | selectattr('name', 'in', fleetdm_scripts | map('basename') | list) | list }}"
+      loop_control: {label: "{{ item.name }}"}
+      register: _fleetdm_script_contents
+      changed_when: false
+      no_log: true
+
+    - name: fleetdm scripts match the tree
+      vars:
+        _name: "{{ item | basename }}"
+        _live: "{{ _fleetdm_script_contents.results | selectattr('item.name', 'equalto', _name) | list }}"
+      ansible.builtin.uri:
+        url: "{{ _fleetdm_base }}/fleet/scripts{{ ('/' ~ _live[0].item.id) if _live else '' }}"
+        method: "{{ 'PATCH' if _live else 'POST' }}"
+        headers: {Authorization: "Bearer {{ _fleetdm_login.json.token }}"}
+        body_format: form-multipart
+        body:
+          script: {filename: "{{ _name }}", content: "{{ lookup('file', item) }}\n", mime_type: text/x-shellscript}
+        validate_certs: false
+      loop: "{{ fleetdm_scripts }}"
+      loop_control: {label: "{{ item | basename }}"}
+      when: not _live or _live[0].content != lookup('file', item) ~ '\n'
+      changed_when: true
+      no_log: true
+
   always:
     - name: fleetdm port-forward stopped
       ansible.builtin.shell:

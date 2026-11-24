@@ -28,3 +28,5 @@ fleetdm_sso_metadata_url: "https://auth.{{ service_domain }}/application/saml/fl
 # SSO admins as [{name, email}]; the emails are the operators' authentik emails, so the list is a binding in all.yml.
 fleetdm_sso_admins: []
 fleetdm_expected_admins: "{{ [fleetdm_admin_email] + (fleetdm_sso_admins | map(attribute='email') | list) }}"
+fleetdm_scripts: "{{ query('fileglob', playbook_dir ~ '/../../kubernetes/fleetdm/config/scripts/*.sh') | sort }}"
+fleetdm_script_timeout: 1800
