@@ -12,7 +12,7 @@
     - {key: mysql_root_password, cmd: openssl rand -hex 24, comment: MySQL root password (the mysql-backup CronJob)}
     - {key: mysql_password, cmd: openssl rand -hex 24, comment: MySQL password of the fleet user}
     - {key: server_private_key, cmd: openssl rand -base64 32, comment: Fleet server private key (encrypts the stored Apple push certificate)}
-    - {key: admin_password, cmd: openssl rand -hex 24, comment: Fleet break-glass admin password}
+    - {key: admin_password, cmd: "printf '%s-%s' \"$(openssl rand -hex 10)\" \"$(openssl rand -hex 10)\"", comment: Fleet break-glass admin password (Fleet requires a symbol and at most 48 characters)}
   loop_control: {loop_var: sk, label: "{{ sk.key }}"}
 
 - name: fleetdm rolled out
@@ -32,9 +32,8 @@
     - name: fleetdm port-forward started
       ansible.builtin.shell:
         cmd: >-
-          setsid -f sh -c 'echo $$ > {{ _fleetdm_pf.path }}/pid;
-          exec {{ k8s_apps_kubectl }} -n fleetdm port-forward --address 127.0.0.1 svc/fleet-service :8080'
-          </dev/null >{{ _fleetdm_pf.path }}/log 2>&1
+          nohup {{ k8s_apps_kubectl }} -n fleetdm port-forward --address 127.0.0.1 svc/fleet-service :8080
+          </dev/null >{{ _fleetdm_pf.path }}/log 2>&1 & echo $! > {{ _fleetdm_pf.path }}/pid
       changed_when: false
 
     - name: fleetdm port-forward local port
@@ -78,10 +77,21 @@
           org_info: {org_name: "{{ fleetdm_org_name }}"}
           server_url: "https://{{ fleetdm_host }}"
         validate_certs: false
-        status_code: 200
+        status_code: [200, 400, 409, 422, 500]
+        return_content: true
+        timeout: 120
+      register: _fleetdm_setup
+      failed_when: false
       when: _fleetdm_probe.status == 404
-      changed_when: true
+      changed_when: _fleetdm_setup.status | default(0) == 200
       no_log: true
+
+    - name: fleetdm first setup succeeded
+      ansible.builtin.assert:
+        that: _fleetdm_setup.status == 200
+        fail_msg: "Fleet setup answered {{ _fleetdm_setup.status }}: {{ _fleetdm_setup.json.message | default(_fleetdm_setup.content | default(_fleetdm_setup.msg | default(''))) | truncate(400) }}"
+        quiet: true
+      when: _fleetdm_setup is not skipped
 
     - name: fleetdm admin login
       ansible.builtin.uri:
