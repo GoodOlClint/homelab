@@ -437,7 +437,7 @@ spec:
       containers:
         - name: libation
           # Pinned (ADR 0018): CLI-only installs skip GUI-run migrations.
-          image: ${REGISTRY}/docker.io/rmcrackan/libation:13.7.10
+          image: ${REGISTRY}/docker.io/rmcrackan/libation:14.2.5
           resources: {requests: {cpu: 25m, memory: 128Mi}}
           env:
             - {name: TZ, value: "${TZ}"}
