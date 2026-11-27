@@ -62,7 +62,6 @@
     - control
     - authentik
     - authentik-ext
-    - codeintel
     - fleetdm
     - jellyfin
     - llm

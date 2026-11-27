@@ -1,3 +1,5 @@
+Retired 2026-11-27: code-intel was removed (ADR 0068, docs/tenant-edges-plan.md Phase 0b).
+
 # codeintel pgvector store — change plan (#46)
 
 Status: **LANDED 2026-09-14** (PR #48; done-when evidence on #46). Decision: [ADR 0055](decisions/0055-code-intelligence-s-pgvector-store-is-a-dedicated-postgres-in-its-own-flux-tree-reached-over-verify-full-tls-on-a-pinned-metallb-address-and-a-shared-clustered-postgres-is-rejected.md). Consumer side: #47 (homelab-mcp posts the split).

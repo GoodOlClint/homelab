@@ -75,7 +75,7 @@
         name: mcp
         tasks_from: accounts
   vars:
-    infisical_secret_paths: ["/mcp", "/plex", "/llm", "/codeintel"]
+    infisical_secret_paths: ["/mcp", "/plex"]
     infisical_agent_templates:
       - name: mcp
         dest_path: /etc/infisical/secrets/mcp.env

@@ -20,7 +20,6 @@ resources:
   - apps/zot.yaml
   - apps/ceph-csi.yaml
   - apps/authentik-ext.yaml
-  - apps/codeintel.yaml
   - apps/fleetdm.yaml
   - apps/ci-reaper.yaml
 patches:

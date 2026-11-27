@@ -52,7 +52,6 @@ metallb:
     ingress: 65
     syslog: 66
     valheim: 67
-    codeintel: 68
     valheim2: 69
     fleetdm: 70
 

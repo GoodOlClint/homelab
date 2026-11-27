@@ -145,12 +145,11 @@
     mode: "0755"
   tags: [mcp, config]
 
-- name: Non-secret gateway settings and the code-intel unit map
+- name: Non-secret gateway settings
   ansible.builtin.template:
-    src: "{{ item }}.j2"
-    dest: "{{ mcp_config_dir }}/{{ item }}"
+    src: gateway.env.j2
+    dest: "{{ mcp_config_dir }}/gateway.env"
     mode: "0644"
-  loop: [gateway.env, units.json]
   notify: Restart homelab-gateway
   tags: [mcp, config]
 
