@@ -65,7 +65,7 @@
       pvesm add iscsi {{ item.storage_id }}
       --portal {{ proxmox_host_synology_storage_host }}
       --target {{ item.target }}
-      --content none
+      --content images
   run_once: true
   changed_when: true
   when: item.storage_id not in (_tenant_pvesm.stdout_lines | map('split') | map('first') | list)
