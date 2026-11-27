@@ -109,13 +109,14 @@ variable "vm_configurations" {
       storage = optional(string, null) # Storage pool (uses primary_disk_storage if null)
       backup  = optional(bool, true)   # Include in vzdump/PBS jobs (false for re-downloadable caches)
     })), [])
-    # PCI passthrough (VM only, q35). `id` is the host BDF; a bare "0000:01:00"
-    # passes every function of the device. Raw ids need the provider's root@pam
-    # login — switch to a cluster resource mapping if that ever changes.
+    # PCI passthrough (VM only, q35). Set exactly one of `id` (host BDF; a bare
+    # "0000:01:00" passes every function; raw ids need the provider's root@pam
+    # login) or `mapping` (a cluster hardware mapping name, usable by a token).
     pci_devices = optional(list(object({
-      id     = string
-      pcie   = optional(bool, true)
-      rombar = optional(bool, true)
+      id      = optional(string)
+      mapping = optional(string)
+      pcie    = optional(bool, true)
+      rombar  = optional(bool, true)
     })), [])
     uefi = optional(bool, false)
     # Additional cloud-init or VM configuration options
@@ -129,6 +130,11 @@ variable "vm_configurations" {
   validation {
     condition     = alltrue([for vm in var.vm_configurations : vm.image == null || vm.type != "lxc"])
     error_message = "An LXC guest cannot set `image` — containers build from var.lxc_template. Roll that pin instead (ADR 0016/0025)."
+  }
+
+  validation {
+    condition     = alltrue([for vm in var.vm_configurations : alltrue([for d in vm.pci_devices : (d.id == null) != (d.mapping == null)])])
+    error_message = "Each pci_devices entry must set exactly one of `id` or `mapping`."
   }
 }
 

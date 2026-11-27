@@ -290,10 +290,11 @@ resource "proxmox_virtual_environment_vm" "vms" {
   dynamic "hostpci" {
     for_each = each.value.pci_devices
     content {
-      device = "hostpci${hostpci.key}"
-      id     = hostpci.value.id
-      pcie   = hostpci.value.pcie
-      rombar = hostpci.value.rombar
+      device  = "hostpci${hostpci.key}"
+      id      = hostpci.value.id
+      mapping = hostpci.value.mapping
+      pcie    = hostpci.value.pcie
+      rombar  = hostpci.value.rombar
     }
   }
 

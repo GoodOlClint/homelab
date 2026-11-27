@@ -5,12 +5,6 @@
     state: restarted
     daemon_reload: true
 
-- name: Restart llama-embed
-  ansible.builtin.systemd:
-    name: llama-embed
-    state: restarted
-    daemon_reload: true
-
 - name: Restart vllm
   ansible.builtin.systemd:
     name: vllm

@@ -116,26 +116,6 @@ llm_wedge_capture_dir: /var/log/vllm-wedge
 llm_docker_dir: "{{ llm_models_dir }}/docker"
 llm_containerd_dir: "{{ llm_models_dir }}/containerd"
 
-# Embeddings: their own always-loaded llama-server on the card, so the chat engine can never evict them. Caddy
-# sends /llama/v1/embeddings here. bge-m3 replaced Qwen3-Embedding-4B on 2026-09-16 (ADR 0051): it ties the 4B on
-# code-intelligence's retrieval set at 6,400 tok/s against 2,460, and both cannot sit beside vLLM at 0.90.
-# Pooling must be `cls` for this model; the default mean pooling returns plausible, wrong vectors. The alias is the
-# exact string code-intelligence's generator records as provider/model and compares between endpoints — a contract.
-llm_embed_model_file: bge-m3-FP16.gguf
-llm_embed_model_url: "https://huggingface.co/gpustack/bge-m3-GGUF/resolve/2d48f1737679ad900d5c26c5aad5410e9c70fdca/{{ llm_embed_model_file }}"
-llm_embed_model_sha256: daec91ffb5dd0c27411bd71f29932917c49cf529a641d0168496c3a501e3062c
-llm_embed_alias: baai/bge-m3
-llm_embed_port: 8082
-# Level Zero indexes follow the guest PCI addresses: 0 is 01:00.0 and 1 is 02:00.0.
-llm_embed_ze_device: 1
-# -ub 2048, NOT the bench's 8192: beside an engine holding 0.90 of the card, the SYCL flash-attention path
-# cannot reserve its scratch from the VMM pool at 8192 and llama-server ABORTS (SIGABRT in
-# ggml_sycl_flash_attn_ext -> ggml_sycl_pool_vmm::alloc) rather than refusing the request. The bench measured
-# 8192 as safe, but with ~900-token chunks and without real client input; code-intelligence's first real
-# request (25 chunks up to 6,000 chars) core-dumped it twice within the hour. Consumers chunk under 2k tokens.
-# --cache-ram 0: llama-server's default 8 GiB host prompt cache is host RAM an embedding server never hits.
-llm_embed_extra_args: "--embedding --pooling cls -ngl 99 -c 8192 -b 2048 -ub 2048 -fa on --cache-ram 0 -t 2"
-
 # Ollama stays as PAIR's supported backend, CPU-only so it can never take the card from llama-server.
 llm_ollama_version: 0.32.15
 llm_ollama_url: "https://github.com/ollama/ollama/releases/download/v{{ llm_ollama_version }}/ollama-linux-amd64.tar.zst"
@@ -152,6 +132,6 @@ llm_pair_port: 11434 # PAIR's Ollama/OpenAI-compatible proxy; must bind loopback
 llm_pair_state_dir: "{{ llm_data_dir }}/pair"
 
 # Per-client API keys, one Infisical /llm secret each (llm_api_key_<client>), rendered into Caddy's env by the agent.
-llm_api_clients: [agents, operator, code_intel, mcp, case_project]
+llm_api_clients: [agents, operator, case_project]
 llm_env_file: /etc/infisical/secrets/llm.env
 llm_caddy_tls_dir: /etc/caddy/tls

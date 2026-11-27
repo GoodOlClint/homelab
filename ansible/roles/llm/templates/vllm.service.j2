@@ -1,11 +1,7 @@
 [Unit]
 Description=vLLM XPU ({{ llm_vllm_served_name }})
-After=network-online.target docker.service llama-embed.service {{ llm_models_dir | replace('/', '-') | regex_replace('^-', '') }}.mount
+After=network-online.target docker.service {{ llm_models_dir | replace('/', '-') | regex_replace('^-', '') }}.mount
 Requires=docker.service {{ llm_models_dir | replace('/', '-') | regex_replace('^-', '') }}.mount
-{% if llm_chat_ze_device == llm_embed_ze_device %}
-# On a shared card the embedder must rebuild its allocation pool before vLLM reserves memory.
-PartOf=llama-embed.service
-{% endif %}
 # A crash loop of a 32 GB engine is expensive, so the limit stays — but 3600 s locked the unit out for an hour
 # after three init failures during the cutover, and a latched unit hides whether the next fix worked
 # (`systemctl reset-failed vllm` before judging one).
@@ -14,11 +10,6 @@ StartLimitBurst=3
 
 [Service]
 Type=exec
-# The embedder must already be answering: the triton/NEO compile cache is shared and two XPU processes
-# initialising at once reproduced a failed engine init, and GPU buffer placement is fixed at load.
-# is-active, not just /health: the embedder only becomes active once its ExecStartPost warm-up has grown the
-# SYCL pool to its steady state, and the engine must measure free memory after that, not before.
-ExecStartPre=/bin/sh -c 'for i in $(seq 1 150); do systemctl is-active --quiet llama-embed && curl -sf http://127.0.0.1:{{ llm_embed_port }}/health >/dev/null && exit 0; sleep 2; done; exit 1'
 ExecStartPre=-/usr/bin/docker rm -f {{ llm_vllm_container }}
 ExecStart=/usr/bin/docker run --rm --name {{ llm_vllm_container }} \
   --device /dev/dri -v /dev/dri/by-path:/dev/dri/by-path:ro \

@@ -234,7 +234,7 @@ locals {
       on_boot      = true
       disk_size_gb = 32
       extra_disks  = [{ size_gb = 300, storage = "local-zfs", backup = false }] # weights are re-downloadable, never ADR 0015 state
-      pci_devices  = [{ id = "0000:03:00.0" }, { id = "0000:07:00.0" }]
+      pci_devices  = [{ mapping = "b70-0" }, { mapping = "b70-1" }]
       data_volume  = { name = "llm" }
     },
     # homelab-mcp gateway (ADR 0052): a VM for its fleet token bundle, outside the Talos cluster.

@@ -14,7 +14,6 @@
   ansible.builtin.assert:
     that:
       - llm_api_clients | reject('match', '^[a-z0-9_]+$') | list | length == 0
-      - llm_embed_model_sha256 | length == 64
       - llm_vllm_image is search('@sha256:[0-9a-f]{64}$')
       - llm_vllm_revision | length == 40
       - llm_vllm_model_files | map(attribute='sha256') | reject('match', '^[0-9a-f]{64}$') | list | length == 0
@@ -167,7 +166,7 @@
   when: not _llm_render.stat.exists
   tags: [llm, packages]
 
-- name: Service user for llama-embed
+- name: Service user
   ansible.builtin.user:
     name: "{{ llm_user }}"
     system: true
@@ -350,7 +349,6 @@
     executable: /bin/bash
   when: _llm_built.stdout | default('') != llm_llama_cpp_build_id
   changed_when: true
-  notify: Restart llama-embed
   tags: [llm, build]
 
 - name: Download the chat checkpoint at the pinned revision
@@ -365,18 +363,6 @@
   loop_control:
     label: "{{ item.name }}"
   notify: Restart vllm
-  tags: [llm, model]
-
-- name: Download the embeddings model
-  ansible.builtin.get_url:
-    url: "{{ llm_embed_model_url }}"
-    dest: "{{ llm_models_dir }}/{{ llm_embed_model_file }}"
-    tmp_dest: "{{ llm_models_dir }}"
-    checksum: "sha256:{{ llm_embed_model_sha256 }}"
-    owner: "{{ llm_user }}"
-    mode: "0644"
-    timeout: 120
-  notify: Restart llama-embed
   tags: [llm, model]
 
 - name: Ollama tarball
@@ -394,14 +380,6 @@
     creates: "/usr/local/lib/ollama/.installed-{{ llm_ollama_version }}"
   notify: Restart ollama
   tags: [llm, ollama]
-
-- name: The embedder's pool warm-up
-  ansible.builtin.template:
-    src: llama-embed-warmup.j2
-    dest: /usr/local/bin/llama-embed-warmup
-    mode: "0755"
-  notify: Restart llama-embed
-  tags: [llm, config]
 
 - name: py-spy's wheel
   ansible.builtin.get_url:
@@ -461,14 +439,6 @@
     dest: /etc/systemd/system/vllm.service
     mode: "0644"
   notify: Restart vllm
-  tags: [llm, config, llm_units]
-
-- name: Embedding service unit
-  ansible.builtin.template:
-    src: llama-embed.service.j2
-    dest: /etc/systemd/system/llama-embed.service
-    mode: "0644"
-  notify: Restart llama-embed
   tags: [llm, config, llm_units]
 
 - name: Ollama and liveness units
@@ -557,27 +527,6 @@
   notify: Restart caddy
   tags: [llm, config]
 
-# What the embedder is SERVING, not whether its files changed. A handler cannot cover this: once a previous run
-# has written the unit, the template task reports ok, nothing notifies, and an embedder left running the old
-# model stays running it — while the engine, which reads free VRAM at init, refuses to start beside it.
-- name: The model the embedder is actually serving
-  ansible.builtin.uri:
-    url: "http://127.0.0.1:{{ llm_embed_port }}/v1/models"
-  register: _llm_embed_live
-  failed_when: false
-  changed_when: false
-  tags: [llm, config]
-
-- name: Restart the embedder when it is not serving the declared model
-  ansible.builtin.systemd:
-    name: llama-embed
-    state: restarted
-    daemon_reload: true
-  when: >-
-    _llm_embed_live.status != 200 or
-    llm_embed_alias not in (_llm_embed_live.json.data | default([]) | map(attribute='id') | list)
-  tags: [llm, config]
-
 - name: Flush handlers before the engine sizes the card
   ansible.builtin.meta: flush_handlers
   tags: [llm, config]
@@ -588,7 +537,7 @@
     enabled: true
     state: started
     daemon_reload: true
-  loop: [ollama, llama-embed, vllm, caddy, vllm-liveness.timer]
+  loop: [ollama, vllm, caddy, vllm-liveness.timer]
   tags: [llm, config]
 
 - name: Every client key reached the agent-rendered env file
@@ -604,7 +553,7 @@
 - name: Raw engine ports bind loopback only
   ansible.builtin.shell: |
     set -o pipefail
-    ss -Hltn | awk '{print $4}' | grep -E ':({{ llm_chat_port }}|{{ llm_embed_port }}|{{ llm_ollama_port }}|{{ llm_pair_port }})$' | grep -vE '^(127\.0\.0\.1|\[::1\]):' || true
+    ss -Hltn | awk '{print $4}' | grep -E ':({{ llm_chat_port }}|{{ llm_ollama_port }}|{{ llm_pair_port }})$' | grep -vE '^(127\.0\.0\.1|\[::1\]):' || true
   args:
     executable: /bin/bash
   register: _llm_exposed
