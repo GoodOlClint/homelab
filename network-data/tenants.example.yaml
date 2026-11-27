@@ -15,7 +15,7 @@ tenants:
         target: iqn.2000-01.com.synology:EXAMPLE.Target-N.0000000000
     pci_mappings: []                  # names from terraform/hosts/pci-mappings.tf granted Mapping.Use
     dns:
-      zone: example                   # child zone label: <zone>.<service_domain>
+      zone: example                   # a label becomes <zone>.<service_domain>; a dotted name (the tenant's own domain) is used as-is
       ttl: 30
     pbs:
       datastore: example              # PBS datastore name

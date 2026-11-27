@@ -43,7 +43,7 @@ bind9_child_zones:
     ttl: 30
 bind9_tenants_binding_file: "{{ playbook_dir }}/../../network-data/local/tenants.yaml"
 bind9_tenant_child_zones: >-
-  {% set ns = namespace(l=[]) %}{% for t, v in (bind9_tenants_binding.tenants | default({})).items() %}{% set ns.l = ns.l + [{'name': v.dns.zone ~ '.' ~ service_domain, 'key': t ~ '-update-key', 'secret_key': t ~ '_tsig_key_secret', 'label': 'tenant', 'vlans': [v.vlan], 'ttl': v.dns.ttl}] %}{% endfor %}{{ ns.l }}
+  {% set ns = namespace(l=[]) %}{% for t, v in (bind9_tenants_binding.tenants | default({})).items() %}{% set ns.l = ns.l + [{'name': (v.dns.zone if '.' in v.dns.zone else v.dns.zone ~ '.' ~ service_domain), 'key': t ~ '-update-key', 'secret_key': t ~ '_tsig_key_secret', 'label': 'tenant', 'vlans': [v.vlan], 'ttl': v.dns.ttl}] %}{% endfor %}{{ ns.l }}
 bind9_child_zones_all: "{{ bind9_child_zones + bind9_tenant_child_zones }}"
 bind9_forward_zones: "{{ (internal_zones | list) + (bind9_child_zones_all | map(attribute='name') | list) }}"
 
