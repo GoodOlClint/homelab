@@ -1,6 +1,6 @@
 # ADR 0055 — Code intelligence's pgvector store is a dedicated Postgres in its own Flux tree, reached over verify-full TLS on a pinned MetalLB address, and a shared clustered Postgres is rejected
 
-- **Status:** Accepted
+- **Status:** Superseded by [ADR 0068](0068-the-second-b70-is-released-from-vm-240-to-a-tenant-through-a-named-pci-mapping-and-the-bge-m3-embedder-retires.md) (code-intel retired 2026-11-27)
 - **Date:** 2026-09-14
 - **Deciders:** operator + agent
 - **Context source:** issue #46 (code-intelligence ADR 0013 decision 6), issue #47 (the homelab-mcp consumer), session 2026-09-14

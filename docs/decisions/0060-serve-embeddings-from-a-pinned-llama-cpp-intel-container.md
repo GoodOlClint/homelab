@@ -1,6 +1,6 @@
 # ADR 0060 — Serve embeddings from a pinned llama.cpp Intel container
 
-- **Status:** Proposed for production after the authorized side-by-side trial
+- **Status:** Superseded by [ADR 0068](0068-the-second-b70-is-released-from-vm-240-to-a-tenant-through-a-named-pci-mapping-and-the-bge-m3-embedder-retires.md) (embedder retired 2026-11-27)
 - **Date:** 2026-11-18
 - **Deciders:** operator + agent
 - **Context source:** [VM 240 audit](../llm-vm240-configuration-audit.md) and [migration plan](../llm-embedding-container-plan.md)

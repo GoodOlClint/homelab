@@ -1,6 +1,6 @@
 # ADR 0068 — The second B70 is released from VM 240 to a tenant through a named PCI mapping, and the BGE-M3 embedder retires
 
-- **Status:** Proposed
+- **Status:** Accepted (operator, 2026-11-27)
 - **Date:** 2026-11-25
 - **Deciders:** operator + agent
 - **Context source:** design session 2026-11-25; [VM 240 configuration audit](../llm-vm240-configuration-audit.md); Codex design review 2026-11-25

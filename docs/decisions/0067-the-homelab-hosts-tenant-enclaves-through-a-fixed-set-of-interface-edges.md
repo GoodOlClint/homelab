@@ -1,6 +1,6 @@
 # ADR 0067 — The homelab hosts tenant enclaves through a fixed set of interface edges
 
-- **Status:** Proposed
+- **Status:** Accepted (operator, 2026-11-27)
 - **Date:** 2026-11-25
 - **Deciders:** operator + agent
 - **Context source:** design session 2026-11-25; Codex design review 2026-11-25. The tenant's own design lives in the tenant's private repository, not here.
