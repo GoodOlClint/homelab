@@ -11,7 +11,7 @@ VM 240 on msi holds both Arc Pro B70 cards: Qwen chat on the first, the BGE-M3 e
 
 ## Decision
 
-- **Timing:** after ms-01b returns to the cluster (msi memory).
+- **Timing (operator, 2026-11-27):** the code-intel and embedder retirement and both cards' mappings land first, in one VM 240 restart, independent of ms-01b. Releasing the second card to the tenant waits for ms-01b to return (msi memory); until then it stays attached to VM 240, idle.
 - **Both B70s get a named PCI resource mapping, one mapping per card.** The VM module gains support for mapped devices, and VM 240 attaches its first card through its mapping instead of raw `hostpci` by address. Gate: the Terraform plan for VM 240's switch is an in-place update, not a replace, and chat answers after the restart.
 - The second B70 (host function `07:00.0` per the audit) leaves VM 240. The tenant's token is granted `Mapping.Use` on that card's mapping alone. Gate: the tenant's scoped token builds its GPU VM with the mapping before the card is released from VM 240.
 - **A later move of the first card is a grant, not a new decision here.** If VM 240 is decommissioned or the tenant takes the first card, the change is: stop or remove VM 240, then grant `Mapping.Use` on the first card's mapping to the tenant, which is the PCI edge already in [ADR 0067](0067-the-homelab-hosts-tenant-enclaves-through-a-fixed-set-of-interface-edges.md). Where homelab chat goes after that is its own homelab decision.
