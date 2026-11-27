@@ -65,7 +65,7 @@ Gates for 0a:
 | 0b.1 | Data decision first: the operator either asks for a final `pg_dump` of the `codeintel` database (kept off-repo, hash recorded) or writes "discard" in the PR. Same for the `/codeintel` and two `llm_api_key_*` secrets and the scratch guest's seeded `openrouter_api_key`. |
 | 0b.2 | `mcp` role and `mcp.env` template: remove `CODE_INTEL_*`, the units file and the `/codeintel` read. Check that the pinned homelab-mcp gateway starts with no code-intel settings; if not, the gateway package change lands first. |
 | 0b.3 | Cluster teardown through its owner: suspend the `codeintel` Flux Kustomization, delete its namespace (PostgreSQL, both PVCs, the backup job, the `InfisicalSecret` consumers), then remove the Flux tree, the Kustomization, `k8s_apps` `codeintel.yml`, the `k8s_seed` PSA entry and bindings, and `metallb.offsets.codeintel` (tracked example and gitignored binding). |
-| 0b.4 | Scratch guest: remove `scratch_vms` code-intel and its `scratch_guests` entry; targeted destroy of LXC 280 (ADR 0054's retirement path). |
+| 0b.4 | Scratch guest: remove `scratch_vms` code-intel and its `scratch_guests` entry; retire LXC 280 by ADR 0054's path: `terraform state rm` of its `code-intel` instances, then `pct destroy 280` on its node. Never a targeted destroy (LESSONS.md: `-target` destroy takes every dependent of a shared resource block). |
 | 0b.5 | Remove the `codeintel` loader-loop entry, then delete the secrets per 0b.1. Delete the model file from the data volume. |
 | 0b.6 | Docs: CLAUDE.md rows for `/codeintel`, `/llm`, `/scratch`; `.claude/rules/llm.md` embedder paragraphs; README; ADR 0060 marked superseded in part; consequence notes on 0051, 0052, 0054, 0055. |
 
