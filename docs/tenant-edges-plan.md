@@ -76,6 +76,8 @@ Gates for 0b:
 3. After 0b.5: `make ansible-all` and `make k8s-apps` succeed, then a second run regenerates none of the deleted secrets.
 4. `git grep -n -i -e code.intel -e codeintel -e llama-embed` shows only history (ADRs, LESSONS.md, superseded plans).
 
+**0b result (2026-11-27): passed.** Gateway redeployed with no `CODE_INTEL_*` in its env files or live process (the pinned gateway registers code-intel tools only when `CODE_INTEL_PG_DSN` is set). LXC 280 retired by `terraform state rm` + `pct destroy` (state backed up first); `make inventory` dropped it. After the push, Flux removed the `codeintel` Kustomization; the namespace was deleted by hand, then both `Retain` PVs and their RBD images. `/codeintel` (four keys and the folder), `llm_api_key_code_intel` and `llm_api_key_mcp` deleted; the model file deleted; the `codeintel` offset removed from the binding; `codeintel`/`code-intel` A and PTR records deleted and checked at BIND; the 29 `codeintel-postgres` PBS snapshots deleted. Two runs each of `make ansible-all` and `make k8s-apps`: 0 failures, and nothing regenerated. ADRs 0067/0068 accepted; 0055 and 0060 superseded by 0068.
+
 ### Phase 1: tenant edges for the first two VMs (now)
 
 Prerequisite from the tenant repository: its flow table (source, destination, port, identity for every flow in its ADR 0001), delivered before 1.3.
