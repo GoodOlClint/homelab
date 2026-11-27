@@ -37,7 +37,11 @@ resource "proxmox_backup_job" "jobs" {
 # The `<tenant>-pbs` storage entry comes from `make backup-finalize` (see
 # docs/make-targets.md). Absent tenants.yaml = no jobs.
 locals {
-  tenant_bindings = try(yamldecode(file("${path.root}/../network-data/local/tenants.yaml")).tenants, {})
+  tenants_file = "${path.root}/../network-data/local/tenants.yaml"
+
+  # Absent file = no jobs. A present file that does not decode, or has no `tenants`
+  # map, fails the plan instead of planning deletion of every tenant job.
+  tenant_bindings = yamldecode(fileexists(local.tenants_file) ? file(local.tenants_file) : "tenants: {}").tenants
 }
 
 resource "proxmox_backup_job" "tenants" {
@@ -51,9 +55,7 @@ resource "proxmox_backup_job" "tenants" {
   enabled   = true
   protected = false
   prune_backups = {
-    keep-daily   = "7"
-    keep-weekly  = "4"
-    keep-monthly = "3"
+    keep-all = "1"
   }
   repeat_missed    = true
   notes_template   = "{{guestname}} - IaC tenant backup job"
