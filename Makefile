@@ -309,14 +309,19 @@ ansible-pfsense:
 IDLE_ARGS = $(if $(IDLE_MAX),-e idle_max_minutes=$(IDLE_MAX),)
 
 # Tenant inventories (docs/tenant-edges-plan.md 1.8): every non-empty tenants.<t>.inventory in the
-# gitignored network-data/local/tenants.yaml rides `update` as an extra -i. No file or no path =
-# no extra args; a listed path that is missing, unreadable or empty fails the target up front.
-# Used by `update` only.
+# gitignored network-data/local/tenants.yaml is patched by its own update-all.yml run with only that
+# inventory, after the fleet run and never merged into it. No file or no path = no tenant runs; a
+# listed path that is missing, unreadable, empty, or sharing a host or group name with the fleet
+# inventories (or named infisical, proxmox, mcp) fails the target up front.
 TENANT_BINDINGS ?= network-data/local/tenants.yaml
-TENANT_INV_ARGS = $(shell $(VENV_PYTHON) scripts/tenant_inventories.py --bindings $(TENANT_BINDINGS) args 2>/dev/null)
-.PHONY: tenant-inventory-check
+.PHONY: tenant-inventory-check update-tenants
 tenant-inventory-check:
 	@$(VENV_PYTHON) scripts/tenant_inventories.py --bindings $(TENANT_BINDINGS) check
+
+update-tenants: tenant-inventory-check
+	@for inv in $$($(VENV_PYTHON) scripts/tenant_inventories.py --bindings $(TENANT_BINDINGS) list); do \
+		ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i $$inv ansible/playbooks/update-all.yml $(if $(VM),--limit $(VM),) $(IDLE_ARGS) || exit 1; \
+	done
 
 # Fleet patch: cluster nodes serially (update-nodes), then guests + worklab + VPS with
 # one-at-a-time reboots (update-all.yml, hosts all:!proxmox:!mcp), then the cluster's
@@ -324,10 +329,11 @@ tenant-inventory-check:
 # skips the node and cluster halves.
 update: tenant-inventory-check
 ifdef VM
-	@$(ANSIBLE_PLAYBOOK) -i ansible/inventory/proxmox.yaml -i ansible/inventory/vps.yaml $(TENANT_INV_ARGS) ansible/playbooks/update-all.yml --limit $(VM) $(IDLE_ARGS)
+	@$(ANSIBLE_PLAYBOOK) -i ansible/inventory/proxmox.yaml -i ansible/inventory/vps.yaml ansible/playbooks/update-all.yml --limit $(VM) $(IDLE_ARGS)
 else
 	@$(MAKE) update-nodes
-	@$(ANSIBLE_PLAYBOOK) -i ansible/inventory/proxmox.yaml -i ansible/inventory/vps.yaml $(TENANT_INV_ARGS) ansible/playbooks/update-all.yml $(IDLE_ARGS)
+	@$(ANSIBLE_PLAYBOOK) -i ansible/inventory/proxmox.yaml -i ansible/inventory/vps.yaml ansible/playbooks/update-all.yml $(IDLE_ARGS)
+	@$(MAKE) update-tenants
 	@$(MAKE) k8s-update
 endif
 
@@ -480,6 +486,7 @@ validate:
 	@$(VENV_PYTHON) scripts/test_axosyslog_routing.py
 	@$(VENV_PYTHON) scripts/check_apt_proxy_probe.py $(CURDIR)
 	@PATH=$(CURDIR)/.venv/bin:$$PATH $(VENV_PYTHON) scripts/test_identity_paging.py
+	@PATH=$(CURDIR)/.venv/bin:$$PATH $(VENV_PYTHON) scripts/test_tenant_inventories.py
 	@$(VENV_PYTHON) scripts/test_github_agent_mcp.py
 	@bash scripts/test_security_guardrails.sh
 	@! grep -rnE "from-literal=|(echo|printf '%s') '\{\{[^}]*(password|secret|token|private_key)" ansible/roles ansible/tasks ansible/playbooks kubernetes scripts || { echo "secret on argv (#17): use stdin: / --value-stdin"; exit 1; }
