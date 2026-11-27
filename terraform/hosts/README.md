@@ -95,6 +95,10 @@ i226 (ring1, WP2) — so a re-apply can never drop the link Terraform is talking
   ping -M do -s 8972 <nas-storage-ip>   # storage VLAN, 9000-byte frames, no fragmentation
   ```
 
+## Tenants
+
+`tenants.tf` reads the gitignored `network-data/local/tenants.yaml` (schema: tracked `network-data/tenants.example.yaml`; absent file = no tenants) and, per tenant, creates a pool, a `<pool>@pve` user, a privilege-separation-off token, CI's pool ACLs, datastore ACLs on the tenant's storages, iSCSI storage ids and image store, a `PVESDNUser` ACL on its VNET (zone and bridge come from `vlans.yaml`), and `TenantMapping` ACLs on each listed PCI mapping. Tokens: `terraform output -json tenant_api_tokens`, handed over by hand. The matching storage entries come from `make proxmox-hosts TAGS=tenants` (`proxmox_host` `tenants.yml`; the iSCSI portal defaults to the NFS server in `host-bindings.yaml` and is overridden by `cluster.synology_storage_host`). ADR 0067.
+
 ## Notes
 
 - Provider auth currently uses `root@pam` + `proxmox_password` (matches the main

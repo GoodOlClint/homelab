@@ -16,6 +16,9 @@
 - ansible.builtin.import_tasks: storage.yml
   when: proxmox_host_nas_nfs | length > 0
   tags: [storage]
+- ansible.builtin.import_tasks: tenants.yml
+  when: proxmox_host_tenants | length > 0
+  tags: [tenants]
 # Ceph waits for the full 3-node cluster (plan Day 2; ADR 0024): a 2-node
 # bootstrap would build a degraded size=3 pool and fail the HEALTH_OK gate.
 # Mirrors the QDevice branches, which key off the same node count.

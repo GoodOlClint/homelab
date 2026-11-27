@@ -19,3 +19,11 @@ output "ci_reaper_api_token" {
   value       = proxmox_user_token.ci_reaper.value
   sensitive   = true
 }
+
+output "tenant_api_tokens" {
+  description = "Per-tenant token id and secret (ADR 0067), handed to the tenant by hand, never Infisical"
+  value = {
+    for k, t in proxmox_user_token.tenant : k => { id = t.id, value = t.value }
+  }
+  sensitive = true
+}

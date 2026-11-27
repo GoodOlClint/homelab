@@ -1,0 +1,74 @@
+---
+# Tenant storage (ADR 0067): one cephfs subdir image store per tenant (a copy of the
+# ci-isos block in storage.yml) and one PVE iSCSI entry per tenant application LUN.
+# ACLs are Terraform's (terraform/hosts/tenants.tf).
+
+- name: Check PVE storage entries
+  ansible.builtin.command:
+    cmd: pvesm status
+  register: _tenant_pvesm
+  changed_when: false
+  run_once: true
+
+- name: Install attr for the cephfs quota xattrs
+  ansible.builtin.apt:
+    name: attr
+    state: present
+
+- name: Create each tenant image subdirectory on cephfs
+  ansible.builtin.file:
+    path: "/mnt/pve/{{ proxmox_host_cephfs_name }}/{{ item.value.image_store.id }}"
+    state: directory
+    mode: "0755"
+  run_once: true
+  loop: "{{ proxmox_host_tenants | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Read each tenant image tree quota
+  ansible.builtin.command:
+    cmd: getfattr -n ceph.quota.max_bytes --only-values /mnt/pve/{{ proxmox_host_cephfs_name }}/{{ item.value.image_store.id }}
+  register: _tenant_quota
+  run_once: true
+  changed_when: false
+  failed_when: false
+  loop: "{{ proxmox_host_tenants | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Cap each tenant image tree
+  ansible.builtin.command:
+    cmd: setfattr -n ceph.quota.max_bytes -v {{ item.item.value.image_store.quota_gb * 1024 * 1024 * 1024 }} /mnt/pve/{{ proxmox_host_cephfs_name }}/{{ item.item.value.image_store.id }}
+  run_once: true
+  changed_when: true
+  when: (item.stdout | default('')) != (item.item.value.image_store.quota_gb * 1024 * 1024 * 1024) | string
+  loop: "{{ _tenant_quota.results }}"
+  loop_control:
+    label: "{{ item.item.key }}"
+
+- name: Register each tenant image datastore
+  ansible.builtin.command:
+    cmd: >-
+      pvesm add cephfs {{ item.value.image_store.id }}
+      --subdir /{{ item.value.image_store.id }}
+      --content iso,import
+  run_once: true
+  changed_when: true
+  when: item.value.image_store.id not in (_tenant_pvesm.stdout_lines | map('split') | map('first') | list)
+  loop: "{{ proxmox_host_tenants | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Register each tenant application LUN as PVE iSCSI storage
+  ansible.builtin.command:
+    cmd: >-
+      pvesm add iscsi {{ item.storage_id }}
+      --portal {{ proxmox_host_synology_storage_host }}
+      --target {{ item.target }}
+      --content none
+  run_once: true
+  changed_when: true
+  when: item.storage_id not in (_tenant_pvesm.stdout_lines | map('split') | map('first') | list)
+  loop: "{{ proxmox_host_tenants.values() | map(attribute='iscsi_luns', default=[]) | flatten }}"
+  loop_control:
+    label: "{{ item.storage_id }}"
