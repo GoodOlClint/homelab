@@ -1,0 +1,26 @@
+# Tenant enclave bindings (ADR 0067). Copy to network-data/local/tenants.yaml (gitignored).
+# Absent file = no tenants: every consumer must treat a missing file as an empty map.
+# Tenant names, VLANs, VMID ranges and addresses never appear in tracked files.
+tenants:
+  example:
+    pool: example                     # Proxmox pool id; also the PVE user `<pool>@pve`, token `<pool>`
+    vmid_range: [6000, 6999]          # convention only; the tenant's own Terraform validates it
+    vlan: example                     # key in network-data/vlans.yaml (bridge + sdn_zone come from there)
+    storages: [ceph-rbd]              # PVE storages the tenant may allocate disks on
+    image_store:                      # cephfs subdir store for the tenant's ISO/import uploads
+      id: example-images
+      quota_gb: 100
+    iscsi_luns:                       # PVE iSCSI storage entries usable only by the tenant
+      - storage_id: example-lake
+        target: iqn.2000-01.com.synology:EXAMPLE.Target-N.0000000000
+    pci_mappings: []                  # names from terraform/hosts/pci-mappings.tf granted Mapping.Use
+    dns:
+      zone: example                   # child zone label: <zone>.<service_domain>
+      ttl: 30
+    pbs:
+      datastore: example              # PBS datastore name
+      lun: 2                          # LUN number on the existing PBS iSCSI target
+      mountpoint: /mnt/pbs-example
+    backup:
+      schedule: "03:30"               # nightly PVE backup job selecting the tenant pool
+    inventory: ""                     # absolute path to the tenant repo's generated Ansible inventory ("" = not bound yet)
