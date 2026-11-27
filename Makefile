@@ -220,7 +220,7 @@ tf:
 # `backup_jobs` in vars.auto.tfvars — never a bare apply while old-shape
 # guests are unmanaged by state (ADR 0028).
 backup-jobs:
-	@cd terraform && terraform init && terraform apply -no-color -auto-approve -target=proxmox_backup_job.jobs
+	@cd terraform && terraform init && terraform apply -no-color -auto-approve -target=proxmox_backup_job.jobs -target=proxmox_backup_job.tenants
 
 # SDN only (zones + VNETs from vlans.yaml): adding a guest VLAN must never be a
 # bare fleet apply while old-shape guests sit outside state (ADR 0028).
