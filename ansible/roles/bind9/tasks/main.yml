@@ -8,19 +8,13 @@
     fail_msg: "Required facts not available. This role must run from a playbook that includes full_pre_tasks.yml."
     quiet: true
 
-- name: Check for the tenant bindings (absent file = no tenants)
-  ansible.builtin.stat:
-    path: "{{ bind9_tenants_binding_file }}"
-  delegate_to: localhost
-  become: false
-  register: bind9_tenants_stat
-  tags: [always]
-
+# Absent file = no tenants; a present file that is invalid or lacks a `tenants` map fails.
 - name: Load the tenant bindings
-  ansible.builtin.include_vars:
-    file: "{{ bind9_tenants_binding_file }}"
-    name: bind9_tenants_binding
-  when: bind9_tenants_stat.stat.exists
+  ansible.builtin.set_fact:
+    bind9_tenants_binding:
+      tenants: >-
+        {{ dict((lookup('ansible.builtin.file', bind9_tenants_binding_file) | from_yaml)['tenants'].items())
+           if lookup('ansible.builtin.fileglob', bind9_tenants_binding_file) else {} }}
   tags: [always]
 
 - name: Install bind9
@@ -83,6 +77,35 @@
     secret_run_on: "{{ inventory_hostname }}"
     secret_infisical_path: "/infrastructure"
     secret_dict_path: "infrastructure"
+  loop: "{{ bind9_child_zones_all }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when: bind9_primary
+  tags: [bind9, dns, secrets]
+
+# Only the primary generates a new key; the secondary takes that value so the pair never
+# creates the same Infisical key independently or renders different secrets.
+- name: Take the child-zone TSIG keys from the primary
+  ansible.builtin.set_fact:
+    secrets: >-
+      {{ secrets | combine({'infrastructure': (secrets.infrastructure | default({}))
+         | combine({item.secret_key: hostvars[bind9_instances[0]].secrets.infrastructure[item.secret_key]})}) }}
+  loop: "{{ bind9_child_zones_all }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when:
+    - not bind9_primary
+    - (secrets.infrastructure | default({}))[item.secret_key] | default('REPLACE_ME') in ['REPLACE_ME', '']
+    - hostvars[bind9_instances[0]].secrets is defined
+    - (hostvars[bind9_instances[0]].secrets.infrastructure | default({}))[item.secret_key] is defined
+  no_log: true
+  tags: [bind9, dns, secrets]
+
+- name: Require every child-zone TSIG key on every DNS host
+  ansible.builtin.assert:
+    that: (secrets.infrastructure | default({}))[item.secret_key] | default('REPLACE_ME') not in ['REPLACE_ME', '']
+    fail_msg: "{{ item.secret_key }} is not in Infisical /infrastructure; run the primary DNS host first so it generates the key."
+    quiet: true
   loop: "{{ bind9_child_zones_all }}"
   loop_control:
     label: "{{ item.key }}"
