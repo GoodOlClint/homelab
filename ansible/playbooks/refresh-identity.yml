@@ -11,6 +11,10 @@
 #   make refresh-identity LIMIT=plex FORCE=true   # force refresh one host
 #   make refresh-identity TAGS=cleanup                 # only clean up orphaned identities
 #   make refresh-identity TAGS="cleanup,refresh"       # cleanup + check/refresh all
+#
+# Cleanup only deletes identities that are members of the homelab project
+# (bootstrap_config.infisical_project_id), end in -vm and match no inventory host.
+# Dry run: pass -e refresh_identity_dry_run=true to list without deleting.
 
 # ============================================================
 # Play 1: Clean up orphaned identities (runs on localhost)
@@ -47,11 +51,26 @@
       ansible.builtin.set_fact:
         _expected_names: "{{ groups['all'] | map('regex_replace', '$', '-vm') | list }}"
 
-    # --- Identify orphaned *-vm identities ---
+    # --- Only identities that are members of the homelab project may be deleted ---
+    - name: List the homelab project's identity members
+      ansible.builtin.uri:
+        url: "{{ bootstrap_config.infisical_url }}/api/v1/projects/{{ bootstrap_config.infisical_project_id }}/identity-memberships"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ _admin_token }}"
+        status_code: 200
+      register: _project_members
+
+    - name: Collect the member identity ids
+      ansible.builtin.set_fact:
+        _member_ids: "{{ _project_members.json.identityMemberships | map(attribute='identity.id') | list }}"
+
+    # --- Identify orphaned *-vm identities: project member AND *-vm AND not in inventory ---
     - name: Identify orphaned VM identities
       ansible.builtin.set_fact:
         _orphaned: >-
           {{ _all_identities
+             | selectattr('identity.id', 'in', _member_ids)
              | selectattr('identity.name', 'match', '.*-vm$')
              | rejectattr('identity.name', 'in', _expected_names)
              | list }}
@@ -74,11 +93,14 @@
       loop: "{{ _orphaned }}"
       loop_control:
         label: "{{ item.identity.name }} ({{ item.identity.id }})"
-      when: _orphaned | length > 0
+      when: _orphaned | length > 0 and not (refresh_identity_dry_run | default(false) | bool)
 
     - name: Report cleanup complete
       ansible.builtin.debug:
-        msg: "Cleanup complete. Deleted {{ _orphaned | length }} orphaned identit{{ 'y' if _orphaned | length == 1 else 'ies' }}."
+        msg: >-
+          {{ 'Dry run, nothing deleted. Would delete' if (refresh_identity_dry_run | default(false) | bool)
+             else 'Cleanup complete. Deleted' }}
+          {{ _orphaned | length }} orphaned identit{{ 'y' if _orphaned | length == 1 else 'ies' }}.
 
     # --- Clean up ---
     - name: Clear admin token from facts

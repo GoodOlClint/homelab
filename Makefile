@@ -308,16 +308,26 @@ ansible-pfsense:
 # IDLE_MAX=<minutes> caps the wait for a busy Plex/Valheim (default 30).
 IDLE_ARGS = $(if $(IDLE_MAX),-e idle_max_minutes=$(IDLE_MAX),)
 
+# Tenant inventories (docs/tenant-edges-plan.md 1.8): every non-empty tenants.<t>.inventory in the
+# gitignored network-data/local/tenants.yaml rides `update` as an extra -i. No file or no path =
+# no extra args; a listed path that is missing, unreadable or empty fails the target up front.
+# Used by `update` only.
+TENANT_BINDINGS ?= network-data/local/tenants.yaml
+TENANT_INV_ARGS = $(shell $(VENV_PYTHON) scripts/tenant_inventories.py --bindings $(TENANT_BINDINGS) args 2>/dev/null)
+.PHONY: tenant-inventory-check
+tenant-inventory-check:
+	@$(VENV_PYTHON) scripts/tenant_inventories.py --bindings $(TENANT_BINDINGS) check
+
 # Fleet patch: cluster nodes serially (update-nodes), then guests + worklab + VPS with
 # one-at-a-time reboots (update-all.yml, hosts all:!proxmox:!mcp), then the cluster's
 # :latest re-pull (k8s-update). VM=<host> limits the guest play to one host and
 # skips the node and cluster halves.
-update:
+update: tenant-inventory-check
 ifdef VM
-	@$(ANSIBLE_PLAYBOOK) -i ansible/inventory/proxmox.yaml -i ansible/inventory/vps.yaml ansible/playbooks/update-all.yml --limit $(VM) $(IDLE_ARGS)
+	@$(ANSIBLE_PLAYBOOK) -i ansible/inventory/proxmox.yaml -i ansible/inventory/vps.yaml $(TENANT_INV_ARGS) ansible/playbooks/update-all.yml --limit $(VM) $(IDLE_ARGS)
 else
 	@$(MAKE) update-nodes
-	@$(ANSIBLE_PLAYBOOK) -i ansible/inventory/proxmox.yaml -i ansible/inventory/vps.yaml ansible/playbooks/update-all.yml $(IDLE_ARGS)
+	@$(ANSIBLE_PLAYBOOK) -i ansible/inventory/proxmox.yaml -i ansible/inventory/vps.yaml $(TENANT_INV_ARGS) ansible/playbooks/update-all.yml $(IDLE_ARGS)
 	@$(MAKE) k8s-update
 endif
 
@@ -440,7 +450,7 @@ plex-token:
 # Refresh Infisical Machine Identities (delete + re-provision)
 # Optional: LIMIT=hostname to target specific VMs, TAGS=cleanup to remove orphans, FORCE=true to override health check
 refresh-identity:
-	@$(ANSIBLE_PLAYBOOK) ansible/playbooks/refresh-identity.yml $(if $(LIMIT),--limit $(LIMIT)) $(if $(TAGS),--tags $(TAGS)) $(if $(FORCE),-e force=true)
+	@$(ANSIBLE_PLAYBOOK) ansible/playbooks/refresh-identity.yml $(if $(LIMIT),--limit $(LIMIT)) $(if $(TAGS),--tags $(TAGS)) $(if $(FORCE),-e force=true) $(if $(DRY_RUN),-e refresh_identity_dry_run=true)
 
 # === Setup & Security ===
 .PHONY: setup-hooks bootstrap-local validate security-check security-check-range
