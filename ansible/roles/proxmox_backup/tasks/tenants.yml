@@ -1,0 +1,30 @@
+---
+# Tenant datastores (ADR 0067). Separate from pbs_datastores on purpose: the fleet
+# DatastoreAdmin/Audit grants and verify/prune loops iterate pbs_datastores only.
+- name: Look for tenant bindings
+  ansible.builtin.stat:
+    path: "{{ playbook_dir }}/../../network-data/local/tenants.yaml"
+  delegate_to: localhost
+  become: false
+  register: _pbs_tenants_stat
+  tags: &tenant_tags
+    - proxmox_backup
+    - pbs
+    - backup
+    - tenants
+
+- name: Load tenant bindings
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/../../network-data/local/tenants.yaml"
+    name: _pbs_tenants_file
+  when: _pbs_tenants_stat.stat.exists
+  tags: *tenant_tags
+
+- name: Provision each tenant datastore
+  ansible.builtin.include_tasks: tenant.yml
+  loop: "{{ (_pbs_tenants_file.tenants | default({})) | dict2items }}"
+  loop_control:
+    loop_var: tenant
+    label: "{{ tenant.key }}"
+  when: pbs_storage_backend == 'iscsi'
+  tags: *tenant_tags

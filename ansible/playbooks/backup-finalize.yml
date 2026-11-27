@@ -26,6 +26,15 @@
     # namespace must already exist on PBS. W2 campaign registers worklab with
     # storage id pbs-campaign + namespace w2-campaign via -e overrides.
     pbs_pve_namespace: ""
+    # Credentials. Defaults are the fleet's; a tenant overrides all four with -e
+    # (storage id, datastore, username, token file). The token never rides -e:
+    # pbs_pve_secret_file is a path on the workstation.
+    pbs_pve_username: "backup@pbs!backup-token"
+    pbs_pve_secret_file: ""
+    pbs_pve_secret: >-
+      {{ (lookup('ansible.builtin.file', pbs_pve_secret_file | expanduser) | trim)
+         if pbs_pve_secret_file | length > 0
+         else (secrets.pbs_backup_token | default('')) }}
     # The name on PBS's ACME cert (ADR 0041): nodes verify it through the root CA, no fingerprint.
     pbs_pve_server: "proxmox-backup.{{ service_domain }}"
 
@@ -33,10 +42,11 @@
     - name: Require PBS credentials from Infisical /shared
       ansible.builtin.assert:
         that:
-          - secrets.pbs_backup_token | default('') | length > 0
+          - pbs_pve_secret | length > 0
         fail_msg: >-
-          /shared/pbs_backup_token must exist in Infisical — run the
-          proxmox-backup provisioning play first.
+          No PBS token: /shared/pbs_backup_token must exist in Infisical (run
+          the proxmox-backup provisioning play first), or pbs_pve_secret_file
+          must name a readable token file.
         quiet: true
       run_once: true
 
@@ -96,8 +106,8 @@
           pvesm add pbs {{ pbs_pve_storage_id }}
           --server {{ pbs_pve_server }}
           --datastore {{ pbs_pve_datastore }}
-          --username backup@pbs!backup-token
-          --password {{ secrets.pbs_backup_token }}
+          --username {{ pbs_pve_username }}
+          --password {{ pbs_pve_secret }}
           --content backup{{ (pbs_pve_namespace | length > 0) | ternary(' --namespace ' ~ pbs_pve_namespace, '') }}
       run_once: true
       changed_when: true
@@ -107,7 +117,7 @@
     - name: Recreate PBS storage (datastore/server moved)
       ansible.builtin.shell: |
         pvesm remove {{ pbs_pve_storage_id }}
-        pvesm add pbs {{ pbs_pve_storage_id }}           --server {{ pbs_pve_server }}           --datastore {{ pbs_pve_datastore }}           --username backup@pbs!backup-token           --password {{ secrets.pbs_backup_token }}           --content backup{{ (pbs_pve_namespace | length > 0) | ternary(' --namespace ' ~ pbs_pve_namespace, '') }}
+        pvesm add pbs {{ pbs_pve_storage_id }}           --server {{ pbs_pve_server }}           --datastore {{ pbs_pve_datastore }}           --username {{ pbs_pve_username }}           --password {{ pbs_pve_secret }}           --content backup{{ (pbs_pve_namespace | length > 0) | ternary(' --namespace ' ~ pbs_pve_namespace, '') }}
       run_once: true
       changed_when: true
       no_log: true
@@ -121,8 +131,8 @@
       ansible.builtin.command:
         cmd: >-
           pvesm set {{ pbs_pve_storage_id }}
-          --username backup@pbs!backup-token
-          --password {{ secrets.pbs_backup_token }}
+          --username {{ pbs_pve_username }}
+          --password {{ pbs_pve_secret }}
           --delete fingerprint
       run_once: true
       changed_when: true

@@ -641,6 +641,8 @@
     - backup
     - acl
 
+- ansible.builtin.import_tasks: tenants.yml
+
 # Verification jobs
 - name: Configure verification jobs
   ansible.builtin.shell: |

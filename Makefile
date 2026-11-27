@@ -341,7 +341,7 @@ update-dns:
 # B3: register the PBS datastore as PVE storage (run once after PBS provisioning,
 # before the first terraform apply with backup_jobs populated)
 backup-finalize:
-	@$(ANSIBLE_PLAYBOOK) -i ansible/inventory/proxmox.yaml ansible/playbooks/backup-finalize.yml
+	@$(ANSIBLE_PLAYBOOK) -i ansible/inventory/proxmox.yaml ansible/playbooks/backup-finalize.yml $(BACKUP_FINALIZE_ARGS)
 
 expand-disk:
 	@$(ANSIBLE_PLAYBOOK) ansible/playbooks/expand-disk.yml

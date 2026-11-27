@@ -31,3 +31,31 @@ resource "proxmox_backup_job" "jobs" {
   notes_template   = "{{guestname}} - IaC backup job '${each.key}'"
   mailnotification = "failure"
 }
+
+# Tenant nightly jobs (ADR 0067): one per tenant, selecting the tenant's pool.
+# The fleet root owns them because creating a job needs Sys.Modify on /.
+# The `<tenant>-pbs` storage entry comes from `make backup-finalize` (see
+# docs/make-targets.md). Absent tenants.yaml = no jobs.
+locals {
+  tenant_bindings = try(yamldecode(file("${path.root}/../network-data/local/tenants.yaml")).tenants, {})
+}
+
+resource "proxmox_backup_job" "tenants" {
+  for_each = local.tenant_bindings
+
+  id        = "${each.key}-nightly"
+  schedule  = each.value.backup.schedule
+  storage   = "${each.key}-pbs"
+  pool      = each.value.pool
+  mode      = "snapshot"
+  enabled   = true
+  protected = false
+  prune_backups = {
+    keep-daily   = "7"
+    keep-weekly  = "4"
+    keep-monthly = "3"
+  }
+  repeat_missed    = true
+  notes_template   = "{{guestname}} - IaC tenant backup job"
+  mailnotification = "failure"
+}
