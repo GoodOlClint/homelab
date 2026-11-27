@@ -30,7 +30,8 @@ adguard_zone_forwards: >-
 # are not under any internal zone, so they need their own forward; label zones ride service_domain's.
 adguard_tenant_zone_forwards: >-
   {%- set out = [] -%}
-  {%- set t = ((lookup('ansible.builtin.file', playbook_dir ~ '/../../network-data/local/tenants.yaml', errors='ignore') | default('', true) | from_yaml) or {}).tenants | default({}) -%}
+  {%- set f = playbook_dir ~ '/../../network-data/local/tenants.yaml' -%}
+  {%- set t = dict((lookup('ansible.builtin.file', f) | from_yaml)['tenants'].items()) if lookup('ansible.builtin.fileglob', f) else {} -%}
   {%- for v in t.values() if '.' in v.dns.zone -%}{{- out.append('[/' ~ v.dns.zone ~ '/]' ~ network_data.dns_server.bind_ipv4) -}}{%- endfor -%}
   {{ out }}
 adguard_upstreams: "{{ adguard_public_upstreams + adguard_reverse_forwards + adguard_zone_forwards + adguard_tenant_zone_forwards }}"

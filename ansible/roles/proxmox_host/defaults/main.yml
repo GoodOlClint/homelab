@@ -75,9 +75,11 @@ proxmox_host_ci_iso_storage_id: "ci-isos"
 proxmox_host_ci_iso_quota_gb: 100
 
 # Tenant enclaves (ADR 0067): bindings in the gitignored network-data/local/tenants.yaml
-# (schema: network-data/tenants.example.yaml). A missing file is no tenants.
+# (schema: network-data/tenants.example.yaml). A missing file is no tenants; a present file that is invalid or lacks a
+# `tenants` map fails.
 proxmox_host_tenants: >-
-  {{ ((lookup('ansible.builtin.file', playbook_dir ~ '/../../network-data/local/tenants.yaml', errors='ignore') | default('', true) | from_yaml) or {}).tenants | default({}) }}
+  {%- set f = playbook_dir ~ '/../../network-data/local/tenants.yaml' -%}
+  {{ dict((lookup('ansible.builtin.file', f) | from_yaml)['tenants'].items()) if lookup('ansible.builtin.fileglob', f) else {} }}
 proxmox_host_synology_storage_host: "{{ host_bindings.cluster.synology_storage_host | default((host_bindings.cluster.nas_nfs | default(':')).split(':')[0]) }}"
 
 # Ceph health-gate waivers: check CODES (e.g. "OSDMAP_FLAGS") that are known,
