@@ -89,6 +89,11 @@
           {{ _pbs_entry is not none and (
              _pbs_entry.server | default('') != pbs_pve_server or
              _pbs_entry.datastore | default('') != pbs_pve_datastore) }}
+        # username IS an updatable pvesm-set option: an active entry under an older, wider identity
+        # still passes the status probe, so compare it explicitly.
+        _pbs_user_drift: >-
+          {{ _pbs_entry is not none and
+             _pbs_entry.username | default('') != pbs_pve_username }}
         # namespace IS an updatable pvesm-set option -> in-place, never recreate
         # (folding it into the destructive path would drop the cluster-wide
         # storage entry on a namespace-only change, breaking every job briefly).
@@ -140,7 +145,7 @@
       when:
         - _pbs_entry is not none
         - not (_pbs_drifted | bool)
-        - not (_pbs_active | bool)
+        - (not (_pbs_active | bool)) or (_pbs_user_drift | bool)
 
     # Namespace changed but endpoint/datastore did not: update in place. A
     # recreated entry (server/datastore drift) already carries the new namespace,
@@ -168,6 +173,20 @@
         (_pbs_status.stdout_lines
          | select('search', '^' ~ pbs_pve_storage_id ~ '\s+\S+\s+active\s')
          | list | length) == 0
+
+    - name: Read back the stored PBS storage entry
+      ansible.builtin.command:
+        cmd: "pvesh get /storage/{{ pbs_pve_storage_id }} --output-format json"
+      register: _pbs_final
+      changed_when: false
+      run_once: true
+
+    - name: Verify the stored username
+      ansible.builtin.assert:
+        that: (_pbs_final.stdout | from_json).username | default('') == pbs_pve_username
+        fail_msg: "Storage {{ pbs_pve_storage_id }} still stores username {{ (_pbs_final.stdout | from_json).username | default('') }}, not {{ pbs_pve_username }}."
+        quiet: true
+      run_once: true
 
     - name: Report
       ansible.builtin.debug:
