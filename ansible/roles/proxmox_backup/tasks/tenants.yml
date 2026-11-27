@@ -1,28 +1,41 @@
 ---
 # Tenant datastores (ADR 0067). Separate from pbs_datastores on purpose: the fleet
 # DatastoreAdmin/Audit grants and verify/prune loops iterate pbs_datastores only.
-- name: Look for tenant bindings
-  ansible.builtin.stat:
-    path: "{{ playbook_dir }}/../../network-data/local/tenants.yaml"
-  delegate_to: localhost
-  become: false
-  register: _pbs_tenants_stat
+# Absent bindings file = no tenants; a present file that is invalid or lacks a `tenants` map fails.
+- name: Load tenant bindings
+  ansible.builtin.set_fact:
+    _pbs_tenants: >-
+      {%- set f = playbook_dir ~ '/../../network-data/local/tenants.yaml' -%}
+      {{ dict((lookup('ansible.builtin.file', f) | from_yaml)['tenants'].items()) if lookup('ansible.builtin.fileglob', f) else {} }}
   tags: &tenant_tags
     - proxmox_backup
     - pbs
     - backup
     - tenants
 
-- name: Load tenant bindings
-  ansible.builtin.include_vars:
-    file: "{{ playbook_dir }}/../../network-data/local/tenants.yaml"
-    name: _pbs_tenants_file
-  when: _pbs_tenants_stat.stat.exists
+- name: Reject tenant LUN, datastore or mountpoint collisions before anything is formatted or mounted
+  ansible.builtin.assert:
+    that:
+      - _t_luns | length == _t_luns | unique | length
+      - pbs_iscsi_lun | int not in _t_luns
+      - _t_dss | length == _t_dss | unique | length
+      - (_t_dss | intersect(pbs_datastores | map(attribute='name') | list)) | length == 0
+      - _t_mounts | length == _t_mounts | unique | length
+      - (_t_mounts | intersect([pbs_iscsi_mount_path, pbs_nfs_mount_path] + (pbs_datastores | map(attribute='path') | list))) | length == 0
+    fail_msg: >-
+      Tenant PBS bindings collide with the fleet datastore or each other
+      (LUNs {{ _t_luns }}, fleet LUN {{ pbs_iscsi_lun }}, datastores {{ _t_dss }}, mountpoints {{ _t_mounts }}).
+    quiet: true
+  vars:
+    _t_luns: "{{ _pbs_tenants.values() | map(attribute='pbs.lun') | map('int') | list }}"
+    _t_dss: "{{ _pbs_tenants.values() | map(attribute='pbs.datastore') | list }}"
+    _t_mounts: "{{ _pbs_tenants.values() | map(attribute='pbs.mountpoint') | list }}"
+  when: pbs_storage_backend == 'iscsi'
   tags: *tenant_tags
 
 - name: Provision each tenant datastore
   ansible.builtin.include_tasks: tenant.yml
-  loop: "{{ (_pbs_tenants_file.tenants | default({})) | dict2items }}"
+  loop: "{{ _pbs_tenants | dict2items }}"
   loop_control:
     loop_var: tenant
     label: "{{ tenant.key }}"

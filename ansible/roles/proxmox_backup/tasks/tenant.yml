@@ -9,6 +9,19 @@
       /dev/disk/by-path/ip-{{ pbs_iscsi_portal.split(':')[0] }}:{{ pbs_iscsi_portal.split(':')[1] }}-iscsi-{{ pbs_iscsi_target }}-lun-{{ tenant.value.pbs.lun }}
     _t_token_file: "{{ lookup('env', 'HOME') }}/.local/state/homelab-tenants/{{ tenant.key }}-pbs-token"
 
+- name: List datastores
+  ansible.builtin.command: proxmox-backup-manager datastore list --output-format json
+  register: _t_ds_list
+  changed_when: false
+
+- name: Reject an existing datastore of this name that is not on the tenant's path
+  ansible.builtin.assert:
+    that: _t_ds_here | length == 0 or (_t_ds_here | first).path == _t_pbs.mountpoint ~ '/pbs-datastore'
+    fail_msg: "Datastore {{ _t_pbs.datastore }} already exists on {{ (_t_ds_here | first).path | default('') }}, not {{ _t_pbs.mountpoint }}/pbs-datastore; refusing to touch it."
+    quiet: true
+  vars:
+    _t_ds_here: "{{ ((_t_ds_list.stdout | default('', true)) or '[]') | from_json | selectattr('name', 'equalto', _t_pbs.datastore) | list }}"
+
 - name: Rescan iSCSI sessions for new LUNs
   ansible.builtin.command: iscsiadm --mode session --rescan
   changed_when: false
@@ -30,12 +43,32 @@
   failed_when: _t_fs.rc not in [0, 2]
   changed_when: false
 
+- name: Read the existing filesystem label
+  ansible.builtin.command: blkid -p -o value -s LABEL {{ _t_devnode.stdout }}
+  register: _t_label
+  changed_when: false
+  failed_when: false
+  when: _t_fs.rc == 0
+
+- name: Reject a LUN whose filesystem belongs to something else
+  ansible.builtin.assert:
+    that: (_t_label.stdout | default('') | trim) == 'pbs-' ~ _t_name
+    fail_msg: "LUN {{ _t_pbs.lun }} carries a filesystem labelled '{{ _t_label.stdout | default('') | trim }}', not 'pbs-{{ _t_name }}'; refusing to mount it."
+    quiet: true
+  when: _t_fs.rc == 0
+
 - name: Format tenant LUN (only when it carries no filesystem)
   community.general.filesystem:
     fstype: "{{ pbs_iscsi_filesystem }}"
     dev: "{{ _t_devnode.stdout }}"
     opts: -L pbs-{{ _t_name }}
   when: _t_fs.rc == 2
+
+- name: Read tenant LUN filesystem UUID
+  ansible.builtin.command: blkid -p -s UUID -o value {{ _t_devnode.stdout }}
+  register: _t_uuid
+  changed_when: false
+  failed_when: _t_uuid.stdout | trim | length == 0
 
 - name: Ensure tenant mount point exists
   ansible.builtin.file:
@@ -48,10 +81,21 @@
 - name: Mount tenant LUN
   ansible.posix.mount:
     path: "{{ _t_pbs.mountpoint }}"
-    src: "{{ _t_devnode.stdout }}"
+    src: "UUID={{ _t_uuid.stdout | trim }}"
     fstype: "{{ pbs_iscsi_filesystem }}"
     opts: _netdev,nofail,defaults
     state: mounted
+
+- name: Read the UUID of the filesystem mounted at the tenant mount point
+  ansible.builtin.command: findmnt -n -o UUID {{ _t_pbs.mountpoint }}
+  register: _t_mounted_uuid
+  changed_when: false
+
+- name: Assert the mount is the tenant LUN's filesystem
+  ansible.builtin.assert:
+    that: _t_mounted_uuid.stdout | trim == _t_uuid.stdout | trim
+    fail_msg: "{{ _t_pbs.mountpoint }} holds filesystem {{ _t_mounted_uuid.stdout | trim }}, not LUN {{ _t_pbs.lun }}'s {{ _t_uuid.stdout | trim }}; refusing to open the datastore."
+    quiet: true
 
 - name: Ensure tenant datastore directory exists
   ansible.builtin.file:
@@ -65,11 +109,6 @@
   ansible.builtin.stat:
     path: "{{ _t_pbs.mountpoint }}/pbs-datastore/.chunks"
   register: _t_chunks
-
-- name: List datastores
-  ansible.builtin.command: proxmox-backup-manager datastore list --output-format json
-  register: _t_ds_list
-  changed_when: false
 
 - name: Create tenant datastore
   ansible.builtin.command: >-
@@ -89,18 +128,10 @@
   when: (((_t_user_list.stdout | default('', true)) or '[]') | from_json | selectattr('userid', 'equalto', _t_user) | list | length) == 0
   changed_when: true
 
-- name: List tenant tokens
-  ansible.builtin.command: proxmox-backup-manager user list-tokens {{ _t_user }} --output-format json
-  register: _t_token_list
-  changed_when: false
-
-- name: Generate tenant token
-  ansible.builtin.command: proxmox-backup-manager user generate-token {{ _t_user }} {{ _t_token_name }}
-  register: _t_token_out
-  when: (((_t_token_list.stdout | default('', true)) or '[]') | from_json | length) == 0
-  changed_when: true
-  no_log: true
-
+# Token handoff. The secret exists once, in the generate output. The workstation file is
+# `<tenant>-pbs-token`; after moving it to the tenant admin project the operator may delete it
+# and creates `<tenant>-pbs-token.handed-off` to record that. A token with neither file fails
+# the play: delete it on PBS (`proxmox-backup-manager user delete-token <user> backup-token`) and rerun.
 - name: Ensure tenant token state directory exists
   ansible.builtin.file:
     path: "{{ _t_token_file | dirname }}"
@@ -108,33 +139,104 @@
     mode: '0700'
   delegate_to: localhost
   become: false
-  when: _t_token_out is changed
 
-- name: Write tenant token to the operator workstation
-  ansible.builtin.copy:
-    content: "{{ _t_token_out.stdout | regex_search('\"value\": \"([^\"]+)\"', '\\1') | first }}"
-    dest: "{{ _t_token_file }}"
-    mode: '0600'
+- name: Check the tenant token handoff state
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ _t_token_file }}"
+    - "{{ _t_token_file }}.handed-off"
   delegate_to: localhost
   become: false
-  when: _t_token_out is changed
-  no_log: true
+  register: _t_handoff
+
+- name: List tenant tokens
+  ansible.builtin.command: proxmox-backup-manager user list-tokens {{ _t_user }} --output-format json
+  register: _t_token_list
+  changed_when: false
+
+- name: Record whether the tenant backup token exists
+  ansible.builtin.set_fact:
+    _t_token_exists: >-
+      {{ ((_t_token_list.stdout | default('', true)) or '[]') | from_json
+         | map(attribute='tokenid') | map('regex_replace', '^.*!', '') | select('equalto', _t_token_name) | list | length > 0 }}
+    _t_handed_off: "{{ _t_handoff.results | map(attribute='stat.exists') | list | reject('equalto', false) | list | length > 0 }}"
+
+- name: Fail when the tenant token exists but was never handed off
+  ansible.builtin.fail:
+    msg: >-
+      Token {{ _t_user }}!{{ _t_token_name }} exists on PBS, but {{ _t_token_file }} and {{ _t_token_file }}.handed-off are both absent,
+      so its secret is lost. Delete the token (proxmox-backup-manager user delete-token {{ _t_user }} {{ _t_token_name }}) and rerun.
+  when: _t_token_exists and not _t_handed_off
+
+- name: Generate and hand off the tenant token
+  when: not _t_token_exists
+  block:
+    - name: Generate tenant token
+      ansible.builtin.command: proxmox-backup-manager user generate-token {{ _t_user }} {{ _t_token_name }}
+      register: _t_token_out
+      changed_when: true
+      no_log: true
+
+    - name: Write tenant token to the operator workstation
+      ansible.builtin.copy:
+        content: "{{ _t_token_out.stdout | regex_search('\"value\": \"([^\"]+)\"', '\\1') | first }}"
+        dest: "{{ _t_token_file }}"
+        mode: '0600'
+      delegate_to: localhost
+      become: false
+      no_log: true
+  rescue:
+    - name: Delete the unrecoverable tenant token
+      ansible.builtin.command: proxmox-backup-manager user delete-token {{ _t_user }} {{ _t_token_name }}
+      changed_when: true
+      failed_when: false
+
+    - name: Fail after the token handoff failed
+      ansible.builtin.fail:
+        msg: "Writing {{ _t_token_file }} failed; the new token was deleted. Fix the workstation path and rerun."
 
 - name: Read current ACL list
   ansible.builtin.command: proxmox-backup-manager acl list --output-format json
   register: _t_acl_list
   changed_when: false
 
-- name: Grant tenant token DatastoreBackup on its datastore only
+# PBS intersects a token's rights with its owning user's, so both identities need the grant.
+- name: Grant tenant user and token DatastoreBackup on its datastore only
   ansible.builtin.command: >-
     proxmox-backup-manager acl update /datastore/{{ _t_pbs.datastore }} DatastoreBackup
-    --auth-id '{{ _t_user }}!{{ _t_token_name }}'
+    --auth-id '{{ item }}'
+  loop:
+    - "{{ _t_user }}"
+    - "{{ _t_user }}!{{ _t_token_name }}"
   when: >-
     ((_t_acl_list.stdout | default('', true)) or '[]') | from_json
     | selectattr('path', 'eq', '/datastore/' ~ _t_pbs.datastore)
     | selectattr('roleid', 'eq', 'DatastoreBackup')
-    | selectattr('ugid', 'eq', _t_user ~ '!' ~ _t_token_name) | list | length == 0
+    | selectattr('ugid', 'eq', item) | list | length == 0
   changed_when: true
+
+- name: Read effective permissions on the tenant datastore
+  ansible.builtin.command: >-
+    proxmox-backup-manager user permissions {{ item }}
+    --path /datastore/{{ _t_pbs.datastore }} --output-format json
+  loop:
+    - "{{ _t_user }}"
+    - "{{ _t_user }}!{{ _t_token_name }}"
+    - monitoring@pbs
+    - monitoring@pbs!monitoring-token
+  register: _t_perms
+  changed_when: false
+
+- name: Assert the tenant can back up and monitoring cannot see the datastore
+  ansible.builtin.assert:
+    that:
+      - "'Datastore.Backup' in _t_perms.results[0].stdout"
+      - "'Datastore.Backup' in _t_perms.results[1].stdout"
+      - "'Datastore.Audit' not in _t_perms.results[2].stdout"
+      - "'Datastore.Audit' not in _t_perms.results[3].stdout"
+    fail_msg: "Effective PBS permissions on {{ _t_pbs.datastore }} are wrong: {{ _t_perms.results | map(attribute='stdout') | list }}"
+    quiet: true
 
 - name: Create tenant prune job
   ansible.builtin.command: >-
