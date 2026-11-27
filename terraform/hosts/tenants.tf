@@ -7,8 +7,17 @@ locals {
   tenants_file = "${path.module}/../../network-data/local/tenants.yaml"
   vlans_file   = "${path.module}/../../network-data/vlans.yaml"
 
-  tenants      = try(yamldecode(file(local.tenants_file)).tenants, {})
-  tenant_vlans = length(local.tenants) == 0 ? {} : yamldecode(file(local.vlans_file)).vlans
+  # Absent file = no tenants. A present file that does not decode, or has no `tenants`
+  # map, fails the plan (an empty fallback would plan deletion of every tenant resource).
+  tenants_doc = yamldecode(fileexists(local.tenants_file) ? file(local.tenants_file) : "tenants: {}")
+  tenants     = local.tenants_doc.tenants
+
+  tenant_vnets = {
+    for t, v in local.tenants : t => {
+      sdn_zone = yamldecode(file(local.vlans_file)).vlans[v.vlan].sdn_zone
+      bridge   = yamldecode(file(local.vlans_file)).vlans[v.vlan].bridge
+    }
+  }
 
   tenant_storage_acls = merge([
     for t, v in local.tenants : {
@@ -83,7 +92,7 @@ resource "proxmox_acl" "tenant_vnet" {
   for_each = local.tenants
 
   user_id   = proxmox_virtual_environment_user.tenant[each.key].user_id
-  path      = "/sdn/zones/${local.tenant_vlans[each.value.vlan].sdn_zone}/${local.tenant_vlans[each.value.vlan].bridge}"
+  path      = "/sdn/zones/${local.tenant_vnets[each.key].sdn_zone}/${local.tenant_vnets[each.key].bridge}"
   role_id   = "PVESDNUser"
   propagate = true
 }
