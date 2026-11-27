@@ -52,18 +52,17 @@
         _expected_names: "{{ groups['all'] | map('regex_replace', '$', '-vm') | list }}"
 
     # --- Only identities that are members of the homelab project may be deleted ---
+    - name: Start the project member listing at the first page
+      ansible.builtin.set_fact:
+        _project_members_all: []
+        _member_offset: 0
+
     - name: List the homelab project's identity members
-      ansible.builtin.uri:
-        url: "{{ bootstrap_config.infisical_url }}/api/v1/projects/{{ bootstrap_config.infisical_project_id }}/identity-memberships"
-        method: GET
-        headers:
-          Authorization: "Bearer {{ _admin_token }}"
-        status_code: 200
-      register: _project_members
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/infisical_project_member_page.yml"
 
     - name: Collect the member identity ids
       ansible.builtin.set_fact:
-        _member_ids: "{{ _project_members.json.identityMemberships | map(attribute='identity.id') | list }}"
+        _member_ids: "{{ _project_members_all | map(attribute='identity.id') | list }}"
 
     # --- Identify orphaned *-vm identities: project member AND *-vm AND not in inventory ---
     - name: Identify orphaned VM identities

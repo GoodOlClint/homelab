@@ -1,0 +1,27 @@
+---
+# Walks GET /api/v1/projects/<id>/identity-memberships one page at a time into
+# _project_members_all, recursing until a short page or totalCount is reached. Callers set_fact
+# _admin_token, _project_members_all: [] and _member_offset: 0 first.
+
+- name: "List project identity members (offset {{ _member_offset }})"
+  ansible.builtin.uri:
+    url: "{{ bootstrap_config.infisical_url }}/api/v1/projects/{{ bootstrap_config.infisical_project_id }}/identity-memberships?limit={{ _page_size | default(100) }}&offset={{ _member_offset }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ _admin_token }}"
+    status_code: 200
+  register: _member_page
+  delegate_to: localhost
+  become: false
+  check_mode: false
+
+- name: Collect the member page
+  ansible.builtin.set_fact:
+    _project_members_all: "{{ _project_members_all | default([]) + _member_page.json.identityMemberships }}"
+    _member_offset: "{{ _member_offset | int + (_page_size | default(100) | int) }}"
+
+- name: Fetch the next member page
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/infisical_project_member_page.yml"
+  when:
+    - _member_page.json.identityMemberships | length == (_page_size | default(100) | int)
+    - _member_page.json.totalCount is not defined or _member_offset | int < _member_page.json.totalCount | int
