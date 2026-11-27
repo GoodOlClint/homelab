@@ -49,12 +49,14 @@ Split into a reversible cutover (0a) and a destructive retirement (0b). Nothing 
 | 0a.3 | VM module: `pci_devices` gains `mapping = optional(string)` with `id` optional; a validation requires exactly one. The hostpci block passes `mapping`. |
 | 0a.4 | VM 240: both cards by mapping name. |
 | 0a.5 | `llm` role: remove the embedder service, warmup, Caddy route, defaults and handlers; in `vllm.service.j2` remove `After=llama-embed`, `PartOf` and the `ExecStartPre` health gate, keeping the Docker and model-mount ordering; drop `code_intel` and `mcp` from `llm_api_clients`. The model file stays on the data volume until 0b. |
-| 0a.6 | `make rebuild llm`. The root disk is disposable (ADR 0015), so the rebuilt guest has no installed embedder unit; no cleanup task is written (greenfield rule). |
+| 0a.6 | **In place, not a rebuild (operator, 2026-11-27).** A fresh guest cannot install: the role's pinned Mesa build (`llm_mesa_version`) is gone from the Kisak PPA, which now offers only a newer build; the running guest has it installed. So: `make hosts-apply`, a targeted apply of VM 240 (hostpci change, one restart), `make ansible llm`, then a one-time hand step on the guest: `systemctl disable --now llama-embed`, remove its unit and warm-up script, `daemon-reload`. No cleanup task is written into the role (greenfield rule). Re-pinning Mesa and proving a clean VM 240 rebuild is its own change before VM 240 is next rebuilt. |
 
 Gates for 0a:
 1. `make plan` and `make hosts-plan` show only the mappings and VM 240.
 2. Cold start: an authenticated chat answer; `systemctl status llama-embed` reports no such unit; nothing listens on the embedder port.
 3. Card identity: the guest card chat uses resolves, through the mapping, to the first card's recorded host BDF, and the second card shows no process in the guest.
+
+**0a result (2026-11-27): passed.** Mappings `b70-0`/`b70-1` created; VM 240 updated in place (`hostpci0: mapping=b70-0` → host `03:00.0`, `hostpci1: mapping=b70-1` → host `07:00.0`); `llm` role ran with 0 failures; the old embedder unit was removed by hand. Gates: authenticated chat answered through Caddy, unauthenticated got 401, `/llama/v1/embeddings` now 404, no embedder unit or listener; vLLM holds only the guest render node on pcie-port-1 (host `03:00.0`), and the second card's node has no user. The Mesa rebuild blocker is issue #68.
 
 **0b: retirement, after 0a passes.**
 
