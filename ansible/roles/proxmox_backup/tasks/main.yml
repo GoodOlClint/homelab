@@ -653,11 +653,12 @@
     - backup
     - acl
 
+# Audit at / inherits into every datastore; monitoring gets /system plus per-fleet-datastore Audit only.
 - name: Grant monitoring user Audit permissions on system
   ansible.builtin.shell: |
-    proxmox-backup-manager acl update / Audit \
+    proxmox-backup-manager acl update /system Audit \
       --auth-id monitoring@pbs
-  when: _pbs_acls | selectattr('path', 'eq', '/')
+  when: _pbs_acls | selectattr('path', 'eq', '/system')
         | selectattr('roleid', 'eq', 'Audit')
         | selectattr('ugid', 'eq', 'monitoring@pbs') | list | length == 0
   changed_when: true
@@ -667,13 +668,41 @@
     - backup
     - acl
 
-- name: Grant monitoring token Audit permissions on system
+- name: Remove monitoring user root Audit grant
   ansible.builtin.shell: |
     proxmox-backup-manager acl update / Audit \
-      --auth-id 'monitoring@pbs!monitoring-token'
+      --auth-id monitoring@pbs --delete true
   when: _pbs_acls | selectattr('path', 'eq', '/')
         | selectattr('roleid', 'eq', 'Audit')
+        | selectattr('ugid', 'eq', 'monitoring@pbs') | list | length > 0
+  changed_when: true
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - acl
+
+- name: Grant monitoring token Audit permissions on system
+  ansible.builtin.shell: |
+    proxmox-backup-manager acl update /system Audit \
+      --auth-id 'monitoring@pbs!monitoring-token'
+  when: _pbs_acls | selectattr('path', 'eq', '/system')
+        | selectattr('roleid', 'eq', 'Audit')
         | selectattr('ugid', 'eq', 'monitoring@pbs!monitoring-token') | list | length == 0
+  changed_when: true
+  tags:
+    - proxmox_backup
+    - pbs
+    - backup
+    - acl
+
+- name: Remove monitoring token root Audit grant
+  ansible.builtin.shell: |
+    proxmox-backup-manager acl update / Audit \
+      --auth-id 'monitoring@pbs!monitoring-token' --delete true
+  when: _pbs_acls | selectattr('path', 'eq', '/')
+        | selectattr('roleid', 'eq', 'Audit')
+        | selectattr('ugid', 'eq', 'monitoring@pbs!monitoring-token') | list | length > 0
   changed_when: true
   tags:
     - proxmox_backup
