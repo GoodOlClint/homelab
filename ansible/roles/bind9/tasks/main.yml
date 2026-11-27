@@ -8,6 +8,21 @@
     fail_msg: "Required facts not available. This role must run from a playbook that includes full_pre_tasks.yml."
     quiet: true
 
+- name: Check for the tenant bindings (absent file = no tenants)
+  ansible.builtin.stat:
+    path: "{{ bind9_tenants_binding_file }}"
+  delegate_to: localhost
+  become: false
+  register: bind9_tenants_stat
+  tags: [always]
+
+- name: Load the tenant bindings
+  ansible.builtin.include_vars:
+    file: "{{ bind9_tenants_binding_file }}"
+    name: bind9_tenants_binding
+  when: bind9_tenants_stat.stat.exists
+  tags: [always]
+
 - name: Install bind9
   ansible.builtin.apt:
     name:
@@ -55,19 +70,22 @@
   loop: "{{ bind9_acme_hosts }}"
   tags: [bind9, dns, secrets]
 
-- name: Auto-generate ci_tsig_key_secret
+- name: Auto-generate the child-zone TSIG keys
   ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/generate_secret.yml"
   vars:
-    secret_key: "ci_tsig_key_secret"
+    secret_key: "{{ item.secret_key }}"
     secret_gen_cmd: >-
-      tsig-keygen -a hmac-sha256 ci-update-key
+      tsig-keygen -a hmac-sha256 {{ item.key }}
       | grep secret
       | awk '{print $2}'
       | tr -d '";'
-    secret_comment: "BIND9 TSIG key for CI guest registrations — update-policy limits it to the ci zone (hmac-sha256) — auto-generated"
+    secret_comment: "BIND9 TSIG key {{ item.key }} for {{ item.label }} registrations — update-policy limits it to {{ item.name }} (hmac-sha256) — auto-generated"
     secret_run_on: "{{ inventory_hostname }}"
     secret_infisical_path: "/infrastructure"
     secret_dict_path: "infrastructure"
+  loop: "{{ bind9_child_zones_all }}"
+  loop_control:
+    label: "{{ item.key }}"
   tags: [bind9, dns, secrets]
 
 - name: Configure named.conf.options
@@ -116,7 +134,7 @@
   vars:
     zone_name: "{{ item.item }}"
     zone_dns_ip: "{{ bind9_vip_ipv4 }}"
-    zone_ttl: "{{ bind9_ci_zone_ttl if item.item == bind9_ci_zone else 300 }}"
+    zone_ttl: "{{ (bind9_child_zones_all | selectattr('name', 'equalto', item.item) | map(attribute='ttl') | list + [300]) | first }}"
   loop: "{{ forward_zone_files_stat.results | default([]) }}"
   when: bind9_primary and not item.stat.exists
   notify: Restart bind9

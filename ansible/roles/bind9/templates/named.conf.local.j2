@@ -13,19 +13,23 @@ key "acme-{{ h }}" {
 };
 {% endfor %}
 
-// CI guest registrations (ADR 0032): granted only in the ci zone below, so a
+{% for c in bind9_child_zones_all %}
+// {{ c.label }} guest registrations (ADR 0032): granted only in the {{ c.name.split('.')[0] }} zone below, so a
 // leaked runner key can never write the fleet zones
-key "ci-update-key" {
+key "{{ c.key }}" {
     algorithm hmac-sha256;
-    secret "{{ secrets.infrastructure.ci_tsig_key_secret }}";
+    secret "{{ secrets.infrastructure[c.secret_key] }}";
 };
 
+{% endfor %}
 {% set secondaries = bind9_instances[1:] | map('extract', hostvars, 'ansible_host') | list %}
 {% macro zone(name) %}
 zone "{{ name }}" {
-{% if name != bind9_ci_zone %}
-    // per-zone allow-query replaces the global one: restate internal, minus CI
-    allow-query { {% for v in bind9_ci_vlans if v in network_data.vlans %}!{{ network_data.ipv4_prefix }}.{{ network_data.vlans[v].id }}.0/24; {% endfor %}127.0.0.1; ::1; {{ internal_network_cidr | default(network_data.ipv4_prefix ~ '.0.0/12') }}; };
+{% set is_child = bind9_child_zones_all | selectattr('name', 'equalto', name) | list | length > 0 %}
+{% set denied = bind9_child_zones_all | rejectattr('name', 'equalto', name) | map(attribute='vlans') | sum(start=[]) %}
+{% if not is_child or denied %}
+    // per-zone allow-query replaces the global one: restate internal, minus {{ bind9_child_zones_all | map(attribute='label') | unique | join(', ') }}
+    allow-query { {% for v in denied if v in network_data.vlans %}!{{ network_data.ipv4_prefix }}.{{ network_data.vlans[v].id }}.0/24; {% endfor %}127.0.0.1; ::1; {{ internal_network_cidr | default(network_data.ipv4_prefix ~ '.0.0/12') }}; };
 {% endif %}
 {% if bind9_primary %}
     type primary;
@@ -40,9 +44,9 @@ zone "{{ name }}" {
         grant acme-{{ h }} name _acme-challenge.{{ bind9_acme_vip_name }}.{{ name }}. TXT;
 {% endfor %}
 {% endif %}
-{% if name == bind9_ci_zone %}
-        grant ci-update-key zonesub ANY;
-{% endif %}
+{% for c in bind9_child_zones_all if c.name == name %}
+        grant {{ c.key }} zonesub ANY;
+{% endfor %}
     };
     // external-dns and the secondaries read the zone by signed AXFR only
     allow-transfer { key "dhcp-update-key"; };

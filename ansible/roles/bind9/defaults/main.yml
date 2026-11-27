@@ -19,19 +19,33 @@ bind9_vip_state: started
 
 # Forward zones (ADR 0040): the keys of vlans.yaml internal_zones — flat public-domain
 # zones, records are dynamic updates only. dns_zones only drives the reverse zones.
-# The CI zone rides along: a child zone whose own TSIG key (ci-update-key) can
-# write nothing outside it, so CI registrations never touch the fleet zones —
-# the DNS half of the ci-isos isolation (ADR 0032).
-bind9_ci_zone: "ci.{{ service_domain }}"
-bind9_forward_zones: "{{ (internal_zones | list) + [bind9_ci_zone] }}"
-# The Ci and ci_runner VLAN subnets are denied queries on every zone except the
-# ci zone: CI guests and the job node can resolve ci names but cannot enumerate
-# or resolve fleet names through BIND. IPv4-only — neither VLAN carries v6.
-bind9_ci_vlans: [ci, ci_runner]
+# Child zones ride along: each has its own TSIG key that can write nothing outside
+# its zone, so registrations there never touch the fleet zones — the DNS half of
+# the ci-isos isolation (ADR 0032). The tracked default is the CI zone; tenant
+# entries from network-data/local/tenants.yaml are appended by the role
+# (bind9_child_zones_all). Entry fields:
+#   name        zone FQDN
+#   key         TSIG key name
+#   secret_key  Infisical key under /infrastructure holding the key's secret
+#   label       word for the rendered named.conf comments
+#   vlans       vlans.yaml keys whose subnets are denied queries on every other zone
+#   ttl         zone TTL and negative-cache TTL
 # CI guests churn per run: a 300s negative TTL blinds a wait-for-registration
 # poll for 5 minutes after the record lands. 30s bounds both stale answers and
 # cached NXDOMAINs; CI's own nsupdate should register records with TTL <= this.
-bind9_ci_zone_ttl: 30
+# The Ci and ci_runner VLANs carry no v6, so the denial is IPv4-only.
+bind9_child_zones:
+  - name: "ci.{{ service_domain }}"
+    key: ci-update-key
+    secret_key: ci_tsig_key_secret
+    label: CI
+    vlans: [ci, ci_runner]
+    ttl: 30
+bind9_tenants_binding_file: "{{ playbook_dir }}/../../network-data/local/tenants.yaml"
+bind9_tenant_child_zones: >-
+  {% set ns = namespace(l=[]) %}{% for t, v in (bind9_tenants_binding.tenants | default({})).items() %}{% set ns.l = ns.l + [{'name': v.dns.zone ~ '.' ~ service_domain, 'key': t ~ '-update-key', 'secret_key': t ~ '_tsig_key_secret', 'label': 'tenant', 'vlans': [v.vlan], 'ttl': v.dns.ttl}] %}{% endfor %}{{ ns.l }}
+bind9_child_zones_all: "{{ bind9_child_zones + bind9_tenant_child_zones }}"
+bind9_forward_zones: "{{ (internal_zones | list) + (bind9_child_zones_all | map(attribute='name') | list) }}"
 
 # ACME DNS-01 clients (ADR 0050): every host that enrolls for a fleet-hosts cert holds its own
 # TSIG key `acme-<host>` (Infisical /infrastructure/acme_tsig_<host>, `-` → `_`), granted only
