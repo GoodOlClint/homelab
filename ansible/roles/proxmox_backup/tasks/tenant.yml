@@ -242,7 +242,7 @@
   ansible.builtin.command: >-
     proxmox-backup-manager prune-job create prune-{{ _t_pbs.datastore }}
     --store {{ _t_pbs.datastore }} --schedule daily
-    --keep-last 7 --keep-daily 14 --keep-weekly 8 --keep-monthly 12
+    --keep-last 3 --keep-daily 7 --keep-weekly 4 --keep-monthly 3
   register: _t_prune
   failed_when: _t_prune.rc != 0 and 'already exists' not in _t_prune.stderr
   changed_when: _t_prune.rc == 0

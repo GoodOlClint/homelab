@@ -723,21 +723,34 @@
   failed_when: verify_job_created.rc != 0 and 'already exists' not in verify_job_created.stderr
   changed_when: verify_job_created.rc == 0
 
-# Prune jobs
+# Prune jobs: created once, then converged, since `create` refuses an existing id.
+- name: Read existing prune jobs
+  ansible.builtin.command: proxmox-backup-manager prune-job list --output-format json
+  register: _pbs_prune_jobs
+  changed_when: false
+
 - name: Configure prune jobs
-  ansible.builtin.shell: |
-    proxmox-backup-manager prune-job create prune-{{ item.name }} \
-      --store {{ item.name }} \
-      --schedule "{{ item.prune_schedule | default('daily') }}" \
-      --keep-last {{ item.keep_last | default(7) }} \
-      --keep-daily {{ item.keep_daily | default(14) }} \
-      --keep-weekly {{ item.keep_weekly | default(8) }} \
-      --keep-monthly {{ item.keep_monthly | default(12) }} \
-      --keep-yearly {{ item.keep_yearly | default(3) }}
+  ansible.builtin.command: >-
+    proxmox-backup-manager prune-job {{ 'update' if _job else 'create' }} prune-{{ item.name }}
+    {{ '' if _job else '--store ' ~ item.name }} --schedule "{{ _want.schedule }}"
+    {% for k, v in _want.items() if k != 'schedule' %}{% if v | int > 0 %}--{{ k }} {{ v }} {% elif _job and k in _job %}--delete {{ k }} {% endif %}{% endfor %}
+  vars:
+    _job: "{{ _pbs_prune_jobs.stdout | from_json | selectattr('id', 'equalto', 'prune-' ~ item.name) | first | default({}) }}"
+    _want:
+      schedule: "{{ item.prune_schedule | default('daily') }}"
+      keep-last: "{{ item.keep_last }}"
+      keep-daily: "{{ item.keep_daily }}"
+      keep-weekly: "{{ item.keep_weekly }}"
+      keep-monthly: "{{ item.keep_monthly }}"
+      keep-yearly: "{{ item.keep_yearly }}"
+    _drift: >-
+      {%- set d = [] -%}
+      {%- for k, v in _want.items() -%}
+      {%- if (_job.get(k, '' if k == 'schedule' else 0) | string) != (v | string) -%}{{- d.append(k) -}}{%- endif -%}
+      {%- endfor -%}{{ d }}
+  when: not _job or _drift | length > 0
   loop: "{{ pbs_datastores }}"
-  register: prune_job_created
-  failed_when: prune_job_created.rc != 0 and 'already exists' not in prune_job_created.stderr
-  changed_when: prune_job_created.rc == 0
+  changed_when: true
 
 - name: Display PBS configuration summary
   ansible.builtin.debug:
